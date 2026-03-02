@@ -72,7 +72,7 @@ public class TriggerService implements IMetaObjectService {
                 onFinishedUi.run();
             }
         });
-        connect.executeSqlTask(new Thread(triggerMetaTask));
+        connect.executeSqlTask(triggerMetaTask);
     }
 
 

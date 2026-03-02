@@ -1,6 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppExecutor;
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
@@ -1872,7 +1873,7 @@ GBASEEOF
             Main.lastInstallConnect.setUsername("gbasedbt");
             Main.lastInstallConnect.setPassword(configValue(ConfigKey.GBASEDBT_PASSWORD));
             Platform.runLater(() -> {
-                Main.mainController.createConnectLeaf();
+                AppState.createConnectLeaf();
             });
         });
 
@@ -2508,7 +2509,7 @@ GBASEEOF
         alert.setHeaderText("");
         alert.setGraphic(null); //避免显示问号
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(RemoteInstallerUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image("file:images/logo.png"));
         HBox hbox = new HBox();

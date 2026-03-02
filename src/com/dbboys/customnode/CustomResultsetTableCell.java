@@ -1,6 +1,5 @@
 package com.dbboys.customnode;
 
-import com.dbboys.app.Main;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.dbboys.i18n.I18n;

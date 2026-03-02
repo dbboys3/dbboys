@@ -88,7 +88,7 @@ public class Main extends Application {
             loadStackpane.setAlignment(loadProgressBar, Pos.BOTTOM_CENTER);
             //loadStackpane.setStyle("-fx-background-color: green;-fx-background-insets: 0");
             Scene bootscene = new Scene(loadStackpane,180,30);
-            bootscene.getStylesheets().add(getClass().getResource("/com/dbboys/css/app.css").toExternalForm());
+            AppState.applyAppStylesheet(bootscene);
             loadProgressBar.getStyleClass().add("loadProgressBar");
             loadingStage.setScene(bootscene);
 
@@ -132,7 +132,7 @@ public class Main extends Application {
                 scene = new Scene(root, 800, 600);
                 AppState.setScene(scene);
 
-                scene.getStylesheets().add(getClass().getResource("/com/dbboys/css/app.css").toExternalForm());
+                AppState.applyAppStylesheet(scene);
 
                 primaryStage.setTitle("DBboys");
                 Image image = new Image("file:images/logo.png");

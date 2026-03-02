@@ -1,6 +1,6 @@
 package com.dbboys.util;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Node;
@@ -53,7 +53,7 @@ public class SnapshotUtil {
         } catch (IOException e) {
             log.error("Failed to write snapshot image.", e);
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("snapshot.error.write_failed", "截图写入临时文件失败：%s").formatted(e.getMessage())
             );
         }
@@ -65,13 +65,13 @@ public class SnapshotUtil {
 
     public static void snapshotSceneRoot() {
         WritableImage image = new WritableImage(
-                (int) (Main.scene.getRoot().getBoundsInParent().getWidth() * SNAPSHOT_SCALE),
-                (int) (Main.scene.getRoot().getBoundsInParent().getHeight() * SNAPSHOT_SCALE)
+                (int) (AppState.getSceneRoot().getBoundsInParent().getWidth() * SNAPSHOT_SCALE),
+                (int) (AppState.getSceneRoot().getBoundsInParent().getHeight() * SNAPSHOT_SCALE)
         );
         SnapshotParameters params = new SnapshotParameters();
         params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
-        Main.scene.getRoot().snapshot(params, image);
-        copyToClipboard(image, Main.mainController.noticePane);
+        AppState.getSceneRoot().snapshot(params, image);
+        copyToClipboard(image, AppState.getNoticePane());
     }
 
     public static void snapshotNode(Node node) {
@@ -82,7 +82,7 @@ public class SnapshotUtil {
         SnapshotParameters params = new SnapshotParameters();
         params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
         node.snapshot(params, image);
-        copyToClipboard(image, Main.mainController.noticePane);
+        copyToClipboard(image, AppState.getNoticePane());
     }
 
     public static void snapshotTableView(TableView<?> tableView) {
@@ -110,7 +110,7 @@ public class SnapshotUtil {
             SnapshotParameters params = new SnapshotParameters();
             params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
             tableView.snapshot(params, image);
-            copyToClipboard(image, Main.mainController.noticePane);
+            copyToClipboard(image, AppState.getNoticePane());
         } finally {
             tableView.setPrefHeight(originalPrefHeight);
             tableView.setMinHeight(originalMinHeight);

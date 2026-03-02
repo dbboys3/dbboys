@@ -1,6 +1,6 @@
 package com.dbboys.customnode;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
@@ -224,7 +224,7 @@ public class CustomSearchReplaceVbox extends VBox {
             lastFindPosition = foundPos;
         } else {
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("searchreplace.notice.reach_end", "已到达结尾，下一个从开头开始查找！")
             );
             lastFindPosition = -1;
@@ -256,7 +256,7 @@ public class CustomSearchReplaceVbox extends VBox {
             lastFindPosition = foundPos;
         } else {
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("searchreplace.notice.reach_start", "已到达开头，下一个从结尾开始搜索!")
             );
             lastFindPosition = -1;
@@ -332,7 +332,7 @@ public class CustomSearchReplaceVbox extends VBox {
         if (count > 0) {
             codeArea.replaceText(0, text.length(), newText.toString());
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     String.format(I18n.t("searchreplace.notice.replace_all_count", "已替换全部 %d 处！"), count)
             );
             lastFindPosition = -1;

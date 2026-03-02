@@ -1,5 +1,6 @@
 package com.dbboys.util.tree;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
@@ -311,7 +312,7 @@ public class TreeContextMenuHandler {
                 {
                     ((Table)treeData).setTableTypeCode("raw");
                     NotificationUtil.showNotification(
-                        Main.mainController.noticePane,
+                        AppState.getNoticePane(),
                         I18n.t("backsql.notice.table_raw", "表\"%s\"已改为裸表！").formatted(treeData.getName())
                     );
                 }
@@ -334,7 +335,7 @@ public class TreeContextMenuHandler {
                 {
                     ((Table)treeData).setTableTypeCode("standard");
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             I18n.t("backsql.notice.table_standard", "表\"%s\"已改为标准表！").formatted(treeData.getName())
                     );
             }
@@ -385,7 +386,7 @@ public class TreeContextMenuHandler {
                         );
                     }
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             I18n.t("backsql.notice.batch_table_truncate_submitted", "已提交%d个表的清空任务！")
                                     .formatted(selectedItems.size())
                     );
@@ -412,7 +413,7 @@ public class TreeContextMenuHandler {
                     );
 
                     NotificationUtil.showNotification(
-                        Main.mainController.noticePane,
+                        AppState.getNoticePane(),
                         I18n.t("backsql.notice.table_truncated", "表\"%s\"已清空！").formatted(treeData.getName())
                 );
 
@@ -532,7 +533,7 @@ public class TreeContextMenuHandler {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL);
             commit.setText(I18n.t("metadata.button.create", "创建"));
             cancelBtn.setText(I18n.t("common.cancel", "取消"));
-            dialog.initOwner(Main.scene.getWindow());
+            dialog.initOwner(AppState.getWindow());
 
 
             GridPane grid = new GridPane();
@@ -588,7 +589,7 @@ public class TreeContextMenuHandler {
                         selectedItem.setExpanded(false);
                         selectedItem.setExpanded(true);
                         NotificationUtil.showNotification(
-                                Main.mainController.noticePane,
+                                AppState.getNoticePane(),
                                 I18n.t("metadata.success.create_user", "用户创建成功！")
                         );
                         dialog.close();
@@ -612,7 +613,7 @@ public class TreeContextMenuHandler {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL);
             commit.setText(I18n.t("metadata.button.reset", "重置"));
             cancelBtn.setText(I18n.t("common.cancel", "取消"));
-            dialog.initOwner(Main.scene.getWindow());
+            dialog.initOwner(AppState.getWindow());
 
 
             GridPane grid = new GridPane();
@@ -660,7 +661,7 @@ public class TreeContextMenuHandler {
                             "alter user " + selectedItem.getValue().getName() + " modify password '" + passwordField1.getText().trim() + "'",
                             () -> {
                                 NotificationUtil.showNotification(
-                                        Main.mainController.noticePane,
+                                        AppState.getNoticePane(),
                                         I18n.t("backsql.notice.user_password_reset", "用户\"%s\"密码已重置！")
                                                 .formatted(selectedItem.getValue().getName())
                                 );
@@ -692,7 +693,7 @@ public class TreeContextMenuHandler {
                     sqlList.add("update statistics for table " + item.getValue().getName());
                 }
                 MetadataTreeviewUtil.tableService.executeObjectSqls(connect, sqlList, () -> NotificationUtil.showNotification(
-                        Main.mainController.noticePane,
+                        AppState.getNoticePane(),
                         I18n.t("backsql.notice.batch_update_statistics_submitted", "%d个表统计更新已完成！")
                                 .formatted(selectedItems.size())
                 ));
@@ -710,31 +711,31 @@ public class TreeContextMenuHandler {
                 }
             if (treeData instanceof Database) {
                 MetadataTreeviewUtil.databaseService.updateStatistics(connect, "update statistics", ()->{
-                    NotificationUtil.showNotification(Main.mainController.noticePane,I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
+                    NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                 });                
             }
             else if (treeData instanceof ObjectFolder) {
                 TreeDataLoader.ObjectFolderKind objectFolderKind = TreeDataLoader.getObjectFolderKind(selectedItem);
                 if(objectFolderKind == TreeDataLoader.ObjectFolderKind.SYSTEM_TABLE_VIEW || objectFolderKind == TreeDataLoader.ObjectFolderKind.TABLES){
                     MetadataTreeviewUtil.tableService.updateStatistics(connect, "update statistics high for table force", ()->{
-                        NotificationUtil.showNotification(Main.mainController.noticePane,I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
+                        NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });    
                 }
                 else if(objectFolderKind == TreeDataLoader.ObjectFolderKind.PROCEDURES){
                     MetadataTreeviewUtil.procedureService.updateStatistics(connect, "update statistics for procedure", ()->{
-                        NotificationUtil.showNotification(Main.mainController.noticePane,I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
+                        NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });    
                 }
             }
             else if(treeData instanceof SysTable||treeData instanceof Table){
                     MetadataTreeviewUtil.tableService.updateStatisticsForTable(connect, treeData.getName(), ()->{
-                        NotificationUtil.showNotification(Main.mainController.noticePane,I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
+                        NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });
                     
             }
             else if(treeData instanceof Procedure){
                     MetadataTreeviewUtil.procedureService.updateStatistics(connect,"update statistics for procedure "+ treeData.getName(), ()->{
-                        NotificationUtil.showNotification(Main.mainController.noticePane,I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
+                        NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });  
             }
         });
@@ -744,11 +745,11 @@ public class TreeContextMenuHandler {
             fileChooser.setTitle(I18n.t("metadata.menu.ddl.to_file", "保存DDL为SQL"));
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
             fileChooser.setInitialFileName(treeData.getName() + ".sql");
-            File file = fileChooser.showSaveDialog(Main.scene.getWindow());
+            File file = fileChooser.showSaveDialog(AppState.getWindow());
             if (file != null) {
                 try (FileWriter writer = new FileWriter(file)) {
                     writer.write(ddlText);
-                    NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("metadata.notice.ddl_saved", "DDL已保存到文件"));
+                    NotificationUtil.showMainNotification( I18n.t("metadata.notice.ddl_saved", "DDL已保存到文件"));
                 } catch (IOException e) {
                     AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
                 }
@@ -760,7 +761,7 @@ public class TreeContextMenuHandler {
             ClipboardContent content = new ClipboardContent();
             content.putString(ddlText);
             clipboard.setContent(content);
-            NotificationUtil.showNotification(Main.mainController.noticePane, "DDL已复制到剪切板");
+            NotificationUtil.showMainNotification( "DDL已复制到剪切板");
         }));
 
         ddlToPopuWindow.setOnAction(event -> TreeCrudHandler.handleDdlAction(treeView, (treeData, ddlText) -> {
@@ -768,19 +769,19 @@ public class TreeContextMenuHandler {
         }));
 
         ddlToNewSqlEditarea.setOnAction(event -> TreeCrudHandler.handleDdlAction(treeView, (treeData, ddlText) -> {
-            Main.mainController.newSqlFileMenuItem.fire();
-            if (Main.mainController.sqlTabPane.getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+            AppState.getNewSqlFileMenuItem().fire();
+            if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
                 currentSqlTab.sqlTabController.sqlEditCodeArea.replaceText(ddlText);
             }
         }));
 
         ddlToCurrentSqlEditarea.setOnAction(event -> TreeCrudHandler.handleDdlAction(treeView, (treeData, ddlText) -> {
-            if (Main.mainController.sqlTabPane.getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+            if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
                 int currentPos=currentSqlTab.sqlTabController.sqlEditCodeArea.getCaretPosition();
                 currentSqlTab.sqlTabController.sqlEditCodeArea.insertText(currentPos, ddlText);
             }else{
-                Main.mainController.newSqlFileMenuItem.fire();
-                if (Main.mainController.sqlTabPane.getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+                AppState.getNewSqlFileMenuItem().fire();
+                if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
                     currentSqlTab.sqlTabController.sqlEditCodeArea.replaceText(ddlText);
                 }
             }
@@ -811,7 +812,7 @@ public class TreeContextMenuHandler {
                         }
                     }
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             I18n.t("backsql.notice.batch_table_delete_submitted", "%d个表已删除！")
                                     .formatted(selectedItems.size())
                     );
@@ -847,7 +848,7 @@ public class TreeContextMenuHandler {
                         }
                     }
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             I18n.t("metadata.notice.delete_object_batch_done", "已删除%d个%s！")
                                     .formatted(selectedItems.size(), objectDisplayName)
                     );
@@ -865,7 +866,7 @@ public class TreeContextMenuHandler {
             alert.setHeaderText("");
             alert.setGraphic(null); //避免显示问号
             //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-            alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+            AppState.applyAppStylesheet(alert.getDialogPane().getScene());
             Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
             alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
             HBox hbox = new HBox();
@@ -933,7 +934,7 @@ public class TreeContextMenuHandler {
             alert.setHeaderText("");
             alert.setGraphic(null); //避免显示问号
             //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-            alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+            AppState.applyAppStylesheet(alert.getDialogPane().getScene());
             Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
             alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
             GridPane grid = new GridPane();
@@ -1031,7 +1032,7 @@ public class TreeContextMenuHandler {
                         + " with log";
                 MetadataTreeviewUtil.databaseService.executeObjectSql(connect, sql, () -> {
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             I18n.t("backsql.notice.database_created", "数据库[%s]创建成功").formatted(textField.getText())
                     );
                     selectedItem.getChildren().clear();

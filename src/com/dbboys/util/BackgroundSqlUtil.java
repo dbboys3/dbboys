@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.dbboys.app.AppContext;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.service.ConnectionService;
 import com.dbboys.vo.BackgroundSqlTask;
@@ -40,23 +40,23 @@ public class BackgroundSqlUtil {
     public static final ConnectionService connectionService = new ConnectionService();
     public static void updateBackSqlUIOnStart() {
         Platform.runLater(() -> {
-            Main.mainController.statusBackSqlStopButton.setDisable(false);
+            AppState.getStatusBackSqlStopButton().setDisable(false);
             setBackSqlCountLabelText(
                     I18n.t("backsql.status.running_count", "有%d个后台任务正在运行").formatted(backSqlTaskList.size())
             );
-            Main.mainController.statusBackSqlCountLabel.setStyle("-fx-font-size: 7;-fx-text-fill: black");
+            AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-text-fill: black");
             PopupWindowUtil.sqlTaskTableView.getItems().clear();
             PopupWindowUtil.sqlTaskTableView.getItems().addAll(new ArrayList<>(backSqlTaskList));
         });
     }
     private static void setBackSqlCountLabelText(String text) {
-        if (Main.mainController == null || Main.mainController.statusBackSqlCountLabel == null) {
+        if (AppState.getMainController() == null || AppState.getStatusBackSqlCountLabel() == null) {
             return;
         }
-        if (Main.mainController.statusBackSqlCountLabel.textProperty().isBound()) {
-            Main.mainController.statusBackSqlCountLabel.textProperty().unbind();
+        if (AppState.getStatusBackSqlCountLabel().textProperty().isBound()) {
+            AppState.getStatusBackSqlCountLabel().textProperty().unbind();
         }
-        Main.mainController.statusBackSqlCountLabel.setText(text);
+        AppState.getStatusBackSqlCountLabel().setText(text);
     }
 
         public static void handleBackgroundSqlError(BackgroundSqlTask backSqlTask, Exception e) {
@@ -89,12 +89,12 @@ public class BackgroundSqlUtil {
     public static void updateBackSqlUIOnFinish() {
         Platform.runLater(() -> {
             if (backSqlTaskList.size() == 0) {
-                Main.mainController.statusBackSqlStopButton.setDisable(true);
+                AppState.getStatusBackSqlStopButton().setDisable(true);
                 bindBackSqlCountLabel(
                         "backsql.status.none_running",
                         "没有正在运行的后台任务"
                 );
-                Main.mainController.statusBackSqlCountLabel.setStyle("-fx-font-size: 7;-fx-text-fill: #888");
+                AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-text-fill: #888");
             } else {
                 setBackSqlCountLabelText(
                         I18n.t("backsql.status.running_count_short", "有%d个正在运行的后台任务").formatted(backSqlTaskList.size())
@@ -106,13 +106,13 @@ public class BackgroundSqlUtil {
     }
 
     private static void bindBackSqlCountLabel(String key, String fallback) {
-        if (Main.mainController == null || Main.mainController.statusBackSqlCountLabel == null) {
+        if (AppState.getMainController() == null || AppState.getStatusBackSqlCountLabel() == null) {
             return;
         }
-        if (Main.mainController.statusBackSqlCountLabel.textProperty().isBound()) {
-            Main.mainController.statusBackSqlCountLabel.textProperty().unbind();
+        if (AppState.getStatusBackSqlCountLabel().textProperty().isBound()) {
+            AppState.getStatusBackSqlCountLabel().textProperty().unbind();
         }
-        Main.mainController.statusBackSqlCountLabel.textProperty().bind(I18n.bind(key, fallback));
+        AppState.getStatusBackSqlCountLabel().textProperty().bind(I18n.bind(key, fallback));
     }
 }
 

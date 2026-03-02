@@ -1,5 +1,6 @@
 package com.dbboys.util;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
@@ -97,14 +98,14 @@ public class PopupWindowUtil {
     static {
         //关于弹出面板
         aboutPopupStageStackPane.setAlignment(Pos.CENTER);
-        aboutPopupStageScene.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(aboutPopupStageScene);
         aboutPopupStage.getIcons().add(aboutPopupStageIcon);
         aboutPopupStage.setScene(aboutPopupStageScene);
         aboutPopupStage.titleProperty().bind(aboutTitleBinding);
         aboutPopupStage.initModality(Modality.APPLICATION_MODAL);
 
         //巡检双击弹出命令输出
-        checkOutputPopupStageScene.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(checkOutputPopupStageScene);
         checkOutputPopupStage.getIcons().add(checkOutputPopupStageIcon);
         checkOutputPopupStage.setScene(checkOutputPopupStageScene);
         checkOutputPopupStage.titleProperty().bind(cmdOutputTitleBinding);
@@ -123,7 +124,7 @@ public class PopupWindowUtil {
 
         sqlHistoryPopupStage.initModality(Modality.APPLICATION_MODAL);
 
-        sqlHistoryPopupStageScene.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(sqlHistoryPopupStageScene);
         sqlHistoryPopupStage.getIcons().add(sqlHistoryPopupStageIcon);
         sqlHistoryPopupStage.setScene(sqlHistoryPopupStageScene);
         sqlHistoryPopupStage.titleProperty().bind(sqlHistoryTitleBinding);
@@ -153,7 +154,7 @@ public class PopupWindowUtil {
 
         //初始化后台任务表格
         backSqlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        backSqlPopupStageScene.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(backSqlPopupStageScene);
         backSqlPopupStage.getIcons().add(backSqlPopupStageIcon);
         backSqlPopupStage.setScene(backSqlPopupStageScene);
         backSqlPopupStageStackPane.getChildren().add(noticePane);
@@ -275,7 +276,7 @@ public class PopupWindowUtil {
 
         //初始化ddl显示面板
         ddlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        ddlPopupStageScene.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(ddlPopupStageScene);
         ddlPopupStage.getIcons().add(ddlPopupStageIcon);
         ddlPopupStage.setScene(ddlPopupStageScene);
         ddlPopupStage.titleProperty().bind(ddlTitleBinding);
@@ -343,10 +344,7 @@ public class PopupWindowUtil {
         alert.setHeaderText("");
         alert.setGraphic(null);
 
-        String style = PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm();
-        if (!alert.getDialogPane().getScene().getStylesheets().contains(style)) {
-            alert.getDialogPane().getScene().getStylesheets().add(style);
-        }
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage stage = (Stage) alert.getDialogPane().getScene().getWindow();
         if (stage.getIcons().isEmpty()) {
             stage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
@@ -388,9 +386,7 @@ public class PopupWindowUtil {
         alert.titleProperty().bind(I18n.bind("popup.param_window.title", "输入SQL绑定变量参数"));
         alert.setHeaderText("");
         alert.setGraphic(null);
-        alert.getDialogPane().getScene().getStylesheets().add(
-                PopupWindowUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm()
-        );
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
 

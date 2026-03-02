@@ -1,6 +1,6 @@
 package com.dbboys.util.tree;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.ctrl.CreateConnectController;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
@@ -25,7 +25,7 @@ public class TreeNavigator {
     private static final Logger log = LogManager.getLogger(TreeNavigator.class);
 
     public static void connectionDisconnected(){
-        TreeItem<TreeData> treeItem=getMetaConnTreeItem(Main.mainController.databaseMetaTreeView.getSelectionModel().getSelectedItem());
+        TreeItem<TreeData> treeItem=getMetaConnTreeItem(AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem());
         try {
             ((Connect)treeItem.getValue()).getConn().close();
         } catch (SQLException e) {
@@ -129,7 +129,7 @@ public class TreeNavigator {
             //关闭主连接
             if(connect.getConn()!=null&&!connect.getConn().isClosed()) {
                 connect.getConn().close();
-                for(Tab tab :Main.mainController.sqlTabPane.getTabs()){
+                for(Tab tab :AppState.getSqlTabPane().getTabs()){
                     if(tab instanceof CustomSqlTab) {
                         if (selectedItem.getValue().getName().equals(((CustomSqlTab) tab).sqlTabController.sqlConnect.getName())) {
                             ((CustomSqlTab) tab).sqlTabController.closeConn();
@@ -139,14 +139,14 @@ public class TreeNavigator {
                 }
             }
             CustomInstanceTab needToRemove=null;
-            for(Tab tab :Main.mainController.sqlTabPane.getTabs()) {
+            for(Tab tab :AppState.getSqlTabPane().getTabs()) {
                 if (tab instanceof CustomInstanceTab) {
                     if (("[instance check]"+selectedItem.getValue().getName()).equals( ((CustomInstanceTab) tab).getTitle())) {
                         needToRemove=(CustomInstanceTab)tab;
                     }
                 }
             }
-            if(needToRemove!=null)Main.mainController.sqlTabPane.getTabs().remove(needToRemove);
+            if(needToRemove!=null)AppState.getSqlTabPane().getTabs().remove(needToRemove);
         } catch (SQLException e) {
             GlobalErrorHandlerUtil.handle(e);
             //new CustomAlert("错误",e.toString());
@@ -208,7 +208,7 @@ public class TreeNavigator {
 
         // 处理搜索结果
         if (MetadataTreeviewUtil.searchResults.isEmpty()) {
-            NotificationUtil.showNotification(Main.mainController.noticePane,
+            NotificationUtil.showMainNotification(
                     I18n.t("metadata.search.no_match", "未搜索到匹配项，请确保需查找的对象已加载！"));
         } else {
             findNext(treeView);
@@ -238,10 +238,10 @@ public class TreeNavigator {
         // 如果是最后一个，提示用户下一次将从头开始
         if (MetadataTreeviewUtil.currentIndex == MetadataTreeviewUtil.searchResults.size() - 1) {
             if(MetadataTreeviewUtil.currentIndex==0){
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.search.only_one", "仅匹配当前一个！"));
             }else{
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.search.wrap", "搜索已到最后，下一个从头开始搜索！"));
             }
         }
@@ -285,7 +285,7 @@ public class TreeNavigator {
             dialog.setTitle(I18n.t("createconnect.dialog.title"));
             Stage alterstage = (Stage) dialog.getDialogPane().getScene().getWindow();
             alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
-            dialogPane.getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+            AppState.applyAppStylesheet(dialogPane.getScene());
             TextField connectNameTextField = (TextField) loader.getNamespace().get("connectNameTextField");
             dialogPane.getScene().getWindow().setOnShown(event -> {
                 connectNameTextField.requestFocus();

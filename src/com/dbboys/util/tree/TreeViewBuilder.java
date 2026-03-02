@@ -1,10 +1,9 @@
 package com.dbboys.util.tree;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.MetadataTreeviewUtil;
 import com.dbboys.util.SqliteDBaccessUtil;
 import com.dbboys.vo.*;
 import javafx.geometry.Pos;
@@ -32,8 +31,8 @@ public class TreeViewBuilder {
         if(!(treeData instanceof ConnectFolder)){
             treeItem.expandedProperty().addListener((obs, wasExpanded, isNowExpanded) -> {
                 if (isNowExpanded&& treeItem.getChildren().isEmpty()){
-                    Main.mainController.databaseMetaTreeView.getSelectionModel().clearSelection();;
-                    Main.mainController.databaseMetaTreeView.getSelectionModel().select(treeItem);
+                    AppState.getDatabaseMetaTreeView().getSelectionModel().clearSelection();;
+                    AppState.getDatabaseMetaTreeView().getSelectionModel().select(treeItem);
                     TreeDataLoader.treeItemAddChildrens(treeItem);
                 };
             });
@@ -61,7 +60,7 @@ public class TreeViewBuilder {
         alert.setHeaderText("");
         alert.setGraphic(null);
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
         HBox hbox = new HBox();

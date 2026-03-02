@@ -12,6 +12,7 @@ import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
 import com.dbboys.app.AppExecutor;
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.vo.ConnectFolder;
 import com.dbboys.vo.Connect;
@@ -63,11 +64,11 @@ public class CreateConnectController {
     private final ConnectionService connectionService = com.dbboys.app.AppContext.get(ConnectionService.class);
 
     @FXML
-    public ChoiceBox connectFolderChoiceBox;
+    public ChoiceBox<ConnectFolder> connectFolderChoiceBox;
     @FXML
-    private ChoiceBox dbTypeChoiceBox;
+    private ChoiceBox<String> dbTypeChoiceBox;
     @FXML
-    private ChoiceBox driverChoiceBox;
+    private ChoiceBox<String> driverChoiceBox;
     @FXML
     private CustomUserTextField connectNameTextField;
     @FXML
@@ -162,7 +163,7 @@ public class CreateConnectController {
             connect.setParentId(((ConnectFolder)newValue).getId());
         });
         //根据目录里的文件夹，读取数据库种类
-        List dbtypes=new ArrayList<String>();
+        List<String> dbtypes = new ArrayList<>();
         File folder = new File("extlib");
         File[] dbTypeFolders = folder.listFiles();
         if (dbTypeFolders != null) {
@@ -175,7 +176,7 @@ public class CreateConnectController {
             log.warn("extlib directory not found or not accessible: {}", folder.getAbsolutePath());
         }
         Collections.sort(dbtypes);
-        ObservableList<Connect> dbtypelist = FXCollections.observableArrayList(dbtypes);
+        ObservableList<String> dbtypelist = FXCollections.observableArrayList(dbtypes);
         dbTypeChoiceBox.setItems(dbtypelist);
 
 
@@ -183,13 +184,13 @@ public class CreateConnectController {
         driverChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable,oldValue,newValue)->{
             //driverChoiceBox.setItems会触发此事件，此时newvalue==null，需要排除
             if(newValue!=null){
-                connect.setDriver(newValue.toString());
+                connect.setDriver(newValue);
             }
         });
         //dbtype发生变化监听，变化后设置connect的dbtype属性，并改变driver驱动列表
         dbTypeChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable,oldValue,newValue)->{
-            connect.setDbtype(newValue.toString());
-            List driverList=new ArrayList<String>();
+            connect.setDbtype(newValue);
+            List<String> driverList = new ArrayList<>();
             File driverfolder = new File("extlib/"+connect.getDbtype());
             File[] driverFiles = driverfolder.listFiles();
             if (driverFiles != null) {
@@ -202,7 +203,7 @@ public class CreateConnectController {
                 log.warn("Driver directory not found or not accessible: {}", driverfolder.getAbsolutePath());
             }
             Collections.sort(driverList);
-            ObservableList<Connect> driverItems = FXCollections.observableArrayList(driverList);
+            ObservableList<String> driverItems = FXCollections.observableArrayList(driverList);
             driverChoiceBox.setItems(driverItems); //触发内容变化监听
             driverChoiceBox.getSelectionModel().select(driverItems.size()-1);
         });
@@ -513,7 +514,7 @@ public class CreateConnectController {
                     alert.setContentText(I18n.t("createconnect.confirm.delete_driver.content"));
                     alert.setGraphic(null); //避免显示问号
                     //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-                    alert.getDialogPane().getScene().getStylesheets().add(getClass().getResource("/com/dbboys/css/app.css").toExternalForm());
+                    AppState.applyAppStylesheet(alert.getDialogPane().getScene());
                     Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
                     alterstage.getIcons().add(new Image("file:images/logo.png"));
 
@@ -607,7 +608,7 @@ public class CreateConnectController {
         alert.setHeaderText("");
         alert.setGraphic(null); //避免显示问号
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(getClass().getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image("file:images/logo.png"));
         HBox hbox = new HBox();
@@ -646,7 +647,7 @@ public class CreateConnectController {
         alert.setHeaderText("");
         alert.setGraphic(null); //避免显示问号
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(getClass().getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image("file:images/logo.png"));
         HBox hbox = new HBox();
@@ -755,9 +756,9 @@ public class CreateConnectController {
                             if (treeDataParam != null && treeDataParam instanceof Connect &&!isCopy) {
                                 Platform.runLater(()->{
                                     TreeItem<TreeData> currItem = new TreeItem<>();
-                                    currItem = Main.mainController.databaseMetaTreeView.getSelectionModel().getSelectedItem();
+                                    currItem = AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem();
                                     currItem.getParent().getChildren().remove(currItem);
-                                    MetadataTreeviewUtil.createConnectLeaf(Main.mainController.databaseMetaTreeView, treeItem);
+                                    MetadataTreeviewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
                                     SqliteDBaccessUtil.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节点
 
                                     //如果当前编辑的连接为空或已断开，不处理
@@ -779,7 +780,7 @@ public class CreateConnectController {
 
                             } else { //否则为新建连接或复制连接
                                 Platform.runLater(()-> {
-                                    MetadataTreeviewUtil.createConnectLeaf(Main.mainController.databaseMetaTreeView, treeItem);
+                                    MetadataTreeviewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
                                     //展开触发展开事件，展开事件会连接数据库，改变连接状态
                                     treeItem.setExpanded(true);
                                     //数据库连接后，默认折叠

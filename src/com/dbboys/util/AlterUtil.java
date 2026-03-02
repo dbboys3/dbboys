@@ -1,5 +1,6 @@
 package com.dbboys.util;
 
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconPaths;
 import javafx.geometry.Insets;
@@ -66,10 +67,7 @@ public final class AlterUtil {
         alert.getDialogPane().setContent(new javafx.scene.layout.VBox(text));
         ((javafx.scene.layout.VBox) alert.getDialogPane().getContent()).setPadding(CONTENT_PADDING);
 
-        String style = AlterUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm();
-        if (!alert.getDialogPane().getScene().getStylesheets().contains(style)) {
-            alert.getDialogPane().getScene().getStylesheets().add(style);
-        }
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
 
         Stage stage = (Stage) alert.getDialogPane().getScene().getWindow();
         if (stage.getIcons().isEmpty()) {

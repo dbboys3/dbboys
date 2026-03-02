@@ -1,5 +1,6 @@
 package com.dbboys.service;
 
+import com.dbboys.app.AppExecutor;
 import com.dbboys.impl.IMetaObjectService;
 import com.dbboys.impl.IMetaObjectService.DdlFetcher;
 import com.dbboys.db.MetadataRepository;
@@ -110,7 +111,7 @@ public class TableService implements IMetaObjectService {
         });
 
         loadIndexColumnsTask.setOnFailed(event -> GlobalErrorHandlerUtil.handle(loadIndexColumnsTask.getException()));
-        new Thread(loadIndexColumnsTask).start();
+        AppExecutor.runAsync(loadIndexColumnsTask);
     }
 
     public void refreshTableMeta(Connect connect,
@@ -140,7 +141,7 @@ public class TableService implements IMetaObjectService {
                 onFinishedUi.run();
             }
         });
-        connect.executeSqlTask(new Thread(tableMetaTask));
+        connect.executeSqlTask(tableMetaTask);
     }
 
 

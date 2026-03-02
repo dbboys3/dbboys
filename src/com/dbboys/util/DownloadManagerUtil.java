@@ -1,7 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.i18n.I18n;
 import com.dbboys.service.ConnectionService;
@@ -314,13 +314,13 @@ class DownloadTaskWrapper {
                                 }
                                 if (autoCloseOnComplete) stackPaneRemoveSelf();
                                 if(file.getName().contains("dbboys.upgrade.")){
-                                    Main.mainController.checkVersion();
+                                    AppState.checkVersion();
                                 }else{
                                     if (installerMode && installerInstallFilePathField != null && installerRemotePathField != null) {
                                         installerInstallFilePathField.setText(file.getAbsolutePath());
                                         installerRemotePathField.setText("/tmp/" + file.getName());
                                     }
-                                    NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("download.notice.completed", "下载已完成！"));
+                                    NotificationUtil.showMainNotification(I18n.t("download.notice.completed", "下载已完成！"));
                                 }
                                 //rootPane.setStyle("-fx-background-color: #c8e6c9; -fx-padding: 10;");
                             });
@@ -386,7 +386,7 @@ class DownloadTaskWrapper {
                     }
                     if (!cancelled) {
                         updateProgress(1,1);
-                        Platform.runLater(() -> NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("download.notice.export_completed", "瀵煎嚭宸插畬鎴愶紒")));
+                        Platform.runLater(() -> NotificationUtil.showMainNotification(I18n.t("download.notice.export_completed", "瀵煎嚭宸插畬鎴愶紒")));
                         if (autoCloseOnComplete) stackPaneRemoveSelf();
                     }
                 } finally {
@@ -609,8 +609,10 @@ class DownloadTaskWrapper {
 
         AppExecutor.runAsync(() -> {
             try {
-                if (task != null) task.get(); // 绛夊緟 Task 瀹屽叏缁撴潫
-            } catch (Exception ignored) {}
+                if (task != null) task.get();
+            } catch (Exception e) {
+                log.debug("Task completion wait failed", e);
+            }
 
             // Task 瀹屽叏缁撴潫鍚庡垹闄ゆ枃浠?
             boolean deleted = false;
@@ -618,7 +620,7 @@ class DownloadTaskWrapper {
             while (!deleted && retries-- > 0) {
                 if (tempFile.exists()) deleted = tempFile.delete();
                 if (!deleted) {
-                    try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                    try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                 }
             }
 
@@ -627,13 +629,13 @@ class DownloadTaskWrapper {
                 stackPaneRemoveSelf();
                 if(source instanceof String) {
                     NotificationUtil.showNotification(
-                            Main.mainController.noticePane,
+                            AppState.getNoticePane(),
                             // success ? "鏂囦欢銆? + file.getName() + "銆戜笅杞藉凡鍙栨秷锛? :
                             success ? I18n.t("download.notice.cancelled", "下载已取消！")
                                     : I18n.t("download.notice.delete_failed", "鏂囦欢銆?s銆戝垹闄ゅけ璐ワ紝鍙兘琚崰鐢紒").formatted(file.getName())
                     );
                 }else{
-                    NotificationUtil.showNotification(Main.mainController.noticePane,                     I18n.t("download.notice.export_cancelled", "瀵煎嚭宸插彇娑堬紒"));
+                    NotificationUtil.showMainNotification(                    I18n.t("download.notice.export_cancelled", "瀵煎嚭宸插彇娑堬紒"));
                 }
             });
         });
@@ -671,7 +673,7 @@ public class DownloadManagerUtil {
     }
 
     static {
-        downloadStackPane = Main.mainController.downloadStackPane;
+        downloadStackPane = AppState.getDownloadStackPane();
         // 自动轮播
         AppExecutor.runAsync(() -> {
             try {
@@ -679,7 +681,9 @@ public class DownloadManagerUtil {
                     Thread.sleep(3000); // 每3秒切换
                     Platform.runLater(DownloadManagerUtil::showNextForAllQueues);
                 }
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         });
     }
 
@@ -855,11 +859,13 @@ public class DownloadManagerUtil {
                     try (ResultSet crs = cps.executeQuery()) {
                         if (crs.next()) totalRows = crs.getLong(1);
                     }
-                } catch (Exception ignored) { }
+                } catch (Exception e) {
+                    log.debug("Count query failed, proceeding without total", e);
+                }
 
                 PreparedStatement ps = conn.prepareStatement(sql,
                         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-                try { ps.setFetchSize(500); } catch (Exception ignored) {}
+                try { ps.setFetchSize(500); } catch (Exception e) { log.trace("setFetchSize not supported", e); }
                 ResultSet rs = ps.executeQuery();
                 ResultSetMetaData meta = rs.getMetaData();
                 long finalTotalRows = totalRows;

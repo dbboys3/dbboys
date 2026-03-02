@@ -1,6 +1,6 @@
 package com.dbboys.util.tree;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.impl.IMetaObjectService;
@@ -42,7 +42,7 @@ public class TreeCrudHandler {
         alert.setHeaderText("");
         alert.setGraphic(null); //避免显示问号
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
         HBox hbox = new HBox();
@@ -103,7 +103,7 @@ public class TreeCrudHandler {
                     TreeViewBuilder.reorderTreeview(treeView, selectedItem);
                 }
                 SqliteDBaccessUtil.updateConnectFolder((ConnectFolder) treeData);
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.folder_renamed", "分类已重命名为：%s").formatted(selectedItem.getValue().getName()));
             }else if(treeData instanceof Connect){
                 selectedItem.getValue().setName(newName);
@@ -113,7 +113,7 @@ public class TreeCrudHandler {
                 }
                 SqliteDBaccessUtil.updateConnect((Connect) selectedItem.getValue());
                 TabpaneUtil.isRefreshConnectList();
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
             }else if(treeData instanceof Database){
                 renameDatabaseObject(MetadataTreeviewUtil.databaseService, selectedItem, newName, "database",
@@ -194,7 +194,7 @@ public class TreeCrudHandler {
         service.renameObject(connect, sql, () -> {
             selectedItem.getValue().setName(newName);
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("backsql.notice.renamed", "%s\"%s\"已重命名为\"%s\"")
                             .formatted(objectDisplayName, oldName, newName)
             );
@@ -233,7 +233,7 @@ public class TreeCrudHandler {
                 parent.getChildren().remove(selectedItem);
             }
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("backsql.notice.deleted", "%s\"%s\"已删除！")
                             .formatted(objectDisplayName, selectedItem.getValue().getName())
             );
@@ -258,13 +258,13 @@ public class TreeCrudHandler {
                     TreeNavigator.disconnectFolder(selectedItem);
                     selectedItem.getParent().getChildren().remove(selectedItem);
                     SqliteDBaccessUtil.deleteConnectFolder((ConnectFolder) selectedItem.getValue());
-                    NotificationUtil.showNotification(Main.mainController.noticePane,
+                    NotificationUtil.showMainNotification(
                             I18n.t("metadata.notice.folder_deleted", "数据库连接分类\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
                 }
             } else {
                 SqliteDBaccessUtil.deleteConnectFolder((ConnectFolder)selectedItem.getValue());
                 selectedItem.getParent().getChildren().remove(selectedItem);
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.folder_deleted", "数据库连接分类\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
 
@@ -285,7 +285,7 @@ public class TreeCrudHandler {
                 SqliteDBaccessUtil.deleteConnectLeaf(connect);
                 selectedItem.getParent().getChildren().remove(selectedItem);
                 TabpaneUtil.isRefreshConnectList();
-                NotificationUtil.showNotification(Main.mainController.noticePane,
+                NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
         }else if(treeData instanceof Database){
@@ -349,7 +349,7 @@ public class TreeCrudHandler {
             ((Index)treeData).setIsdisabled(!enabled);
 
             NotificationUtil.showNotification(
-                Main.mainController.noticePane,
+                AppState.getNoticePane(),
                 I18n.t(
                         enabled ? "backsql.notice.index_enabled" : "backsql.notice.index_disabled",
                         enabled ? "索引\"%s\"已启用！" : "索引\"%s\"已禁用！"
@@ -379,7 +379,7 @@ public class TreeCrudHandler {
         Runnable onSucceeded = () -> {
             ((Trigger)treeData).setIsdisabled(!enabled);
             NotificationUtil.showNotification(
-                Main.mainController.noticePane,
+                AppState.getNoticePane(),
                 I18n.t(
                         enabled ? "backsql.notice.trigger_enabled" : "backsql.notice.trigger_disabled",
                         enabled ? "触发器\"%s\"已启用！" : "触发器\"%s\"已禁用！"
@@ -524,8 +524,7 @@ public class TreeCrudHandler {
             }
         }));
 
-        Thread thread = new Thread(ddlTask);
-        TreeNavigator.getMetaConnect(firstItem).executeSqlTask(thread);
+        TreeNavigator.getMetaConnect(firstItem).executeSqlTask(ddlTask);
     }
 
     public static void exportTableData(List<TreeItem<TreeData>> selectedItems, ExportFormat format) {
@@ -564,7 +563,7 @@ public class TreeCrudHandler {
                     chooser.setInitialFileName(baseName + ".sql");
                 }
             }
-            File file = chooser.showSaveDialog(Main.scene.getWindow());
+            File file = chooser.showSaveDialog(AppState.getWindow());
             if (file == null) return;
             if (file.exists()) {
                 file.delete();
@@ -578,7 +577,7 @@ public class TreeCrudHandler {
         // 多表导出：选择目录，按表名各生成一个文件和任务
         DirectoryChooser dirChooser = new DirectoryChooser();
         dirChooser.setTitle(I18n.t("metadata.export.dir.title", "选择导出目录"));
-        File dir = dirChooser.showDialog(Main.scene.getWindow());
+        File dir = dirChooser.showDialog(AppState.getWindow());
         if (dir == null) {
             return;
         }

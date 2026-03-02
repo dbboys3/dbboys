@@ -15,6 +15,10 @@ public class NotificationUtil {
     // 记录每个 noticePane 当前正在播放的动画
     private static final Map<StackPane, SequentialTransition> ACTIVE_ANIMATIONS = new WeakHashMap<>();
 
+    public static void showMainNotification(String message) {
+        showNotification(com.dbboys.app.AppState.getNoticePane(), message);
+    }
+
     public static void showNotification(StackPane noticePane, String message) {
         if (!Platform.isFxApplicationThread()) {
             Platform.runLater(() -> showNotification(noticePane, message));

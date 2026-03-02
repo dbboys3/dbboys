@@ -1,7 +1,7 @@
 package com.dbboys.customnode;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
@@ -171,7 +171,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                             ClipboardContent content = new ClipboardContent();
                             content.putString(url);
                             clipboard.setContent(content);
-                            NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.link_copied"));
+                            NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.link_copied"));
                         });
                         if(DOC_TYPES.contains(ext)||ext.equals("md")){
                             saveAsItem.setOnAction(ev -> {
@@ -186,7 +186,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     return;
                                 }
                                 fileChooser.setInitialFileName(defaultName);
-                                File file = fileChooser.showSaveDialog(Main.scene.getWindow());
+                                File file = fileChooser.showSaveDialog(AppState.getWindow());
 
                                 if (file != null) {
                                     if(file.exists()){
@@ -226,7 +226,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     } else if (saveFileTemp.exists()) {
                                         AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.file_downloading"));
                                     } else {
-                                        NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.download_to_desktop"));
+                                        NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.download_to_desktop"));
                                         DownloadManagerUtil.addDownload(url, saveFile, true, null);
                                     }
 
@@ -278,7 +278,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         textArea.setText(e.getLeft());
                         textArea.prefWidthProperty().bind(
                                 //Bindings.subtract(customGenericStyledArea.widthProperty(), 27)
-                                Bindings.subtract(Main.mainController.sqlTabPane.widthProperty(), 37)
+                                Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 37)
                         );
 
                         textArea.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
@@ -301,7 +301,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                 ClipboardContent content = new ClipboardContent();
                                 content.putString(textArea.getText());
                                 clipboard.setContent(content);
-                                NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.code_block_copied"));
+                                NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.code_block_copied"));
                             }
                         });
 
@@ -321,7 +321,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                             customUserTextField.setText(e.getLeft());
                             customUserTextField.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;-fx-background-color:none;-fx-border-width: 0;-fx-effect:none");
                             customUserTextField.prefWidthProperty().bind(
-                                    Bindings.subtract(Main.mainController.sqlTabPane.widthProperty(), 36)
+                                    Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 36)
                             );
                             customUserTextField.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
                                 if (!newFocus) {
@@ -341,7 +341,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     ClipboardContent content = new ClipboardContent();
                                     content.putString(customUserTextField.getText());
                                     clipboard.setContent(content);
-                                    NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.title_copied"));
+                                    NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.title_copied"));
                                 }
                             });
 
@@ -603,7 +603,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     );
 
                                     // 3. 选择保存路径
-                                    File targetFile = fileChooser.showSaveDialog(Main.scene.getWindow());
+                                    File targetFile = fileChooser.showSaveDialog(AppState.getWindow());
                                     if (targetFile == null) {
                                         return; // 用户取消
                                     }
@@ -616,7 +616,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                                 targetFile.toPath(),
                                                 StandardCopyOption.REPLACE_EXISTING // 覆盖选项
                                         );
-                                        NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.image_saved"));
+                                        NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_saved"));
                                     } catch (IOException e) {
                                         log.error("Operation failed", e);
                                     }
@@ -630,7 +630,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                                     // 复制到剪贴板
                                     clipboard.setContent(content);
-                                    NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("genericstyled.notice.image_copied"));
+                                    NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_copied"));
 
                                 });
                                 imageContextMenu.show(pane, event.getScreenX(), event.getScreenY());

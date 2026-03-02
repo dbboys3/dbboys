@@ -1,6 +1,6 @@
 package com.dbboys.customnode;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.service.TableService;
 import com.dbboys.ui.IconFactory;
@@ -433,7 +433,7 @@ public class CustomTableInfoTab extends CustomTab {
         saveColumnButton.setOnAction(e -> {
             if (tableChangeSubmitting) {
                 NotificationUtil.showNotification(
-                        Main.mainController.noticePane,
+                        AppState.getNoticePane(),
                         I18n.t("tableinfo.save_changes.running", "表结构变更正在后台执行，请等待完成后再保存")
                 );
                 return;
@@ -441,7 +441,7 @@ public class CustomTableInfoTab extends CustomTab {
             List<String> alterSQLList = this.createMode ? generateCreateTableSQL() : generateAlterTableSQL();
             if (alterSQLList == null || alterSQLList.isEmpty()) {
                 NotificationUtil.showNotification(
-                        Main.mainController.noticePane,
+                        AppState.getNoticePane(),
                         I18n.t("tableinfo.save_changes.no_sql", "未检测到可执行的变更SQL")
                 );
                 return;
@@ -469,7 +469,7 @@ public class CustomTableInfoTab extends CustomTab {
                                 colsTableView.refresh();
                             }
                             NotificationUtil.showNotification(
-                                    Main.mainController.noticePane,
+                                    AppState.getNoticePane(),
                                     I18n.t("tableinfo.save_changes.success", "表结构变更已成功执行")
                             );
                             colsTabLoaded = false;
@@ -479,7 +479,7 @@ public class CustomTableInfoTab extends CustomTab {
                             log.error("保存回调处理失败", ex);
                             try {
                                 NotificationUtil.showNotification(
-                                        Main.mainController.noticePane,
+                                        AppState.getNoticePane(),
                                         I18n.t("tableinfo.save_changes.success", "表结构变更已成功执行")
                                 );
                             } catch (Exception notifyEx) {
@@ -492,7 +492,7 @@ public class CustomTableInfoTab extends CustomTab {
                     () -> tableChangeSubmitting = false
             );
             NotificationUtil.showNotification(
-                    Main.mainController.noticePane,
+                    AppState.getNoticePane(),
                     I18n.t("tableinfo.save_changes.queued", "变更SQL已提交后台任务，按顺序执行（共 %d 条）").formatted(alterSQLList.size())
             );
         });
@@ -594,7 +594,7 @@ public class CustomTableInfoTab extends CustomTab {
                                    return null;
                                 }
                             };
-        connect.executeSqlTask(new Thread(task));
+        connect.executeSqlTask(task);
     }
 
     
@@ -635,7 +635,7 @@ public class CustomTableInfoTab extends CustomTab {
                 }               
 
             };
-                            connect.executeSqlTask(new Thread(task));
+                            connect.executeSqlTask(task);
         }
 
         });
@@ -1721,8 +1721,8 @@ private void waitAndSelectCreatedTableNode(String targetName) {
             }
         }
 
-        if (found != null && Main.mainController != null && Main.mainController.databaseMetaTreeView != null) {
-            TreeView<TreeData> metaTreeView = Main.mainController.databaseMetaTreeView;
+        if (found != null && AppState.getMainController() != null && AppState.getDatabaseMetaTreeView() != null) {
+            TreeView<TreeData> metaTreeView = AppState.getDatabaseMetaTreeView();
             metaTreeView.getSelectionModel().clearSelection();
             metaTreeView.getSelectionModel().select(found);
             int row = Math.max(0, metaTreeView.getRow(found));

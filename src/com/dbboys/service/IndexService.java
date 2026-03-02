@@ -76,7 +76,7 @@ public class IndexService implements IMetaObjectService {
                 onFinishedUi.run();
             }
         });
-        connect.executeSqlTask(new Thread(indexMetaTask));
+        connect.executeSqlTask(indexMetaTask);
     }
 
     public void disableIndex(Connect connect, String sql, Runnable onSucceededUi) {

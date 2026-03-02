@@ -1,7 +1,6 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppContext;
-import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 
 import com.dbboys.i18n.I18n;

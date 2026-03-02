@@ -31,7 +31,16 @@ public final class AppState {
     private static final ObjectProperty<ProgressBar> loadProgressBar = new SimpleObjectProperty<>(new ProgressBar(0.1));
     private static Connect lastInstallConnect;
 
+    private static final String APP_STYLESHEET =
+            AppState.class.getResource("/com/dbboys/css/app.css").toExternalForm();
+
     private AppState() {}
+
+    public static String getAppStylesheet() { return APP_STYLESHEET; }
+
+    public static void applyAppStylesheet(Scene s) {
+        if (s != null) s.getStylesheets().add(APP_STYLESHEET);
+    }
 
     // --- MainController ---
     public static MainController getMainController() { return mainController.get(); }
@@ -170,5 +179,18 @@ public final class AppState {
 
     public static Button getStatusBackSqlListButton() {
         return getMainController() == null ? null : getMainController().statusBackSqlListButton;
+    }
+
+    public static void checkVersion() {
+        if (getMainController() != null) getMainController().checkVersion();
+    }
+
+    public static void createConnectLeaf() {
+        if (getMainController() != null) getMainController().createConnectLeaf();
+    }
+
+    public static javafx.scene.Parent getSceneRoot() {
+        Scene s = getScene();
+        return s == null ? null : s.getRoot();
     }
 }

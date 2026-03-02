@@ -1,5 +1,6 @@
 package com.dbboys.customnode;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -62,8 +63,8 @@ public class CustomSqlTab extends CustomTab{
 
         setOnCloseRequest(event1 -> {
             /*避免关闭后双击无响应*/
-            if (Main.mainController.sqlTabPane.getTabs().size() == 1) {
-                Main.mainController.sqlTabPane.setOnMouseClicked(event -> {
+            if (AppState.getSqlTabPane().getTabs().size() == 1) {
+                AppState.getSqlTabPane().setOnMouseClicked(event -> {
                     if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
                         TabpaneUtil.addCustomSqlTab(null);
                     }
@@ -105,7 +106,7 @@ public class CustomSqlTab extends CustomTab{
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle(I18n.t("sql.tab.save_dialog_title", "保存文件"));
             fileChooser.setInitialFileName(getBaseTitle());
-            File file = fileChooser.showSaveDialog(Main.scene.getWindow());
+            File file = fileChooser.showSaveDialog(AppState.getWindow());
             if (file != null) { //用户选择了确认
                 try (FileWriter writer = new FileWriter(file)) {
                     writer.write(content);

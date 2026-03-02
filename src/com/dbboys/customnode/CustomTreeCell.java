@@ -1,6 +1,6 @@
 package com.dbboys.customnode;
 
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
@@ -608,7 +608,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             if (treeItem != null && !treeItem.getChildren().isEmpty()) {
                 MetadataTreeviewUtil.connectFolderInfoItem.fire();
             } else {
-                NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("treecell.notice.no_connection", "当前分类无连接!"));
+                NotificationUtil.showMainNotification(I18n.t("treecell.notice.no_connection", "当前分类无连接!"));
             }
             return;
         }
@@ -624,7 +624,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         String sql = buildSelectSql(item);
         if (!appendAndRunInCurrentSqlTab(sql)) {
             MetadataTreeviewUtil.databaseOpenFileItem.fire();
-            if (Main.mainController.sqlTabPane.getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+            if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
                 currentSqlTab.sqlTabController.sqlInit = sql;
             }
         }
@@ -641,7 +641,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     }
 
     private boolean appendAndRunInCurrentSqlTab(String sql) {
-        if (!(Main.mainController.sqlTabPane.getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab)) {
+        if (!(AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab)) {
             return false;
         }
         TreeItem<TreeData> treeItem = getTreeItem();

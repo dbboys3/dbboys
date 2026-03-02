@@ -3,6 +3,7 @@ package com.dbboys.customnode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.util.ConfigManagerUtil;
 import com.dbboys.util.MarkdownUtil;
@@ -64,13 +65,13 @@ public class CustomTreeviewTab extends Tab {
                         });
                     }
                 }
-                if(Main.mainController!=null){
-                    Main.mainController.mainSplitPane.setDividerPositions(Main.split1Pos);
+                if(AppState.getMainController()!=null){
+                    AppState.getMainSplitPane().setDividerPositions(AppState.getSplit1Pos());
                     Main.sqledit_codearea_is_max=0;
                 }
 
             } else {
-                Main.mainController.mainSplitPane.setDividerPositions(0);
+                AppState.getMainSplitPane().setDividerPositions(0);
                 Main.sqledit_codearea_is_max=1;
                 Platform.runLater(() -> {
                 titleToggleIcon.setFill(Color.valueOf("#ddd"));

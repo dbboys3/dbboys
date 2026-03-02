@@ -1,6 +1,5 @@
 package com.dbboys.util;
 
-import com.dbboys.app.Main;
 import com.dbboys.vo.ConnectFolder;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.TreeData;

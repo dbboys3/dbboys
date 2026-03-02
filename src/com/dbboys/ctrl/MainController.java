@@ -257,7 +257,7 @@ public class MainController {
                     if(db.getString().endsWith(".md")){
                         TabpaneUtil.addCustomMarkdownTab(new File(db.getString()),false);
                     }else{
-                        NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("main.notice.unsupported_markdown_file"));
+                        NotificationUtil.showMainNotification(I18n.t("main.notice.unsupported_markdown_file"));
                     }
                 }
 
@@ -506,7 +506,7 @@ public class MainController {
             if(Main.sqledit_codearea_is_max==0) {
                 //保留两位小数设置，否则可能因为小数过多而设置不准
                 Platform.runLater(() -> {
-                    mainSplitPane.setDividerPositions(Main.split1Pos);
+                    mainSplitPane.setDividerPositions(AppState.getSplit1Pos());
                 });
             }else{
                 Platform.runLater(() -> {
@@ -752,8 +752,8 @@ public class MainController {
             //如果回答确认，执行关闭流程
             if(sureToclosed) {
                 //disconnectAll(); //关闭所有连接,取消此操作，如果连接已中断会导致关闭卡顿，软件关闭会自动关闭连接
-                String split1Content = String.valueOf(Main.split1Pos);
-                String split2Content = String.valueOf(Main.split2Pos);
+                String split1Content = String.valueOf(AppState.getSplit1Pos());
+                String split2Content = String.valueOf(AppState.getSplit2Pos());
                 ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", split1Content);
                 ConfigManagerUtil.setProperty("SPLIT_DRIVER_SQL", split2Content);
                 //log.info("开始执行primaryStage.close()。");
@@ -849,7 +849,7 @@ public class MainController {
 
     //文件-断开所有连接响应函数
     public void disconnectAll() {
-        for (TreeItem<TreeData> ti : Main.mainController.databaseMetaTreeView.getRoot().getChildren()) {
+        for (TreeItem<TreeData> ti : AppState.getDatabaseMetaTreeView().getRoot().getChildren()) {
             MetadataTreeviewUtil.disconnectFolder(ti);
         }
     };
@@ -882,14 +882,14 @@ public class MainController {
 
 
     public void checkInstallEnv(){
-        RemoteCheckEnvUtil.startWizard((Stage) Main.scene.getWindow());
+        RemoteCheckEnvUtil.startWizard((Stage) AppState.getWindow());
     }
     public void installGBase8S(){
-        RemoteInstallerUtil.startWizard((Stage) Main.scene.getWindow());
+        RemoteInstallerUtil.startWizard((Stage) AppState.getWindow());
     }
 
     public void unInstallGBase8S(){
-        RemoteUninstallerUtil.startWizard((Stage) Main.scene.getWindow());
+        RemoteUninstallerUtil.startWizard((Stage) AppState.getWindow());
     }
 
     public void setLanguageZh() {
@@ -907,7 +907,7 @@ public class MainController {
     private void applyLanguage(Locale locale, String noticeKey) {
         I18n.setLocale(locale);
         ConfigManagerUtil.setProperty("UI_LANG", locale.toLanguageTag());
-        NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t(noticeKey));
+        NotificationUtil.showMainNotification(I18n.t(noticeKey));
     }
 
 }

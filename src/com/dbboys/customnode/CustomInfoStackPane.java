@@ -1,7 +1,7 @@
 package com.dbboys.customnode;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
@@ -178,7 +178,7 @@ public class CustomInfoStackPane extends StackPane {
                 }
 
                 */
-                SnapshotUtil.copyToClipboard(image, showNoticeInMain ? Main.mainController.noticePane : noticePane);
+                SnapshotUtil.copyToClipboard(image, showNoticeInMain ? AppState.getNoticePane() : noticePane);
                 finishSnapshot();
             });
         });

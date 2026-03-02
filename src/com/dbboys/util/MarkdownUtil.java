@@ -1,5 +1,6 @@
 package com.dbboys.util;
 
+import com.dbboys.app.AppState;
 import com.dbboys.customnode.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -216,7 +217,7 @@ public class MarkdownUtil {
             alert.setHeaderText("");
             alert.setGraphic(null); //避免显示问号
             //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-            alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+            AppState.applyAppStylesheet(alert.getDialogPane().getScene());
             Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
             alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
             HBox hbox = new HBox();
@@ -567,7 +568,7 @@ public class MarkdownUtil {
         alert.setHeaderText("");
         alert.setGraphic(null); //避免显示问号
         //alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
-        alert.getDialogPane().getScene().getStylesheets().add(MetadataTreeviewUtil.class.getResource("/com/dbboys/css/app.css").toExternalForm());
+        AppState.applyAppStylesheet(alert.getDialogPane().getScene());
         Stage alterstage = (Stage) alert.getDialogPane().getScene().getWindow();
         alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
         HBox hbox = new HBox();
@@ -710,7 +711,7 @@ public class MarkdownUtil {
                     Files.deleteIfExists(dir);
                 } catch (AccessDeniedException e) {
                     // 防御性重试
-                    try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                    try { Thread.sleep(100); } catch (InterruptedException e1) { Thread.currentThread().interrupt(); }
                     Files.deleteIfExists(dir);
                 }
                 return FileVisitResult.CONTINUE;

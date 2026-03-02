@@ -1,7 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.dbboys.i18n.I18n;
@@ -162,6 +162,7 @@ class LuceneIndexer {
 }
 
 class LuceneSearcher {
+    private static final Logger log = LogManager.getLogger(LuceneSearcher.class);
     private final Path indexDir;
     private final Analyzer analyzer = new SmartChineseAnalyzer();
 
@@ -202,7 +203,9 @@ class LuceneSearcher {
                     if (!term.isBlank()) tokens.add(term);
                 }
                 ts.end();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debug("Tokenizer failed, falling back to raw keyword", e);
+            }
 
             if (tokens.isEmpty()) tokens.add(keyword);
 
@@ -364,7 +367,9 @@ public class MarkdownSearchUtil {
                 if (!term.isBlank()) tokens.add(term);
             }
             ts.end();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debug("Tokenizer failed, falling back to raw keyword", e);
+        }
 
         if (tokens.isEmpty()) tokens.add(keyword);
 
@@ -445,7 +450,7 @@ public class MarkdownSearchUtil {
     public static void buildIndex(boolean isNeedNotice) {
         AppExecutor.runAsync(() -> {
             Platform.runLater(()->{
-                Main.mainController.rebuildMarkdownIndexButton.setVisible(false);
+                AppState.getRebuildMarkdownIndexButton().setVisible(false);
             });
         try {
             if (Files.exists(indexDir)) {
@@ -463,15 +468,15 @@ public class MarkdownSearchUtil {
             indexer.buildIndex(Paths.get("docs"));
             Platform.runLater(()->{
                 if(isNeedNotice){
-                    NotificationUtil.showNotification(Main.mainController.noticePane, rebuildDoneBinding.get());
+                    NotificationUtil.showMainNotification(rebuildDoneBinding.get());
                 }
                 Platform.runLater(()->{
-                    Main.mainController.rebuildMarkdownIndexButton.setVisible(true);
+                    AppState.getRebuildMarkdownIndexButton().setVisible(true);
                 });
             });
         } catch (Exception e) {
             Platform.runLater(()-> {
-                        Main.mainController.rebuildMarkdownIndexButton.setVisible(true);
+                        AppState.getRebuildMarkdownIndexButton().setVisible(true);
                         AlterUtil.CustomAlert(errorTitleBinding.get(),
                                 buildFailedBinding.get().formatted(e.getMessage()));
                     });
@@ -489,7 +494,7 @@ public class MarkdownSearchUtil {
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
             List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
             Platform.runLater(()->{
-                Stage mainStage = (Stage) Main.scene.getWindow();
+                Stage mainStage = (Stage) AppState.getWindow();
                 if (!popupListenersAdded) {
                     mainStage.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
                         if (searchResultPopup.isShowing()) {
@@ -535,7 +540,7 @@ public class MarkdownSearchUtil {
                             mainStage.getY() + 56);
                 }else{
                     searchResultPopup.hide();
-                    NotificationUtil.showNotification(Main.mainController.noticePane, noMatchBinding.get());
+                    NotificationUtil.showMainNotification(noMatchBinding.get());
                 }
 
                 DropShadow shadow = new DropShadow();
@@ -572,7 +577,9 @@ public class MarkdownSearchUtil {
             keywordField=warmUpKeywordBinding.get();
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
             List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debug("Index warm-up failed", e);
+        }
     }
 
 

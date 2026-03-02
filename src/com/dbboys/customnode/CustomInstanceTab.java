@@ -1,7 +1,7 @@
 package com.dbboys.customnode;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.app.Main;
+import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.service.AdminService;
 import com.dbboys.ui.IconFactory;
@@ -278,11 +278,11 @@ public class CustomInstanceTab extends CustomTab {
                         //if (result != 0) throw new Exception("创建数据库空间失败，请检查日志错误！");
                         if(result.contains("has been changed to")){
                             Platform.runLater(()->{
-                                NotificationUtil.showNotification(Main.mainController.noticePane, "参数已修改生效！");
+                                NotificationUtil.showMainNotification("参数已修改生效！");
                             });
                         }else if(result.contains("shared memory not initialized")){
                             Platform.runLater(()->{
-                                NotificationUtil.showNotification(Main.mainController.noticePane, "配置文件已修改，数据库未启动，下次启动后生效！");
+                                NotificationUtil.showMainNotification("配置文件已修改，数据库未启动，下次启动后生效！");
                             });
                         }else{
                             Platform.runLater(()->{
@@ -409,7 +409,7 @@ public class CustomInstanceTab extends CustomTab {
                     commit.setText(I18n.t("instance.dialog.create", "创建"));
                 }
                 cancelBtn.setText(I18n.t("common.cancel", "取消"));
-                dialog.initOwner(Main.scene.getWindow());
+                dialog.initOwner(AppState.getWindow());
                 GridPane grid = new GridPane();
                 grid.setHgap(10);
                 grid.setVgap(5);
@@ -639,7 +639,7 @@ public class CustomInstanceTab extends CustomTab {
                             backgroupHbox.setVisible(false);
                             processTask.cancel();
                             cancelBtn.fire();
-                            NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("instance.notice.space_create_success", "空间创建/扩容成功！"));
+                            NotificationUtil.showMainNotification(I18n.t("instance.notice.space_create_success", "空间创建/扩容成功！"));
                             refreshButton.fire();
                         });
                         task.setOnFailed(event1 -> {
@@ -745,7 +745,7 @@ public class CustomInstanceTab extends CustomTab {
                     };
                     task.setOnSucceeded(event1 -> {
                         //cancelBtn.fire();
-                        NotificationUtil.showNotification(Main.mainController.noticePane, String.format(I18n.t("instance.notice.space_deleted", "空间\"%s\"已删除！"), spaceUsage.getName()));
+                        NotificationUtil.showMainNotification(String.format(I18n.t("instance.notice.space_deleted", "空间\"%s\"已删除！"), spaceUsage.getName()));
                         refreshButton.fire();
                     });
                     task.setOnFailed(event1 -> {
@@ -785,7 +785,7 @@ public class CustomInstanceTab extends CustomTab {
                     };
                     task.setOnSucceeded(event1 -> {
                         //cancelBtn.fire();
-                        NotificationUtil.showNotification(Main.mainController.noticePane, String.format(I18n.t("instance.notice.datafile_deleted", "数据文件\"%s\"已删除！"), spaceUsage.getName()));
+                        NotificationUtil.showMainNotification(String.format(I18n.t("instance.notice.datafile_deleted", "数据文件\"%s\"已删除！"), spaceUsage.getName()));
                         refreshButton.fire();
                     });
                     task.setOnFailed(event1 -> {
@@ -816,7 +816,7 @@ public class CustomInstanceTab extends CustomTab {
                     };
                     task.setOnSucceeded(event1 -> {
                         //cancelBtn.fire();
-                        NotificationUtil.showNotification(Main.mainController.noticePane, String.format(I18n.t("instance.notice.datafile_expanded", "数据文件\"%s\"已设置为自动扩展！"), spaceUsage.getName()));
+                        NotificationUtil.showMainNotification(String.format(I18n.t("instance.notice.datafile_expanded", "数据文件\"%s\"已设置为自动扩展！"), spaceUsage.getName()));
                         refreshButton.fire();
                     });
                     task.setOnFailed(event1 -> {
@@ -847,7 +847,7 @@ public class CustomInstanceTab extends CustomTab {
                     };
                     task.setOnSucceeded(event1 -> {
                         //cancelBtn.fire();
-                        NotificationUtil.showNotification(Main.mainController.noticePane, String.format(I18n.t("instance.notice.datafile_unexpanded", "数据文件\"%s\"已关闭自动扩展！"), spaceUsage.getName()));
+                        NotificationUtil.showMainNotification(String.format(I18n.t("instance.notice.datafile_unexpanded", "数据文件\"%s\"已关闭自动扩展！"), spaceUsage.getName()));
                         refreshButton.fire();
                     });
                     task.setOnFailed(event1 -> {
@@ -876,7 +876,7 @@ public class CustomInstanceTab extends CustomTab {
                     };
                     task.setOnSucceeded(event1 -> {
                         //cancelBtn.fire();
-                        NotificationUtil.showNotification(Main.mainController.noticePane, String.format(I18n.t("instance.notice.space_unlimited", "数据库空间\"%s\"已解除大小限制！"), spaceUsage.getName()));
+                        NotificationUtil.showMainNotification(String.format(I18n.t("instance.notice.space_unlimited", "数据库空间\"%s\"已解除大小限制！"), spaceUsage.getName()));
                         refreshButton.fire();
                     });
                     task.setOnFailed(event1 -> {
@@ -954,7 +954,7 @@ public class CustomInstanceTab extends CustomTab {
                 }
             };
             instanceInfoTask.setOnSucceeded(event1 -> {
-                NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("instance.notice.started", "数据库已启动。"));
+                NotificationUtil.showMainNotification(I18n.t("instance.notice.started", "数据库已启动。"));
                 startButton.setDisable(false);
                 startButton.setVisible(false);
                 stopButton.setVisible(true);
@@ -968,7 +968,7 @@ public class CustomInstanceTab extends CustomTab {
                 startButton.setDisable(false);
             });
             startButton.setDisable(true);
-            connect.executeSqlTask(new Thread(instanceInfoTask));
+            connect.executeSqlTask(instanceInfoTask);
         });
 
         stopButton.setOnAction(e -> {
@@ -991,7 +991,7 @@ public class CustomInstanceTab extends CustomTab {
                     stopButton.setDisable(false);
                     stopButton.setVisible(false);
                     startButton.setVisible(true);
-                    NotificationUtil.showNotification(Main.mainController.noticePane, I18n.t("instance.notice.stopped", "数据库已关闭。"));
+                    NotificationUtil.showMainNotification(I18n.t("instance.notice.stopped", "数据库已关闭。"));
                     instanceStatusTextCode.set("offline");
 
                 });
@@ -1001,7 +1001,7 @@ public class CustomInstanceTab extends CustomTab {
                     // NotificationUtil.showNotification(Main.mainController.noticePane,"数据库停止出现异常，请查看日志。");
                 });
                 stopButton.setDisable(true);
-                connect.executeSqlTask(new Thread(instanceInfoTask));
+                connect.executeSqlTask(instanceInfoTask);
             }
         });
         StackPane.setAlignment(hbox, Pos.CENTER);

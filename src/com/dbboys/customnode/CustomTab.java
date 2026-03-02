@@ -1,5 +1,6 @@
 package com.dbboys.customnode;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
@@ -21,7 +22,7 @@ public class CustomTab extends Tab {
 
     public CustomTab(String title) {
         //如果有面板，去掉双击响应事件
-        Main.mainController.sqlTabPane.setOnMouseClicked(null);
+        AppState.getSqlTabPane().setOnMouseClicked(null);
         //super(title);
         //设置标题保证标题溢出下拉正常显示标题
         setText(title);
@@ -36,20 +37,20 @@ public class CustomTab extends Tab {
             if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
                 if(Main.sqledit_codearea_is_max == 0)
                 {
-                    for(Tab tab:Main.mainController.treeviewTabPane.getTabs()){
+                    for(Tab tab:AppState.getTreeviewTabPane().getTabs()){
                         if(((CustomTreeviewTab)tab).titleToggle.isSelected()){
                             ((CustomTreeviewTab)tab).titleToggle.setSelected(false);
                         }
                     }
-                    Main.mainController.mainSplitPane.setDividerPositions(0);
+                    AppState.getMainSplitPane().setDividerPositions(0);
                     Main.sqledit_codearea_is_max = 1;
                 }else{
-                    for(Tab tab:Main.mainController.treeviewTabPane.getTabs()){
+                    for(Tab tab:AppState.getTreeviewTabPane().getTabs()){
                         if(((CustomTreeviewTab)tab).isSelected()){
                             ((CustomTreeviewTab)tab).titleToggle.setSelected(true);
                         }
                     }
-                    Main.mainController.mainSplitPane.setDividerPositions(Main.split1Pos);
+                    AppState.getMainSplitPane().setDividerPositions(AppState.getSplit1Pos());
                     Main.sqledit_codearea_is_max = 0;
                 }
                 if(this instanceof CustomSqlTab){
@@ -88,8 +89,8 @@ public class CustomTab extends Tab {
 
         setOnCloseRequest(event1 -> {
             /*避免关闭后双击无响应*/
-            if (Main.mainController.sqlTabPane.getTabs().size() == 1) {
-                Main.mainController.sqlTabPane.setOnMouseClicked(event -> {
+            if (AppState.getSqlTabPane().getTabs().size() == 1) {
+                AppState.getSqlTabPane().setOnMouseClicked(event -> {
                     if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
                         TabpaneUtil.addCustomSqlTab(null);
                     }

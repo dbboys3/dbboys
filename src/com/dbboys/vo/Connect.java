@@ -270,10 +270,10 @@ public class Connect extends TreeData{
         return getName();
     }
 
-    public void executeSqlTask(Thread thread) {
+    public void executeSqlTask(Runnable task) {
         executorService.submit(() -> {
             try {
-                thread.run();
+                task.run();
             } catch (Exception e) {
                 com.dbboys.util.GlobalErrorHandlerUtil.handle(e);
             }

@@ -1,6 +1,5 @@
 package com.dbboys.util.tree;
 
-import com.dbboys.app.Main;
 import com.dbboys.i18n.I18n;
 import com.dbboys.impl.IMetaObjectService;
 import com.dbboys.util.GlobalErrorHandlerUtil;
@@ -46,7 +45,7 @@ public class TreeDataLoader {
         if(treeItem.getValue() instanceof Connect){
             Connect connect =(Connect)treeItem.getValue();
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                         try{
                               connect.setConn(MetadataTreeviewUtil.metadataService.getConnection(connect));
                               //连接之后切换到gbase模式
@@ -88,11 +87,11 @@ public class TreeDataLoader {
                             });
                             GlobalErrorHandlerUtil.handle(e);
                         }
-                    }));
+                    });
         }else if(treeItem.getValue() instanceof DatabaseFolder){
             //创建子线程加载数据库
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                           final List<Database> databases = new ArrayList<>();
                           try {
                               databases.addAll(MetadataTreeviewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem).getConn(), false));
@@ -124,11 +123,11 @@ public class TreeDataLoader {
                                 treeItem.setExpanded(false);
                             });
                         }
-                    }));
+                    });
         }else if(treeItem.getValue() instanceof UserFolder){
             //创建子线程加载数据库
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                           final List<User> users = new ArrayList<>();
                           try {
                               users.addAll(MetadataTreeviewUtil.userService.getUsers(TreeNavigator.getMetaConnect(treeItem).getConn()));
@@ -151,11 +150,11 @@ public class TreeDataLoader {
                                 treeItem.setExpanded(false);
                             });
                         }
-                    }));
+                    });
         }
         else if(treeItem.getValue() instanceof Database){
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                         ObjectList objectList;
                         try {
                             Database database = TreeNavigator.getCurrentDatabase(treeItem);
@@ -173,7 +172,7 @@ public class TreeDataLoader {
 
                             if(objectList.getInfo()==null){
                                 Platform.runLater(() -> {
-                                    com.dbboys.util.NotificationUtil.showNotification(Main.mainController.noticePane,
+                                    com.dbboys.util.NotificationUtil.showMainNotification(
                                             I18n.t("metadata.notice.database_not_found", "未找到当前数据库，数据库已被删除！"));
                                     treeItem.getParent().getChildren().remove(treeItem);
                                 });
@@ -232,10 +231,10 @@ public class TreeDataLoader {
                                 treeItem.setExpanded(false);
                             });
                         }
-                    }));
+                    });
         }else if (isObjectFolder(treeItem, ObjectFolderKind.SYSTEM_TABLE_VIEW)) {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                         ObjectList objectList;
                         try {
                             objectList = MetadataTreeviewUtil.tableService.loadSystemTables(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
@@ -263,10 +262,10 @@ public class TreeDataLoader {
                                 treeItem.setExpanded(false);
                             });
                         }
-                    }));
+                    });
         }else if (isLoadableObjectFolder(treeItem)) {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                         ObjectList objectList;
                         ObjectFolderKind kind = getObjectFolderKind(treeItem);
                         IMetaObjectService service = getMetaObjectService(kind);
@@ -295,10 +294,10 @@ public class TreeDataLoader {
                                 treeItem.setExpanded(false);
                             });
                         }
-                    }));
+                    });
         }else if(treeItem.getValue() instanceof DBPackage){
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
-                    new Thread(() -> {
+                    () -> {
                         String packageDDL = "";
                         try {
                             //Object parentValue = treeItem.getParent() == null ? null : treeItem.getParent().getValue();
@@ -353,7 +352,7 @@ public class TreeDataLoader {
                             });
                         }
 
-                    }));
+                    });
 
         }
 
