@@ -1,10 +1,12 @@
 package com.dbboys.util;
 
+import com.dbboys.app.AppErrorHandler;
+
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.i18n.I18n;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.vo.Connect;
@@ -306,7 +308,7 @@ class DownloadTaskWrapper {
                             boolean finalMoved = moved;
                             Platform.runLater(() -> {
                                 if (!finalMoved) {
-                                    AlterUtil.CustomAlert(
+                                    AlertUtil.CustomAlert(
                                             I18n.t("download.error.title", "下载失败"),
                                             I18n.t("download.message.rename_failed", "下载完成，但重命名失败")
                                     );
@@ -332,7 +334,7 @@ class DownloadTaskWrapper {
 
             task.setOnFailed(e -> {
                 stackPaneRemoveSelf();
-                Platform.runLater(() -> AlterUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
             });
 
             progressBar.progressProperty().bind(task.progressProperty());
@@ -343,7 +345,7 @@ class DownloadTaskWrapper {
             task = createResultSetExportTask(streamingFormat, streamingResultSet, metaData, file, totalRows);
             task.setOnFailed(e -> {
                 stackPaneRemoveSelf();
-                Platform.runLater(() -> AlterUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
             });
             progressBar.progressProperty().bind(task.progressProperty());
             // 百分比显示在 progressLabel，行数/总行数显示在 speedLabel
@@ -759,7 +761,7 @@ public class DownloadManagerUtil {
             boolean fillInstallerPathWhenDuplicate
     ) {
         if (hostStackPane == null) {
-            AlterUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), I18n.t("download.error.host_missing", "下载容器未初始化"));
+            AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), I18n.t("download.error.host_missing", "下载容器未初始化"));
             return;
         }
         if(file.exists()){
@@ -767,7 +769,7 @@ public class DownloadManagerUtil {
                 installFilePathField.setText(file.getAbsolutePath());
                 remotePathField.setText("/tmp/" + file.getName());
             }
-            AlterUtil.CustomAlert(
+            AlertUtil.CustomAlert(
                     I18n.t("download.error.title", "下载失败"),
                     fileExistsMessage.formatted(file.getAbsolutePath())
             );
@@ -778,7 +780,7 @@ public class DownloadManagerUtil {
         File tempFile=new File(file.getAbsolutePath()+".download");
         if(tempFile.exists()){
             Platform.runLater(() -> {
-               AlterUtil.CustomAlert(
+               AlertUtil.CustomAlert(
                        I18n.t("download.error.title", "下载失败"),
                        downloadingMessage
                );
@@ -877,7 +879,7 @@ public class DownloadManagerUtil {
                 return null;
             }
         };
-        prepTask.setOnFailed(ev -> GlobalErrorHandlerUtil.handle(prepTask.getException()));
+        prepTask.setOnFailed(ev -> AppErrorHandler.handle(prepTask.getException()));
         AppExecutor.runTask(prepTask);
     }
 

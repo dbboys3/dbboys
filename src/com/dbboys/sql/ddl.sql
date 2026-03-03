@@ -1,2 +1,0 @@
--- DDL SQL resources (placeholder)
--- DDLRepository has complex logic, not just string SQL constants.

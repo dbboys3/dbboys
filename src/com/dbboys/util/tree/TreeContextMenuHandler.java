@@ -1,11 +1,13 @@
 package com.dbboys.util.tree;
 
 import com.dbboys.app.AppState;
+import com.dbboys.app.AppErrorHandler;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.IMetaObjectService;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.MetaObjectService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
@@ -69,11 +71,11 @@ public class TreeContextMenuHandler {
                 IconFactory.group(IconPaths.METADATA_ENABLE_ITEM, 0.7, 0.7));
         CustomShortcutMenuItem disableItem = MenuItemUtil.createMenuItemI18n("metadata.menu.disable",
                 IconFactory.group(IconPaths.METADATA_DISABLE_ITEM, 0.06, 0.06));
-        MetadataTreeviewUtil.connectFolderInfoItem = MenuItemUtil.createMenuItemI18n("metadata.menu.folder_connect_info",
+        TreeViewUtil.connectFolderInfoItem = MenuItemUtil.createMenuItemI18n("metadata.menu.folder_connect_info",
                 IconFactory.group(IconPaths.METADATA_CONNECT_FOLDER_INFO_ITEM, 0.55, 0.55));
         CustomShortcutMenuItem createConnectItem = MenuItemUtil.createMenuItemI18n("metadata.menu.create_connection",
                 IconFactory.group(IconPaths.METADATA_CREATE_CONNECT_ITEM, 0.6, 0.6));
-        MetadataTreeviewUtil.databaseOpenFileItem = MenuItemUtil.createMenuItemI18n("metadata.menu.new_sql", "Ctrl+N",
+        TreeViewUtil.databaseOpenFileItem = MenuItemUtil.createMenuItemI18n("metadata.menu.new_sql", "Ctrl+N",
                 IconFactory.group(IconPaths.METADATA_DATABASE_OPEN_FILE_ITEM, 0.6, 0.55));
         //MenuItem disconnectAll = new MenuItem("断开所有连接(Disconnect ALL)",disconnectItemIcon);
         CustomShortcutMenuItem disconnectFolder = MenuItemUtil.createMenuItemI18n("metadata.menu.disconnect_folder",
@@ -88,9 +90,9 @@ public class TreeContextMenuHandler {
                 IconFactory.group(IconPaths.METADATA_FOLD_FOLDER_ITEM, 0.75, 0.75));
         CustomShortcutMenuItem moveItem = MenuItemUtil.createMenuItemI18n("metadata.menu.move_to",
                 IconFactory.group(IconPaths.METADATA_MOVE_ITEM, 0.7, 0.7));
-        MetadataTreeviewUtil.refreshItem = MenuItemUtil.createMenuItemI18n("metadata.menu.refresh", "F5",
+        TreeViewUtil.refreshItem = MenuItemUtil.createMenuItemI18n("metadata.menu.refresh", "F5",
                 IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.7, 0.7));
-        MetadataTreeviewUtil.connectInfoItem = MenuItemUtil.createMenuItemI18n("metadata.menu.instance_info",
+        TreeViewUtil.connectInfoItem = MenuItemUtil.createMenuItemI18n("metadata.menu.instance_info",
                 IconFactory.group(IconPaths.METADATA_CONNECT_INFO_ITEM, 0.55, 0.55));
         CustomShortcutMenuItem connectItem = MenuItemUtil.createMenuItemI18n("metadata.menu.connect",
                 IconFactory.group(IconPaths.METADATA_CONNECT_ITEM, 0.65, 0.65));
@@ -180,7 +182,7 @@ public class TreeContextMenuHandler {
         exportSqlItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.SQL));
         
         //右键连接信息点击响应
-        MetadataTreeviewUtil.connectInfoItem.setOnAction(event->{
+        TreeViewUtil.connectInfoItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect((Connect) selectedItem.getValue());
             TabpaneUtil.addCustomInstanceTab(connect,0);
@@ -243,14 +245,14 @@ public class TreeContextMenuHandler {
             }
             if (event.getCode() == KeyCode.N && event.isControlDown()) {
                 if (selectedItem.getValue() instanceof Database) {
-                    MetadataTreeviewUtil.databaseOpenFileItem.fire();
+                    TreeViewUtil.databaseOpenFileItem.fire();
                     event.consume();
                 }
                 return;
             }
             if (event.getCode() == KeyCode.F5) {
                 if (TreeNavigator.canRefreshItem(selectedItem)) {
-                    MetadataTreeviewUtil.refreshItem.fire();
+                    TreeViewUtil.refreshItem.fire();
                     event.consume();
                 }
                 return;
@@ -296,14 +298,14 @@ public class TreeContextMenuHandler {
         modifyToRawItem.setOnAction(event -> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             TreeData treeData = selectedItem.getValue();
-            Boolean confirm = AlterUtil.CustomAlertConfirm(
+            Boolean confirm = AlertUtil.CustomAlertConfirm(
                     I18n.t("metadata.alert.modify_to_raw.title", "改为裸表"),
                     I18n.t("metadata.alert.modify_to_raw.content", "确定将表\"%s\"更改为裸表吗？裸表具有更高的性能但不支持事务回滚，不建议在生产环境使用！")
                             .formatted(treeData.getName())
             );
             if(confirm){
                 Connect connect = TreeCrudHandler.buildObjectConnect(selectedItem, false);
-                MetadataTreeviewUtil.tableService.modifyTableToRaw(connect, treeData.getName(), () -> 
+                TreeViewUtil.tableService.modifyTableToRaw(connect, treeData.getName(), () -> 
                 {
                     ((Table)treeData).setTableTypeCode("raw");
                     NotificationUtil.showMainNotification(
@@ -318,14 +320,14 @@ public class TreeContextMenuHandler {
         modifyToStandardItem.setOnAction(event -> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             TreeData treeData = selectedItem.getValue();
-            Boolean confirm = AlterUtil.CustomAlertConfirm(
+            Boolean confirm = AlertUtil.CustomAlertConfirm(
                     I18n.t("metadata.alert.modify_to_standard.title", "改为标准表"),
                     I18n.t("metadata.alert.modify_to_standard.content", "确定将表\"%s\"更改为标准表吗？")
                             .formatted(treeData.getName())
             );
             if(confirm){
                 Connect connect = TreeCrudHandler.buildObjectConnect(selectedItem, false);
-                MetadataTreeviewUtil.tableService.modifyTableToStandard(connect, treeData.getName(), () -> 
+                TreeViewUtil.tableService.modifyTableToStandard(connect, treeData.getName(), () -> 
                 {
                     ((Table)treeData).setTableTypeCode("standard");
                     NotificationUtil.showMainNotification(
@@ -348,13 +350,13 @@ public class TreeContextMenuHandler {
                     }
                 }
                 if (hasExternalTable) {
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("metadata.alert.truncate.external_not_supported", "选中项中包含外部表，无法批量清空！")
                     );
                     return;
                 }
-                boolean confirmBatch = AlterUtil.CustomAlertConfirm(
+                boolean confirmBatch = AlertUtil.CustomAlertConfirm(
                         I18n.t("metadata.alert.truncate.title", "清空表"),
                         I18n.t("metadata.alert.truncate.batch_content", "确定要清空选中的%d个表吗？")
                                 .formatted(selectedItems.size())
@@ -367,10 +369,10 @@ public class TreeContextMenuHandler {
                 for (TreeItem<TreeData> item : selectedItems) {
                     sqlList.add("truncate table " + item.getValue().getName());
                 }
-                MetadataTreeviewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
+                TreeViewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
                     for (TreeItem<TreeData> item : selectedItems) {
                         item.getValue().setRunning(true);
-                        MetadataTreeviewUtil.tableService.refreshTableMeta(
+                        TreeViewUtil.tableService.refreshTableMeta(
                                 TreeNavigator.getMetaConnect(item),
                                 TreeNavigator.getCurrentDatabase(item),
                                 item.getValue().getName(),
@@ -387,16 +389,16 @@ public class TreeContextMenuHandler {
             }
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             TreeData treeData = selectedItem.getValue();
-            Boolean confirm = AlterUtil.CustomAlertConfirm(
+            Boolean confirm = AlertUtil.CustomAlertConfirm(
                     I18n.t("metadata.alert.truncate.title", "清空表"),
                     I18n.t("metadata.alert.truncate.content", "确定要清空表\"%s\"吗？")
                             .formatted(treeData.getName())
             );
             if(confirm){
                 Connect connect = TreeCrudHandler.buildObjectConnect(selectedItem, false);
-                MetadataTreeviewUtil.tableService.truncateTable(connect, treeData.getName(), () -> {
+                TreeViewUtil.tableService.truncateTable(connect, treeData.getName(), () -> {
                     selectedItem.getValue().setRunning(true);
-                    MetadataTreeviewUtil.tableService.refreshTableMeta(
+                    TreeViewUtil.tableService.refreshTableMeta(
                             TreeNavigator.getMetaConnect(selectedItem),
                             TreeNavigator.getCurrentDatabase(selectedItem),
                             selectedItem.getValue().getName(),
@@ -432,7 +434,7 @@ public class TreeContextMenuHandler {
         });
 
 
-        MetadataTreeviewUtil.connectFolderInfoItem.setOnAction(event->{
+        TreeViewUtil.connectFolderInfoItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             TabpaneUtil.addConnectsInfoTab((ConnectFolder)selectedItem.getValue());
 
@@ -443,11 +445,11 @@ public class TreeContextMenuHandler {
             ComstomTabUtil.addCustomSqlTab(sql_tabpane,selectedItem.getValue());
         });
     */
-        MetadataTreeviewUtil.databaseOpenFileItem.setOnAction(event->{
+        TreeViewUtil.databaseOpenFileItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect(TreeNavigator.getMetaConnect(selectedItem));
             Database database=TreeNavigator.getCurrentDatabase(selectedItem);
-            connect.setProps(MetadataTreeviewUtil.metadataService.modifyProps(connect,database.getDbLocale()));
+            connect.setProps(TreeViewUtil.metadataService.modifyProps(connect,database.getDbLocale()));
             connect.setDatabase(database.getName());
             TabpaneUtil.addCustomSqlTab(connect);
         });
@@ -501,9 +503,9 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect((Connect) selectedItem.getValue());
             connect.setConn(null);
-            connect.setName(SqliteDBaccessUtil.getCopyName(connect));
+            connect.setName(LocalDbRepository.getCopyName(connect));
             TreeNavigator.showCreateConnectDialog(connect,true);
-            //String result=SqliteDBaccessUtil.createConnect(connect);
+            //String result=LocalDbRepository.createConnect(connect);
             //--------/*
 
         });
@@ -569,12 +571,12 @@ public class TreeContextMenuHandler {
                     passwordField2.requestFocus();
                     event1.consume();
                 } else if (!passwordField1.getText().trim().equals(passwordField2.getText().trim())) {
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("metadata.error.password_not_match", "两次密码输入不一致！"));
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("metadata.error.password_not_match", "两次密码输入不一致！"));
                     event1.consume();
                 } else {
                     event1.consume();
                     Connect connect=TreeCrudHandler.buildObjectConnect(selectedItem,true);
-                    MetadataTreeviewUtil.userService.executeObjectSql(connect, "create user " + userName.getText().trim() + " with password '" + passwordField1.getText().trim() + "'", 
+                    TreeViewUtil.userService.executeObjectSql(connect, "create user " + userName.getText().trim() + " with password '" + passwordField1.getText().trim() + "'", 
                     () -> {
                         selectedItem.getChildren().clear();
                         selectedItem.setExpanded(false);
@@ -640,12 +642,12 @@ public class TreeContextMenuHandler {
                     passwordField2.requestFocus();
                     event1.consume();
                 } else if (!passwordField1.getText().trim().equals(passwordField2.getText().trim())) {
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("metadata.error.password_not_match", "两次密码输入不一致！"));
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("metadata.error.password_not_match", "两次密码输入不一致！"));
                     event1.consume();
                 } else {
                     event1.consume();
                     Connect connect=TreeCrudHandler.buildObjectConnect(selectedItem,true);
-                    MetadataTreeviewUtil.userService.executeObjectSql(
+                    TreeViewUtil.userService.executeObjectSql(
                             connect,
                             "alter user " + selectedItem.getValue().getName() + " modify password '" + passwordField1.getText().trim() + "'",
                             () -> {
@@ -667,7 +669,7 @@ public class TreeContextMenuHandler {
         updateStatisticsItem.setOnAction(event -> {
             List<TreeItem<TreeData>> selectedItems = new ArrayList<>(treeView.getSelectionModel().getSelectedItems());
             if (TreeNavigator.isMultiTableSelection(selectedItems)) {
-                boolean confirmBatch = AlterUtil.CustomAlertConfirm(
+                boolean confirmBatch = AlertUtil.CustomAlertConfirm(
                         I18n.t("backsql.confirm.update_statistics.title", "统计更新"),
                         I18n.t("backsql.confirm.update_statistics.batch_content", "确定要对选中的%d个表执行统计更新吗？")
                                 .formatted(selectedItems.size())
@@ -680,7 +682,7 @@ public class TreeContextMenuHandler {
                 for (TreeItem<TreeData> item : selectedItems) {
                     sqlList.add("update statistics for table " + item.getValue().getName());
                 }
-                MetadataTreeviewUtil.tableService.executeObjectSqls(connect, sqlList, () -> NotificationUtil.showMainNotification(
+                TreeViewUtil.tableService.executeObjectSqls(connect, sqlList, () -> NotificationUtil.showMainNotification(
                         I18n.t("backsql.notice.batch_update_statistics_submitted", "%d个表统计更新已完成！")
                                 .formatted(selectedItems.size())
                 ));
@@ -689,7 +691,7 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             TreeData treeData = selectedItem.getValue();
             Connect connect = TreeCrudHandler.buildObjectConnect(selectedItem, false);
-            boolean confirm = AlterUtil.CustomAlertConfirm(
+            boolean confirm = AlertUtil.CustomAlertConfirm(
                         I18n.t("backsql.confirm.update_statistics.title", "统计更新"),
                         I18n.t("backsql.confirm.update_statistics.content", "确定要执行统计更新吗？")
                 );
@@ -697,31 +699,31 @@ public class TreeContextMenuHandler {
                     return;
                 }
             if (treeData instanceof Database) {
-                MetadataTreeviewUtil.databaseService.updateStatistics(connect, "update statistics", ()->{
+                TreeViewUtil.databaseService.updateStatistics(connect, "update statistics", ()->{
                     NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                 });                
             }
             else if (treeData instanceof ObjectFolder) {
                 TreeDataLoader.ObjectFolderKind objectFolderKind = TreeDataLoader.getObjectFolderKind(selectedItem);
                 if(objectFolderKind == TreeDataLoader.ObjectFolderKind.SYSTEM_TABLE_VIEW || objectFolderKind == TreeDataLoader.ObjectFolderKind.TABLES){
-                    MetadataTreeviewUtil.tableService.updateStatistics(connect, "update statistics high for table force", ()->{
+                    TreeViewUtil.tableService.updateStatistics(connect, "update statistics high for table force", ()->{
                         NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });    
                 }
                 else if(objectFolderKind == TreeDataLoader.ObjectFolderKind.PROCEDURES){
-                    MetadataTreeviewUtil.procedureService.updateStatistics(connect, "update statistics for procedure", ()->{
+                    TreeViewUtil.procedureService.updateStatistics(connect, "update statistics for procedure", ()->{
                         NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });    
                 }
             }
             else if(treeData instanceof SysTable||treeData instanceof Table){
-                    MetadataTreeviewUtil.tableService.updateStatisticsForTable(connect, treeData.getName(), ()->{
+                    TreeViewUtil.tableService.updateStatisticsForTable(connect, treeData.getName(), ()->{
                         NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });
                     
             }
             else if(treeData instanceof Procedure){
-                    MetadataTreeviewUtil.procedureService.updateStatistics(connect,"update statistics for procedure "+ treeData.getName(), ()->{
+                    TreeViewUtil.procedureService.updateStatistics(connect,"update statistics for procedure "+ treeData.getName(), ()->{
                         NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });  
             }
@@ -738,7 +740,7 @@ public class TreeContextMenuHandler {
                     writer.write(ddlText);
                     NotificationUtil.showMainNotification( I18n.t("metadata.notice.ddl_saved", "DDL已保存到文件"));
                 } catch (IOException e) {
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
                 }
             }
         }));
@@ -778,7 +780,7 @@ public class TreeContextMenuHandler {
         deleteItem.setOnAction(event -> {
             List<TreeItem<TreeData>> selectedItems = new ArrayList<>(treeView.getSelectionModel().getSelectedItems());
             if (TreeNavigator.isMultiTableSelection(selectedItems)) {
-                boolean confirmBatch = AlterUtil.CustomAlertConfirm(
+                boolean confirmBatch = AlertUtil.CustomAlertConfirm(
                         I18n.t("backsql.confirm.delete_table.title", "删除表"),
                         I18n.t("backsql.confirm.delete_table.batch_content", "确定要删除选中的%d个表吗？")
                                 .formatted(selectedItems.size())
@@ -791,7 +793,7 @@ public class TreeContextMenuHandler {
                 for (TreeItem<TreeData> item : selectedItems) {
                     sqlList.add("drop table " + item.getValue().getName());
                 }
-                MetadataTreeviewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
+                TreeViewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
                     for (TreeItem<TreeData> item : selectedItems) {
                         TreeItem<TreeData> parent = item.getParent();
                         if (parent != null) {
@@ -809,7 +811,7 @@ public class TreeContextMenuHandler {
                 TreeItem<TreeData> firstItem = selectedItems.get(0);
                 String objectType = TreeNavigator.getDeleteObjectType(firstItem.getValue());
                 String objectDisplayName = TreeCrudHandler.getDeleteObjectDisplayName(objectType);
-                boolean confirmBatch = AlterUtil.CustomAlertConfirm(
+                boolean confirmBatch = AlertUtil.CustomAlertConfirm(
                         I18n.t(TreeCrudHandler.getDeleteConfirmTitleKey(objectType), "删除对象"),
                         I18n.t("metadata.alert.delete_object.batch_content", "确定要删除选中的%d个%s吗？")
                                 .formatted(selectedItems.size(), objectDisplayName)
@@ -817,7 +819,7 @@ public class TreeContextMenuHandler {
                 if (!confirmBatch) {
                     return;
                 }
-                IMetaObjectService service = TreeNavigator.getDeleteService(firstItem.getValue());
+                MetaObjectService service = TreeNavigator.getDeleteService(firstItem.getValue());
                 if (service == null) {
                     return;
                 }
@@ -884,7 +886,7 @@ public class TreeContextMenuHandler {
             ButtonType result = alert.showAndWait().orElse(buttonTypeCancel);
             if (result == buttonTypeOk) {
                 selectedItem.setValue(connect);
-                SqliteDBaccessUtil.updateConnect(connect);
+                LocalDbRepository.updateConnect(connect);
                 selectedItem.getParent().getChildren().remove(selectedItem);
                 TreeNavigator.treeViewMoveConnectItem(treeView,selectedItem);
             }
@@ -896,7 +898,7 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             ConnectFolder connectFolder =(ConnectFolder) selectedItem.getValue();
             connectFolder.setExpand(1);
-            SqliteDBaccessUtil.updateConnectFolder(connectFolder);
+            LocalDbRepository.updateConnectFolder(connectFolder);
             selectedItem.setExpanded(true);
         });
 
@@ -905,7 +907,7 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             ConnectFolder connectFolder =(ConnectFolder) selectedItem.getValue();
             connectFolder.setExpand(0);
-            SqliteDBaccessUtil.updateConnectFolder(connectFolder);
+            LocalDbRepository.updateConnectFolder(connectFolder);
             selectedItem.setExpanded(false);
         });
 
@@ -971,12 +973,12 @@ public class TreeContextMenuHandler {
                 else {
                     log.info("selectitem is "+selectedItem.getValue().getName());
                 }
-                dbspaceList = FXCollections.observableArrayList(MetadataTreeviewUtil.databaseService.getDBspaceForCreateDatabase(((Connect) selectedItem.getParent().getValue()).getConn()));
+                dbspaceList = FXCollections.observableArrayList(TreeViewUtil.databaseService.getDBspaceForCreateDatabase(((Connect) selectedItem.getParent().getValue()).getConn()));
             }catch (SQLException e){
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
             catch (Exception e) {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
             comboBox1.setItems(dbspaceList);
             comboBox1.setValue(dbspaceList.get(0));
@@ -1010,11 +1012,11 @@ public class TreeContextMenuHandler {
                 Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
                 String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
                 connect.setDatabase("sysmaster");
-                connect.setProps(MetadataTreeviewUtil.connectionService.modifyProps(connect, dbLocale));
+                connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, dbLocale));
                 String sql = "create database " + textField.getText() + " in "
                         + ((String) comboBox1.getValue()).replaceAll("\\([^()]*\\)", "")
                         + " with log";
-                MetadataTreeviewUtil.databaseService.executeObjectSql(connect, sql, () -> {
+                TreeViewUtil.databaseService.executeObjectSql(connect, sql, () -> {
                     NotificationUtil.showMainNotification(
                             I18n.t("backsql.notice.database_created", "数据库[%s]创建成功").formatted(textField.getText())
                     );
@@ -1025,12 +1027,12 @@ public class TreeContextMenuHandler {
 
             }
         });
-        MetadataTreeviewUtil.refreshItem.setOnAction(event->{
+        TreeViewUtil.refreshItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             if(selectedItem.isLeaf()){
                 if(selectedItem.getValue() instanceof Table||selectedItem.getValue() instanceof SysTable){
                     selectedItem.getValue().setRunning(true);
-                    MetadataTreeviewUtil.tableService.refreshTableMeta(
+                    TreeViewUtil.tableService.refreshTableMeta(
                             TreeNavigator.getMetaConnect(selectedItem),
                             TreeNavigator.getCurrentDatabase(selectedItem),
                             selectedItem.getValue().getName(),
@@ -1040,7 +1042,7 @@ public class TreeContextMenuHandler {
                 }
                 else if(selectedItem.getValue() instanceof Index){
                     selectedItem.getValue().setRunning(true);
-                    MetadataTreeviewUtil.indexService.refreshIndexMeta(
+                    TreeViewUtil.indexService.refreshIndexMeta(
                             TreeNavigator.getMetaConnect(selectedItem),
                             TreeNavigator.getCurrentDatabase(selectedItem),
                             selectedItem.getValue().getName(),
@@ -1050,7 +1052,7 @@ public class TreeContextMenuHandler {
                 }
                 else if(selectedItem.getValue() instanceof Trigger){
                     selectedItem.getValue().setRunning(true);
-                    MetadataTreeviewUtil.triggerService.refreshTriggerMeta(
+                    TreeViewUtil.triggerService.refreshTriggerMeta(
                             TreeNavigator.getMetaConnect(selectedItem),
                             TreeNavigator.getCurrentDatabase(selectedItem),
                             selectedItem.getValue().getName(),
@@ -1074,12 +1076,12 @@ public class TreeContextMenuHandler {
         setDefaultDatabaseItem.setOnAction(event-> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             ConnectionService.ChangeDefaultDatabaseResult result =
-                    MetadataTreeviewUtil.metadataService.changeDefaultDatabase(TreeNavigator.getMetaConnect(selectedItem),
+                    TreeViewUtil.metadataService.changeDefaultDatabase(TreeNavigator.getMetaConnect(selectedItem),
                             TreeNavigator.getCurrentDatabase(selectedItem));
             if (result.isDisconnected()) {
                 TreeNavigator.connectionDisconnected();
             } else if (result.getErrorCode() != null) {
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), "[" + result.getErrorCode() + "]" + result.getErrorMessage());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), "[" + result.getErrorCode() + "]" + result.getErrorMessage());
             }
             treeView.refresh();
         });
@@ -1142,7 +1144,7 @@ public class TreeContextMenuHandler {
                 moveItem.setDisable(false);
                 modifyconnectItem.setDisable(false);
                 setDefaultDatabaseItem.setDisable(false);
-                MetadataTreeviewUtil.connectFolderInfoItem.setDisable(false);
+                TreeViewUtil.connectFolderInfoItem.setDisable(false);
                 createDatabaseItem.setDisable(false);
                 deleteItem.setDisable(false);
                 renameItem.setDisable(false);
@@ -1240,9 +1242,9 @@ public class TreeContextMenuHandler {
 
                 //连接分类
                 if(selectedItem.getValue() instanceof ConnectFolder){
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.connectFolderInfoItem);
+                    treeview_menu.getItems().add(TreeViewUtil.connectFolderInfoItem);
                     if(selectedItem.getChildren().size()==0){
-                        MetadataTreeviewUtil.connectFolderInfoItem.setDisable(true);
+                        TreeViewUtil.connectFolderInfoItem.setDisable(true);
                     }
                     treeview_menu.getItems().add(createConnectItem);
                     //treeview_menu.getItems().add(addSystemLevel);
@@ -1293,7 +1295,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(separator2);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.connectInfoItem);
+                    treeview_menu.getItems().add(TreeViewUtil.connectInfoItem);
                     treeview_menu.getItems().add(healthCheckItem);
                     treeview_menu.getItems().add(onlinelogItem);
                     treeview_menu.getItems().add(spaceManagerItem);
@@ -1313,7 +1315,7 @@ public class TreeContextMenuHandler {
                             disconnectItem.setDisable(true);
                         }
                     } catch (SQLException e) {
-                        GlobalErrorHandlerUtil.handle(e);
+                        AppErrorHandler.handle(e);
 
                         throw new RuntimeException(e);
                     }
@@ -1325,11 +1327,11 @@ public class TreeContextMenuHandler {
                 //数据库对象文件夹
                 else if(selectedItem.getValue() instanceof DatabaseFolder){
                     treeview_menu.getItems().add(createDatabaseItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                 }
                 else if(selectedItem.getValue() instanceof UserFolder) {
                     treeview_menu.getItems().add(addUserItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                 }
                 else if(selectedItem.getValue() instanceof User) {
                     treeview_menu.getItems().add(modifyUserItem);
@@ -1337,11 +1339,11 @@ public class TreeContextMenuHandler {
                 }
                 //数据库
                 else if(selectedItem.getValue() instanceof Database) {
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.databaseOpenFileItem);
+                    treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
                     treeview_menu.getItems().add(setDefaultDatabaseItem);
                     treeview_menu.getItems().add(updateStatisticsItem);
                     treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                 }
@@ -1355,7 +1357,7 @@ public class TreeContextMenuHandler {
                     }else if(objectFolderKind == TreeDataLoader.ObjectFolderKind.PROCEDURES) {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
                 }
                 //系统表
@@ -1363,7 +1365,7 @@ public class TreeContextMenuHandler {
                     if(!((SysTable)selectedItem.getValue()).getTableTypeCode().equals("view")){
                         treeview_menu.getItems().add(updateStatisticsItem);
                         treeview_menu.getItems().add(copyItem);
-                        treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                        treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     }
                 }
                 //表
@@ -1380,7 +1382,7 @@ public class TreeContextMenuHandler {
                         modifyToStandardItem.setDisable(true);
                     }
                     treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(exportMenu);
@@ -1398,7 +1400,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(enableItem);
                     treeview_menu.getItems().add(disableItem);
                     treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
@@ -1432,7 +1434,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(enableItem);
                     treeview_menu.getItems().add(disableItem);
                     treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
                     if(((Trigger)selectedItem.getValue()).isIsdisabled()) {
@@ -1458,7 +1460,7 @@ public class TreeContextMenuHandler {
                 else if(selectedItem.getValue() instanceof DBPackage) {
                     //treeview_menu.getItems().add(packageDDLItem);
                     treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(MetadataTreeviewUtil.refreshItem);
+                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
                 }

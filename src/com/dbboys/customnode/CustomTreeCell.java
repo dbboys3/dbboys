@@ -4,11 +4,11 @@ import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.GlobalErrorHandlerUtil;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.NotificationUtil;
 import com.dbboys.util.PopupWindowUtil;
 import com.dbboys.util.TabpaneUtil;
-import com.dbboys.util.MetadataTreeviewUtil;
+import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.beans.binding.Bindings;
 import javafx.beans.value.ObservableValue;
@@ -558,7 +558,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
 
         setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
-                MetadataTreeviewUtil.handleDdlAction(getTreeView(), (treeData, ddlText) -> {
+                TreeViewUtil.handleDdlAction(getTreeView(), (treeData, ddlText) -> {
                     PopupWindowUtil.openDDLWindow(ddlText);
                  });
             }
@@ -606,24 +606,24 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         if (item instanceof ConnectFolder) {
             TreeItem<TreeData> treeItem = getTreeItem();
             if (treeItem != null && !treeItem.getChildren().isEmpty()) {
-                MetadataTreeviewUtil.connectFolderInfoItem.fire();
+                TreeViewUtil.connectFolderInfoItem.fire();
             } else {
                 NotificationUtil.showMainNotification(I18n.t("treecell.notice.no_connection", "当前分类无连接!"));
             }
             return;
         }
         if (item instanceof Connect) {
-            MetadataTreeviewUtil.connectInfoItem.fire();
+            TreeViewUtil.connectInfoItem.fire();
             return;
         }
         if (item instanceof Database) {
-            MetadataTreeviewUtil.databaseOpenFileItem.fire();
+            TreeViewUtil.databaseOpenFileItem.fire();
             return;
         }
 
         String sql = buildSelectSql(item);
         if (!appendAndRunInCurrentSqlTab(sql)) {
-            MetadataTreeviewUtil.databaseOpenFileItem.fire();
+            TreeViewUtil.databaseOpenFileItem.fire();
             if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
                 currentSqlTab.sqlTabController.sqlInit = sql;
             }
@@ -651,9 +651,9 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             return false;
         }
         boolean sameConnect = currentSqlTab.sqlTabController.sqlConnectChoiceBox.getValue().getName()
-                .equals(MetadataTreeviewUtil.getMetaConnect(treeItem).getName());
+                .equals(TreeViewUtil.getMetaConnect(treeItem).getName());
         boolean sameDatabase = currentSqlTab.sqlTabController.sqlDbChoiceBox.getValue().getName()
-                .equals(MetadataTreeviewUtil.getCurrentDatabase(treeItem).getName());
+                .equals(TreeViewUtil.getCurrentDatabase(treeItem).getName());
         boolean runnable = !currentSqlTab.sqlTabController.sqlRunButton.isDisable();
         if (!(sameConnect && sameDatabase && runnable)) {
             return false;

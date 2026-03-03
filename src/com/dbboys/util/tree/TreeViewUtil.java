@@ -1,9 +1,10 @@
-package com.dbboys.util;
+package com.dbboys.util.tree;
 
 import com.dbboys.app.AppContext;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.service.DatabaseService;
 import com.dbboys.service.FunctionService;
 import com.dbboys.service.IndexService;
@@ -15,7 +16,6 @@ import com.dbboys.service.TableService;
 import com.dbboys.service.TriggerService;
 import com.dbboys.service.UserService;
 import com.dbboys.service.ViewService;
-import com.dbboys.util.tree.*;
 import com.dbboys.vo.*;
 import javafx.scene.control.*;
 import java.util.ArrayList;
@@ -24,7 +24,7 @@ import java.util.function.BiConsumer;
 
 
 
-public class MetadataTreeviewUtil {
+public class TreeViewUtil {
 
 
     //public static ExecutorService executorService;
@@ -75,8 +75,8 @@ public class MetadataTreeviewUtil {
         treeView.getSelectionModel().select(rootItem);
         treeView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         treeView.setShowRoot(false);
-        List<ConnectFolder> connectFolders = SqliteDBaccessUtil.getConnectFolders();
-        List<Connect> connectLeafs = SqliteDBaccessUtil.getConnectLeafs();
+        List<ConnectFolder> connectFolders = LocalDbRepository.getConnectFolders();
+        List<Connect> connectLeafs = LocalDbRepository.getConnectLeafs();
         //添加分类节点
         for(ConnectFolder connectFolder : connectFolders){
             TreeItem<TreeData> connectFolderItem = createTreeItem(connectFolder);

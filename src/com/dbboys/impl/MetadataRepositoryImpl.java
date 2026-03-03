@@ -1,7 +1,8 @@
-package com.dbboys.db;
+package com.dbboys.impl;
 
 import com.dbboys.i18n.I18n;
 import com.dbboys.db.DDLRepository;
+import com.dbboys.db.SqlRunner;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.*;
 
@@ -11,7 +12,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MetadataRepository implements com.dbboys.impl.IMetadataRepository {
+public class MetadataRepositoryImpl implements com.dbboys.api.MetadataRepository {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 30;
 
     private static final String SQL_DATABASES_GBASE = """

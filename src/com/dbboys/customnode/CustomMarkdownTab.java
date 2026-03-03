@@ -4,7 +4,7 @@ import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.AlterUtil;
+import com.dbboys.util.AlertUtil;
 import com.dbboys.util.TabpaneUtil;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -159,7 +159,7 @@ public class CustomMarkdownTab extends CustomTab{
             }
 
             if (hasUnsavedChanges()) {
-                boolean confirmClose = AlterUtil.CustomAlertConfirm(
+                boolean confirmClose = AlertUtil.CustomAlertConfirm(
                         I18n.t("markdown.tab.close_title", "关闭文件"),
                         String.format(I18n.t("markdown.tab.close_confirm", "文件【%s】未保存，确定要关闭吗？"), getTitle().replace("*", ""))
                 );
@@ -357,7 +357,7 @@ public class CustomMarkdownTab extends CustomTab{
     }
 
     private void showErrorAlert(IOException e) {
-        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
     }
 
     private void switchToEditMode(Button editButton) {

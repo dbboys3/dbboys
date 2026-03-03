@@ -3,7 +3,7 @@ package com.dbboys.util.tree;
 import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.SqliteDBaccessUtil;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.*;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -97,7 +97,7 @@ public class TreeViewBuilder {
             ConnectFolder connectFolder = new ConnectFolder();
             connectFolder.setName(textField.getText());
             connectFolder.setExpand(1);
-            SqliteDBaccessUtil.createConnectFolder(connectFolder);
+            LocalDbRepository.createConnectFolder(connectFolder);
             TreeItem<TreeData> treeItem = createTreeItem(connectFolder);
             treeView.getRoot().getChildren().add(treeItem);
             reorderTreeview(treeView,treeItem);

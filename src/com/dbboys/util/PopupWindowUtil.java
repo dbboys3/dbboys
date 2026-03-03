@@ -1,6 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppState;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
@@ -294,7 +295,7 @@ public class PopupWindowUtil {
 
     public static void openSqlHistoryPopupWindow(Integer id) {
         sqlHistoryTableView.getItems().clear();
-        sqlHistoryTableView.getItems().addAll(SqliteDBaccessUtil.getSqlHistoryList(id));
+        sqlHistoryTableView.getItems().addAll(LocalDbRepository.getSqlHistoryList(id));
         sqlHistoryTableView.scrollTo(sqlHistoryTableView.getItems().size());
         sqlHistoryPopupStage.show();
     }

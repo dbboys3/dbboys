@@ -477,7 +477,7 @@ public class MarkdownSearchUtil {
         } catch (Exception e) {
             Platform.runLater(()-> {
                         AppState.getRebuildMarkdownIndexButton().setVisible(true);
-                        AlterUtil.CustomAlert(errorTitleBinding.get(),
+                        AlertUtil.CustomAlert(errorTitleBinding.get(),
                                 buildFailedBinding.get().formatted(e.getMessage()));
                     });
             log.error("Operation failed", e);
@@ -553,7 +553,7 @@ public class MarkdownSearchUtil {
             });
         } catch (Exception e) {
             Platform.runLater(()->{
-                AlterUtil.CustomAlert(errorTitleBinding.get(), e.getMessage());
+                AlertUtil.CustomAlert(errorTitleBinding.get(), e.getMessage());
             });
             log.error("Operation failed", e);
         }

@@ -1,9 +1,11 @@
 package com.dbboys.ctrl;
 
 import com.dbboys.app.*;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.*;
+import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -327,7 +329,7 @@ public class MainController {
             if(!connectSearchTextField.getText().equals(oldValue.replace(" ", ""))){
                 String searchText=connectSearchTextField.getText();
                 if (!searchText.isEmpty()&&searchText.length()>=2) {
-                    MetadataTreeviewUtil.searchTree(databaseMetaTreeView,searchText,connectSearchButton);
+                    TreeViewUtil.searchTree(databaseMetaTreeView,searchText,connectSearchButton);
                 }else{
                     connectSearchButton.setDisable(true);
                 }
@@ -741,7 +743,7 @@ public class MainController {
             Boolean sureToclosed=true;
             for (Tab tab : sqlTabPane.getTabs()) {
                 if (tab.getText().startsWith("*")) {
-                    if(!AlterUtil.CustomAlertConfirm(I18n.t("common.hint"), I18n.t("main.confirm.unsaved_sql_close"))){
+                    if(!AlertUtil.CustomAlertConfirm(I18n.t("common.hint"), I18n.t("main.confirm.unsaved_sql_close"))){
                         sureToclosed=false;
                         event.consume();
                     }
@@ -771,7 +773,7 @@ public class MainController {
         //设置树根节点
         // 初始化显示连接树
         try {
-            MetadataTreeviewUtil.initDatabaseObjectsTreeview(databaseMetaTreeView);
+            TreeViewUtil.initDatabaseObjectsTreeview(databaseMetaTreeView);
         }catch (Exception e){
         }
     }
@@ -804,7 +806,7 @@ public class MainController {
 
     private void initBackgroundTasks() {
         //清理sql历史记录保留1000行
-        AppExecutor.runAsync(() -> SqliteDBaccessUtil.deleteSqlHistory());
+        AppExecutor.runAsync(() -> LocalDbRepository.deleteSqlHistory());
         //运行一次搜索，避免首次搜索慢
         AppExecutor.runAsync(() -> MarkdownSearchUtil.warmUpIndex());
     }
@@ -830,7 +832,7 @@ public class MainController {
     //文件-新建连接响应函数
 
     public void createConnectLeaf(){
-        MetadataTreeviewUtil.showCreateConnectDialog(null,false);
+        TreeViewUtil.showCreateConnectDialog(null,false);
     }
 
 
@@ -843,14 +845,14 @@ public class MainController {
     //文件-新建连接分类响应函数
 
     public void createConnectFolder() {
-        MetadataTreeviewUtil.createConnectFolder(databaseMetaTreeView);
+        TreeViewUtil.createConnectFolder(databaseMetaTreeView);
     }
 
 
     //文件-断开所有连接响应函数
     public void disconnectAll() {
         for (TreeItem<TreeData> ti : AppState.getDatabaseMetaTreeView().getRoot().getChildren()) {
-            MetadataTreeviewUtil.disconnectFolder(ti);
+            TreeViewUtil.disconnectFolder(ti);
         }
     };
 

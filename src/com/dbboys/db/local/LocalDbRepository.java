@@ -1,9 +1,9 @@
-package com.dbboys.util;
+package com.dbboys.db.local;
 
 import com.dbboys.vo.ConnectFolder;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.UpdateResult;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -12,8 +12,8 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public  class SqliteDBaccessUtil {
-    private static final Logger log = LogManager.getLogger(SqliteDBaccessUtil.class);
+public  class LocalDbRepository {
+    private static final Logger log = LogManager.getLogger(LocalDbRepository.class);
 
     /** @deprecated Use {@link com.dbboys.db.local.LocalDbConnection#get()} */
     @Deprecated
@@ -288,7 +288,6 @@ public  class SqliteDBaccessUtil {
         }
         return connectLeafList;
     }
-
 
 
 
@@ -615,4 +614,3 @@ public  class SqliteDBaccessUtil {
 
 
 }
-

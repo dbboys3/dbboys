@@ -5,7 +5,9 @@ import com.dbboys.i18n.I18n;
 import com.dbboys.service.TableService;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.*;
+import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -118,10 +120,10 @@ public class CustomTableInfoTab extends CustomTab {
 
     public CustomTableInfoTab(TreeItem<TreeData> treeItem, String tableName) {
 
-        super("[table]"+(MetadataTreeviewUtil.getMetaConnTreeItem(treeItem).getValue().getName()+"."+MetadataTreeviewUtil.getCurrentDatabase(treeItem).getName()+"."+""));
+        super("[table]"+(TreeViewUtil.getMetaConnTreeItem(treeItem).getValue().getName()+"."+TreeViewUtil.getCurrentDatabase(treeItem).getName()+"."+""));
         this.treeItem=treeItem;
-        this.connect=(Connect)MetadataTreeviewUtil.getMetaConnTreeItem(treeItem).getValue();
-        this.database=MetadataTreeviewUtil.getCurrentDatabase(treeItem);
+        this.connect=(Connect)TreeViewUtil.getMetaConnTreeItem(treeItem).getValue();
+        this.database=TreeViewUtil.getCurrentDatabase(treeItem);
         final boolean readOnlyConnect = this.connect.getReadonly() != null && this.connect.getReadonly();
         this.createMode = tableName != null;
         this.tableName = tableName == null ? treeItem.getValue().getName() : tableName.trim();
@@ -452,8 +454,8 @@ public class CustomTableInfoTab extends CustomTab {
             String alterSQL = String.join("\n", alterSQLList);
             log.info("\n" + alterSQL);
             tableChangeSubmitting = true;
-            Connect connect=MetadataTreeviewUtil.buildObjectConnect(treeItem,false);
-            MetadataTreeviewUtil.tableService.modifyTableFromUi(
+            Connect connect=TreeViewUtil.buildObjectConnect(treeItem,false);
+            TreeViewUtil.tableService.modifyTableFromUi(
                     connect,
                     alterSQLList,
                     () -> {
@@ -655,11 +657,11 @@ public class CustomTableInfoTab extends CustomTab {
         }
 
             try {
-                ddl = SqlParserUtil.formatSql(MetadataTreeviewUtil.tableService.getDDL(connect,database, tableName));
+                ddl = SqlParserUtil.formatSql(TreeViewUtil.tableService.getDDL(connect,database, tableName));
                 ;
             } catch (Exception e) {
                 // TODO Auto-generated catch block
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
 
             }
 
@@ -745,17 +747,16 @@ public class CustomTableInfoTab extends CustomTab {
 
 
             try {
-                colInfo =  MetadataTreeviewUtil.tableService.getColumns(connect,database, tableName)
+                colInfo =  TreeViewUtil.tableService.getColumns(connect,database, tableName)
                 ;
-                tableComment = MetadataTreeviewUtil.tableService.getTableComment(
+                tableComment = TreeViewUtil.tableService.getTableComment(
                         connect,
                         database,
                         tableName
                 );
             } catch (Exception e) {
                 // TODO Auto-generated catch block
-                GlobalErrorHandlerUtil.handle(e);
-
+                AppErrorHandler.handle(e);
             }
             
 
@@ -940,7 +941,7 @@ public class CustomTableInfoTab extends CustomTab {
         }
 
         if (rowSet.isEmpty()) {
-            AlterUtil.CustomAlert(
+            AlertUtil.CustomAlert(
                     I18n.t("tableinfo.delete_column.alert.title", "提示"),
                     I18n.t("tableinfo.delete_column.alert.no_selection", "请先选择要删除的列")
             );
@@ -949,7 +950,7 @@ public class CustomTableInfoTab extends CustomTab {
 
         // 至少保留一列
         if (colsTableView.getItems() == null || colsTableView.getItems().size() <= 1) {
-            AlterUtil.CustomAlert(
+            AlertUtil.CustomAlert(
                     I18n.t("tableinfo.delete_column.alert.title", "提示"),
                     I18n.t("tableinfo.delete_column.alert.only_one_left", "当前仅剩一列，不能删除")
             );

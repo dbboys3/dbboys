@@ -1,7 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.db.MetadataRepository;
-import com.dbboys.impl.IMetaObjectService;
+import com.dbboys.api.MetadataRepository;
+import com.dbboys.impl.MetadataRepositoryImpl;
+import com.dbboys.api.MetaObjectService;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
 import com.dbboys.vo.ObjectList;
@@ -12,12 +13,12 @@ import java.util.List;
 //import org.apache.logging.log4j.LogManager;
 //import org.apache.logging.log4j.Logger;
 
-public class DatabaseService implements IMetaObjectService {
+public class DatabaseService implements MetaObjectService {
     //private static final Logger log = LogManager.getLogger(DatabaseService.class);
     private final MetadataRepository metadataRepository;
 
     public DatabaseService() {
-        this(new MetadataRepository());
+        this(new MetadataRepositoryImpl());
     }
 
     public DatabaseService(MetadataRepository metadataRepository) {

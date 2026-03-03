@@ -393,7 +393,7 @@ public class RemoteInstallerUtil {
                             systeminfoTask.setOnFailed(e1 -> {
                                 backgroundHBox.setVisible(false);
                                 String error = systeminfoTask.getException().getMessage();
-                                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                             });
 
                             AppExecutor.runTask(systeminfoTask);
@@ -419,7 +419,7 @@ public class RemoteInstallerUtil {
                         runningTask.setOnFailed(e -> {
                             backgroundHBox.setVisible(false);
                             String error = runningTask.getException().getMessage();
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                         });
 
 
@@ -451,11 +451,11 @@ public class RemoteInstallerUtil {
                 case 3:
                     if(notUploadedRadioButton.isSelected()) {
                         if(installFilePathField.getText().isEmpty()){
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.local_package_empty", "需上传的安装包文件路径不能为空！"));
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.local_package_empty", "需上传的安装包文件路径不能为空！"));
                         }else if(!new File(installFilePathField.getText()).exists()){
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.local_package_missing", "需上传的安装包文件不存在！"));
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.local_package_missing", "需上传的安装包文件不存在！"));
                         }else if(systemInfoArea.getText().contains("x86_64")&&!installFilePathField.getText().contains("x86_64")){
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.cpu_mismatch_local", "需上传的安装包文件与远程服务器CPU不匹配！"));
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.cpu_mismatch_local", "需上传的安装包文件与远程服务器CPU不匹配！"));
                         }else{
                             selectedFile=new File(installFilePathField.getText());
                             remoteFilePath=remotePathField.getText();
@@ -511,7 +511,7 @@ public class RemoteInstallerUtil {
                                 }
                                 backgroundHBox.setVisible(false);
                                 String error = runningTask.getException().getMessage();
-                                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                             });
                             stopButton.setOnAction(event1->{
                                 runningTask.cancel();
@@ -540,7 +540,7 @@ public class RemoteInstallerUtil {
                             try {
                                 if(remoteFileExists(remoteFilePath)) {
                                     /* 如果存在不执行任何操作
-                                    if( AlterUtil.CustomAlertConfirm("文件已存在","安装包在服务器/tmp目录已存在，确定要上传覆盖吗？")){
+                                    if( AlertUtil.CustomAlertConfirm("文件已存在","安装包在服务器/tmp目录已存在，确定要上传覆盖吗？")){
                                         executeCommandWithExitStatus("cd /tmp");
                                         executeCommandWithExitStatus("rm -rf " + shellQuote(remoteFilePath));
                                         new Thread(runningTask).start();
@@ -558,14 +558,14 @@ public class RemoteInstallerUtil {
                         }
                     }else{
                         if(remotePathField.getText().isEmpty()){
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.remote_path_empty", "远程服务器上安装包路径不能为空！"));
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.remote_path_empty", "远程服务器上安装包路径不能为空！"));
                         }else {
                             remoteFilePath=remotePathField.getText();
                             try {
                                 if(!remoteFileExists(remoteFilePath)) {
-                                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.remote_package_missing", "远程服务器上安装包文件不存在！"));
+                                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.remote_package_missing", "远程服务器上安装包文件不存在！"));
                                 }else if(systemInfoArea.getText().contains("x86_64")&&!remoteFilePath.contains("x86_64")){
-                                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.cpu_mismatch_remote", "服务器上的安装包文件与CPU不匹配！"));
+                                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("remote.install.error.cpu_mismatch_remote", "服务器上的安装包文件与CPU不匹配！"));
                                 }else{
                                     initConfigList();
                                     currentStep.set(currentStep.get() + 1);
@@ -1803,7 +1803,7 @@ GBASEEOF
                         customInstallStepHbox14.iconLabel.setVisible(false);
 
                         String error = installTask.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
 
                     try {
@@ -2036,7 +2036,7 @@ GBASEEOF
             }else if(systemInfoArea.getText().contains("aarch64")) {
                 url="https://www.dbboys.com/dl/gbase8s/server/arm/latest.tar";
             }else{
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"),
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("remote.install.error.unknown_platform", "未知系统平台，请手动下载数据库安装包！"));
                 return;
             }
@@ -2060,7 +2060,7 @@ GBASEEOF
                 fileName=DownloadManagerUtil.getRealFileNameFromRedirect(url);
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
-                AlterUtil.CustomAlert(I18n.t("common.download_failed", "下载失败"), e.getMessage());
+                AlertUtil.CustomAlert(I18n.t("common.download_failed", "下载失败"), e.getMessage());
                 return;
             }
 

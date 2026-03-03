@@ -1,4 +1,4 @@
-package com.dbboys.util;
+package com.dbboys.db;
 
 import java.sql.SQLException;
 import java.util.Set;

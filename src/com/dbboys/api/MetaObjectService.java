@@ -1,9 +1,8 @@
-package com.dbboys.impl;
+package com.dbboys.api;
 
-import com.dbboys.service.ConnectionService;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.BackgroundSqlUtil;
-import com.dbboys.util.SqliteDBaccessUtil;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.BackgroundSqlTask;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -20,8 +19,8 @@ import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public interface IMetaObjectService {
-    Logger LOG = LogManager.getLogger(IMetaObjectService.class);
+public interface MetaObjectService {
+    Logger LOG = LogManager.getLogger(MetaObjectService.class);
 
     @FunctionalInterface
     interface DdlFetcher {
@@ -93,7 +92,7 @@ public interface IMetaObjectService {
                     updateResult.setElapsedTime(String.format("%.3f", (endtime - beginTime) / 1000.0) + " sec");
                     updateResult.setEndTime(sdf.format(endtime));
                     updateResult.setMark(I18n.t("backsql.history.mark.ui_task", "界面操作任务,独立事务"));
-                    SqliteDBaccessUtil.saveSqlHistory(updateResult);
+                    LocalDbRepository.saveSqlHistory(updateResult);
                 } catch (SQLException e) {
                     BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
                     throw new Exception("error");
@@ -179,7 +178,7 @@ public interface IMetaObjectService {
                         updateResult.setElapsedTime(String.format("%.3f", (endtime - beginTime) / 1000.0) + " sec");
                         updateResult.setEndTime(sdf.format(endtime));
                         updateResult.setMark(I18n.t("backsql.history.mark.ui_task", "界面操作任务,独立事务"));
-                        SqliteDBaccessUtil.saveSqlHistory(updateResult);
+                        LocalDbRepository.saveSqlHistory(updateResult);
                     }
                 } catch (SQLException e) {
                     BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
@@ -225,7 +224,7 @@ public interface IMetaObjectService {
                         try {
                             CONNECTION_SERVICE = com.dbboys.app.AppContext.get(ConnectionService.class);
                         } catch (IllegalStateException e) {
-                            CONNECTION_SERVICE = new ConnectionService();
+                            CONNECTION_SERVICE = new com.dbboys.impl.ConnectionServiceImpl();
                         }
                     }
                 }

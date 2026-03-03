@@ -223,7 +223,7 @@ public class RemoteUninstallerUtil {
                         runningTask.setOnFailed(e -> {
                             backgroundHBox.setVisible(false);
                             String error = runningTask.getException().getMessage();
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                         });
 
 
@@ -330,7 +330,7 @@ public class RemoteUninstallerUtil {
                         customInstallStepHbox4.iconLabel.setVisible(false);
                         customInstallStepHbox5.iconLabel.setVisible(false);
                         String error = installTask.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
 
                     AppExecutor.runTask(installTask);

@@ -1,7 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.db.MetadataRepository;
-import com.dbboys.impl.IMetaObjectService;
+import com.dbboys.api.MetadataRepository;
+import com.dbboys.impl.MetadataRepositoryImpl;
+import com.dbboys.api.MetaObjectService;
 import com.dbboys.db.DDLRepository;
 import com.dbboys.vo.ObjectList;
 import com.dbboys.vo.User;
@@ -11,11 +12,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class UserService implements IMetaObjectService {
+public class UserService implements MetaObjectService {
     private final MetadataRepository metadataRepository;
 
     public UserService() {
-        this(new MetadataRepository());
+        this(new MetadataRepositoryImpl());
     }
 
     public UserService(MetadataRepository metadataRepository) {

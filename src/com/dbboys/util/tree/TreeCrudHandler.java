@@ -1,9 +1,11 @@
 package com.dbboys.util.tree;
 
 import com.dbboys.app.AppState;
+import com.dbboys.app.AppErrorHandler;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.IMetaObjectService;
+import com.dbboys.api.MetaObjectService;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
 import com.dbboys.vo.*;
@@ -95,7 +97,7 @@ public class TreeCrudHandler {
                 if (selectedItem.getParent().getChildren().size() > 1) { //多于1个分类，重新排序
                     TreeViewBuilder.reorderTreeview(treeView, selectedItem);
                 }
-                SqliteDBaccessUtil.updateConnectFolder((ConnectFolder) treeData);
+                LocalDbRepository.updateConnectFolder((ConnectFolder) treeData);
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.folder_renamed", "分类已重命名为：%s").formatted(selectedItem.getValue().getName()));
             }else if(treeData instanceof Connect){
@@ -104,41 +106,41 @@ public class TreeCrudHandler {
                 if(selectedItem.getParent().getChildren().size()>1) {//多于1个连接重新排序
                     TreeViewBuilder.reorderTreeview(treeView, selectedItem);
                 }
-                SqliteDBaccessUtil.updateConnect((Connect) selectedItem.getValue());
+                LocalDbRepository.updateConnect((Connect) selectedItem.getValue());
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
             }else if(treeData instanceof Database){
-                renameDatabaseObject(MetadataTreeviewUtil.databaseService, selectedItem, newName, "database",
+                renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, newName, "database",
                         true);
             }else if(treeData instanceof Table){
-                renameDatabaseObject(MetadataTreeviewUtil.tableService, selectedItem, newName, "table",
+                renameDatabaseObject(TreeViewUtil.tableService, selectedItem, newName, "table",
                         false);
             }else if(treeData instanceof Index){
-                renameDatabaseObject(MetadataTreeviewUtil.indexService, selectedItem, newName, "index",
+                renameDatabaseObject(TreeViewUtil.indexService, selectedItem, newName, "index",
                         false);
             }else if(treeData instanceof Sequence){
-                renameDatabaseObject(MetadataTreeviewUtil.sequenceService, selectedItem, newName, "sequence",
+                renameDatabaseObject(TreeViewUtil.sequenceService, selectedItem, newName, "sequence",
                         false);
             }else if(treeData instanceof View){
                 //不支持重命名
-                renameDatabaseObject(MetadataTreeviewUtil.viewService, selectedItem, newName, "view",
+                renameDatabaseObject(TreeViewUtil.viewService, selectedItem, newName, "view",
                         false);
             }else if(treeData instanceof Synonym){
                 //不支持重命名
-                renameDatabaseObject(MetadataTreeviewUtil.synonymService, selectedItem, newName, "synonym",
+                renameDatabaseObject(TreeViewUtil.synonymService, selectedItem, newName, "synonym",
                         false);
             }else if(treeData instanceof Trigger){
                 //不支持重命名
-                renameDatabaseObject(MetadataTreeviewUtil.triggerService, selectedItem, newName, "trigger",
+                renameDatabaseObject(TreeViewUtil.triggerService, selectedItem, newName, "trigger",
                         false);
             }else if(treeData instanceof Function){
                 //不支持重命名
-                renameDatabaseObject(MetadataTreeviewUtil.functionService, selectedItem, newName, "function",
+                renameDatabaseObject(TreeViewUtil.functionService, selectedItem, newName, "function",
                         false);
             }else if(treeData instanceof Procedure){
                 //不支持重命名
-                renameDatabaseObject(MetadataTreeviewUtil.procedureService, selectedItem, newName, "procedure",
+                renameDatabaseObject(TreeViewUtil.procedureService, selectedItem, newName, "procedure",
                         false);
             }
         }
@@ -175,7 +177,7 @@ public class TreeCrudHandler {
         return I18n.t("metadata.dialog.rename.title", "重命名");
     }
 
-    public static void renameDatabaseObject(IMetaObjectService service,
+    public static void renameDatabaseObject(MetaObjectService service,
                                              TreeItem<TreeData> selectedItem,
                                              String newName,
                                              String objectType,
@@ -193,7 +195,7 @@ public class TreeCrudHandler {
         });
     }
 
-    public static void deleteDatabaseObject(IMetaObjectService service,
+    public static void deleteDatabaseObject(MetaObjectService service,
                                              TreeItem<TreeData> selectedItem,
                                              String objectType,
                                              boolean useSysmaster) {
@@ -209,7 +211,7 @@ public class TreeCrudHandler {
             confirmContent = I18n.t("metadata.alert.delete_object.content", "确定要删除%s\"%s\"吗？")
                     .formatted(objectDisplayName, objectName);
         }
-        boolean confirm = AlterUtil.CustomAlertConfirm(
+        boolean confirm = AlertUtil.CustomAlertConfirm(
                 I18n.t(confirmTitleKey, "删除对象"),
                 confirmContent
         );
@@ -237,10 +239,10 @@ public class TreeCrudHandler {
         TreeData treeData = selectedItem.getValue();
         if(treeData instanceof  ConnectFolder){
             if (selectedItem.getParent().getChildren().size() <= 1) {
-                AlterUtil.CustomAlert(I18n.t("metadata.alert.delete_folder.title", "删除连接分类"),
+                AlertUtil.CustomAlert(I18n.t("metadata.alert.delete_folder.title", "删除连接分类"),
                         I18n.t("metadata.alert.delete_folder.single", "当前只有一个连接分类，不可删除！"));
             } else if (selectedItem.getChildren().size() > 0) {
-                Boolean confirm = AlterUtil.CustomAlertConfirm(
+                Boolean confirm = AlertUtil.CustomAlertConfirm(
                         I18n.t("metadata.alert.delete_folder.title", "删除连接分类"),
                         I18n.t("metadata.alert.delete_folder.content", "删除连接分类\"%s\"将删除该分类下【%d】个连接，确定要删除该分类吗？")
                                 .formatted(selectedItem.getValue().getName(), selectedItem.getChildren().size())
@@ -248,19 +250,19 @@ public class TreeCrudHandler {
                 if (confirm) {
                     TreeNavigator.disconnectFolder(selectedItem);
                     selectedItem.getParent().getChildren().remove(selectedItem);
-                    SqliteDBaccessUtil.deleteConnectFolder((ConnectFolder) selectedItem.getValue());
+                    LocalDbRepository.deleteConnectFolder((ConnectFolder) selectedItem.getValue());
                     NotificationUtil.showMainNotification(
                             I18n.t("metadata.notice.folder_deleted", "数据库连接分类\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
                 }
             } else {
-                SqliteDBaccessUtil.deleteConnectFolder((ConnectFolder)selectedItem.getValue());
+                LocalDbRepository.deleteConnectFolder((ConnectFolder)selectedItem.getValue());
                 selectedItem.getParent().getChildren().remove(selectedItem);
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.folder_deleted", "数据库连接分类\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
 
         }else if(treeData instanceof Connect){
-            if (AlterUtil.CustomAlertConfirm(
+            if (AlertUtil.CustomAlertConfirm(
                     I18n.t("metadata.alert.delete_connection.title", "删除连接"),
                     I18n.t("metadata.alert.delete_connection.content", "确定要删除连接\"%s\"吗？").formatted(selectedItem.getValue().getName()))) {
                 Connect connect = (Connect) treeData;
@@ -270,37 +272,37 @@ public class TreeCrudHandler {
                         selectedItem.getChildren().clear();
                     }
                 } catch (java.sql.SQLException e) {
-                    GlobalErrorHandlerUtil.handle(e);
+                    AppErrorHandler.handle(e);
                     throw new RuntimeException(e);
                 }
-                SqliteDBaccessUtil.deleteConnectLeaf(connect);
+                LocalDbRepository.deleteConnectLeaf(connect);
                 selectedItem.getParent().getChildren().remove(selectedItem);
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
         }else if(treeData instanceof Database){
-            deleteDatabaseObject(MetadataTreeviewUtil.databaseService, selectedItem, "database", true);
+            deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
         }else if(treeData instanceof Table){
-            deleteDatabaseObject(MetadataTreeviewUtil.tableService, selectedItem, "table", false);
+            deleteDatabaseObject(TreeViewUtil.tableService, selectedItem, "table", false);
         }else if(treeData instanceof View){
-            deleteDatabaseObject(MetadataTreeviewUtil.viewService, selectedItem, "view", false);
+            deleteDatabaseObject(TreeViewUtil.viewService, selectedItem, "view", false);
         }else if(treeData instanceof Index){
-            deleteDatabaseObject(MetadataTreeviewUtil.indexService, selectedItem, "index", false);
+            deleteDatabaseObject(TreeViewUtil.indexService, selectedItem, "index", false);
         }else if(treeData instanceof Sequence){
-            deleteDatabaseObject(MetadataTreeviewUtil.sequenceService, selectedItem, "sequence", false);
+            deleteDatabaseObject(TreeViewUtil.sequenceService, selectedItem, "sequence", false);
         }else if(treeData instanceof Synonym){
-            deleteDatabaseObject(MetadataTreeviewUtil.synonymService, selectedItem, "synonym", false);
+            deleteDatabaseObject(TreeViewUtil.synonymService, selectedItem, "synonym", false);
         }else if(treeData instanceof Trigger){
-            deleteDatabaseObject(MetadataTreeviewUtil.triggerService, selectedItem, "trigger", false);
+            deleteDatabaseObject(TreeViewUtil.triggerService, selectedItem, "trigger", false);
         }else if(treeData instanceof Function){
-            deleteDatabaseObject(MetadataTreeviewUtil.functionService, selectedItem, "function", false);
+            deleteDatabaseObject(TreeViewUtil.functionService, selectedItem, "function", false);
         }else if(treeData instanceof Procedure){
-            deleteDatabaseObject(MetadataTreeviewUtil.procedureService, selectedItem, "procedure", false);
+            deleteDatabaseObject(TreeViewUtil.procedureService, selectedItem, "procedure", false);
         }else if(treeData instanceof DBPackage){
-            deleteDatabaseObject(MetadataTreeviewUtil.packageService, selectedItem, "package", false);
+            deleteDatabaseObject(TreeViewUtil.packageService, selectedItem, "package", false);
         }else if(treeData instanceof User){
-            deleteDatabaseObject(MetadataTreeviewUtil.databaseService, selectedItem, "user", false);
+            deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
         }
     }
 
@@ -308,7 +310,7 @@ public class TreeCrudHandler {
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
         Database currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
         connect.setDatabase(useSysmaster ? "sysmaster" : currentDatabase.getName());
-        connect.setProps(MetadataTreeviewUtil.connectionService.modifyProps(connect, currentDatabase.getDbLocale()));
+        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, currentDatabase.getDbLocale()));
         return connect;
     }
 
@@ -326,7 +328,7 @@ public class TreeCrudHandler {
 
     public static void toggleIndexEnabled(Connect connect, TreeData treeData, boolean enabled) {
         String action = enabled ? "enable" : "disable";
-        boolean confirm = AlterUtil.CustomAlertConfirm(
+        boolean confirm = AlertUtil.CustomAlertConfirm(
                 I18n.t("metadata.alert." + action + "_index.title", enabled ? "启用索引" : "禁用索引"),
                 I18n.t("metadata.alert." + action + "_index.content",
                                 enabled ? "确定要启用索引\"%s\"吗？启用索引可能会较长时间锁表！" : "确定要禁用索引\"%s\"吗？索引禁用后启用需要自动重建耗费较长时间！")
@@ -347,15 +349,15 @@ public class TreeCrudHandler {
             );
         };
         if (enabled) {
-            MetadataTreeviewUtil.indexService.enableIndex(connect, sql, onSucceeded);
+            TreeViewUtil.indexService.enableIndex(connect, sql, onSucceeded);
         } else {
-            MetadataTreeviewUtil.indexService.disableIndex(connect, sql, onSucceeded);
+            TreeViewUtil.indexService.disableIndex(connect, sql, onSucceeded);
         }
     }
 
     public static void toggleTriggerEnabled(Connect connect, TreeData treeData, boolean enabled) {
         String action = enabled ? "enable" : "disable";
-        boolean confirm = AlterUtil.CustomAlertConfirm(
+        boolean confirm = AlertUtil.CustomAlertConfirm(
                 I18n.t("metadata.alert." + action + "_trigger.title", enabled ? "启用触发器" : "禁用触发器"),
                 I18n.t(
                         "metadata.alert." + action + "_trigger.content",
@@ -376,9 +378,9 @@ public class TreeCrudHandler {
             );
         };
         if (enabled) {
-            MetadataTreeviewUtil.triggerService.enableTrigger(connect, sql, onSucceeded);
+            TreeViewUtil.triggerService.enableTrigger(connect, sql, onSucceeded);
         } else {
-            MetadataTreeviewUtil.triggerService.disableTrigger(connect, sql, onSucceeded);
+            TreeViewUtil.triggerService.disableTrigger(connect, sql, onSucceeded);
         }
     }
 
@@ -462,25 +464,25 @@ public class TreeCrudHandler {
                     Database database = TreeNavigator.getCurrentDatabase(item);
                     String ddlText = "";
                     if (data instanceof Table) {
-                        ddlText = MetadataTreeviewUtil.tableService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.tableService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Index) {
-                        ddlText = MetadataTreeviewUtil.indexService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.indexService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof View) {
-                        ddlText = MetadataTreeviewUtil.viewService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.viewService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Trigger) {
-                        ddlText = MetadataTreeviewUtil.triggerService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.triggerService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Sequence) {
-                        ddlText = MetadataTreeviewUtil.sequenceService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.sequenceService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Synonym) {
-                        ddlText = MetadataTreeviewUtil.synonymService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.synonymService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Function) {
-                        ddlText = MetadataTreeviewUtil.functionService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.functionService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof Procedure) {
-                        ddlText = MetadataTreeviewUtil.procedureService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.procedureService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof DBPackage) {
-                        ddlText = MetadataTreeviewUtil.packageService.getDDL(connectParam, database, data.getName());
+                        ddlText = TreeViewUtil.packageService.getDDL(connectParam, database, data.getName());
                     } else if (data instanceof PackageFunction || data instanceof PackageProcedure) {
-                        ddlText = MetadataTreeviewUtil.packageService.getChildrenDDL(
+                        ddlText = TreeViewUtil.packageService.getChildrenDDL(
                                 ((DBPackage) item.getParent().getValue()).getDDL(), data.getName());
                     }
 
@@ -507,7 +509,7 @@ public class TreeCrudHandler {
             String ddlText = ddlTask.getValue();
             onSuccess.accept(firstData, ddlText == null ? "" : ddlText);
         });
-        GlobalErrorHandlerUtil.bindTask(ddlTask, () -> items.forEach(it -> {
+        AppErrorHandler.bindTask(ddlTask, () -> items.forEach(it -> {
             if (it != null && it.getValue() != null) {
                 it.getValue().setRunning(false);
             }

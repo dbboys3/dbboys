@@ -12,10 +12,10 @@ import javafx.stage.Stage;
 
 import java.util.Optional;
 
-public final class AlterUtil {
+public final class AlertUtil {
     private static final Insets CONTENT_PADDING = new Insets(10, 20, 10, 20);
 
-    private AlterUtil() {
+    private AlertUtil() {
     }
 
     public static void showAlert(String title, String message) {

@@ -1,10 +1,11 @@
 package com.dbboys.util.tree;
 
 import com.dbboys.app.AppState;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.ctrl.CreateConnectController;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.IMetaObjectService;
+import com.dbboys.api.MetaObjectService;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
 import com.dbboys.vo.*;
@@ -29,13 +30,13 @@ public class TreeNavigator {
         try {
             ((Connect)treeItem.getValue()).getConn().close();
         } catch (SQLException e) {
-            GlobalErrorHandlerUtil.handle(e);
+            AppErrorHandler.handle(e);
             ((Connect)treeItem.getValue()).setConn(null);
         }
 
         Platform.runLater(() -> {
 
-            if (AlterUtil.CustomAlertConfirm(
+            if (AlertUtil.CustomAlertConfirm(
                     I18n.t("common.error", "错误"),
                     I18n.t("metadata.alert.connection_lost", "数据库已断开连接，是否需要重新连接？"))) {
                 treeItem.getChildren().clear();
@@ -148,7 +149,7 @@ public class TreeNavigator {
             }
             if(needToRemove!=null)AppState.getSqlTabPane().getTabs().remove(needToRemove);
         } catch (SQLException e) {
-            GlobalErrorHandlerUtil.handle(e);
+            AppErrorHandler.handle(e);
             //new CustomAlert("错误",e.toString());
         }
         selectedItem.setExpanded(false);
@@ -193,8 +194,8 @@ public class TreeNavigator {
         }
 
         // 清空之前的搜索结果
-        MetadataTreeviewUtil.searchResults.clear();
-        MetadataTreeviewUtil.currentIndex = -1;
+        TreeViewUtil.searchResults.clear();
+        TreeViewUtil.currentIndex = -1;
 
         // 执行搜索
         TreeItem<TreeData> root = treeView.getRoot();
@@ -203,28 +204,28 @@ public class TreeNavigator {
         }
 
         // 处理搜索结果
-        if (MetadataTreeviewUtil.searchResults.isEmpty()) {
+        if (TreeViewUtil.searchResults.isEmpty()) {
             NotificationUtil.showMainNotification(
                     I18n.t("metadata.search.no_match", "未搜索到匹配项，请确保需查找的对象已加载！"));
         } else {
             findNext(treeView);
             // 更新按钮状态
-            if(MetadataTreeviewUtil.searchResults.size()>1){
+            if(TreeViewUtil.searchResults.size()>1){
                 nextButton.setDisable(false);
             }
         }
     }
 
     public static void findNext(TreeView<TreeData> treeView) {
-        if (MetadataTreeviewUtil.searchResults.isEmpty()) {
+        if (TreeViewUtil.searchResults.isEmpty()) {
             return;
         }
 
         // 更新当前索引
-        MetadataTreeviewUtil.currentIndex = (MetadataTreeviewUtil.currentIndex + 1) % MetadataTreeviewUtil.searchResults.size();
+        TreeViewUtil.currentIndex = (TreeViewUtil.currentIndex + 1) % TreeViewUtil.searchResults.size();
 
         // 获取当前匹配项
-        TreeItem<TreeData> currentItem = MetadataTreeviewUtil.searchResults.get(MetadataTreeviewUtil.currentIndex);
+        TreeItem<TreeData> currentItem = TreeViewUtil.searchResults.get(TreeViewUtil.currentIndex);
 
         // 滚动到并选中当前项
         treeView.getSelectionModel().clearSelection();
@@ -232,8 +233,8 @@ public class TreeNavigator {
         treeView.scrollTo(treeView.getRow(currentItem));
 
         // 如果是最后一个，提示用户下一次将从头开始
-        if (MetadataTreeviewUtil.currentIndex == MetadataTreeviewUtil.searchResults.size() - 1) {
-            if(MetadataTreeviewUtil.currentIndex==0){
+        if (TreeViewUtil.currentIndex == TreeViewUtil.searchResults.size() - 1) {
+            if(TreeViewUtil.currentIndex==0){
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.search.only_one", "仅匹配当前一个！"));
             }else{
@@ -247,7 +248,7 @@ public class TreeNavigator {
 
         //rootitem未设置值可能为null
         if(node.getValue()!=null&&node.getValue().getName().toLowerCase().contains(searchText.toLowerCase())){
-            MetadataTreeviewUtil.searchResults.add(node);
+            TreeViewUtil.searchResults.add(node);
         }
         // 如果节点未展开，则不继续遍历其子节点
         if (!node.isExpanded()) {
@@ -330,7 +331,7 @@ public class TreeNavigator {
                 Connect connect = (Connect) treeData;
                 return connect.getConn() == null || connect.getConn().isClosed();
             } catch (SQLException e) {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
                 return false;
             }
         }
@@ -368,7 +369,7 @@ public class TreeNavigator {
                 Connect connect = (Connect) treeData;
                 return connect.getConn() == null || connect.getConn().isClosed();
             } catch (SQLException e) {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
                 return false;
             }
         }
@@ -493,33 +494,33 @@ public class TreeNavigator {
         return false;
     }
 
-    public static IMetaObjectService getDeleteService(TreeData treeData) {
+    public static MetaObjectService getDeleteService(TreeData treeData) {
         if (treeData instanceof View) {
-            return MetadataTreeviewUtil.viewService;
+            return TreeViewUtil.viewService;
         }
         if (treeData instanceof Index) {
-            return MetadataTreeviewUtil.indexService;
+            return TreeViewUtil.indexService;
         }
         if (treeData instanceof Sequence) {
-            return MetadataTreeviewUtil.sequenceService;
+            return TreeViewUtil.sequenceService;
         }
         if (treeData instanceof Synonym) {
-            return MetadataTreeviewUtil.synonymService;
+            return TreeViewUtil.synonymService;
         }
         if (treeData instanceof Trigger) {
-            return MetadataTreeviewUtil.triggerService;
+            return TreeViewUtil.triggerService;
         }
         if (treeData instanceof Function) {
-            return MetadataTreeviewUtil.functionService;
+            return TreeViewUtil.functionService;
         }
         if (treeData instanceof Procedure) {
-            return MetadataTreeviewUtil.procedureService;
+            return TreeViewUtil.procedureService;
         }
         if (treeData instanceof DBPackage) {
-            return MetadataTreeviewUtil.packageService;
+            return TreeViewUtil.packageService;
         }
         if (treeData instanceof User) {
-            return MetadataTreeviewUtil.databaseService;
+            return TreeViewUtil.databaseService;
         }
         return null;
     }

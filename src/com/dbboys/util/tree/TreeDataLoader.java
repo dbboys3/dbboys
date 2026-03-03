@@ -1,9 +1,8 @@
 package com.dbboys.util.tree;
 
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.IMetaObjectService;
-import com.dbboys.util.GlobalErrorHandlerUtil;
-import com.dbboys.util.MetadataTreeviewUtil;
+import com.dbboys.api.MetaObjectService;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.PopupWindowUtil;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.*;
@@ -43,9 +42,9 @@ public class TreeDataLoader {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
                         try{
-                              connect.setConn(MetadataTreeviewUtil.metadataService.getConnection(connect));
+                              connect.setConn(TreeViewUtil.metadataService.getConnection(connect));
                               //连接之后切换到gbase模式
-                              MetadataTreeviewUtil.metadataService.sessionChangeToGbaseMode(connect.getConn());
+                              TreeViewUtil.metadataService.sessionChangeToGbaseMode(connect.getConn());
 
 
                             //TreeItem<TreeData> scanItem=createTreeItem(checkTreeData);
@@ -74,14 +73,14 @@ public class TreeDataLoader {
                                 treeItem.getChildren().clear();
                                 treeItem.setExpanded(false);
                             });
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                         }
                         catch (Exception e) {
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 treeItem.setExpanded(false);
                             });
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                         }
                     });
         }else if(treeItem.getValue() instanceof DatabaseFolder){
@@ -90,17 +89,17 @@ public class TreeDataLoader {
                     () -> {
                           final List<Database> databases = new ArrayList<>();
                           try {
-                              databases.addAll(MetadataTreeviewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem).getConn(), false));
+                              databases.addAll(TreeViewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem).getConn(), false));
                           } catch (SQLException e) {
                               if (e.getErrorCode() == -201) {
                                   try {
                                       databases.clear();
-                                      databases.addAll(MetadataTreeviewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem).getConn(), true));
+                                      databases.addAll(TreeViewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem).getConn(), true));
                                   } catch (SQLException ex) {
-                                      GlobalErrorHandlerUtil.handle(ex);
+                                      AppErrorHandler.handle(ex);
                                   }
                               } else {
-                                  GlobalErrorHandlerUtil.handle(e);
+                                  AppErrorHandler.handle(e);
                               }
                           }
                         //查询到结果后删除loading节点
@@ -126,9 +125,9 @@ public class TreeDataLoader {
                     () -> {
                           final List<User> users = new ArrayList<>();
                           try {
-                              users.addAll(MetadataTreeviewUtil.userService.getUsers(TreeNavigator.getMetaConnect(treeItem).getConn()));
+                              users.addAll(TreeViewUtil.userService.getUsers(TreeNavigator.getMetaConnect(treeItem).getConn()));
                           } catch (SQLException e) {
-                              GlobalErrorHandlerUtil.handle(e);
+                              AppErrorHandler.handle(e);
                           }
                         //查询到结果后删除loading节点
                         if(users.size()>0){
@@ -154,9 +153,9 @@ public class TreeDataLoader {
                         ObjectList objectList;
                         try {
                             Database database = TreeNavigator.getCurrentDatabase(treeItem);
-                            objectList = MetadataTreeviewUtil.databaseService.loadObjects(TreeNavigator.getMetaConnect(treeItem), database);
+                            objectList = TreeViewUtil.databaseService.loadObjects(TreeNavigator.getMetaConnect(treeItem), database);
                         } catch (Exception e) {
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 treeItem.setExpanded(false);
@@ -233,9 +232,9 @@ public class TreeDataLoader {
                     () -> {
                         ObjectList objectList;
                         try {
-                            objectList = MetadataTreeviewUtil.tableService.loadSystemTables(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
+                            objectList = TreeViewUtil.tableService.loadSystemTables(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
                         } catch (Exception e) {
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 treeItem.setExpanded(false);
@@ -264,14 +263,14 @@ public class TreeDataLoader {
                     () -> {
                         ObjectList objectList;
                         ObjectFolderKind kind = getObjectFolderKind(treeItem);
-                        IMetaObjectService service = getMetaObjectService(kind);
+                        MetaObjectService service = getMetaObjectService(kind);
                         if (service == null) {
                             return;
                         }
                         try {
                             objectList = service.loadObjects(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
                         } catch (Exception e) {
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 treeItem.setExpanded(false);
@@ -297,10 +296,10 @@ public class TreeDataLoader {
                         String packageDDL = "";
                         try {
                             //Object parentValue = treeItem.getParent() == null ? null : treeItem.getParent().getValue();
-                            packageDDL = MetadataTreeviewUtil.packageService.getDDL(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem),treeItem.getValue().getName());
+                            packageDDL = TreeViewUtil.packageService.getDDL(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem),treeItem.getValue().getName());
                     
                         } catch (Exception e) {
-                            GlobalErrorHandlerUtil.handle(e);
+                            AppErrorHandler.handle(e);
                         }
                         if (!packageDDL.isEmpty()) {
                             ((DBPackage) treeItem.getValue()).setDDL(packageDDL);
@@ -444,17 +443,17 @@ public class TreeDataLoader {
         ));
     }
 
-    public static IMetaObjectService getMetaObjectService(ObjectFolderKind kind) {
+    public static MetaObjectService getMetaObjectService(ObjectFolderKind kind) {
         return switch (kind) {
-            case TABLES -> MetadataTreeviewUtil.tableService;
-            case VIEWS -> MetadataTreeviewUtil.viewService;
-            case INDEXES -> MetadataTreeviewUtil.indexService;
-            case SEQUENCES -> MetadataTreeviewUtil.sequenceService;
-            case SYNONYMS -> MetadataTreeviewUtil.synonymService;
-            case TRIGGERS -> MetadataTreeviewUtil.triggerService;
-            case FUNCTIONS -> MetadataTreeviewUtil.functionService;
-            case PROCEDURES -> MetadataTreeviewUtil.procedureService;
-            case PACKAGES -> MetadataTreeviewUtil.packageService;
+            case TABLES -> TreeViewUtil.tableService;
+            case VIEWS -> TreeViewUtil.viewService;
+            case INDEXES -> TreeViewUtil.indexService;
+            case SEQUENCES -> TreeViewUtil.sequenceService;
+            case SYNONYMS -> TreeViewUtil.synonymService;
+            case TRIGGERS -> TreeViewUtil.triggerService;
+            case FUNCTIONS -> TreeViewUtil.functionService;
+            case PROCEDURES -> TreeViewUtil.procedureService;
+            case PACKAGES -> TreeViewUtil.packageService;
             default -> null;
         };
     }

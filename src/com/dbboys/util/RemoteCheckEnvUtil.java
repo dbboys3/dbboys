@@ -242,7 +242,7 @@ public class RemoteCheckEnvUtil {
                             systeminfoTask.setOnFailed(e1 -> {
                                 backgroundHBox.setVisible(false);
                                 String error = systeminfoTask.getException().getMessage();
-                                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                             });
 
                             startTask(systeminfoTask, "RemoteSystemInfoTask");
@@ -268,7 +268,7 @@ public class RemoteCheckEnvUtil {
                         runningTask.setOnFailed(e -> {
                             backgroundHBox.setVisible(false);
                             String error = runningTask.getException().getMessage();
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                         });
 
 

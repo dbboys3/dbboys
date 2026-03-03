@@ -3,11 +3,11 @@ package com.dbboys.ctrl;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.ConnectionErrorHandler;
-import com.dbboys.util.GlobalErrorHandlerUtil;
+import com.dbboys.db.ConnectionErrorHandler;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
 import com.dbboys.vo.TreeData;
@@ -87,7 +87,7 @@ public class SqlConnectionHandler {
                 conn = connectionService.getConnection(newVal);
                 connectionService.changeCommitMode(conn, ctrl.sqlCommitModeChoiceBox.getSelectionModel().getSelectedIndex());
             } catch (Exception e) {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
             if (conn != null) {
                 if (ctrl.sqlConnect.getConn() != null)
@@ -95,7 +95,7 @@ public class SqlConnectionHandler {
                         ctrl.closeResultSet();
                         ctrl.sqlConnect.getConn().close();
                     } catch (SQLException e) {
-                        GlobalErrorHandlerUtil.handle(e);
+                        AppErrorHandler.handle(e);
                     }
                 ctrl.sqlConnect = newVal;
                 ctrl.sqlConnect.setConn(conn);
@@ -141,7 +141,7 @@ public class SqlConnectionHandler {
                             }
                         }
                     } catch (SQLException e) {
-                        GlobalErrorHandlerUtil.handle(e);
+                        AppErrorHandler.handle(e);
                     }
                 }
             }
@@ -256,7 +256,7 @@ public class SqlConnectionHandler {
                     if (ConnectionErrorHandler.isDisconnectError(e)) {
                         ctrl.connectionDisconnected();
                     } else {
-                        GlobalErrorHandlerUtil.handle(e);
+                        AppErrorHandler.handle(e);
                         Platform.runLater(() -> {
                             ctrl.suppressCommitModeChange = true;
                             ctrl.sqlCommitModeChoiceBox.getSelectionModel().select(oldValue);

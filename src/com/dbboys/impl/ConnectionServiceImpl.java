@@ -1,11 +1,14 @@
-package com.dbboys.service;
+package com.dbboys.impl;
 
-import com.dbboys.db.MetadataRepository;
+import com.dbboys.api.MetadataRepository;
+import com.dbboys.api.ConnectionService;
+import com.dbboys.api.ConnectionService.ChangeDefaultDatabaseResult;
+import com.dbboys.api.ConnectionService.SqlWork;
 import com.dbboys.i18n.I18n;
-import com.dbboys.util.GlobalErrorHandlerUtil;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.MD5Util;
-import com.dbboys.util.MetadataTreeviewUtil;
-import com.dbboys.util.SqliteDBaccessUtil;
+import com.dbboys.util.tree.TreeViewUtil;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.*;
 import javafx.scene.control.TreeItem;
 
@@ -26,17 +29,17 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-public class ConnectionService implements com.dbboys.impl.IConnectionService {
-    private static final Logger log = LogManager.getLogger(ConnectionService.class);
+public class ConnectionServiceImpl implements ConnectionService {
+    private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
     private final MetadataRepository metadataRepository;
 
-    public ConnectionService() {
-        this(new MetadataRepository());
+    public ConnectionServiceImpl() {
+        this(new MetadataRepositoryImpl());
     }
 
-    public ConnectionService(MetadataRepository metadataRepository) {
+    public ConnectionServiceImpl(MetadataRepository metadataRepository) {
         this.metadataRepository = metadataRepository;
     }
 
@@ -73,10 +76,8 @@ public class ConnectionService implements com.dbboys.impl.IConnectionService {
                 info.setProperty(jsonObject.getString("propName"), jsonObject.getString("propValue"));
             }
         }
-        //info("conn info is:" + info);
 
         Connection connection = driver.connect(urlString, info);
-        //log.info("conn info is:" + connection.getMetaData().getURL());
         return connection;
     }
 
@@ -110,6 +111,7 @@ public class ConnectionService implements com.dbboys.impl.IConnectionService {
         sessionChangeToGbaseMode(conn);
         return conn;
     }
+
     public Connection getConnection(Connect connect) throws Exception {
         return createConnection(connect);
     }
@@ -129,44 +131,6 @@ public class ConnectionService implements com.dbboys.impl.IConnectionService {
             // ignore
         }
     }
-public static class ChangeDefaultDatabaseResult {
-        private boolean success;
-        private boolean disconnected;
-        private Integer errorCode;
-        private String errorMessage;
-
-        public boolean isSuccess() {
-            return success;
-        }
-
-        public void setSuccess(boolean success) {
-            this.success = success;
-        }
-
-        public boolean isDisconnected() {
-            return disconnected;
-        }
-
-        public void setDisconnected(boolean disconnected) {
-            this.disconnected = disconnected;
-        }
-
-        public Integer getErrorCode() {
-            return errorCode;
-        }
-
-        public void setErrorCode(Integer errorCode) {
-            this.errorCode = errorCode;
-        }
-
-        public String getErrorMessage() {
-            return errorMessage;
-        }
-
-        public void setErrorMessage(String errorMessage) {
-            this.errorMessage = errorMessage;
-        }
-    }
 
     public ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Database database) {
         ChangeDefaultDatabaseResult result = new ChangeDefaultDatabaseResult();
@@ -183,7 +147,7 @@ public static class ChangeDefaultDatabaseResult {
 
             }
             connect.setProps(modifyProps(connect, database.getDbLocale()));
-            SqliteDBaccessUtil.updateConnect(connect);
+            LocalDbRepository.updateConnect(connect);
             result.setSuccess(true);
         } catch (SQLException e) {
             if (e.getErrorCode() == -79716 || e.getErrorCode() == -79730) {
@@ -195,7 +159,7 @@ public static class ChangeDefaultDatabaseResult {
                     connect.setProps(modifyProps(connect, database.getDbLocale()));
                     connect.setConn(getConnection(connect));
                     sessionChangeToGbaseMode(connect.getConn());
-                    SqliteDBaccessUtil.updateConnect(connect);
+                    LocalDbRepository.updateConnect(connect);
                     result.setSuccess(true);
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
@@ -323,19 +287,9 @@ public static class ChangeDefaultDatabaseResult {
         return result;
     }
 
-    
-
-
-
-
     @FunctionalInterface
     private interface SqlFunction<T, R> {
         R apply(T value) throws Exception;
-    }
-
-    @FunctionalInterface
-    public interface SqlWork<T> {
-        T apply(Connection conn) throws Exception;
     }
 
     private static class ConnectionLease {
@@ -355,7 +309,6 @@ public static class ChangeDefaultDatabaseResult {
             return new ConnectionLease(conn, false);
         } catch (SQLException e) {
             if (e.getErrorCode() == -23197) {
-                //切到sysmaster库，避免349错误
                 metadataRepository.setDatabase(connect.getConn(), "sysmaster");
                 Connect connect1 = new Connect(connect);
                 connect1.setDatabase(database.getName());
@@ -368,8 +321,6 @@ public static class ChangeDefaultDatabaseResult {
             throw e;
         }
     }
-
-
 
     public <T> T withMetaSession(Connect connect, Database database, SqlWork<T> action) throws Exception {
         if (connect == null) {
@@ -387,8 +338,4 @@ public static class ChangeDefaultDatabaseResult {
             }
         }
     }
-
-
-
-
 }

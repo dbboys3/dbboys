@@ -6,15 +6,10 @@ import java.sql.Connection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import com.dbboys.ctrl.CreateConnectController;
-
 public class Connect extends TreeData{
-        private static final Logger log = LogManager.getLogger(Connect.class);
 
     private IntegerProperty  id=new SimpleIntegerProperty();
     private IntegerProperty  parentId=new SimpleIntegerProperty();
@@ -275,19 +270,9 @@ public class Connect extends TreeData{
             try {
                 task.run();
             } catch (Exception e) {
-                com.dbboys.util.GlobalErrorHandlerUtil.handle(e);
+                com.dbboys.app.AppErrorHandler.handle(e);
             }
         });
-    }
-
-    public ConnectConfig toConfig() {
-        return ConnectConfig.fromConnect(this);
-    }
-
-    public static Connect fromConfig(ConnectConfig config) {
-        Connect c = new Connect();
-        config.applyTo(c);
-        return c;
     }
 }
 

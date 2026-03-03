@@ -6,7 +6,7 @@ import com.dbboys.i18n.I18n;
 import com.dbboys.service.AdminService;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.HealthCheck;
@@ -286,7 +286,7 @@ public class CustomInstanceTab extends CustomTab {
                             });
                         }else{
                             Platform.runLater(()->{
-                                AlterUtil.CustomAlert("提醒", "参数已修改，请重启数据库生效！");
+                                AlertUtil.CustomAlert("提醒", "参数已修改，请重启数据库生效！");
                             });
                         }
                     } catch (Exception e) {
@@ -302,7 +302,7 @@ public class CustomInstanceTab extends CustomTab {
                 event.getRowValue().set(2, oldvalue.toString());
                 event.getTableView().refresh();
                 String error = task.getException().getMessage();
-                AlterUtil.CustomAlert("错误", error);
+                AlertUtil.CustomAlert("错误", error);
             });
             AppExecutor.runTask(task);
 
@@ -518,14 +518,14 @@ public class CustomInstanceTab extends CustomTab {
                         if(!isAddFile) {
                             for (CustomSpaceChart.SpaceUsage u : dbspaceChartList) {
                                 if (u.getName().equals(nameTextField.getText())) {
-                                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("instance.dialog.space_exists", "空间\"%s\"已存在，请使用其他空间名！"), nameTextField.getText()));
+                                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("instance.dialog.space_exists", "空间\"%s\"已存在，请使用其他空间名！"), nameTextField.getText()));
                                     return;
                                 }
                             }
                         }
                         for(CustomSpaceChart.SpaceUsage u:chunkChartList){
                             if(u.getName().equals(filePathTextField.getText())){
-                                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("instance.dialog.file_exists", "数据文件\"%s\"已存在，请使用其他数据文件路径！"), filePathTextField.getText()));
+                                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("instance.dialog.file_exists", "数据文件\"%s\"已存在，请使用其他数据文件路径！"), filePathTextField.getText()));
                                 return;
                             }
                         }
@@ -646,7 +646,7 @@ public class CustomInstanceTab extends CustomTab {
                             processTask.cancel();
                             backgroupHbox.setVisible(false);
                             String error = task.getException().getMessage();
-                            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                         });
                         processStopButton.setOnAction(event1->{
                             runningLabel.setText(I18n.t("instance.dialog.init.progress", " 正在初始化...0.00%"));
@@ -717,7 +717,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onDropDbspace(CustomSpaceChart.SpaceUsage spaceUsage) {
                 // 「删除数据库空间」的业务逻辑（示例：弹出确认弹窗）
-                if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.drop_space.title", "删除空间"), String.format(I18n.t("instance.confirm.drop_space.content", "确定要删除空间\"%s\"吗？"), spaceUsage.getName()))){
+                if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.drop_space.title", "删除空间"), String.format(I18n.t("instance.confirm.drop_space.content", "确定要删除空间\"%s\"吗？"), spaceUsage.getName()))){
                     String cmd="onspaces -d "+spaceUsage.getName()+" -y ";
 
                     for(CustomSpaceChart.SpaceUsage u:chunkChartList){
@@ -750,7 +750,7 @@ public class CustomInstanceTab extends CustomTab {
                     });
                     task.setOnFailed(event1 -> {
                         String error = task.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
                     AppExecutor.runTask(task);
                 }
@@ -761,7 +761,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onDropDatafile(CustomSpaceChart.SpaceUsage spaceUsage) {
                 // 「删除数据库空间」的业务逻辑（示例：弹出确认弹窗）
-                if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.drop_datafile.title", "删除数据文件"), String.format(I18n.t("instance.confirm.drop_datafile.content", "确定要删除数据文件\"%s\"吗？"), spaceUsage.getName()))){
+                if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.drop_datafile.title", "删除数据文件"), String.format(I18n.t("instance.confirm.drop_datafile.content", "确定要删除数据文件\"%s\"吗？"), spaceUsage.getName()))){
                     String dbspace=spaceUsage.getLabel().trim().split(" ")[2].trim();
                     String cmd="onspaces -d "+dbspace+" -p "+spaceUsage.getName()+" -o 0 -y";
                     cmd+="&& rm -rf "+spaceUsage.getName();
@@ -790,7 +790,7 @@ public class CustomInstanceTab extends CustomTab {
                     });
                     task.setOnFailed(event1 -> {
                         String error = task.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
                     AppExecutor.runTask(task);
                 }
@@ -801,7 +801,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onExpandDatafile(CustomSpaceChart.SpaceUsage spaceUsage) {
                 // 「删除数据库空间」的业务逻辑（示例：弹出确认弹窗）
-                if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.expand_datafile.title", "数据文件自动扩展"), String.format(I18n.t("instance.confirm.expand_datafile.content", "确定要设置数据文件\"%s\"自动扩展吗？"), spaceUsage.getName()))){
+                if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.expand_datafile.title", "数据文件自动扩展"), String.format(I18n.t("instance.confirm.expand_datafile.content", "确定要设置数据文件\"%s\"自动扩展吗？"), spaceUsage.getName()))){
                     int chunkId=spaceUsage.getNumber();
                     Task<Void> task = new Task<>() {
                         @Override
@@ -821,7 +821,7 @@ public class CustomInstanceTab extends CustomTab {
                     });
                     task.setOnFailed(event1 -> {
                         String error = task.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
                     AppExecutor.runTask(task);
                 }
@@ -832,7 +832,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onUnExpandDatafile(CustomSpaceChart.SpaceUsage spaceUsage) {
                 // 「删除数据库空间」的业务逻辑（示例：弹出确认弹窗）
-                if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.unexpand_datafile.title", "数据文件关闭自动扩展"), String.format(I18n.t("instance.confirm.unexpand_datafile.content", "确定要关闭数据文件\"%s\"自动扩展吗？"), spaceUsage.getName()))){
+                if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.unexpand_datafile.title", "数据文件关闭自动扩展"), String.format(I18n.t("instance.confirm.unexpand_datafile.content", "确定要关闭数据文件\"%s\"自动扩展吗？"), spaceUsage.getName()))){
                     int chunkId=spaceUsage.getNumber();
                     Task<Void> task = new Task<>() {
                         @Override
@@ -852,7 +852,7 @@ public class CustomInstanceTab extends CustomTab {
                     });
                     task.setOnFailed(event1 -> {
                         String error = task.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
                     AppExecutor.runTask(task);
                 }
@@ -861,7 +861,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onUnlimitedSpaceSize(CustomSpaceChart.SpaceUsage spaceUsage) {
                 // 「删除数据库空间」的业务逻辑（示例：弹出确认弹窗）
-                if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.unlimit_space.title", "解除大小限制"), String.format(I18n.t("instance.confirm.unlimit_space.content", "确定要解除数据库空间\"%s\"的大小限制吗？"), spaceUsage.getName()))){
+                if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.unlimit_space.title", "解除大小限制"), String.format(I18n.t("instance.confirm.unlimit_space.content", "确定要解除数据库空间\"%s\"的大小限制吗？"), spaceUsage.getName()))){
                     Task<Void> task = new Task<>() {
                         @Override
                         protected Void call() throws Exception {
@@ -880,7 +880,7 @@ public class CustomInstanceTab extends CustomTab {
                     });
                     task.setOnFailed(event1 -> {
                         String error = task.getException().getMessage();
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), error);
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
                     AppExecutor.runTask(task);
                 }
@@ -961,7 +961,7 @@ public class CustomInstanceTab extends CustomTab {
 
             });
             instanceInfoTask.setOnFailed(event1 -> {
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("instance.error.start_exception", "数据库启动出现异常，请查看日志。"));
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("instance.error.start_exception", "数据库启动出现异常，请查看日志。"));
 
                 startButton.setDisable(false);
             });
@@ -970,7 +970,7 @@ public class CustomInstanceTab extends CustomTab {
         });
 
         stopButton.setOnAction(e -> {
-            if(AlterUtil.CustomAlertConfirm(I18n.t("instance.confirm.stop.title", "关闭数据库"), I18n.t("instance.confirm.stop.content", "确定要关闭数据库吗？"))) {
+            if(AlertUtil.CustomAlertConfirm(I18n.t("instance.confirm.stop.title", "关闭数据库"), I18n.t("instance.confirm.stop.content", "确定要关闭数据库吗？"))) {
                 Task<Void> instanceInfoTask = new Task<>() {
                     @Override
                     protected Void call() throws Exception {
@@ -995,7 +995,7 @@ public class CustomInstanceTab extends CustomTab {
                 });
                 instanceInfoTask.setOnFailed(event1 -> {
                     stopButton.setDisable(false);
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("instance.error.stop_exception", "数据库停止出现异常，请查看日志。"));
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("instance.error.stop_exception", "数据库停止出现异常，请查看日志。"));
                 });
                 stopButton.setDisable(true);
                 connect.executeSqlTask(instanceInfoTask);

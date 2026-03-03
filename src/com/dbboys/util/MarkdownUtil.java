@@ -184,12 +184,12 @@ public class MarkdownUtil {
                 File file = item.getValue().getFile();
                 if (TabpaneUtil.findCustomMarkdownTab(file.toPath()) != null) {
                     if(file.isDirectory())
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             String.format(I18n.t("markdown.tree.error.folder_opened", "文件夹【%s】中有文件正在被打开，请关闭文件后重试!"), file.getName())
                     );
                     else
-                        AlterUtil.CustomAlert(
+                        AlertUtil.CustomAlert(
                                 I18n.t("common.error", "错误"),
                                 String.format(I18n.t("markdown.tree.error.file_opened", "文件【%s】正在被打开，请关闭文件后重试!"), file.getName())
                         );
@@ -245,7 +245,7 @@ public class MarkdownUtil {
                     Path newPath = file.toPath().resolveSibling(newName);
                     if(file.isDirectory()){
                         if(TabpaneUtil.findCustomMarkdownTab(file.toPath())!=null){
-                            AlterUtil.CustomAlert(
+                            AlertUtil.CustomAlert(
                                     I18n.t("common.error", "错误"),
                                     String.format(I18n.t("markdown.tree.error.folder_opened", "文件夹【%s】中有文件正在被打开，请关闭文件后重试!"), file.getName())
                             );
@@ -253,7 +253,7 @@ public class MarkdownUtil {
                         }
                     }
                     if (Files.exists(newPath)) {
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.same_name_exists", "已存在同名文件/文件夹!"));
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.same_name_exists", "已存在同名文件/文件夹!"));
                         return;
                     }
                     Files.move(file.toPath(), newPath);
@@ -265,7 +265,7 @@ public class MarkdownUtil {
 
                 } catch (IOException ex) {
                     log.error("Operation failed", ex);
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"),ex.getMessage());
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"),ex.getMessage());
                 }
             }
         });
@@ -295,14 +295,14 @@ public class MarkdownUtil {
                     ? String.format(I18n.t("markdown.tree.delete.confirm_multi", "确定要删除选中的 %d 个项目（含其子内容）吗？"), topLevelItems.size())
                     : String.format(I18n.t("markdown.tree.delete.confirm_single", "确定要删除【%s】（含其子内容）吗？"), topLevelItems.get(0).getValue().getName());
 
-            if (AlterUtil.CustomAlertConfirm(I18n.t("markdown.tree.delete.title", "删除文件"), msg)) {
+            if (AlertUtil.CustomAlertConfirm(I18n.t("markdown.tree.delete.title", "删除文件"), msg)) {
                 try {
                     Set<TreeItem<Markdown>> parentNodes = new HashSet<>();
 
                     for (TreeItem<Markdown> item : topLevelItems) {
                         File file = item.getValue().getFile();
                         if(file.isDirectory()&&TabpaneUtil.findCustomMarkdownTab(file.toPath())!=null){
-                            AlterUtil.CustomAlert(
+                            AlertUtil.CustomAlert(
                                     I18n.t("common.error", "错误"),
                                     String.format(I18n.t("markdown.tree.error.folder_opened", "文件夹【%s】中有文件正在被打开，请关闭文件后重试!"), file.getName())
                             );
@@ -333,7 +333,7 @@ public class MarkdownUtil {
 
                 } catch (IOException e1) {
                     log.error("Operation failed", e1);
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e1.getMessage());
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e1.getMessage());
                 }
             }
         });
@@ -480,7 +480,7 @@ public class MarkdownUtil {
         // 目标只能是一个文件夹（取第一个选中的文件夹）
         File targetDirFile = targetItem.getValue().getFile();
         if (!targetDirFile.isDirectory()) {
-            //AlterUtil.CustomAlert("错误", "目标必须是文件夹");
+            //AlertUtil.CustomAlert("错误", "目标必须是文件夹");
             return;
         }
         Path targetDirPath = targetDirFile.toPath();
@@ -500,7 +500,7 @@ public class MarkdownUtil {
             if (clipboard.hasFiles()) {
                 filesToPaste.addAll(clipboard.getFiles());
             } else {
-                AlterUtil.CustomAlert(I18n.t("common.tip", "提示"), I18n.t("markdown.tree.paste.empty_clipboard", "剪贴板中没有可粘贴的文件！"));
+                AlertUtil.CustomAlert(I18n.t("common.tip", "提示"), I18n.t("markdown.tree.paste.empty_clipboard", "剪贴板中没有可粘贴的文件！"));
                 return;
             }
         }
@@ -512,7 +512,7 @@ public class MarkdownUtil {
 
                 // 检测1：目标是否已存在同名文件/文件夹
                 if (Files.exists(targetPath)) {
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             String.format(I18n.t("markdown.tree.error.target_exists", "目标已存在同名文件/文件夹【%s】"), srcFile.getName())
                     );
@@ -522,7 +522,7 @@ public class MarkdownUtil {
 
                 // 检测2：若源是文件夹，判断目标是否是源的子目录（避免循环）
                 if (srcFile.isDirectory() && isPathContained(srcPath, targetPath)) {
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             String.format(I18n.t("markdown.tree.error.paste_into_child", "不能将文件夹【%s】粘贴到其自身的子目录中！"), srcFile.getName())
                     );
@@ -556,7 +556,7 @@ public class MarkdownUtil {
 
         } catch (IOException ex) {
             log.error("Operation failed", ex);
-            AlterUtil.CustomAlert(I18n.t("markdown.tree.paste.error_title", "粘贴错误"), ex.getMessage());
+            AlertUtil.CustomAlert(I18n.t("markdown.tree.paste.error_title", "粘贴错误"), ex.getMessage());
         }
     }
 
@@ -595,7 +595,7 @@ public class MarkdownUtil {
             try {
                 Path newPath = parent.toPath().resolve(textField.getText());
                 if (Files.exists(newPath)) {
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"),I18n.t("markdown.tree.error.file_or_folder_exists", "文件/文件夹已存在！"));
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"),I18n.t("markdown.tree.error.file_or_folder_exists", "文件/文件夹已存在！"));
                     return;
                 }
                 if (isFolder) Files.createDirectory(newPath);
@@ -614,7 +614,7 @@ public class MarkdownUtil {
                 }
             } catch (IOException e) {
                 log.error("Operation failed", e);
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
             }
         }
     }
@@ -657,14 +657,14 @@ public class MarkdownUtil {
     }
     private static void deleteFile(TreeItem<Markdown> treeItem) {
         if(treeItem.getParent().equals(treeView.getRoot())&&treeView.getRoot().getChildren().size()==1){
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"),I18n.t("markdown.tree.error.last_root_folder", "当前只有一个文件夹，不允许删除！"));
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"),I18n.t("markdown.tree.error.last_root_folder", "当前只有一个文件夹，不允许删除！"));
             return;
         }
         File file=treeItem.getValue().getFile();
         String deleteTarget = file.isFile()
                 ? String.format(I18n.t("markdown.tree.delete.file_name", "文件【%s】"), file.getName())
                 : String.format(I18n.t("markdown.tree.delete.folder_name", "文件夹【%s】"), file.getName());
-        if (AlterUtil.CustomAlertConfirm(I18n.t("markdown.tree.delete.title", "删除文件"), String.format(I18n.t("markdown.tree.delete.confirm_target", "确定要删除%s吗？"), deleteTarget))) {
+        if (AlertUtil.CustomAlertConfirm(I18n.t("markdown.tree.delete.title", "删除文件"), String.format(I18n.t("markdown.tree.delete.confirm_target", "确定要删除%s吗？"), deleteTarget))) {
             try {
                 deleteRecursively(file.toPath());
                 if(treeItem.getParent().equals(treeView.getRoot())){
@@ -675,7 +675,7 @@ public class MarkdownUtil {
                 treeItem.getParent().getChildren().remove(treeItem);
             } catch (IOException e) {
                 log.error("Operation failed", e);
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
             }
         }
     }
@@ -728,7 +728,7 @@ public class MarkdownUtil {
                 else Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 log.error("Operation failed", e);
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),e.getMessage());
             }
         });
     }

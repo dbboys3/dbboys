@@ -2,7 +2,7 @@ package com.dbboys.customnode;
 
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
-import com.dbboys.util.AlterUtil;
+import com.dbboys.util.AlertUtil;
 import com.dbboys.util.MarkdownUtil;
 import com.dbboys.util.TabpaneUtil;
 import com.dbboys.vo.Markdown;
@@ -230,14 +230,14 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
         try {
             targetDir = dropTargetItem.getValue().getFile().getCanonicalFile();
         } catch (IOException e) {
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.access_target_dir", "无法访问目标目录: ") + e.getMessage());
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.access_target_dir", "无法访问目标目录: ") + e.getMessage());
             event.setDropCompleted(false);
             event.consume();
             return;
         }
 
         if (!targetDir.isDirectory()) {
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.target_must_be_dir", "目标必须是目录"));
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.target_must_be_dir", "目标必须是目录"));
             event.setDropCompleted(false);
             event.consume();
             return;
@@ -250,9 +250,9 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
                 File f = p.toFile();
                 if (TabpaneUtil.findCustomMarkdownTab(f.toPath()) != null) {
                     if (f.isDirectory())
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("markdown.tree.error.folder_opened", "文件夹【%s】中有文件正在被打开，请关闭文件后重试!"), f.getName()));
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("markdown.tree.error.folder_opened", "文件夹【%s】中有文件正在被打开，请关闭文件后重试!"), f.getName()));
                     else
-                        AlterUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("markdown.tree.error.file_opened", "文件【%s】正在被打开，请关闭文件后重试!"), f.getName()));
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), String.format(I18n.t("markdown.tree.error.file_opened", "文件【%s】正在被打开，请关闭文件后重试!"), f.getName()));
                     event.setDropCompleted(false);
                     event.consume();
                     return;
@@ -263,7 +263,7 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
             log.error(ex.getMessage(), ex);
         }
 
-        if (!AlterUtil.CustomAlertConfirm(
+        if (!AlertUtil.CustomAlertConfirm(
                 I18n.t("markdown.tree.confirm.drag_title", "拖动确认"),
                 I18n.t("markdown.tree.confirm.drag_message", "确定要拖动对象吗？")
         )) {
@@ -278,7 +278,7 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
             for (Path src : sourcePaths) {
                 Path destination = targetPath.resolve(src.getFileName());
                 if (Files.exists(destination)) {
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("markdown.tree.error.drag_target_exists", "目标已存在同名文件/文件夹: ") + src.getFileName()
                     );
@@ -309,7 +309,7 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
             success = true;
         } catch (IOException e) {
             log.error(e.getMessage(), e);
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.move_failed", "移动失败: ") + e.getMessage());
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("markdown.tree.error.move_failed", "移动失败: ") + e.getMessage());
             success = false;
         }
 

@@ -2,7 +2,6 @@ package com.dbboys.app;
 
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.ConfigManagerUtil;
-import com.dbboys.util.GlobalErrorHandlerUtil;
 import com.dbboys.ctrl.MainController;
 import com.dbboys.customnode.CustomSqlEditCodeArea;
 import com.dbboys.util.TabpaneUtil;
@@ -59,7 +58,7 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         AppContext.init();
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> GlobalErrorHandlerUtil.handle(e));
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> AppErrorHandler.handle(e));
 
         //版本号
         JSONObject jsonObject=new JSONObject();
@@ -71,7 +70,7 @@ public class Main extends Application {
         AppState.setVersion(VERSION);
 
         try {
-            Thread.currentThread().setUncaughtExceptionHandler((t, e) -> GlobalErrorHandlerUtil.handle(e));
+            Thread.currentThread().setUncaughtExceptionHandler((t, e) -> AppErrorHandler.handle(e));
 
             //语言设置
             String uiLang = ConfigManagerUtil.getProperty("UI_LANG");
@@ -163,7 +162,7 @@ public class Main extends Application {
             Platform.runLater(new Runnable() {
                 @Override
                 public void run() {
-                    Thread.currentThread().setUncaughtExceptionHandler((t, e) -> GlobalErrorHandlerUtil.handle(e));
+                    Thread.currentThread().setUncaughtExceptionHandler((t, e) -> AppErrorHandler.handle(e));
                     primaryStage.setScene(scene);
                         //打开软件默认打开一个sql编辑面板
                         //StageStyle.UNDECORATED

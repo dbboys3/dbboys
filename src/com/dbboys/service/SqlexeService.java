@@ -3,13 +3,16 @@ package com.dbboys.service;
 import com.dbboys.ctrl.SqlTabController;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.dbboys.db.SqlexeRepository;
-import com.dbboys.util.AlterUtil;
-import com.dbboys.util.GlobalErrorHandlerUtil;
+import com.dbboys.api.ConnectionService;
+import com.dbboys.api.SqlexeRepository;
+import com.dbboys.impl.ConnectionServiceImpl;
+import com.dbboys.impl.SqlexeRepositoryImpl;
+import com.dbboys.util.AlertUtil;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
 import javafx.application.Platform;
-import com.dbboys.util.MetadataTreeviewUtil;
+import com.dbboys.util.tree.TreeViewUtil;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -24,7 +27,7 @@ public class SqlexeService {
     private final SqlexeRepository sqlexeRepository;
 
     public SqlexeService() {
-        this(new ConnectionService(), new DatabaseService(), new SqlexeRepository());
+        this(new ConnectionServiceImpl(), new DatabaseService(), new SqlexeRepositoryImpl());
     }
 
     public SqlexeService(ConnectionService connectionService, DatabaseService databaseService, SqlexeRepository sqlexeRepository) {
@@ -76,7 +79,7 @@ public class SqlexeService {
                         } catch (SQLException e1) {
                         }
                 
-                    GlobalErrorHandlerUtil.handle(ex);
+                    AppErrorHandler.handle(ex);
                     connect.setConn(connection);
 
                 }
@@ -84,7 +87,7 @@ public class SqlexeService {
                 result = "disconnected";
                 log.error("Operation failed", e);
             } else {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
         }
         return result;
@@ -103,9 +106,9 @@ public class SqlexeService {
                     log.error("Operation failed", ex);
                 }
             } else if (e.getErrorCode() == -79716 || e.getErrorCode() == -79730) {
-                MetadataTreeviewUtil.connectionDisconnected();
+                TreeViewUtil.connectionDisconnected();
             } else {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
         }
         return catalogs;

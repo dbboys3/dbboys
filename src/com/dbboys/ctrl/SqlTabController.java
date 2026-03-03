@@ -4,10 +4,11 @@ import com.dbboys.app.AppContext;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.customnode.*;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.i18n.I18n;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.util.*;
+import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -405,14 +406,14 @@ public class SqlTabController {
         Platform.runLater(() -> {
             sqlTransactionText.set("");
             //transactionBox.setVisible(false);
-            if (AlterUtil.CustomAlertConfirm(I18n.t("common.error"), I18n.t("sql.confirm.reconnect"))) {
+            if (AlertUtil.CustomAlertConfirm(I18n.t("common.error"), I18n.t("sql.confirm.reconnect"))) {
                 //嵌套Platform保证前一步完成后执行下一步，避免渲染延迟导致前后顺序错误
                 Platform.runLater(() -> {
                     sqlConnectChoiceBox.setValue(defaultConnect);
                     Platform.runLater(() -> {
                         sqlConnectChoiceBox.setValue(sqlConnect);
                         Platform.runLater(() -> {
-                            if (MetadataTreeviewUtil.metadataService.testConn(sqlConnect)) {
+                            if (TreeViewUtil.metadataService.testConn(sqlConnect)) {
                                 NotificationUtil.showMainNotification(I18n.t("sql.notice.reconnect_success"));
                                 //    data_manager_sqlRunButton.fire();
                             }
@@ -445,7 +446,7 @@ public class SqlTabController {
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);
-            //AlterUtil.CustomAlert("错误", "["+e.getErrorCode()+"]"+e.getMessage());
+            //AlertUtil.CustomAlert("错误", "["+e.getErrorCode()+"]"+e.getMessage());
         }
     }
 
@@ -467,7 +468,7 @@ public class SqlTabController {
             }
         } catch (SQLException e) {
             log.error(e.getMessage(), e);
-            AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
+            AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
         }
     }
 

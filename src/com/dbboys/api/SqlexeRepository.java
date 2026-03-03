@@ -1,10 +1,10 @@
-package com.dbboys.impl;
+package com.dbboys.api;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 
-public interface ISqlexeRepository {
+public interface SqlexeRepository {
 
     void setDatabase(Connection conn, String databaseName) throws SQLException;
 

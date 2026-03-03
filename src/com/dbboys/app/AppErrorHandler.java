@@ -1,11 +1,11 @@
-package com.dbboys.util;
+package com.dbboys.app;
 
 import com.dbboys.i18n.I18n;
+import com.dbboys.util.tree.TreeViewUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javafx.application.Platform;
-import javafx.beans.binding.StringBinding;
 import javafx.concurrent.Task;
 
 import java.io.IOException;
@@ -14,8 +14,8 @@ import java.io.StringWriter;
 import java.sql.SQLException;
 import java.util.List;
 
-public final class GlobalErrorHandlerUtil {
-    private static final Logger log = LogManager.getLogger(GlobalErrorHandlerUtil.class);
+public final class AppErrorHandler {
+    private static final Logger log = LogManager.getLogger(AppErrorHandler.class);
     private static final List<ErrorStrategy> STRATEGIES = List.of(
             new SqlDisconnectedStrategy(),
             new SqlDatabaseNotChoicedStrategy(),
@@ -24,7 +24,7 @@ public final class GlobalErrorHandlerUtil {
             new DefaultStrategy()
     );
 
-    private GlobalErrorHandlerUtil() {
+    private AppErrorHandler() {
     }
 
     public static void handle(Throwable e) {
@@ -82,7 +82,7 @@ public final class GlobalErrorHandlerUtil {
         public void handle(Throwable e) {
             try {
                 log.error("Operation failed", e);
-                MetadataTreeviewUtil.connectionDisconnected();
+                TreeViewUtil.connectionDisconnected();
             } catch (Exception ex) {
                 log.error("Connection disconnected. {}", formatExceptionDetails(ex));
             }
@@ -112,7 +112,7 @@ public final class GlobalErrorHandlerUtil {
         public void handle(Throwable e) {
             SQLException se = (SQLException) e;
             Platform.runLater(()->{
-            AlterUtil.CustomAlert(I18n.bind("common.error", "错误").get(), "[" + se.getErrorCode() + "]" + e.getMessage());
+            com.dbboys.util.AlertUtil.CustomAlert(I18n.bind("common.error", "错误").get(), "[" + se.getErrorCode() + "]" + e.getMessage());
             });
             log.error("SQL error. code={}, message={}\n{}", se.getErrorCode(), se.getMessage(), formatExceptionDetails(e));
         }

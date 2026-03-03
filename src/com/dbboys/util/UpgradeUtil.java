@@ -1,6 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppExecutor;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.i18n.I18n;
 import com.dbboys.vo.Version;
@@ -39,7 +40,7 @@ public class UpgradeUtil {
 
     public static void initDatabaseToFactorySettings() {
         log.info("Restore to factory settings.");
-        if (AlterUtil.CustomAlertConfirm(
+        if (AlertUtil.CustomAlertConfirm(
                 I18n.t("upgrade.confirm.reset.title", "恢复出厂设置"),
                 I18n.t("upgrade.confirm.reset.content", "恢复出厂设置将删除所有数据及配置信息并重启软件，数据库知识不受影响，确定要恢复出厂设置吗？")
         )) {
@@ -52,7 +53,7 @@ public class UpgradeUtil {
                 }
             };
             task.setOnSucceeded(event -> {
-                //AlterUtil.CustomAlert("恢复出场设置","恢复出厂设置完成，程序即将关闭，关闭后请手动启动！");
+                //AlertUtil.CustomAlert("恢复出场设置","恢复出厂设置完成，程序即将关闭，关闭后请手动启动！");
                 restartExecutable();
                 //Platform.exit();
             });
@@ -96,7 +97,7 @@ public class UpgradeUtil {
                 Iterator<Path> it = stream.iterator();
                 if (it.hasNext()) {
                     Path file = it.next();
-                    if (AlterUtil.CustomAlertConfirm(
+                    if (AlertUtil.CustomAlertConfirm(
                             I18n.t("upgrade.confirm.version.title", "版本更新"),
                             I18n.t("upgrade.confirm.downloaded_package", "升级包\"%s\"已完成下载，确定要升级软件吗？").formatted(file.toAbsolutePath())
                     )) {
@@ -109,7 +110,7 @@ public class UpgradeUtil {
 
             if (lastVersion.getBuild() > Main.VERSION.getBuild()) {
                 versionDownloadUrl = lastVersion.getUrl();
-                if (AlterUtil.CustomAlertConfirm(
+                if (AlertUtil.CustomAlertConfirm(
                         I18n.t("upgrade.confirm.version.title", "版本更新"),
                         I18n.t("upgrade.confirm.new_version_found", "检查到新版本\"%s\"，确定要升级软件吗？").formatted(lastVersion.getVersion())
                 )) {
@@ -126,7 +127,7 @@ public class UpgradeUtil {
             }
 
         } catch (Exception e) {
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
             log.error(e.getMessage(), e);
         }
 
@@ -164,7 +165,7 @@ public class UpgradeUtil {
             File exeFile = new File(currentDir, exeName);
 
             if (!exeFile.exists()) {
-                AlterUtil.CustomAlert(
+                AlertUtil.CustomAlert(
                         I18n.t("upgrade.error.restart.title", "重启错误"),
                         I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
                 );
@@ -180,7 +181,7 @@ public class UpgradeUtil {
 
         } catch (Exception e) {
             log.error("Restart executable failed.", e);
-            AlterUtil.CustomAlert(
+            AlertUtil.CustomAlert(
                     I18n.t("upgrade.error.restart.title", "重启错误"),
                     I18n.t("upgrade.error.restart_failed", "重启失败！")
             );
@@ -192,7 +193,7 @@ public class UpgradeUtil {
     }
 
     public static void initDefaultConfig() {
-        SqliteDBaccessUtil.initDB();
+        LocalDbRepository.initDB();
         ConfigManagerUtil.setProperty("DEFAULT_LISTVIEW_TAB", "0");
         ConfigManagerUtil.setProperty("RESULT_FETCH_PER_TIME", "200");
         ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", "0.2");

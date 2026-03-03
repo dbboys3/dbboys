@@ -1,6 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.app.AppState;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.vo.Connect;
@@ -95,7 +96,7 @@ public class TabpaneUtil {
 
         newtab.setContent(instanceInfoTableView);
         //如果分类下有连接，显示所有连接信息
-        ObservableList<TreeData> data = FXCollections.observableArrayList(new ArrayList<>(SqliteDBaccessUtil.getFolderConnect(connect)));
+        ObservableList<TreeData> data = FXCollections.observableArrayList(new ArrayList<>(LocalDbRepository.getFolderConnect(connect)));
         // 设置数据
         instanceInfoTableView.setItems(data);
         //默认选中第一行，保证右键事件当前行不为null
@@ -207,7 +208,7 @@ public class TabpaneUtil {
 
     public static void addCustomMarkdownTab(File file, boolean modifiable) {
         if (!file.exists()) {
-            AlterUtil.CustomAlert(
+            AlertUtil.CustomAlert(
                     I18n.t("common.error", "错误"),
                     I18n.t("tabpane.error.file_not_exists", "文件不存在！")
             );
@@ -268,7 +269,7 @@ public class TabpaneUtil {
         boolean canClose = true;
         for (Tab tab : tabPane().getTabs()) {
             if (tab.getText().startsWith("*") && !tab.equals(currentTab)) {
-                if (!AlterUtil.CustomAlertConfirm(
+                if (!AlertUtil.CustomAlertConfirm(
                         I18n.t("common.notice", "提示"),
                         I18n.t("tabpane.confirm.close_unsaved", "部分打开的文件未保存，确定要关闭吗？")
                 )) {
@@ -299,7 +300,7 @@ public class TabpaneUtil {
         TabPane currentTabPane = AppState.getSqlTabPane();
         for (Tab tab : currentTabPane.getTabs()) {
             if (tab.getText().startsWith("*")) {
-                if (!AlterUtil.CustomAlertConfirm(
+                if (!AlertUtil.CustomAlertConfirm(
                         I18n.t("common.notice", "提示"),
                         I18n.t("tabpane.confirm.close_unsaved", "部分打开的文件未保存，确定要关闭吗？")
                 )) {

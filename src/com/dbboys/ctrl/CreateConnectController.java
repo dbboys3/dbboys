@@ -1,15 +1,17 @@
 package com.dbboys.ctrl;
 
 
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.CustomInfoCodeArea;
 import com.dbboys.customnode.CustomLostFocusCommitTableCell;
 import com.dbboys.customnode.CustomResultsetTableView;
 import com.dbboys.customnode.CustomUserTextField;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
+import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
@@ -147,7 +149,7 @@ public class CreateConnectController {
         }
         this.isCopy=isCopy;
         Connect connect=new Connect();
-        ObservableList<ConnectFolder> list = FXCollections.observableArrayList(SqliteDBaccessUtil.getConnectFolders());
+        ObservableList<ConnectFolder> list = FXCollections.observableArrayList(LocalDbRepository.getConnectFolders());
         connectFolderChoiceBox.setItems(list);
         connectFolderChoiceBox.getValue();
         connectFolderChoiceBox.getSelectionModel().select(0);
@@ -221,7 +223,7 @@ public class CreateConnectController {
                 connectFolder=treeDataParam.getName();
             }else{
                 //如果不是分类上右键新建，那就是编辑连接，所有信息填充到表单
-                connectFolder=SqliteDBaccessUtil.getConnectType(((Connect) treeDataParam));
+                connectFolder=LocalDbRepository.getConnectType(((Connect) treeDataParam));
                 connectNameTextField.setText(((Connect)treeDataParam).getName());
                 if(!((Connect)treeDataParam).getPropByName("GBASEDBTSERVER").isEmpty()){
                     groupTextField.setText(((Connect)treeDataParam).getPropByName("GBASEDBTSERVER"));
@@ -294,8 +296,8 @@ public class CreateConnectController {
             }else {
                 setConnect(connect);
                 //如果连接信息可正常连接，检查连接名是否已存在
-                if(SqliteDBaccessUtil.checkConnectLeafNameExists(connect)){
-                    AlterUtil.CustomAlert(
+                if(LocalDbRepository.checkConnectLeafNameExists(connect)){
+                    AlertUtil.CustomAlert(
                             I18n.t("common.error"),
                             String.format(I18n.t("createconnect.error.name_exists"), connect.getName())
                     );
@@ -454,7 +456,7 @@ public class CreateConnectController {
                 // 处理选中的文件
                 ObservableList<String> items = driverChoiceBox.getItems();
                 if(items.stream().anyMatch(name -> name.equals(selectedFile.getName()))){
-                    AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_same_name"));
+                    AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_same_name"));
                 }else{
 
                     Path sourcePath = Paths.get(selectedFile.getAbsolutePath());
@@ -474,7 +476,7 @@ public class CreateConnectController {
                             }
                         }
                         if(md5same){
-                            AlterUtil.CustomAlert(
+                            AlertUtil.CustomAlert(
                                     I18n.t("common.error"),
                                     String.format(I18n.t("createconnect.error.driver_same_md5"), sourceSamename)
                             );
@@ -495,11 +497,11 @@ public class CreateConnectController {
         //删除当前驱动包
         public void deleteDriverClicked(){
             if(driverChoiceBox.getItems().size()<=1){
-                AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_last_one"));
+                AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_last_one"));
             }else{
                 String currItem = driverChoiceBox.getValue();
                 File file = new File("extlib/"+dbTypeChoiceBox.getValue()+"/"+currItem);
-                if(SqliteDBaccessUtil.checkDriverInUse(currItem)){
+                if(LocalDbRepository.checkDriverInUse(currItem)){
                     //如果正在使用，提示是否确认要删除
                     Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                     alert.setTitle(I18n.t("createconnect.confirm.delete_driver.title"));
@@ -521,7 +523,7 @@ public class CreateConnectController {
                             driverChoiceBox.getItems().remove(currItem);
                             driverChoiceBox.getSelectionModel().select(0);
                         }else{
-                            AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_delete_failed"));
+                            AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_delete_failed"));
                         }
                     }
                 }else{
@@ -529,7 +531,7 @@ public class CreateConnectController {
                         driverChoiceBox.getItems().remove(currItem);
                         driverChoiceBox.getSelectionModel().select(0);
                     }else{
-                        AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_delete_failed"));
+                        AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_delete_failed"));
                     }
                 }
 
@@ -707,7 +709,7 @@ public class CreateConnectController {
                         end=System.currentTimeMillis();
                         Long finalEnd = end;
                         Platform.runLater(()-> {
-                            AlterUtil.CustomAlert(
+                            AlertUtil.CustomAlert(
                                     I18n.t("common.error"),
                                     String.format(I18n.t("createconnect.error.connect_failed"), e1.getErrorCode(), e1.getMessage(), (finalEnd - start))
                             );
@@ -729,7 +731,7 @@ public class CreateConnectController {
                     //确认提交连接
                     if(isCommit){
 
-                        String result=SqliteDBaccessUtil.createConnectLeaf(connect);
+                        String result=LocalDbRepository.createConnectLeaf(connect);
                         if(result.equals("")){
                             Platform.runLater(()-> {
                                setConnectingVisible(false);
@@ -737,7 +739,7 @@ public class CreateConnectController {
                                 cancelButton.fire();
                             });
 
-                            TreeItem<TreeData> treeItem=MetadataTreeviewUtil.createTreeItem(connect);
+                            TreeItem<TreeData> treeItem=TreeViewUtil.createTreeItem(connect);
 
 
                             //判断是否为编辑连接，符合条件表示为编辑连接
@@ -746,8 +748,8 @@ public class CreateConnectController {
                                     TreeItem<TreeData> currItem = new TreeItem<>();
                                     currItem = AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem();
                                     currItem.getParent().getChildren().remove(currItem);
-                                    MetadataTreeviewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
-                                    SqliteDBaccessUtil.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节点
+                                    TreeViewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
+                                    LocalDbRepository.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节点
 
                                     //如果当前编辑的连接为空或已断开，不处理
                                     try {
@@ -768,7 +770,7 @@ public class CreateConnectController {
 
                             } else { //否则为新建连接或复制连接
                                 Platform.runLater(()-> {
-                                    MetadataTreeviewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
+                                    TreeViewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
                                     //展开触发展开事件，展开事件会连接数据库，改变连接状态
                                     treeItem.setExpanded(true);
                                     //数据库连接后，默认折叠
@@ -785,13 +787,13 @@ public class CreateConnectController {
 
 
                         }else{
-                            AlterUtil.CustomAlert(I18n.t("common.error"), result);
+                            AlertUtil.CustomAlert(I18n.t("common.error"), result);
                         }
 
                     //如果不是提交连接，那就是点击了测试连接,需要
                     }else{
                         Platform.runLater(()->{
-                            AlterUtil.CustomAlert(
+                            AlertUtil.CustomAlert(
                                     I18n.t("common.hint"),
                                     String.format(I18n.t("createconnect.notice.test_success"), (finalEnd - start))
                             );
@@ -814,7 +816,7 @@ public class CreateConnectController {
                 task.cancel();
             });
             connectingStopButton.setOnAction(event1 -> {
-                //MetadataTreeviewUtil.testConnThread.interrupt();
+                //TreeViewUtil.testConnThread.interrupt();
                 task.cancel();
                 setConnectingVisible(false);
             });

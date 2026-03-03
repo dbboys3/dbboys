@@ -1,1 +1,0 @@
--- Admin SQL resources (placeholder)

@@ -6,7 +6,7 @@ import com.dbboys.customnode.CustomInfoStackPane;
 import com.dbboys.customnode.CustomTableCell;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.AlterUtil;
+import com.dbboys.util.AlertUtil;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
@@ -121,7 +121,7 @@ public class ResultSetColumnBuilder {
                                 lobDataPopupStage.close();
                             } catch (Exception ex) {
                                 log.error(ex.getMessage(), ex);
-                                AlterUtil.CustomAlert(I18n.t("common.error"), ex.getMessage());
+                                AlertUtil.CustomAlert(I18n.t("common.error"), ex.getMessage());
                             }
                         });
                         saveBtn.setMaxWidth(Double.MAX_VALUE);
@@ -189,10 +189,10 @@ public class ResultSetColumnBuilder {
                 Platform.runLater(() -> {
                     event.getRowValue().set(columnIndex, oldvalue == null ? null : oldvalue.toString());
                     event.getTableView().refresh();
-                    if (com.dbboys.util.ConnectionErrorHandler.isDisconnectError(e)) {
+                    if (com.dbboys.db.ConnectionErrorHandler.isDisconnectError(e)) {
                         ctrl.hiddenDisconnectedButton.fire();
                     } else {
-                        AlterUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage());
+                        AlertUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage());
                     }
                 });
             } finally {

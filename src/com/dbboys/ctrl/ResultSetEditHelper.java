@@ -1,6 +1,7 @@
 package com.dbboys.ctrl;
 
 import com.dbboys.i18n.I18n;
+import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.util.*;
 import com.dbboys.vo.UpdateResult;
 import javafx.application.Platform;
@@ -76,7 +77,7 @@ public class ResultSetEditHelper {
         } else {
             updateResult.setMark(String.format(I18n.t("resultset.mark.auto_edit", "自动提交，查询结果集编辑，参数[%s,%s]"), newValue, sqlParams));
         }
-        SqliteDBaccessUtil.saveSqlHistory(updateResult);
+        LocalDbRepository.saveSqlHistory(updateResult);
         ctrl.sqlStatement.close();
     }
 

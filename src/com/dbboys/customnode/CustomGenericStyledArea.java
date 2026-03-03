@@ -5,7 +5,7 @@ import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.util.AlterUtil;
+import com.dbboys.util.AlertUtil;
 import com.dbboys.util.DownloadManagerUtil;
 import com.dbboys.util.MenuItemUtil;
 import com.dbboys.util.NotificationUtil;
@@ -180,7 +180,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     defaultName = resolveDownloadFileName(url, isHttpLink);
                                 } catch (Exception ex) {
                                     log.error(ex.getMessage(),ex);
-                                    AlterUtil.CustomAlert(I18n.t("genericstyled.alert.download_error"), ex.getMessage());
+                                    AlertUtil.CustomAlert(I18n.t("genericstyled.alert.download_error"), ex.getMessage());
                                     return;
                                 }
                                 fileChooser.setInitialFileName(defaultName);
@@ -211,7 +211,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                         defaultName = resolveDownloadFileName(url, isHttpLink);
                                     } catch (Exception ex) {
                                         log.error(ex.getMessage(),ex);
-                                        AlterUtil.CustomAlert(I18n.t("genericstyled.alert.download_error"), ex.getMessage());
+                                        AlertUtil.CustomAlert(I18n.t("genericstyled.alert.download_error"), ex.getMessage());
                                         return;
                                     }
 
@@ -220,9 +220,9 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     //这里增加判断是避免弹出通知 “文件将下载到桌面”后又报错！
                                     File saveFileTemp = new File(desktopDir, defaultName + ".download");
                                     if (saveFile.exists()) {
-                                        AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.desktop_file_exists"));
+                                        AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.desktop_file_exists"));
                                     } else if (saveFileTemp.exists()) {
-                                        AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.file_downloading"));
+                                        AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.file_downloading"));
                                     } else {
                                         NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.download_to_desktop"));
                                         DownloadManagerUtil.addDownload(url, saveFile, true, null);
@@ -808,7 +808,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                 }else{
                     String finalUrl = url;
                     Platform.runLater(() -> {
-                        AlterUtil.CustomAlert(I18n.t("common.error"), String.format(I18n.t("genericstyled.error.file_not_found"), finalUrl));
+                        AlertUtil.CustomAlert(I18n.t("common.error"), String.format(I18n.t("genericstyled.error.file_not_found"), finalUrl));
                     });
                 }
 

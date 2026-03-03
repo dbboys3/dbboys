@@ -2,6 +2,8 @@ package com.dbboys.ctrl;
 
 import com.dbboys.customnode.CustomResultsetTab;
 import com.dbboys.i18n.I18n;
+import com.dbboys.db.local.LocalDbRepository;
+import com.dbboys.db.ConnectionErrorHandler;
 import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -128,7 +130,7 @@ public class SqlExecutionHelper {
                                 if (isCancelled()) return null;
                             } else if (ctrl.sqlConnect.getReadonly()) {
                                 Platform.runLater(() -> {
-                                    AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.error.readonly_select_only"));
+                                    AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.error.readonly_select_only"));
                                 });
                             } else {
                                 executeNonSelect(sdf, sql, this);
@@ -228,7 +230,7 @@ public class SqlExecutionHelper {
                 if (ConnectionErrorHandler.isDisconnectError(e)) {
                     ctrl.connectionDisconnected();
                 } else {
-                    AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
+                    AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
                 }
             });
         } catch (Exception e) {
@@ -385,9 +387,9 @@ public class SqlExecutionHelper {
                         } catch (SQLException ex) {
                             log.error(ex.getMessage(), ex);
                         }
-                        AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
+                        AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
                     } else {
-                        AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
+                        AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage());
                     }
                 });
             }
@@ -398,7 +400,7 @@ public class SqlExecutionHelper {
 
     private void handlePostExecutionSuccess(Sql sql) throws SQLException {
         if (!sql.getSqlType().equals("SELECT")) {
-            SqliteDBaccessUtil.saveSqlHistory(ctrl.updateResult);
+            LocalDbRepository.saveSqlHistory(ctrl.updateResult);
 
             if (sql.getSqlType().startsWith("DATABASE")) {
                 ctrl.sqlConnect.setDatabase(sql.getSqlType().split(" ")[1]);
@@ -458,7 +460,7 @@ public class SqlExecutionHelper {
             @Override
             protected Void call() throws Exception {
                 if (!SqlParserUtil.isSingleStatement(ctrl.sqlText)) {
-                    Platform.runLater(() -> AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.single_only")));
+                    Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.single_only")));
                 } else {
                     try {
                         ctrl.sqlStatement = ctrl.sqlConnect.getConn().prepareStatement("execute function ifx_explain(?)");
@@ -469,13 +471,13 @@ public class SqlExecutionHelper {
                             try {
                                 if (rs.getString(1) != null) {
                                     if (rs.getString(1).equals("Error 0")) {
-                                        AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported"));
+                                        AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported"));
                                     } else {
                                         ctrl.showExplainText(rs.getString(1));
                                         rs.close();
                                     }
                                 } else {
-                                    AlterUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported"));
+                                    AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported"));
                                 }
                             } catch (SQLException e) {
                                 throw new RuntimeException(e);
@@ -485,7 +487,7 @@ public class SqlExecutionHelper {
                         if (ConnectionErrorHandler.isDisconnectError(e)) {
                             ctrl.connectionDisconnected();
                         } else {
-                            Platform.runLater(() -> AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage()));
+                            Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage()));
                             log.error(e.getMessage(), e);
                         }
                     }
@@ -523,7 +525,7 @@ public class SqlExecutionHelper {
                     if (ConnectionErrorHandler.isDisconnectError(e)) {
                         ctrl.connectionDisconnected();
                     } else {
-                        Platform.runLater(() -> AlterUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage()));
+                        Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), "[" + e.getErrorCode() + "]" + e.getMessage()));
                         log.error(e.getMessage(), e);
                     }
                     throw new Exception("ERROR");

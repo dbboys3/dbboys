@@ -1,8 +1,8 @@
 package com.dbboys.ctrl;
 
 import com.dbboys.i18n.I18n;
-import com.dbboys.util.AlterUtil;
-import com.dbboys.util.ConnectionErrorHandler;
+import com.dbboys.util.AlertUtil;
+import com.dbboys.db.ConnectionErrorHandler;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -103,7 +103,7 @@ public class ResultSetFetchHelper {
                     if (ConnectionErrorHandler.isDisconnectError(e)) {
                         ctrl.hiddenDisconnectedButton.fire();
                     } else {
-                        Platform.runLater(() -> AlterUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage()));
+                        Platform.runLater(() -> AlertUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage()));
                     }
                 }
                 return null;

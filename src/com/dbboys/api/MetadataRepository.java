@@ -1,4 +1,4 @@
-package com.dbboys.impl;
+package com.dbboys.api;
 
 import com.dbboys.vo.*;
 
@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public interface IMetadataRepository {
+public interface MetadataRepository {
 
     List<User> getUsers(Connection conn) throws SQLException;
 

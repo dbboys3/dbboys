@@ -8,6 +8,7 @@ import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
+import com.dbboys.db.ConnectionErrorHandler;
 import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
 import javafx.application.Platform;
@@ -277,7 +278,7 @@ public class ResultSetTabController {
         resultSetExportButton.setOnAction(event -> {
             String sqlText = lastSqlTextField.getText();
             if (resultSetTableView.getItems().isEmpty()) {
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"),
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("resultset.export.empty_sql", "没有可以导出的结果集！"));
                 return;
             }
@@ -363,7 +364,7 @@ public class ResultSetTabController {
                         hiddenDisconnectedButton.fire();
                     } else {
                         Platform.runLater(() ->
-                            AlterUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage()));
+                            AlertUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage()));
                     }
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);

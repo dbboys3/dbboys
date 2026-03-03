@@ -6,7 +6,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.dbboys.ctrl.SqlTabController;
 import com.dbboys.i18n.I18n;
-import com.dbboys.util.AlterUtil;
+import com.dbboys.util.AlertUtil;
 import com.dbboys.util.TabpaneUtil;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.*;
@@ -71,7 +71,7 @@ public class CustomSqlTab extends CustomTab{
                 });
             }
             if(isDirty()){
-                if (AlterUtil.CustomAlertConfirm(
+                if (AlertUtil.CustomAlertConfirm(
                         I18n.t("sql.tab.close_title", "关闭文件"),
                         String.format(I18n.t("sql.tab.close_confirm", "文件【%s】未保存，确定要关闭吗？"), getBaseTitle())
                 )) {
@@ -95,7 +95,7 @@ public class CustomSqlTab extends CustomTab{
             refreshTooltip();
         } catch (IOException e) {
            // log.error("Operation failed", e);
-            AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
         }
     }
 
@@ -115,7 +115,7 @@ public class CustomSqlTab extends CustomTab{
                     markSaved();
                     refreshTooltip();
                 } catch (IOException e) {
-                    AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
                 }
             }
         }else{
@@ -123,7 +123,7 @@ public class CustomSqlTab extends CustomTab{
                 Files.writeString(Paths.get(filePath), content);
                 markSaved();
             } catch (IOException e) {
-                AlterUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
             }
         }
     }

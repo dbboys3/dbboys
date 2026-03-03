@@ -2,7 +2,8 @@ package com.dbboys.service;
 
 import com.dbboys.customnode.CustomSpaceChart;
 import com.dbboys.db.AdminRepository;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
+import com.dbboys.impl.ConnectionServiceImpl;
 import com.dbboys.vo.Connect;
 
 import java.sql.Connection;
@@ -14,7 +15,7 @@ public class AdminService {
     private final AdminRepository adminRepository;
 
     public AdminService() {
-        this(new ConnectionService(), new AdminRepository());
+        this(new ConnectionServiceImpl(), new AdminRepository());
     }
 
     public AdminService(ConnectionService connectionService, AdminRepository adminRepository) {

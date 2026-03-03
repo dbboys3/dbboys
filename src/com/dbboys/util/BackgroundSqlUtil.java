@@ -1,5 +1,7 @@
 package com.dbboys.util;
 
+import com.dbboys.app.AppErrorHandler;
+
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,7 +12,8 @@ import java.util.concurrent.Executors;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
-import com.dbboys.service.ConnectionService;
+import com.dbboys.api.ConnectionService;
+import com.dbboys.impl.ConnectionServiceImpl;
 import com.dbboys.vo.BackgroundSqlTask;
 
 import javafx.application.Platform;
@@ -29,7 +32,7 @@ public class BackgroundSqlUtil {
             try {
                 connectionServiceInstance = AppContext.get(ConnectionService.class);
             } catch (IllegalStateException e) {
-                connectionServiceInstance = new ConnectionService();
+                connectionServiceInstance = new ConnectionServiceImpl();
             }
         }
         return connectionServiceInstance;
@@ -37,7 +40,7 @@ public class BackgroundSqlUtil {
 
     /** @deprecated Use {@link #getConnectionService()} instead */
     @Deprecated
-    public static final ConnectionService connectionService = new ConnectionService();
+    public static final ConnectionService connectionService = new ConnectionServiceImpl();
     public static void updateBackSqlUIOnStart() {
         Platform.runLater(() -> {
             AppState.getStatusBackSqlStopButton().setDisable(false);
@@ -66,7 +69,7 @@ public class BackgroundSqlUtil {
         Platform.runLater(() -> {
             if (e instanceof SQLException se) {
                 if (se.getErrorCode() != -213) {
-                    AlterUtil.CustomAlert(
+                    AlertUtil.CustomAlert(
                             I18n.t("backsql.error.title", "后台任务错误"),
                             I18n.t(
                                     "backsql.error.content",
@@ -81,7 +84,7 @@ public class BackgroundSqlUtil {
                     );
                 }
             } else {
-                GlobalErrorHandlerUtil.handle(e);
+                AppErrorHandler.handle(e);
             }
         });
     }

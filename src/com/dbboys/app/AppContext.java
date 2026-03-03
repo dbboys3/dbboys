@@ -14,16 +14,16 @@ public final class AppContext {
         synchronized (AppContext.class) {
             if (initialized) return;
 
-            var metaRepo = new com.dbboys.db.MetadataRepository();
+            var metaRepo = new com.dbboys.impl.MetadataRepositoryImpl();
             var adminRepo = new com.dbboys.db.AdminRepository();
-            var sqlexeRepo = new com.dbboys.db.SqlexeRepository();
+            var sqlexeRepo = new com.dbboys.impl.SqlexeRepositoryImpl();
 
-            register(com.dbboys.db.MetadataRepository.class, metaRepo);
+            register(com.dbboys.api.MetadataRepository.class, metaRepo);
             register(com.dbboys.db.AdminRepository.class, adminRepo);
-            register(com.dbboys.db.SqlexeRepository.class, sqlexeRepo);
+            register(com.dbboys.api.SqlexeRepository.class, sqlexeRepo);
 
-            var connService = new com.dbboys.service.ConnectionService(metaRepo);
-            register(com.dbboys.service.ConnectionService.class, connService);
+            var connService = new com.dbboys.impl.ConnectionServiceImpl(metaRepo);
+            register(com.dbboys.api.ConnectionService.class, connService);
 
             register(com.dbboys.service.DatabaseService.class, new com.dbboys.service.DatabaseService(metaRepo));
             register(com.dbboys.service.TableService.class, new com.dbboys.service.TableService(metaRepo));

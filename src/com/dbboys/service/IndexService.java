@@ -1,9 +1,10 @@
 package com.dbboys.service;
 
-import com.dbboys.impl.IMetaObjectService;
-import com.dbboys.impl.IMetaObjectService.DdlFetcher;
-import com.dbboys.db.MetadataRepository;
-import com.dbboys.util.GlobalErrorHandlerUtil;
+import com.dbboys.api.MetaObjectService;
+import com.dbboys.api.MetaObjectService.DdlFetcher;
+import com.dbboys.api.MetadataRepository;
+import com.dbboys.impl.MetadataRepositoryImpl;
+import com.dbboys.app.AppErrorHandler;
 import com.dbboys.db.DDLRepository;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -17,11 +18,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class IndexService implements IMetaObjectService {
+public class IndexService implements MetaObjectService {
     private final MetadataRepository metadataRepository;
 
     public IndexService() {
-        this(new MetadataRepository());
+        this(new MetadataRepositoryImpl());
     }
 
     public IndexService(MetadataRepository metadataRepository) {
@@ -71,7 +72,7 @@ public class IndexService implements IMetaObjectService {
             }
         });
         indexMetaTask.setOnFailed(event -> {
-            GlobalErrorHandlerUtil.handle(indexMetaTask.getException());
+            AppErrorHandler.handle(indexMetaTask.getException());
             if (onFinishedUi != null) {
                 onFinishedUi.run();
             }
