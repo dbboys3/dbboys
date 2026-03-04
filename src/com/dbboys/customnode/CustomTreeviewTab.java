@@ -35,7 +35,7 @@ public class CustomTreeviewTab extends Tab {
         //header.setSpacing(5);
         //header.setStyle("-fx-background-color: red");
         
-        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT, 0.5, Color.valueOf("#074675"));
+        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.5, Color.valueOf("#074675"));
         titleToggleIcon.setRotate(90);
         titleToggle.setGraphic(new Group(titleToggleIcon));
         titleToggle.setFocusTraversable(false);
