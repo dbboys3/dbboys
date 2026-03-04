@@ -70,6 +70,30 @@ public class MainController {
     @FXML
     public CustomTreeviewTab markdownTab;
     @FXML
+    public CustomTreeviewTab aiTab;
+    @FXML
+    public VBox aiTabVBox;
+    @FXML
+    public ScrollPane aiChatScrollPane;
+    @FXML
+    public VBox aiChatMessages;
+    @FXML
+    public TextField aiInputField;
+    @FXML
+    public Button aiSendButton;
+    @FXML
+    public Label aiModelLabel;
+    @FXML
+    public ChoiceBox<String> aiModelChoiceBox;
+    @FXML
+    public Button aiTestDemoButton;
+    @FXML
+    public Label aiApiStatusLabel;
+    @FXML
+    public Button aiLoginButton;
+    @FXML
+    public Button aiPasteKeyButton;
+    @FXML
     private Menu menuFile;
     @FXML
     private CustomShortcutMenuItem menuFileAddFolder;
@@ -179,6 +203,7 @@ public class MainController {
         initSidebarSearch();
         Main.loadProgressBar.setProgress(0.6);
         initMarkdownPanel();
+        initAiPanel();
         initSqlTabInteractions();
         initMenuActions();
         Main.loadProgressBar.setProgress(0.7);
@@ -300,6 +325,10 @@ public class MainController {
         });
         // tooltip is bound in initI18nBindings
         markdownTab.titleToggleIcon.setContent(IconPaths.MARKDOWN_TAB_TOGGLE);
+        
+        aiTab.titleToggleIcon.setContent(IconPaths.AI_TAB_TOGGLE);
+        
+
 
         //左侧tabpane默认选中上次关闭前tab，没有配置则默认第一个tab
         int defaultIndex = 0;
@@ -319,6 +348,13 @@ public class MainController {
             Tab tab = treeviewTabPane.getTabs().get(preferredIndex);
             treeviewTabPane.getSelectionModel().select(tab);
             ((CustomTreeviewTab) tab).titleToggle.setSelected(true);
+            if(tab==aiTab){
+                log.info("aiTab");
+                Platform.runLater(() -> mainSplitPane.setDividerPositions(1.0));
+            }else{
+                log.info("not aiTab");
+                Platform.runLater(() -> mainSplitPane.setDividerPositions(AppState.getSplit1Pos()));
+            }
         }
     }
 
@@ -393,6 +429,132 @@ public class MainController {
         });
     }
 
+    private void initAiPanel() {
+        if (aiInputField != null) {
+            aiInputField.setOnKeyPressed(event -> {
+                if (event.getCode() == KeyCode.ENTER) {
+                    sendAiMessage();
+                    event.consume();
+                }
+            });
+        }
+        if (aiLoginButton != null) {
+            aiLoginButton.textProperty().bind(I18n.bind("ai.button.web_login"));
+        }
+        if (aiPasteKeyButton != null) {
+            aiPasteKeyButton.textProperty().bind(I18n.bind("ai.button.paste_key"));
+        }
+        if (aiTestDemoButton != null) {
+            aiTestDemoButton.textProperty().bind(I18n.bind("ai.button.test_demo"));
+        }
+        if (aiModelLabel != null) {
+            aiModelLabel.textProperty().bind(I18n.bind("ai.model.label"));
+        }
+        if (aiModelChoiceBox != null) {
+            aiModelChoiceBox.getItems().setAll(
+                    com.dbboys.util.AiAuthUtil.PROVIDER_OPENAI,
+                    com.dbboys.util.AiAuthUtil.PROVIDER_DOUBAO
+            );
+            aiModelChoiceBox.setConverter(new javafx.util.StringConverter<String>() {
+                @Override
+                public String toString(String id) {
+                    return id == null ? "" : I18n.t("ai.model." + id);
+                }
+                @Override
+                public String fromString(String string) {
+                    if (string == null) return null;
+                    if (I18n.t("ai.model.openai").equals(string)) return com.dbboys.util.AiAuthUtil.PROVIDER_OPENAI;
+                    if (I18n.t("ai.model.doubao").equals(string)) return com.dbboys.util.AiAuthUtil.PROVIDER_DOUBAO;
+                    return null;
+                }
+            });
+            String current = com.dbboys.util.AiAuthUtil.getProvider();
+            aiModelChoiceBox.setValue(current);
+            if (aiModelChoiceBox.getValue() == null && !aiModelChoiceBox.getItems().isEmpty()) {
+                aiModelChoiceBox.setValue(aiModelChoiceBox.getItems().get(0));
+            }
+            aiModelChoiceBox.getSelectionModel().selectedItemProperty().addListener((o, oldVal, newVal) -> {
+                if (newVal != null) {
+                    // 切换提供商时，使用对应的 Key；如果当前提供商没有 Key，则提示输入
+                    com.dbboys.util.AiAuthUtil.setProvider(newVal);
+                    String token = com.dbboys.util.AiAuthUtil.getApiToken();
+                    if (token == null || token.trim().isEmpty()) {
+                        showPasteAiKeyDialog();
+                    } else {
+                        refreshAiApiStatus();
+                    }
+                }
+            });
+        }
+        refreshAiApiStatus();
+    }
+
+    private void refreshAiApiStatus() {
+        if (aiApiStatusLabel == null) return;
+        if (com.dbboys.util.AiAuthUtil.hasConfiguredApi()) {
+            aiApiStatusLabel.textProperty().bind(I18n.bind("ai.status.authorized"));
+        } else {
+            aiApiStatusLabel.textProperty().bind(I18n.bind("ai.status.unauthorized"));
+        }
+    }
+
+    @FXML
+    public void openAiWebLogin() {
+        com.dbboys.util.AiAuthUtil.startWebLoginAndOpenBrowser(() -> {
+            refreshAiApiStatus();
+            NotificationUtil.showMainNotification(I18n.t("ai.notice.login_success"));
+        });
+    }
+
+    @FXML
+    public void showPasteAiKeyDialog() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle(I18n.t("ai.dialog.paste_key.title"));
+        dialog.setHeaderText(null);
+        dialog.setContentText(I18n.t("ai.dialog.paste_key.prompt"));
+        dialog.showAndWait().ifPresent(key -> {
+            if (key != null && !key.isBlank()) {
+                com.dbboys.util.AiAuthUtil.setApiToken(key);
+                String base = com.dbboys.util.AiAuthUtil.getApiBaseUrl();
+                // 现在统一走豆包，这里不再修改 baseUrl
+                refreshAiApiStatus();
+                // 异步校验 Key 是否生效
+                AppExecutor.runAsync(() -> {
+                    String err = com.dbboys.util.AiApiUtil.validateKey();
+                    Platform.runLater(() -> {
+                        if (err == null) {
+                            NotificationUtil.showMainNotification(I18n.t("ai.notice.login_success"));
+                        } else {
+                            NotificationUtil.showMainNotification("AI Key 校验失败: " + err);
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    /**
+     * 运行一次豆包官方图片+文本示例，并在 AI 对话区域输出结果。
+     */
+    @FXML
+    public void runDoubaoDemo() {
+        if (aiChatMessages == null) {
+            return;
+        }
+        AppExecutor.runAsync(() -> {
+            String result = com.dbboys.util.AiApiUtil.runDoubaoImageDemo();
+            Platform.runLater(() -> {
+                String prefix = I18n.t("ai.notice.test_demo_prefix");
+                Label demoLabel = new Label(prefix + " " + (result == null ? "" : result));
+                demoLabel.setWrapText(true);
+                demoLabel.setMaxWidth(1.0E7);
+                demoLabel.setStyle("-fx-padding: 6 10;-fx-background-color: #f0f0f0;-fx-background-radius: 8;-fx-border-radius: 8;");
+                aiChatMessages.getChildren().add(demoLabel);
+                scrollAiChatToBottom();
+            });
+        });
+    }
+
     private void initMenuActions() {
         newSqlFileMenuItem.setOnAction(event -> {
             TabpaneUtil.addCustomSqlTab(null);});
@@ -450,8 +612,13 @@ public class MainController {
             markdownTab.titleToggle.textProperty().bind(I18n.bind("main.sidebar.knowledge"));
             bindTooltip(markdownTab.titleToggle, "main.tooltip.knowledge_base");
         }
+        if (aiTab != null && aiTab.titleToggle != null) {
+            aiTab.titleToggle.textProperty().bind(I18n.bind("main.sidebar.ai"));
+            bindTooltip(aiTab.titleToggle, "main.tooltip.ai");
+        }
         bindTabText(connectTab, "main.sidebar.connections");
         bindTabText(markdownTab, "main.sidebar.knowledge");
+        bindTabText(aiTab, "main.sidebar.ai");
 
         bindPrompt(connectSearchTextField, "main.prompt.search_objects");
         bindPrompt(markdownSearchTextField, "main.prompt.search_knowledge");
@@ -465,6 +632,7 @@ public class MainController {
         bindTooltip(statusBackSqlStopButton, "main.tooltip.stop_all_tasks");
         bindTooltip(statusBackSqlListButton, "main.tooltip.view_task_list");
         bindTooltip(snapshotRootButton, "main.tooltip.snapshot_to_clipboard");
+        bindPrompt(aiInputField, "main.prompt.ai_input");
     }
 
     private void bindText(Labeled labeled, String key) {
@@ -505,7 +673,7 @@ public class MainController {
 
     private void initSplitPaneResizeBehavior() {
         mainSplitPane.widthProperty().addListener((obs, oldVal, newVal) -> {
-            if(Main.sqledit_codearea_is_max==0) {
+            if(AppState.getSqlEditCodeAreaIsMax()==0) {
                 //保留两位小数设置，否则可能因为小数过多而设置不准
                 Platform.runLater(() -> {
                     mainSplitPane.setDividerPositions(AppState.getSplit1Pos());
@@ -840,7 +1008,53 @@ public class MainController {
         MarkdownSearchUtil.buildIndex();
     }
 
+    @FXML
+    public void sendAiMessage() {
+        if (aiInputField == null || aiChatMessages == null) return;
+        String text = aiInputField.getText();
+        if (text == null || text.isBlank()) return;
+        Label userMsg = new Label("我: " + text);
+        userMsg.setWrapText(true);
+        userMsg.setMaxWidth(1.0E7);
+        userMsg.setStyle("-fx-padding: 6 10;-fx-background-color: #e3f2fd;-fx-background-radius: 8;-fx-border-radius: 8;");
+        aiChatMessages.getChildren().add(userMsg);
+        aiInputField.clear();
+        scrollAiChatToBottom();
 
+        if (!com.dbboys.util.AiAuthUtil.hasConfiguredApi()) {
+            NotificationUtil.showMainNotification(I18n.t("ai.notice.please_login"));
+            return;
+        }
+
+        Label assistantPlaceholder = new Label(I18n.t("ai.replying"));
+        assistantPlaceholder.setWrapText(true);
+        assistantPlaceholder.setMaxWidth(1.0E7);
+        assistantPlaceholder.setStyle("-fx-padding: 6 10;-fx-background-color: #f0f0f0;-fx-background-radius: 8;-fx-border-radius: 8;");
+        aiChatMessages.getChildren().add(assistantPlaceholder);
+        scrollAiChatToBottom();
+
+        com.dbboys.app.AppExecutor.runAsync(() -> {
+            String reply = com.dbboys.util.AiApiUtil.chat(text);
+            Platform.runLater(() -> {
+                aiChatMessages.getChildren().remove(assistantPlaceholder);
+                String content = reply != null && !reply.isEmpty() ? reply : I18n.t("ai.notice.api_error");
+                Label assistantMsg = new Label("AI: " + content);
+                assistantMsg.setWrapText(true);
+                assistantMsg.setMaxWidth(1.0E7);
+                assistantMsg.setStyle("-fx-padding: 6 10;-fx-background-color: #f0f0f0;-fx-background-radius: 8;-fx-border-radius: 8;");
+                aiChatMessages.getChildren().add(assistantMsg);
+                scrollAiChatToBottom();
+            });
+        });
+    }
+
+    private void scrollAiChatToBottom() {
+        Platform.runLater(() -> {
+            if (aiChatScrollPane != null) {
+                aiChatScrollPane.setVvalue(1.0);
+            }
+        });
+    }
 
     //文件-新建连接分类响应函数
 

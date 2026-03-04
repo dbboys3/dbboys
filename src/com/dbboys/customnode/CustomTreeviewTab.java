@@ -44,6 +44,7 @@ public class CustomTreeviewTab extends Tab {
         //设置图标保证响应双击最大化事件
         setGraphic(header);
         titleToggle.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            log.info("newValue: " + newValue);
             if (newValue) {
                 Platform.runLater(() -> {
                     titleToggleIcon.setFill(Color.valueOf("#074675"));
@@ -54,11 +55,11 @@ public class CustomTreeviewTab extends Tab {
                     if (idx >= 0) {
                         ConfigManagerUtil.setProperty("DEFAULT_LISTVIEW_TAB", String.valueOf(idx));
                     }
+            
                 }
                 for(Tab tab:getTabPane().getTabs()){
                     //tab=(CustomTreeviewTab)tab;
                     if(!((CustomTreeviewTab)tab).getTitle().equals(getTitle())){
-                        log.info("!((CustomTreeviewTab)tab).getTitle().equals(getTitle())");
                         ((CustomTreeviewTab)tab).titleToggle.setSelected(false);
                         Platform.runLater(() -> {
                                 ((CustomTreeviewTab)tab).titleToggleIcon.setFill(Color.valueOf("#ddd"));
