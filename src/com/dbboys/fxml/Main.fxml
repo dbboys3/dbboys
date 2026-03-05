@@ -163,7 +163,7 @@
                                 </ScrollPane>
                                 <HBox alignment="CENTER_LEFT" spacing="6" style="-fx-padding: 6;-fx-border-width: 0.5 0 0 0;-fx-border-color: #ddd;-fx-background-color: #fff">
                                     <TextArea fx:id="aiInputField" HBox.hgrow="ALWAYS" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" style="-fx-padding: 8;-fx-focus-color: #c0d8f8;-fx-faint-focus-color: transparent"/>
-                                    <Button fx:id="aiSendButton" text="发送" styleClass="little-custom-button" onAction="#sendAiMessage"/>
+                                    <Button fx:id="aiSendButton" text="发送" styleClass="little-custom-button" onAction="#sendAiMessage" focusTraversable="false"/>
                                 </HBox>
                             </VBox>
                         </CustomTreeviewTab>
