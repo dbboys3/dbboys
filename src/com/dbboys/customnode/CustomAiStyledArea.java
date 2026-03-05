@@ -174,18 +174,23 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                 continue;
             }
 
-            // 处理图片（保持与 CustomGenericStyledArea 一致）
-            if (line.contains("![") && line.contains("](")) {
-                Matcher imgMatcher = IMG_PATTERN.matcher(line);
-                if (imgMatcher.find()) {
-                    String imgUrl = imgMatcher.group(1);
+        // 处理图片（本地文件或网络图片）
+        if (line.contains("![") && line.contains("](")) {
+            Matcher imgMatcher = IMG_PATTERN.matcher(line);
+            if (imgMatcher.find()) {
+                String imgUrl = imgMatcher.group(1).trim();
 
-                    ImageView imgView = new ImageView(new Image("file:images/failed.png"));
-                    imgView.setPreserveRatio(true);
-                    imgView.setFitWidth(500);
-                    StackPane pane = new StackPane(imgView);
-                    pane.prefWidthProperty().bind(widthProperty());
-                    try {
+                ImageView imgView = new ImageView(new Image("file:images/failed.png"));
+                imgView.setPreserveRatio(true);
+                imgView.setFitWidth(500);
+                StackPane pane = new StackPane(imgView);
+                pane.prefWidthProperty().bind(widthProperty());
+                try {
+                    if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+                        // 网络图片：直接使用 URL 加载
+                        imgView.setImage(new Image(imgUrl, true));
+                    } else {
+                        // 本地图片：按照原有逻辑解析相对路径
                         Path path = getAbsPath(markdownFile, imgUrl);
 
                         if (Files.exists(path)) {
@@ -233,16 +238,17 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                                 event.consume();
                             });
                         }
-                        append(Either.right(pane), "");
-                        appendText("\n");
-                    } catch (Exception e) {
-                        log.error(e.getMessage(), e);
-                        append(Either.right(pane), "");
-                        appendText("\n");
                     }
+                    append(Either.right(pane), "");
+                    appendText("\n");
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                    append(Either.right(pane), "");
+                    appendText("\n");
                 }
-                continue;
             }
+            continue;
+        }
 
             // 处理普通文本行（包含链接、行内代码、粗体等）
             if (!line.trim().isEmpty()) {

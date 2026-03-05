@@ -61,7 +61,10 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     public static final Pattern BOLD_PATTERN = Pattern.compile("\\*\\*([^*]+)\\*\\*");
     public static final Pattern TABLE_LINE_PATTERN = Pattern.compile("^\\|.*\\|$");
     public static final Pattern TABLE_SEPARATOR_PATTERN = Pattern.compile("^\\s*\\|(\\s*-+\\s*\\|)+\\s*$");
-    public static final Pattern COMBINED_PATTERN = Pattern.compile("(\\[.*?]\\(.*?\\)|\\*\\*[^*]+\\*\\*)");
+    // 同时匹配 Markdown 链接、纯 http 链接和粗体
+    public static final Pattern COMBINED_PATTERN = Pattern.compile(
+            "(\\[.*?]\\(.*?\\)|https?://[^\\s\\\"]+|\\*\\*[^*]+\\*\\*)"
+    );
     public static final Pattern HEADING_PATTERN = Pattern.compile("^#{1,6} .*$");
     public static final Set<String> DOC_TYPES = Set.of(
             "zip", "rar", "7z", "exe", "pdf", "doc", "docx", "xls", "xlsx",
@@ -572,84 +575,77 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
             }
 
-            // 处理图片
+            // 处理图片（本地文件或网络图片）
             if (line.contains("![") && line.contains("](")) {
                 Matcher imgMatcher = IMG_PATTERN.matcher(line);
                 if (imgMatcher.find()) {
-                    String imgUrl = imgMatcher.group(1);
-                    //imgUrl="docs"+imgUrl;
+                    String imgUrl = imgMatcher.group(1).trim();
 
                     ImageView imgView = new ImageView(new Image("file:images/failed.png"));
-                    //imgView.setFitHeight(Math.min(300, imgView));
                     imgView.setPreserveRatio(true);
                     imgView.setFitWidth(500);
                     StackPane pane = new StackPane(imgView);
                     pane.prefWidthProperty().bind(widthProperty());
                     try {
-                        Path path=getAbsPath(markdownFile,imgUrl);
+                        if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+                            // 网络图片：直接使用 URL 加载
+                            imgView.setImage(new Image(imgUrl, true));
+                        } else {
+                            // 本地图片：按照原有逻辑解析相对路径
+                            Path path = getAbsPath(markdownFile, imgUrl);
 
-                        if(Files.exists(path)){
-                            imgView.setImage(new Image("file:"+path));
-                        }
-                        Image image=imgView.getImage();
-                        if(Files.exists(path)) {
-                            pane.setOnContextMenuRequested(event -> {
-                                imageSaveAsItem.setOnAction(event1 -> {
-                                    FileChooser fileChooser = new FileChooser();
-                                    fileChooser.setTitle(I18n.t("genericstyled.filechooser.image_save_as"));
+                            if (Files.exists(path)) {
+                                imgView.setImage(new Image("file:" + path));
+                            }
+                            Image image = imgView.getImage();
+                            if (Files.exists(path)) {
+                                pane.setOnContextMenuRequested(event -> {
+                                    imageSaveAsItem.setOnAction(event1 -> {
+                                        FileChooser fileChooser = new FileChooser();
+                                        fileChooser.setTitle(I18n.t("genericstyled.filechooser.image_save_as"));
 
-                                    // 2. 设置默认文件名（与原始文件同名）和格式过滤
-                                    String originalFileName = new File(path.toUri()).getName();
-                                    fileChooser.setInitialFileName(originalFileName);
-                                    fileChooser.getExtensionFilters().addAll(
-                                            new FileChooser.ExtensionFilter(I18n.t("genericstyled.filechooser.image_files"), "*.png", "*.jpg", "*.jpeg", "*.gif"),
-                                            new FileChooser.ExtensionFilter(I18n.t("genericstyled.filechooser.all_files"), "*.*")
-                                    );
-
-                                    // 3. 选择保存路径
-                                    File targetFile = fileChooser.showSaveDialog(AppState.getWindow());
-                                    if (targetFile == null) {
-                                        return; // 用户取消
-                                    }
-
-                                    // 4. 用 Files.copy() 复制文件（支持覆盖已存在文件）
-                                    try {
-                                        // 复制原始文件到目标路径，若目标存在则覆盖
-                                        Files.copy(
-                                                path,
-                                                targetFile.toPath(),
-                                                StandardCopyOption.REPLACE_EXISTING // 覆盖选项
+                                        String originalFileName = new File(path.toUri()).getName();
+                                        fileChooser.setInitialFileName(originalFileName);
+                                        fileChooser.getExtensionFilters().addAll(
+                                                new FileChooser.ExtensionFilter(I18n.t("genericstyled.filechooser.image_files"), "*.png", "*.jpg", "*.jpeg", "*.gif"),
+                                                new FileChooser.ExtensionFilter(I18n.t("genericstyled.filechooser.all_files"), "*.*")
                                         );
-                                        NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_saved"));
-                                    } catch (IOException e) {
-                                        log.error("Operation failed", e);
-                                    }
+
+                                        File targetFile = fileChooser.showSaveDialog(AppState.getWindow());
+                                        if (targetFile == null) {
+                                            return;
+                                        }
+
+                                        try {
+                                            Files.copy(
+                                                    path,
+                                                    targetFile.toPath(),
+                                                    StandardCopyOption.REPLACE_EXISTING
+                                            );
+                                            NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_saved"));
+                                        } catch (IOException e) {
+                                            log.error("Operation failed", e);
+                                        }
+                                    });
+                                    imageCopyItem.setOnAction(event1 -> {
+                                        Clipboard clipboard = Clipboard.getSystemClipboard();
+                                        ClipboardContent content = new ClipboardContent();
+                                        content.putImage(image);
+                                        clipboard.setContent(content);
+                                        NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_copied"));
+
+                                    });
+                                    imageContextMenu.show(pane, event.getScreenX(), event.getScreenY());
+                                    event.consume();
                                 });
-                                imageCopyItem.setOnAction(event1 -> {
-                                    Clipboard clipboard = Clipboard.getSystemClipboard();
-
-                                    // 创建剪贴板内容并放入图像
-                                    ClipboardContent content = new ClipboardContent();
-                                    content.putImage(image); // 直接放入 Image 对象
-
-                                    // 复制到剪贴板
-                                    clipboard.setContent(content);
-                                    NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.image_copied"));
-
-                                });
-                                imageContextMenu.show(pane, event.getScreenX(), event.getScreenY());
-                                event.consume();
-                            });
+                            }
                         }
                         append(Either.right(pane), "");
                         appendText("\n");
-                        //append(Either.left("\n"), "");
                     } catch (Exception e) {
                         log.error(e.getMessage(), e);
                         append(Either.right(pane), "");
-                            //append(Either.left("[图片加载失败: " + imgUrl + "]"), "");
-                            appendText("\n");
-
+                        appendText("\n");
                     }
                 }
                 continue;
@@ -745,13 +741,31 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
             String matched = matcher.group();
             if (matched.startsWith("[")) {
-                // 链接处理（不变）
+                // 链接处理：支持 [text](url "title")，忽略括号内引号里的提示
                 Matcher linkMatcher = LINK_PATTERN.matcher(matched);
                 if (linkMatcher.find()) {
                     String linkText = linkMatcher.group(1);
-                    String linkUrl = linkMatcher.group(2);
+                    String rawTarget = linkMatcher.group(2);
+                    String linkUrl = rawTarget == null ? "" : rawTarget.trim();
+
+                    // 去掉后面的 "提示" 或多余说明，只保留真正的 URL
+                    int quoteIdx = linkUrl.indexOf('"');
+                    if (quoteIdx >= 0) {
+                        linkUrl = linkUrl.substring(0, quoteIdx).trim();
+                    } else {
+                        int spaceIdx = linkUrl.indexOf(' ');
+                        if (spaceIdx >= 0) {
+                            linkUrl = linkUrl.substring(0, spaceIdx).trim();
+                        }
+                    }
+
                     append(Either.left(linkText), "link:" + linkUrl + ";");
                 }
+            } else if (matched.startsWith("http://") || matched.startsWith("https://")) {
+                // 纯 http/https 链接，例如：https://markdown.com.cn "点击跳转官方指南"
+                // 这里只匹配 URL 本身，后面的 "提示" 会作为普通文本保留
+                String linkUrl = matched.trim();
+                append(Either.left(linkUrl), "link:" + linkUrl + ";");
             } else if (matched.startsWith("**")) {
                 // 加粗处理：确保正确提取内容
                 Matcher boldMatcher = BOLD_PATTERN.matcher(matched);
