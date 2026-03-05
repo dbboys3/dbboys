@@ -55,34 +55,39 @@ import java.util.regex.Pattern;
 
 public class CustomGenericStyledArea extends GenericStyledArea {
     private static final Logger log = LogManager.getLogger(CustomGenericStyledArea.class);
-    private static final Pattern IMG_PATTERN = Pattern.compile("!\\[.*?]\\((.*?)\\)");
-    private static final Pattern LINK_PATTERN = Pattern.compile("\\[(.*?)\\]\\((.*?)\\)");
-    private static final Pattern INLINE_CODE_PATTERN = Pattern.compile("`(.*?)`");
-    private static final Pattern BOLD_PATTERN = Pattern.compile("\\*\\*([^*]+)\\*\\*");
-    private static final Pattern TABLE_LINE_PATTERN = Pattern.compile("^\\|.*\\|$");
-    private static final Pattern TABLE_SEPARATOR_PATTERN = Pattern.compile("^\\s*\\|(\\s*-+\\s*\\|)+\\s*$");
-    private static final Pattern COMBINED_PATTERN = Pattern.compile("(\\[.*?]\\(.*?\\)|\\*\\*[^*]+\\*\\*)");
-    private static final Pattern HEADING_PATTERN = Pattern.compile("^#{1,6} .*$");
-    private static final Set<String> DOC_TYPES = Set.of(
+    public static final Pattern IMG_PATTERN = Pattern.compile("!\\[.*?]\\((.*?)\\)");
+    public static final Pattern LINK_PATTERN = Pattern.compile("\\[(.*?)\\]\\((.*?)\\)");
+    public static final Pattern INLINE_CODE_PATTERN = Pattern.compile("`(.*?)`");
+    public static final Pattern BOLD_PATTERN = Pattern.compile("\\*\\*([^*]+)\\*\\*");
+    public static final Pattern TABLE_LINE_PATTERN = Pattern.compile("^\\|.*\\|$");
+    public static final Pattern TABLE_SEPARATOR_PATTERN = Pattern.compile("^\\s*\\|(\\s*-+\\s*\\|)+\\s*$");
+    public static final Pattern COMBINED_PATTERN = Pattern.compile("(\\[.*?]\\(.*?\\)|\\*\\*[^*]+\\*\\*)");
+    public static final Pattern HEADING_PATTERN = Pattern.compile("^#{1,6} .*$");
+    public static final Set<String> DOC_TYPES = Set.of(
             "zip", "rar", "7z", "exe", "pdf", "doc", "docx", "xls", "xlsx",
             "png", "jpg", "jpeg", "gif", "bmp", "mp3", "mp4", "avi",
             "mkv", "txt", "csv", "json", "xml", "iso", "tar", "gz", "tar.gz",
             "sh", "chm", "jar", "yml"
     );
-    private static final String LINK_STYLE = "-fx-fill: #0066cc; -fx-underline: true; -fx-cursor: hand;";
-    private static final String INVALID_LINK_STYLE = "-fx-fill: #f00; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
-    private static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
-    private static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
-    private int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
-    private Runnable onSearchRequest = () -> {};
+    public static final String LINK_STYLE = "-fx-fill: #0066cc; -fx-underline: true; -fx-cursor: hand;";
+    public static final String INVALID_LINK_STYLE = "-fx-fill: #f00; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
+    public static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
+    public static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
+    public int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
+    public Runnable onSearchRequest = () -> {};
     public  CustomShortcutMenuItem codeAreaSearchItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.search", "Ctrl+F", IconFactory.group(IconPaths.MAIN_SEARCH, 0.6));
     public  ContextMenu contextMenu = new ContextMenu();
     public  CustomShortcutMenuItem modifyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.modify", "Ctrl+Enter", IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.65));
-    private  CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
-    private  CustomShortcutMenuItem imageCopyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_image", IconFactory.group(IconPaths.COPY, 0.7));
+    public  CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
+    public  CustomShortcutMenuItem imageCopyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_image", IconFactory.group(IconPaths.COPY, 0.7));
     public  ContextMenu imageContextMenu = new ContextMenu();
-    private CustomShortcutMenuItem imageSaveAsItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.image_save_as", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
-    private File markdownFile;
+    public CustomShortcutMenuItem imageSaveAsItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.image_save_as", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
+    public File markdownFile;
+
+    /** 便捷构造：无文件上下文时使用临时占位文件名。 */
+    public CustomGenericStyledArea() {
+        this(new File("inline.md"));
+    }
 
     public static class NodeSegmentOps implements SegmentOps<Node, String> {
         @Override
@@ -120,6 +125,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             return new Text("");
         }
     }
+
 
     public CustomGenericStyledArea(File markdownFile){
         this.markdownFile=markdownFile;
@@ -683,7 +689,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         }
     }
 
-    private void processTextLine(String line) {
+    public void processTextLine(String line) {
         if(!line.startsWith("\t")){
             line = "\t" + line;
         }
@@ -825,7 +831,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     /**
      * 根据表格数据生成JavaFX TableView组件
      */
-    private Node createTableView(List<List<String>> tableRows) {
+    public Node createTableView(List<List<String>> tableRows) {
         // 创建表格视图
         CustomResultsetTableView<List<String>> tableView = new CustomResultsetTableView<>();
         tableView.setStyle("-fx-border-color: #dddddd; -fx-border-width: 1px;");
@@ -978,7 +984,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         return "downloaded.file";
     }
 
-    private static Path getAbsPath(File file,String url){
+    public static Path getAbsPath(File file,String url){
         Path appDir = Path.of(System.getProperty("user.dir"));
         Path baseFile = Path.of(file.getPath());
         Path relative  = Paths.get(url);
@@ -999,4 +1005,3 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
 
 }
-

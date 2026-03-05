@@ -896,13 +896,8 @@ public class MainController {
         String text = aiInputField.getText();
         if (text == null || text.isBlank()) return;
 
-        javafx.scene.text.Text userText = new javafx.scene.text.Text(text);
-        javafx.scene.text.TextFlow userFlow = new javafx.scene.text.TextFlow(userText);
-        userFlow.setStyle("-fx-padding: 6 10;-fx-background-color: #e3f2fd;-fx-background-radius: 8;-fx-border-radius: 8;");
-        HBox userBox = new HBox(userFlow);
-        userBox.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
-        userBox.setFillHeight(false);
-        aiChatMessages.getChildren().add(userBox);
+        // 用户消息使用 CustomGenericStyledArea 展示（支持 Markdown）
+        addUserMarkdownMessage(text);
         aiInputField.clear();
         scrollAiChatToBottom();
 
@@ -935,13 +930,8 @@ public class MainController {
                     return;
                 }
                 String content = reply != null && !reply.isEmpty() ? reply : I18n.t("ai.notice.api_error");
-                javafx.scene.text.Text aiText = new javafx.scene.text.Text(content);
-                javafx.scene.text.TextFlow aiFlow = new javafx.scene.text.TextFlow(aiText);
-                aiFlow.setStyle("-fx-padding: 6 10;-fx-background-color: #f0f0f0;-fx-background-radius: 8;-fx-border-radius: 8;");
-                HBox aiBox = new HBox(aiFlow);
-                aiBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-                aiBox.setFillHeight(false);
-                aiChatMessages.getChildren().add(aiBox);
+                // AI 回复同样通过 CustomGenericStyledArea 展示
+                addAiMarkdownMessage(content);
                 scrollAiChatToBottom();
                 aiTaskFuture = null;
                 updateAiSendButtonText(false);
@@ -982,6 +972,27 @@ public class MainController {
             sendIcon.setScaleY(0.8);
             aiSendButton.setGraphic(sendIcon);
         }
+    }
+
+    private void addAiMarkdownMessage(String content) {
+        com.dbboys.customnode.AiStyledArea area = new com.dbboys.customnode.AiStyledArea();
+        area.parseMarkdownWithStyles(content == null ? "" : content);
+        area.setEditable(false);
+        area.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
+        area.setStyle(area.getStyle() + ";-fx-padding: 6 10 6 10;");
+        aiChatMessages.getChildren().add(area);
+    }
+
+    private void addUserMarkdownMessage(String content) {
+        com.dbboys.customnode.AiStyledArea area = new com.dbboys.customnode.AiStyledArea();
+        area.parseMarkdownWithStyles(content == null ? "" : content);
+        area.setEditable(false);
+        area.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
+        area.setStyle(area.getStyle() + ";-fx-padding: 6 10 6 10;");
+        HBox userBox = new HBox(area);
+        userBox.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        userBox.setFillHeight(false);
+        aiChatMessages.getChildren().add(userBox);
     }
 
     private void scrollAiChatToBottom() {
