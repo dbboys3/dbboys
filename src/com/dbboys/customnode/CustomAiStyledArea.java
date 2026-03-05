@@ -9,6 +9,7 @@ import org.reactfx.util.Either;
 import javafx.scene.Node;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +43,17 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         setStyle("-fx-font-family: system; -fx-font-size: 11px;");
         // AI 对话不需要右键菜单，避免误操作
         setContextMenu(null);
+
+            // 关键：高度随内容变化
+        setMinHeight(Region.USE_PREF_SIZE);
+        setPrefHeight(Region.USE_COMPUTED_SIZE);
+        // 监听内容总高度估算，动态设置 prefHeight
+        totalHeightEstimateProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                // +10 预留一点内边距，可根据需要调整
+                setPrefHeight((double)newVal + 10);
+            }
+        });
     }
 
     /**
