@@ -14,8 +14,6 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
-import javafx.scene.layout.StackPane;
-import javafx.scene.shape.Rectangle;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -293,21 +291,15 @@ public class TreeNavigator {
             int titleBarHeight = 36;
             int contentH = dialogH - titleBarHeight;
 
-            StackPane contentWrapper = new StackPane(dialogPane);
-            contentWrapper.setMinSize(dialogW, contentH);
-            contentWrapper.setMaxSize(dialogW, contentH);
-            contentWrapper.setPrefSize(dialogW, contentH);
-            Rectangle clip = new Rectangle();
-            clip.widthProperty().bind(contentWrapper.widthProperty());
-            clip.heightProperty().bind(contentWrapper.heightProperty());
-            contentWrapper.setClip(clip);
+            dialogPane.setMinSize(dialogW, contentH);
+            dialogPane.setPrefSize(dialogW, contentH);
+            dialogPane.setMaxSize(dialogW, contentH);
 
             SimpleStringProperty titleProp = new SimpleStringProperty(I18n.t("createconnect.dialog.title"));
-            CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(stage, titleProp, contentWrapper, dialogW, dialogH, null, false);
+            CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(stage, titleProp, dialogPane, dialogW, dialogH, null, false);
             stage.setScene(frame.scene);
             stage.setResizable(false);
-            stage.setWidth(dialogW);
-            stage.setHeight(dialogH);
+            stage.sizeToScene();
 
             controller.init(treeDataParam, isCopy, stage);
             frame.closeButton.setOnAction(e -> stage.close());
