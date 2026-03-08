@@ -1593,6 +1593,13 @@ Text {
   -fx-font-weight: normal;
 }
 
+.window-title-bar-left .menu-bar {
+  -fx-background-color: transparent;
+}
+.window-title-bar-left .menu-bar > .container > .menu-button > .label {
+  -fx-text-fill: white;
+}
+
 .menu-bar {
   -fx-background-color: -color-border-muted, -color-bg-subtle;
   -fx-background-insets: 0 0 0 0, 0 0 1 0;

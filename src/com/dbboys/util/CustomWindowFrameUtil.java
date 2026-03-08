@@ -59,6 +59,30 @@ public final class CustomWindowFrameUtil {
                                Node content,
                                double width,
                                double height) {
+        return create(stage, titleBinding, content, width, height, null);
+    }
+
+    /** Same as create(...) but with optional left content in the title bar (e.g. logo + menu). */
+    public static Frame create(Stage stage,
+                               ObservableValue<String> titleBinding,
+                               Node content,
+                               double width,
+                               double height,
+                               Node titleBarLeft) {
+        return create(stage, titleBinding, content, width, height, titleBarLeft, true);
+    }
+
+    /**
+     * Same as create(..., titleBarLeft) but can disable edge resize (e.g. for fixed-size dialogs).
+     * @param enableResize false to disable border drag resize and resize cursor
+     */
+    public static Frame create(Stage stage,
+                               ObservableValue<String> titleBinding,
+                               Node content,
+                               double width,
+                               double height,
+                               Node titleBarLeft,
+                               boolean enableResize) {
         Region dragRegion = new Region();
         HBox.setHgrow(dragRegion, Priority.ALWAYS);
 
@@ -76,6 +100,9 @@ public final class CustomWindowFrameUtil {
         closeButton.setOnMouseExited(event -> closeButton.setStyle(CLOSE_STYLE));
 
         HBox titleBar = new HBox(titleLabel, dragRegion, minButton, maxButton, closeButton);
+        if (titleBarLeft != null) {
+            titleBar.getChildren().add(0, titleBarLeft);
+        }
         titleBar.setAlignment(Pos.CENTER_LEFT);
         titleBar.setStyle(TITLE_STYLE);
 
@@ -90,7 +117,9 @@ public final class CustomWindowFrameUtil {
 
         Scene scene = new Scene(root, width, height);
         AppState.applyAppStylesheet(scene);
-        enableResize(stage, root, scene);
+        if (enableResize) {
+            enableResize(stage, root, scene);
+        }
 
         WindowState state = new WindowState();
         configureTitleBar(stage, titleBar, maxButton, state);
@@ -171,6 +200,24 @@ public final class CustomWindowFrameUtil {
         }
         state.maximized = !state.maximized;
         stage.getProperties().put(MAXIMIZED_KEY, state.maximized);
+    }
+
+    /** Maximizes the stage using the frame's state and button; call after show if you want to start maximized. */
+    public static void requestMaximize(Frame frame) {
+        Stage stage = (Stage) frame.scene.getWindow();
+        if (frame.state.maximized) return;
+        frame.state.prevX = stage.getX();
+        frame.state.prevY = stage.getY();
+        frame.state.prevWidth = stage.getWidth();
+        frame.state.prevHeight = stage.getHeight();
+        Rectangle2D visualBounds = getVisualBounds(stage);
+        stage.setX(visualBounds.getMinX());
+        stage.setY(visualBounds.getMinY());
+        stage.setWidth(visualBounds.getWidth());
+        stage.setHeight(visualBounds.getHeight());
+        frame.maxButton.setGraphic(IconFactory.group(IconPaths.WINDOW_RESTORE, 0.4, Color.WHITE));
+        frame.state.maximized = true;
+        stage.getProperties().put(MAXIMIZED_KEY, true);
     }
 
     private static Rectangle2D getVisualBounds(Stage stage) {

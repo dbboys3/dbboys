@@ -130,6 +130,7 @@ public class CreateConnectController {
     public  String props;
     public  Button cancelButton;
     public  Dialog<?> dialog;
+    private Stage dialogStage;
 
     public CreateConnectController(){
 
@@ -141,6 +142,20 @@ public class CreateConnectController {
 
     public void init(TreeData treeDataParam, Boolean isCopy, Dialog<?> dialog){
         this.dialog = dialog;
+        this.dialogStage = null;
+        initCommon(treeDataParam, isCopy);
+        cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
+    }
+
+    public void init(TreeData treeDataParam, Boolean isCopy, Stage stageWindow){
+        this.dialogStage = stageWindow;
+        this.dialog = null;
+        initCommon(treeDataParam, isCopy);
+        cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
+        cancelButton.setOnAction(e -> closeWindow());
+    }
+
+    private void initCommon(TreeData treeDataParam, Boolean isCopy){
         //默认属性
         this.props = DEFAULT_PROPS;
         this.treeDataParam = treeDataParam;
@@ -309,9 +324,17 @@ public class CreateConnectController {
             }
         });
         //connectNameTextField.requestFocus();
+    }
 
-        cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
+    private void closeWindow() {
+        if (dialog != null) dialog.close();
+        else if (dialogStage != null) dialogStage.close();
+    }
 
+    /** Call from commitConnecting to cancel task when window is closed. */
+    private void setTaskCancelOnClose(java.lang.Runnable runnable) {
+        if (dialog != null) dialog.setOnCloseRequest(e -> runnable.run());
+        else if (dialogStage != null) dialogStage.setOnCloseRequest(e -> runnable.run());
     }
 
     public void setConnect(Connect connect){
@@ -820,9 +843,7 @@ public class CreateConnectController {
                 task.cancel();
                 setConnectingVisible(false);
             });
-            dialog.setOnCloseRequest(event -> {
-                task.cancel();
-            });
+            setTaskCancelOnClose(task::cancel);
             AppExecutor.runTask(task);
 
         } catch (Exception e) {

@@ -10,10 +10,15 @@ import com.dbboys.ui.IconPaths;
 import com.dbboys.util.*;
 import com.dbboys.vo.*;
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.layout.StackPane;
+import javafx.scene.shape.Rectangle;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -269,32 +274,57 @@ public class TreeNavigator {
 
     }
 
-    //弹出创建连接对话框
-    public static void showCreateConnectDialog(TreeData treeDataParam,Boolean isCopy)  {
+    //弹出创建连接对话框（使用 CustomWindowFrameUtil 框架）
+    public static void showCreateConnectDialog(TreeData treeDataParam, Boolean isCopy) {
         try {
             ResourceBundle bundle = ResourceBundle.getBundle("com.dbboys.i18n.messages", I18n.getLocale());
             FXMLLoader loader = new FXMLLoader(CreateConnectController.class.getResource("/com/dbboys/fxml/CreateConnect.fxml"), bundle);
             DialogPane dialogPane = loader.load();
             CreateConnectController controller = loader.getController();
-            Dialog<ButtonType> dialog = new Dialog<>();
-            controller.init(treeDataParam, isCopy,dialog);
-            dialog.setDialogPane(dialogPane);
-            dialog.setTitle(I18n.t("createconnect.dialog.title"));
-            Stage alterstage = (Stage) dialog.getDialogPane().getScene().getWindow();
-            alterstage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
-            AppState.applyAppStylesheet(dialogPane.getScene());
+
+            Stage stage = new Stage(StageStyle.UNDECORATED);
+            stage.initModality(Modality.APPLICATION_MODAL);
+            if (AppState.getWindow() != null) stage.initOwner(AppState.getWindow());
+            stage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
+
+            dialogPane.setHeader(null);
+            int dialogW = 520;
+            int dialogH = 520;
+            int titleBarHeight = 36;
+            int contentH = dialogH - titleBarHeight;
+
+            StackPane contentWrapper = new StackPane(dialogPane);
+            contentWrapper.setMinSize(dialogW, contentH);
+            contentWrapper.setMaxSize(dialogW, contentH);
+            contentWrapper.setPrefSize(dialogW, contentH);
+            Rectangle clip = new Rectangle();
+            clip.widthProperty().bind(contentWrapper.widthProperty());
+            clip.heightProperty().bind(contentWrapper.heightProperty());
+            contentWrapper.setClip(clip);
+
+            SimpleStringProperty titleProp = new SimpleStringProperty(I18n.t("createconnect.dialog.title"));
+            CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(stage, titleProp, contentWrapper, dialogW, dialogH, null, false);
+            stage.setScene(frame.scene);
+            stage.setResizable(false);
+            stage.setWidth(dialogW);
+            stage.setHeight(dialogH);
+
+            controller.init(treeDataParam, isCopy, stage);
+            frame.closeButton.setOnAction(e -> stage.close());
+
             TextField connectNameTextField = (TextField) loader.getNamespace().get("connectNameTextField");
-            dialogPane.getScene().getWindow().setOnShown(event -> {
-                connectNameTextField.requestFocus();
-            });
-            dialog.setOnCloseRequest(e -> {
-                dialog.close();
-            });
-            dialog.showAndWait();
+            stage.setOnShown(event -> connectNameTextField.requestFocus());
+
+            javafx.stage.Window owner = AppState.getWindow();
+            if (owner instanceof Stage ownerStage) {
+                stage.setX(ownerStage.getX() + (ownerStage.getWidth() - dialogW) / 2);
+                stage.setY(ownerStage.getY() + (ownerStage.getHeight() - dialogH) / 2);
+            }
+
+            stage.showAndWait();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public static boolean canCopyItem(TreeItem<TreeData> selectedItem) {

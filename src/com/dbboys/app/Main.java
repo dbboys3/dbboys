@@ -2,6 +2,7 @@ package com.dbboys.app;
 
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.ConfigManagerUtil;
+import com.dbboys.util.CustomWindowFrameUtil;
 import com.dbboys.ctrl.MainController;
 import com.dbboys.customnode.CustomSqlEditCodeArea;
 import com.dbboys.util.TabpaneUtil;
@@ -17,8 +18,12 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.scene.Node;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.apache.logging.log4j.LogManager;
@@ -112,7 +117,7 @@ public class Main extends Application {
 
                 //加载主界面
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/fxml/Main.fxml"));
-                    Pane root= null;
+                    Pane root = null;
                     try {
                         root = loader.load();
                     } catch (IOException e) {
@@ -120,16 +125,36 @@ public class Main extends Application {
                     }
                 mainController = loader.getController();
                 AppState.setMainController(mainController);
-                scene = new Scene(root, 800, 600);
-                AppState.setScene(scene);
 
-                AppState.applyAppStylesheet(scene);
+                // 使用 CustomWindowFrameUtil：logo 和菜单放入框架标题栏，去掉原标题栏和边框拖拽层
+                VBox mainVBox = mainController.mainVBox;
+                HBox oldTitleBar = (HBox) mainVBox.getChildren().get(0);
+                Node logo = oldTitleBar.getChildren().get(0);
+                Node menuBar = oldTitleBar.getChildren().get(1);
+                HBox titleBarLeft = new HBox(logo, menuBar);
+                titleBarLeft.getStyleClass().add("window-title-bar-left");
+                titleBarLeft.setAlignment(Pos.CENTER_LEFT);
+                titleBarLeft.setStyle("-fx-background-color: transparent;");
+                mainVBox.getChildren().remove(0);
+
+                mainController.removeCustomFrameResizeLayersFromRoot();
+
+                SimpleStringProperty titleProp = new SimpleStringProperty("DBboys");
+                CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+                        primaryStage, titleProp, root, 800, 600, titleBarLeft);
+                scene = frame.scene;
+                AppState.setScene(scene);
 
                 primaryStage.setTitle("DBboys");
                 Image image = new Image("file:images/logo.png");
                 primaryStage.getIcons().add(image);
-               // primaryStage.initStyle(StageStyle.DECORATED);
-                primaryStage.initStyle(StageStyle.UNDECORATED); //UNDECORATED可以避免加载treelist黑块现象
+                primaryStage.initStyle(StageStyle.UNDECORATED);
+
+                frame.closeButton.setOnAction(e -> {
+                    if (mainController.requestClose()) {
+                        mainController.performCloseAndExit();
+                    }
+                });
 
                 // 在后台线程中预加载，避免首次点击时卡顿，首次打开sql编辑界面300+ms下降到50+ms
                 AppExecutor.runAsync(() -> {
@@ -194,7 +219,7 @@ public class Main extends Application {
                         }
 
                         //打开软件默认最大化
-                        Main.mainController.windowMaximizeButton.fire();
+                        CustomWindowFrameUtil.requestMaximize(frame);
                         //ResizeHelper.addResizeListener(primaryStage);
                         log.info("dbboys已启动。");
 

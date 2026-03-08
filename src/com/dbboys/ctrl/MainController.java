@@ -783,32 +783,41 @@ public class MainController {
         //窗口关闭按钮
 
         windowCloseButton.setOnAction(event->{
-            Stage primaryStage = (Stage) ((Node) event.getSource()).getScene().getWindow();
-            Boolean sureToclosed=true;
-            for (Tab tab : sqlTabPane.getTabs()) {
-                if (tab.getText().startsWith("*")) {
-                    if(!AlertUtil.CustomAlertConfirm(I18n.t("common.hint"), I18n.t("main.confirm.unsaved_sql_close"))){
-                        sureToclosed=false;
-                        event.consume();
-                    }
-                    break;
-                }
-            }
-
-            //如果回答确认，执行关闭流程
-            if(sureToclosed) {
-                //disconnectAll(); //关闭所有连接,取消此操作，如果连接已中断会导致关闭卡顿，软件关闭会自动关闭连接
-                String split1Content = String.valueOf(AppState.getSplit1Pos());
-                String split2Content = String.valueOf(AppState.getSplit2Pos());
-                ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", split1Content);
-                ConfigManagerUtil.setProperty("SPLIT_DRIVER_SQL", split2Content);
-                //log.info("开始执行primaryStage.close()。");
-                primaryStage.close();
-                //log.info("结束执行primaryStage.close()，开始执行System.exit(0)。");
-                System.exit(0); //避免executorService线程未关闭
-                log.info("dbboys已关闭。");
+            if (requestClose()) {
+                performCloseAndExit();
             }
         });
+    }
+
+    /** Removes the legacy resize layer panes from root when using CustomWindowFrameUtil (frame provides resize). */
+    public void removeCustomFrameResizeLayersFromRoot() {
+        if (root != null) {
+            root.getChildren().removeAll(
+                    resizeLayerRight, resizeLayerLeft, resizeLayerBottom,
+                    resizeLayerTop, resizeLayerBottom_left, resizeLayerBottom_right);
+        }
+    }
+
+    /** Returns true if the window can close (e.g. user confirmed when there are unsaved SQL tabs). */
+    public boolean requestClose() {
+        for (Tab tab : sqlTabPane.getTabs()) {
+            if (tab.getText().startsWith("*")) {
+                return AlertUtil.CustomAlertConfirm(I18n.t("common.hint"), I18n.t("main.confirm.unsaved_sql_close"));
+            }
+        }
+        return true;
+    }
+
+    /** Saves split positions, closes the stage, and exits. Call after requestClose() returns true. */
+    public void performCloseAndExit() {
+        String split1Content = String.valueOf(AppState.getSplit1Pos());
+        String split2Content = String.valueOf(AppState.getSplit2Pos());
+        ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", split1Content);
+        ConfigManagerUtil.setProperty("SPLIT_DRIVER_SQL", split2Content);
+        Stage stage = (Stage) root.getScene().getWindow();
+        stage.close();
+        System.exit(0); //避免executorService线程未关闭
+        log.info("dbboys已关闭。");
     }
 
     private void initTreeView() {
