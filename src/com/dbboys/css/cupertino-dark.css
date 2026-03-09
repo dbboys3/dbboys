@@ -4982,3 +4982,72 @@ Text {
   -fx-opacity: 0.85;
   -fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
 }
+
+
+
+#自定义区域#############################################################################
+/*隐藏标题，只显示自定义图形,保证设置了text并且异常下拉框可以正常显示标题*/
+#treeviewTabPane .tab-label,#sqlTabPane .tab-label {
+  -fx-content-display: graphic-only; /* 只显示graphic */
+  -fx-background-color: none;
+}
+
+/*标题栏里顶部和左边的距离*/
+#treeviewTabPane .tab-header-area {
+  -fx-padding: 0 0 0 0;   /* 上 右 下 左 */
+}
+
+/*标题栏高度*/
+#treeviewTabPane .tab,#treeviewTabpane .tab:selected {
+  -fx-pref-height: 35px;
+  -fx-min-height: 35px;
+  -fx-max-height: 35px;
+  -fx-pref-width: 35px;
+  -fx-min-width: 35px;
+  -fx-max-width: 35px;
+  -fx-background-radius:0px;
+  -fx-border-radius: 0px;
+  -fx-background-color:none;
+}
+
+
+
+/* 基础样式 */
+/* ToggleButton: 稳重商务风 */
+.toggle-button {
+  -fx-pref-height: 35px;
+  -fx-min-height: 35px;
+  -fx-max-height: 35px;
+  -fx-pref-width: 35px;
+  -fx-min-width: 35px;
+  -fx-max-width: 35px;
+  -fx-content-display: graphic-only;
+
+  
+  -fx-background-color: #f2f2f2;
+  -fx-background-insets: 3px;
+  -fx-background-radius: 4px;
+
+  -fx-border-color: #b8c1cc;
+  -fx-border-width: 0.5px;
+  -fx-border-radius: 4px;
+  -fx-border-insets: 3px;
+
+  -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.06), 2, 0, 0, 1);
+}
+
+.toggle-button:hover {
+  -fx-background-color: #eef2f6;
+  -fx-border-color: #6f8498;
+  -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 3, 0, 0, 1);
+}
+
+.toggle-button:selected {
+  -fx-background-color: #e6edf4;
+  -fx-border-color: #274b68;
+  -fx-effect: dropshadow(gaussian, rgba(39, 75, 104, 0.12), 3, 0, 0, 1);
+}
+
+.toggle-button:focused {
+  -fx-border-color: #274b68;
+}

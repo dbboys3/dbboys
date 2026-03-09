@@ -35,19 +35,21 @@ public class CustomTreeviewTab extends Tab {
         //header.setSpacing(5);
         //header.setStyle("-fx-background-color: red");
         
-        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.5, Color.valueOf("#074675"));
-        titleToggleIcon.setRotate(90);
+        // 默认灰色图标
+        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.7, Color.valueOf("#666"));
         titleToggle.setGraphic(new Group(titleToggleIcon));
+        titleToggle.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        // 仅图标，无背景无边框
+        titleToggle.setStyle("-fx-background-color: transparent; -fx-border-width: 0; -fx-border-color: transparent;");
         titleToggle.setFocusTraversable(false);
         titleToggle.setTooltip(new Tooltip("数据库连接"));
 
-        //设置图标保证响应双击最大化事件
-        setGraphic(header);
+        // 设置图标保证响应点击/双击等事件
+        setGraphic(titleToggle);
         titleToggle.selectedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
-                Platform.runLater(() -> {
-                    titleToggleIcon.setFill(Color.valueOf("#074675"));
-                });
+                // 选中：图标白色
+                Platform.runLater(() -> titleToggleIcon.setFill(Color.WHITE));
                 getTabPane().getSelectionModel().select(this);
                 if (getTabPane() != null) {
                     int idx = getTabPane().getTabs().indexOf(this);
@@ -66,7 +68,7 @@ public class CustomTreeviewTab extends Tab {
                     if (!((CustomTreeviewTab) tab).getTitle().equals(getTitle())) {
                         ((CustomTreeviewTab) tab).titleToggle.setSelected(false);
                         Platform.runLater(() -> {
-                            ((CustomTreeviewTab) tab).titleToggleIcon.setFill(Color.valueOf("#ddd"));
+                            ((CustomTreeviewTab) tab).titleToggleIcon.setFill(Color.valueOf("#666"));
                         });
                     }
                 }
@@ -83,8 +85,19 @@ public class CustomTreeviewTab extends Tab {
                 }
                 AppState.setSqlEditCodeAreaIsMax(1);
                 Platform.runLater(() -> {
-                    titleToggleIcon.setFill(Color.valueOf("#ddd"));
+                        titleToggleIcon.setFill(Color.valueOf("#666"));
+                    
                 });
+            }
+        });
+
+        // 鼠标悬停时图标变白，移出时根据选中状态恢复
+        titleToggle.setOnMouseEntered(e -> titleToggleIcon.setFill(Color.WHITE));
+        titleToggle.setOnMouseExited(e -> {
+            if (titleToggle.isSelected()) {
+                titleToggleIcon.setFill(Color.WHITE);
+            } else {
+                titleToggleIcon.setFill(Color.valueOf("#666"));
             }
         });
         /*
