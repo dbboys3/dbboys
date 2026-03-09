@@ -10,20 +10,20 @@
 <?import com.dbboys.customnode.CustomUserTextField?>
 <?import com.dbboys.customnode.CustomInfoStackPane?>
 <?import com.dbboys.customnode.CustomResultsetTableView?>
-<VBox fx:id="resultSetVBox" style="-fx-border-width: 0;-fx-border-color: #008000;-fx-background-insets: 0;-fx-background-color: #eee;" fx:controller="com.dbboys.ctrl.ResultSetTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
-    <HBox alignment="CENTER_LEFT" style="-fx-background-color: #f2f2f2;-fx-border-width:0.2 0 0 0;-fx-border-color: white">
+<VBox fx:id="resultSetVBox"  fx:controller="com.dbboys.ctrl.ResultSetTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
+    <HBox alignment="CENTER_LEFT" style="-fx-background-color: #1c1c1e;">
         <Button fx:id="lastSqlCopyButton" styleClass="little-custom-button" focusTraversable="false" />
         <CustomLabelTextField fx:id="lastSqlTextField" text="" focusTraversable="false" />
         <Region HBox.hgrow="ALWAYS"></Region>
         <Button fx:id="lastSqlRefreshButton" styleClass="little-custom-button" focusTraversable="false" />
     </HBox>
     <StackPane>
-        <VBox style="-fx-border-color: none;">
-            <HBox style="-fx-background-color: white;">
+        <VBox>
+            <HBox style="-fx-background-color: #1c1c1e;">
                 <CustomResultsetTableView fx:id="resultSetTableView">
                 </CustomResultsetTableView>
             </HBox>
-            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" style="-fx-border-color: #aaa;-fx-border-width: 0.2 0 0 0">
+            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT">
                 <Label fx:id="resultSetLabelLeftBracket" />
                     <StackPane>
                         <Label visible="false" fx:id="resultSetEditableEnabledLabel" />

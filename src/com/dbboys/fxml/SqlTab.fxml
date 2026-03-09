@@ -92,7 +92,7 @@
                 <TabPane fx:id="resultsetTabPane" tabClosingPolicy="ALL_TABS">
                     <Tab fx:id="resultsetSummaryTab" closable="false" style="-fx-pref-height: 18;">
                         <StackPane fx:id="resultsetStackPane">
-                            <CustomResultsetTableView fx:id="resultsetTotalTableView" style="-fx-background-color: white">
+                            <CustomResultsetTableView fx:id="resultsetTotalTableView">
                             </CustomResultsetTableView>
                         </StackPane>
 

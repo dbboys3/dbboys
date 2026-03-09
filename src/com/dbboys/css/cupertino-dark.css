@@ -59,7 +59,8 @@
   -color-bg-overlay: rgb(28, 28, 30);
   -color-bg-subtle: rgb(44, 44, 46);
   -color-bg-inset: #0b0b0c;
-  -color-border-default: rgb(72, 72, 74);
+  /*-color-border-default: rgb(72, 72, 74);*/
+  -color-border-default: rgb(60, 60, 62);
   -color-border-muted: rgb(58, 58, 60);
   -color-border-subtle: rgb(49, 49, 52);
   -color-shadow-default: rgb(0, 0, 0);
@@ -930,7 +931,9 @@ Text {
   -fx-background-insets: 0;
   -fx-background-radius: 0;
 }
-
+.table-view{
+  -fx-background-color: -color-bg-default;
+}
 .table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell .text-field-table-cell:focus-within {
   -fx-background-insets: 0, 1, 2;
   -fx-background-color: -color-bg-default, -color-accent-emphasis, -color-bg-default;
@@ -2436,7 +2439,7 @@ Text {
   -fx-alignment: CENTER;
 }
 .tab-pane > .tab-header-area > .tab-header-background {
-  -fx-background-insets: 0 0 0 0, 0 0 2px 0;
+  -fx-background-insets: 0 0 0 0, 0 0 0.5px 0;
   -fx-background-color: -color-border-default, -color-bg-default;
 }
 .tab-pane > .tab-header-area > .headers-region > .tab {
@@ -5052,4 +5055,148 @@ Text {
 
 .toggle-button:focused {
   -fx-border-color: #274b68;
+}
+
+/* 按下时的样式 */
+.custom-button:pressed ,.little-custom-button:pressed,.codearea-camera-button:pressed{
+  -fx-effect: innershadow(two-pass-box, rgba(0, 0, 0, 0.3), 5, 0, 0, 1);  /* 按下时的内阴影效果 */
+}
+.custom-button{
+  -fx-background-color: none;
+  -fx-border-color: none;
+  -fx-border-width: 0;
+}
+.little-custom-button{
+  -fx-font-size: 9; /*控制按钮高度*/
+  -fx-background-radius: 2;
+  /*
+  -fx-background-insets: 3;
+  -fx-padding:  5; */
+  -fx-border-width: 0;
+  -fx-border-color: none;
+  -fx-background-color: none;
+}
+.little-custom-button:hover{
+  -fx-background-radius: 2;
+  /*
+  -fx-background-insets: 3;
+  -fx-padding: 5;*/
+  -fx-border-width: 0;
+  -fx-border-color: none;
+  -fx-background-color: #ddd;
+}
+
+/* SQL 编辑框背景与文字颜色：比主界面稍浅一点的深色，文字默认白色 */
+.code-area {
+  -fx-background-color: #1d1d1d;
+  -fx-font-size: 12; /* sql编辑框字体大小，有自己的默认字体，与系统字体不一样 */
+}
+
+/*sql编辑框右键弹出字体，设置为系统默认值，与其他字体保持一致*/
+.code-area .context-menu .menu-item {
+  -fx-font-family: "System Regular";
+  -fx-font-size: 11px;
+}
+
+
+/*codearea选中文字背景色,有效*/
+.styled-text-area .selection {
+  /*-fx-fill: #ddd;*/
+  -fx-fill: #333;
+}
+
+/*codearea选中文字背景色,有效*/
+.styled-text-area .selection .text{
+  /*-fx-fill: #ddd;*/
+  -fx-fill: red;
+}
+
+
+
+/* 选中文本白字,无效 
+.styled-text-area .selected-text {
+  -fx-fill: white;
+}
+*/
+
+/*底下这个也有效
+.code-area .main-selection {
+  -fx-fill: yellow;
+}
+*/
+
+
+
+
+/*
+
+.styled-text-area .virtual-flow {
+  -fx-cursor: text;
+  -fx-highlight-fill: red;
+  -fx-blink-caret-rate: 100ms;
+  -fx-highlight-text-fill:white;
+}
+*/
+  /*当前选定行背景色*/
+.paragraph-box:has-caret {
+  -fx-background-color: #333;
+}
+
+.brace, .bracket {
+  -fx-fill: #333;
+}
+
+.comment {
+  -fx-fill: #aaa;
+//    -fx-font-style: italic;
+}
+.currentline{
+ // -fx-background-color: #eaf6fc;
+  //-rtfx-background-color: yellow;
+  //-fx-padding: 0 10000px 0 0;
+}
+
+.code-area .text {
+  -fx-fill: #ffffff;
+}
+
+.code-area .text.keyword,.code-area .text.paren{
+  -fx-font-weight:bold;
+  -fx-fill:#d119f1;
+}
+.function{
+  -fx-font-weight:bold;
+  -fx-fill:#074675;
+}
+.doublestring,.fanyinhao{
+  -fx-fill:#074675;
+}
+.number{
+  -fx-fill:#3f80b0
+}
+
+.error{
+  -fx-font-weight:bold;
+  -fx-fill:#cf2311
+}
+
+
+/*codearea行号css*/
+.lineno{
+  -fx-alignment: center-right; /* 垂直居中 */
+  -fx-background-color: #333333;
+  -fx-padding: 0;
+  /*
+  -fx-font-family: system;
+
+   */
+}
+
+
+
+/*当前行号*/
+.paragraph-box:has-caret .lineno {
+ /* -fx-font-weight: bold;*/
+  -fx-background-color: #333;
+  /*-fx-text-fill: white;*/
 }
