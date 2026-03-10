@@ -1093,7 +1093,8 @@ Text {
   -fx-font-size: 1.25em;
 }
 .table-view.bordered .table-row-cell > .table-cell {
-  -fx-border-color: transparent -color-cell-border transparent transparent;
+  -fx-border-color: -color-border-default;
+  -fx-border-width: 0.5px;
 }
 .table-view.bordered .table-row-cell > .table-cell:empty {
   -fx-border-color: transparent;
@@ -1122,7 +1123,7 @@ Text {
   -fx-background-color: -color-cell-border, -color-cell-bg;
   -fx-background-insets: 0, 0 0 1 0;
   -fx-padding: 0;
-  -fx-cell-size: 3em;
+  -fx-cell-size: 22px;
 }
 .table-view .table-row-cell:empty {
   -fx-background-color: transparent;
@@ -1135,6 +1136,8 @@ Text {
   -fx-padding: 0 0.5em 0 0.5em;
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
+  -fx-border-width: 0.5px;
+  -fx-border-color: -color-border-default;
 }
 .table-view .table-row-cell > .table-cell.table-column.align-left {
   -fx-alignment: BASELINE_LEFT;
@@ -1148,7 +1151,8 @@ Text {
 
 .table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell:last-visible,
 .tree-table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell > .tree-table-cell:last-visible {
-  -fx-border-color: transparent;
+  -fx-border-color: -color-border-default;
+  -fx-border-width: 0.5px;
 }
 
 .table-view .table-row-cell > .table-cell.check-box-table-cell,
