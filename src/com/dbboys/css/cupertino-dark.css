@@ -51,7 +51,9 @@
   -color-danger-7: #b33029;
   -color-danger-8: #8c2620;
   -color-danger-9: #661c17;
-  -color-fg-default: rgb(255, 255, 255);
+  /*-color-fg-default: rgb(255, 255, 255);*/
+  -color-fg-default: rgb(200, 200, 200);
+
   -color-fg-muted: #aeaeb2;
   -color-fg-subtle: rgb(141, 141, 147);
   -color-fg-emphasis: rgb(255, 255, 255);
@@ -60,7 +62,7 @@
   -color-bg-subtle: rgb(44, 44, 46);
   -color-bg-inset: #0b0b0c;
   /*-color-border-default: rgb(72, 72, 74);*/
-  -color-border-default: rgb(60, 60, 62);
+  -color-border-default: rgb(40, 40, 42);
   -color-border-muted: rgb(58, 58, 60);
   -color-border-subtle: rgb(49, 49, 52);
   -color-shadow-default: rgb(0, 0, 0);
@@ -1031,11 +1033,11 @@ Text {
 .table-view > .column-header-background .column-header {
   -fx-background-color: transparent;
   -fx-background-insets: 0;
-  -fx-size: 40px;
+  -fx-size: 25px;
   -fx-padding: 0;
   -fx-font-weight: bold;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1 1 0;
+  -fx-border-width: 0 0.5 0.5 0;
 }
 .table-view > .column-header-background .column-header .label {
   -fx-text-fill: -color-header-fg;
@@ -1620,7 +1622,7 @@ Text {
   -fx-background-color: transparent;
 }
 .window-title-bar-left .menu-bar > .container > .menu-button > .label {
-  -fx-text-fill: white;
+  -fx-text-fill: -color-fg-default;
 }
 
 .menu-bar {
@@ -5108,7 +5110,7 @@ Text {
 
 /* 所有未显式指定颜色的 SVG 图标默认使用白色填充 */
 .svg-icon {
-  -fx-fill: #fff;
+  -fx-fill: -color-fg-default;
 }
 
 /* SQL 编辑框背景与文字颜色：比主界面稍浅一点的深色，文字默认白色 */
@@ -5121,6 +5123,18 @@ Text {
 .code-area .context-menu .menu-item {
   -fx-font-family: "System Regular";
   -fx-font-size: 11px;
+}
+.code-area .context-menu .menu-item > .label {
+  -fx-text-fill: -color-fg-default;
+}
+.code-area .context-menu .menu-item > .label > .text {
+  -fx-fill: -color-fg-default;
+}
+.code-area .context-menu .menu-item:focused > .label {
+  -fx-text-fill: -color-fg-emphasis;
+}
+.code-area .context-menu .menu-item:focused > .label > .text {
+  -fx-fill: -color-fg-emphasis;
 }
 
 

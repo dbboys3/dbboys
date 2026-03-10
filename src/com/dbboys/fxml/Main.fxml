@@ -102,7 +102,7 @@
             </Label>
         </HBox>
         -->
-        <SplitPane fx:id="mainSplitPane" style="-fx-border-width:0.5 0 0.5 0; -fx-border-color: #333;">
+        <SplitPane fx:id="mainSplitPane" style="-fx-border-width:0.5 0 0.5 0; -fx-border-color: -color-border-default">
             <VBox alignment="TOP_LEFT" >
                 <StackPane prefHeight="2000">
                     <TabPane fx:id="treeviewTabPane" side="LEFT" minWidth="35" tabClosingPolicy="UNAVAILABLE">

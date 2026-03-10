@@ -27,7 +27,6 @@ public class CustomResultsetTableView<S> extends TableView<S> {
                             setText(null); // 空行不显示行号
                         } else {
                             setText(String.valueOf(getIndex() + 1)); // 行号从 1 开始
-                            setStyle("-fx-background-color: #f2f2f2;-fx-text-fill: black");
                             setOnMouseClicked(event -> {
                                 int rowIndex = getIndex();
                                 getSelectionModel().clearAndSelect(rowIndex);

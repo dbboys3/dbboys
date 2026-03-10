@@ -38,11 +38,11 @@ import java.util.regex.Pattern;
 
 public class CustomTreeCell extends TreeCell<TreeData> {
     private static final String DRAG_PAYLOAD = "DATABASEOBJECTDRAG";
-    private static final Color PRIMARY_COLOR = Color.valueOf("#fff");
-    private static final Color WARN_COLOR = Color.valueOf("#9f453c");
-    private static final Color INACTIVE_COLOR = Color.valueOf("#666");
-    private static final String CONNECTED_TEXT_STYLE = "-fx-text-fill:#fff;";
+    private static final String CONNECTED_TEXT_STYLE = "-fx-fill: -color-fg-default;";
     private static final String DISCONNECTED_TEXT_STYLE = "-fx-text-fill:#666;";
+    private static final String PRIMARY_ICON_STYLE = "-fx-fill: -color-fg-default;";
+    private static final String WARN_ICON_STYLE = "-fx-fill: #9f453c;";
+    private static final String INACTIVE_ICON_STYLE = "-fx-fill: #666;";
     private static final Pattern COUNT_INFO_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[个個](?:\\s*/\\s*(.+))?\\s*$");
     private static final Set<String> SYSTEM_DATABASES = Set.of(
             "sysmaster", "sysuser", "sysadmin", "sysutils", "sysha", "syscdr", "syscdcv1", "gbasedbt", "sys"
@@ -74,7 +74,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         loadingIcon.setFitHeight(iconSize);
         runningIcon.setFitWidth(iconSize);
         runningIcon.setFitHeight(iconSize);
-        nodeIcon.setFill(PRIMARY_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
         lockIcon.setScaleX(0.45);
         lockIcon.setScaleY(0.45);
         lockIcon.setContent(IconPaths.TREECELL_LOCK);
@@ -87,12 +87,12 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         warnIcon.setContent(IconPaths.CHECK_WARN);
         warnIcon.setScaleX(0.4);
         warnIcon.setScaleY(0.4);
-        warnIcon.setFill(WARN_COLOR);
+        applyWarnIconStyle(warnIcon);
 
         defaultDbIcon.setScaleX(0.5);
         defaultDbIcon.setScaleY(0.5);
         defaultDbIcon.setContent(IconPaths.METADATA_SET_DEFAULT_DATABASE_ITEM);
-        defaultDbIcon.setFill(PRIMARY_COLOR);
+        applyPrimaryIconStyle(defaultDbIcon);
 
 
     }
@@ -123,7 +123,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_DATABASE_FOLDER);
                 nodeIcon.setScaleX(0.13);
                 nodeIcon.setScaleY(0.13);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
@@ -134,7 +134,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_OBJECT_FOLDER);
                 nodeIcon.setScaleX(0.5);
                 nodeIcon.setScaleY(0.5);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindLocalizedCountInfo(descripLabel, objectFolder.descriptionProperty());
                 graphicHbox.getChildren().clear();
@@ -146,7 +146,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_TABLE);
                 nodeIcon.setScaleX(0.38);
                 nodeIcon.setScaleY(0.38);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 if (isRawOrExternal(sysTable.getTableTypeCode())) {
                     warnIcon.setVisible(true);
@@ -189,7 +189,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_INDEX);
                 nodeIcon.setScaleX(0.5);
                 nodeIcon.setScaleY(0.5);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 warnIcon.visibleProperty().unbind();
                 warnIcon.visibleProperty().bind(index.isdisabledProperty());
                 nameLabel.textProperty().unbind();
@@ -222,7 +222,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.RESULTSET_ROW_NUMBER);
                 nodeIcon.setScaleX(0.58);
                 nodeIcon.setScaleY(0.6);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 descripLabel.textProperty().unbind();
                 descripLabel.setText("SEQ");
@@ -242,7 +242,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_SYNONYM);
                 nodeIcon.setScaleX(0.35);
                 nodeIcon.setScaleY(0.35);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
                         "DATABASE: " , synonym.databaseProperty() , "\n" ,
@@ -258,7 +258,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_TRIGGER);
                 nodeIcon.setScaleX(0.5);
                 nodeIcon.setScaleY(0.5);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 warnIcon.visibleProperty().unbind();
                 warnIcon.visibleProperty().bind(trigger.isdisabledProperty());
                 bindNameLabel(item);
@@ -281,7 +281,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_FUNCTION);
                 nodeIcon.setScaleX(0.7);
                 nodeIcon.setScaleY(0.6);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
                         "DATABASE: ",function.databaseProperty(),"\n",
@@ -296,7 +296,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_PROCEDURE);
                 nodeIcon.setScaleX(0.55);
                 nodeIcon.setScaleY(0.55);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
                         "DATABASE: ",procedure.databaseProperty(),"\n",
@@ -311,7 +311,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_PACKAGE);
                 nodeIcon.setScaleX(0.45);
                 nodeIcon.setScaleY(0.45);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 warnIcon.visibleProperty().unbind();
                 warnIcon.visibleProperty().bind(dbPackage.isEmptyProperty());
                 bindNameLabel(item);
@@ -331,7 +331,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_FUNCTION);
                 nodeIcon.setScaleX(0.7);
                 nodeIcon.setScaleY(0.6);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 descripLabel.textProperty().unbind();
                 descripLabel.textProperty().bind(packageFunction.descriptionProperty());
@@ -341,7 +341,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_PROCEDURE);
                 nodeIcon.setScaleX(0.55);
                 nodeIcon.setScaleY(0.55);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 descripLabel.textProperty().unbind();
                 descripLabel.textProperty().bind(packageProcedure.descriptionProperty());
@@ -352,7 +352,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 //userIcon.setContent(IconPaths.METADATA_NAME_LABEL);
                 nodeIcon.setScaleX(0.65);
                 nodeIcon.setScaleY(0.65);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
@@ -362,7 +362,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.METADATA_NAME_LABEL);
                 nodeIcon.setScaleX(0.55);
                 nodeIcon.setScaleY(0.55);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
@@ -370,7 +370,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_CHECK_FOLDER);
                 nodeIcon.setScaleX(0.75);
                 nodeIcon.setScaleY(0.75);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
@@ -378,7 +378,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 nodeIcon.setContent(IconPaths.TREECELL_MON_FOLDER);
                 nodeIcon.setScaleX(0.6);
                 nodeIcon.setScaleY(0.6);
-                nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
@@ -409,7 +409,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             nodeIcon.setScaleX(0.56);
             nodeIcon.setScaleY(0.56);
         }
-        nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
         bindCellText(item);
         setGraphic(nodeIconStackpane);
     }
@@ -418,7 +418,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         nodeIcon.setContent(IconPaths.GBASE_LOGO);
         nodeIcon.setScaleX(0.22);
         nodeIcon.setScaleY(0.22);
-        nodeIcon.setFill(PRIMARY_COLOR);
+                applyPrimaryIconStyle(nodeIcon);
         applyConnectedVisualStyle();
         String status = I18n.t("treecell.status.connected", "Connected");
         try {
@@ -446,7 +446,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         nodeIcon.setContent(IconPaths.TREECELL_DATABASE);
         nodeIcon.setScaleX(0.4);
         nodeIcon.setScaleY(0.4);
-        nodeIcon.setFill(PRIMARY_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
         bindNameLabel(item);
         String sysTag = isSystemDatabase(database.getName()) ? "(SYS)" : "";
         warnIcon.setVisible("nolog".equals(database.getDbLog()));
@@ -473,7 +473,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         nodeIcon.setContent(IconPaths.TREECELL_TABLE);
         nodeIcon.setScaleX(0.38);
         nodeIcon.setScaleY(0.38);
-        nodeIcon.setFill(PRIMARY_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
         bindNameLabel(item);
         warnIcon.visibleProperty().unbind();
         warnIcon.visibleProperty().bind(Bindings.createBooleanBinding(
@@ -501,7 +501,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         nodeIcon.setContent(IconPaths.TREECELL_VIEW);
         nodeIcon.setScaleX(0.55);
         nodeIcon.setScaleY(0.55);
-        nodeIcon.setFill(PRIMARY_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
         bindNameLabel(item);
         descripLabel.textProperty().unbind();
         descripLabel.setText("VIEW");
@@ -520,8 +520,8 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setStyle(null);
         nameLabel.setStyle("");
         descripLabel.textProperty().unbind();
-        nodeIcon.setFill(PRIMARY_COLOR);
-        lockIcon.setFill(WARN_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
+        applyWarnIconStyle(lockIcon);
         warnIcon.visibleProperty().unbind();
         warnIcon.setVisible(false);
         nodeIconGroup.visibleProperty().unbind();
@@ -745,23 +745,30 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setTooltip(tooltip);
     }
 
+    private void applyPrimaryIconStyle(SVGPath icon) {
+        icon.setStyle(PRIMARY_ICON_STYLE);
+    }
+
+    private void applyWarnIconStyle(SVGPath icon) {
+        icon.setStyle(WARN_ICON_STYLE);
+    }
+
+    private void applyInactiveIconStyle(SVGPath icon) {
+        icon.setStyle(INACTIVE_ICON_STYLE);
+    }
+
     private void applyConnectedVisualStyle() {
         nameLabel.setStyle(CONNECTED_TEXT_STYLE);
-        nodeIcon.setFill(PRIMARY_COLOR);
-        lockIcon.setFill(WARN_COLOR);
+        applyPrimaryIconStyle(nodeIcon);
+        applyWarnIconStyle(lockIcon);
     }
 
     private void applyDisconnectedVisualStyle() {
         nameLabel.setStyle(DISCONNECTED_TEXT_STYLE);
-        nodeIcon.setFill(INACTIVE_COLOR);
-        lockIcon.setFill(INACTIVE_COLOR);
+        applyInactiveIconStyle(nodeIcon);
+        applyInactiveIconStyle(lockIcon);
     }
 }
-
-
-
-
-
 
 
 

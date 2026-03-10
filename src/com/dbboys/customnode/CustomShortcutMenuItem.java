@@ -44,8 +44,8 @@ public class CustomShortcutMenuItem extends CustomMenuItem {
         iconSlot.setStyle(COMPACT_PADDING);
         HBox.setMargin(iconSlot, new Insets(0, DEFAULT_ICON_TEXT_GAP, 0, DEFAULT_ICON_LEFT_PADDING));
 
-        textLabel.setStyle("-fx-padding: 0;-fx-min-width: 120;");
-        shortcutLabel.setStyle(COMPACT_PADDING);
+        textLabel.setStyle("-fx-padding: 0;-fx-min-width: 120;-fx-text-fill: -color-fg-default;");
+        shortcutLabel.setStyle(COMPACT_PADDING + "-fx-text-fill: #888;");
         shortcutLabel.setTranslateX(SHORTCUT_NUDGE_RIGHT);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

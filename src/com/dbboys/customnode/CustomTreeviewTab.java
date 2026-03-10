@@ -22,6 +22,8 @@ import com.dbboys.ui.IconPaths;
 
 public class CustomTreeviewTab extends Tab {
     private static final Logger log = LogManager.getLogger(CustomTreeviewTab.class);
+    private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#666");
+    private static final Color ACTIVE_ICON_COLOR = Color.WHITE;
 
     public ToggleButton titleToggle = new ToggleButton();
     public ContextMenu contextMenu=new ContextMenu();
@@ -34,8 +36,9 @@ public class CustomTreeviewTab extends Tab {
         //header.setSpacing(5);
         //header.setStyle("-fx-background-color: red");
         
-        // 默认灰色图标
-        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.7, Color.valueOf("#666"));
+        // 默认灰色图标；移除 svg-icon 样式类，避免被全局 SVG 白色规则覆盖
+        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.7, DEFAULT_ICON_COLOR);
+        titleToggleIcon.getStyleClass().remove("svg-icon");
         titleToggle.setGraphic(new Group(titleToggleIcon));
         titleToggle.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
         // 仅图标，无背景无边框
@@ -48,8 +51,7 @@ public class CustomTreeviewTab extends Tab {
         setGraphic(titleToggle);
         titleToggle.selectedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
-                // 选中：图标白色
-                Platform.runLater(() -> titleToggleIcon.setFill(Color.WHITE));
+                Platform.runLater(this::updateTitleToggleIconColor);
                 getTabPane().getSelectionModel().select(this);
                 if (getTabPane() != null) {
                     int idx = getTabPane().getTabs().indexOf(this);
@@ -68,7 +70,7 @@ public class CustomTreeviewTab extends Tab {
                     if (!((CustomTreeviewTab) tab).getTitle().equals(getTitle())) {
                         ((CustomTreeviewTab) tab).titleToggle.setSelected(false);
                         Platform.runLater(() -> {
-                            ((CustomTreeviewTab) tab).titleToggleIcon.setFill(Color.valueOf("#666"));
+                            ((CustomTreeviewTab) tab).updateTitleToggleIconColor();
                         });
                     }
                 }
@@ -84,22 +86,13 @@ public class CustomTreeviewTab extends Tab {
                     mainSplitPane.setDividerPositions(0);
                 }
                 AppState.setSqlEditCodeAreaIsMax(1);
-                Platform.runLater(() -> {
-                        titleToggleIcon.setFill(Color.valueOf("#666"));
-                    
-                });
+                Platform.runLater(this::updateTitleToggleIconColor);
             }
         });
 
         // 鼠标悬停时图标变白，移出时根据选中状态恢复
-        titleToggle.setOnMouseEntered(e -> titleToggleIcon.setFill(Color.WHITE));
-        titleToggle.setOnMouseExited(e -> {
-            if (titleToggle.isSelected()) {
-                titleToggleIcon.setFill(Color.WHITE);
-            } else {
-                titleToggleIcon.setFill(Color.valueOf("#666"));
-            }
-        });
+        titleToggle.setOnMouseEntered(e -> updateTitleToggleIconColor());
+        titleToggle.setOnMouseExited(e -> updateTitleToggleIconColor());
         /*
 
         SVGPath newRootFolderItemIcon = new SVGPath();
@@ -185,6 +178,11 @@ public class CustomTreeviewTab extends Tab {
         //titleToggle.setText(title);
         setText(title);
         //setGraphic(header);
+    }
+
+    private void updateTitleToggleIconColor() {
+        boolean active = titleToggle.isSelected() || titleToggle.isHover();
+        titleToggleIcon.setFill(active ? ACTIVE_ICON_COLOR : DEFAULT_ICON_COLOR);
     }
 
 }
