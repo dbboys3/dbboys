@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
     private static final Logger log = LogManager.getLogger(CustomMarkdownTreeCell.class);
     private static final String TREE_CELL_DRAG_OVER_STYLE = "tree-cell-drag-over";
-    private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#074675");
+    private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#fff");
     private static final String EXT_MD = "md";
     private static final String EXT_PDF = "pdf";
     private static final String EXT_DOC = "doc";

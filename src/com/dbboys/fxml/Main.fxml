@@ -125,7 +125,7 @@
                                         </tooltip>
                                     </Button>
                                 </HBox>
-                                <TreeView fx:id="databaseMetaTreeView" prefHeight="2000" style="-fx-padding:0;-fx-border-width:0"></TreeView>
+                                <TreeView fx:id="databaseMetaTreeView" prefHeight="2000"></TreeView>
                             </VBox>
                         </CustomTreeviewTab>
                         <CustomTreeviewTab fx:id="markdownTab" closable="false">

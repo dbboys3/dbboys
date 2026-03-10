@@ -32,13 +32,13 @@
         </Button>
         <Region prefWidth="50"></Region>
         <StackPane fx:id="sqlConnectChoiceBoxIconStackPane"/>
-        <ChoiceBox fx:id="sqlConnectChoiceBox" styleClass="custom-connectname-choicebox" focusTraversable="false">
-        </ChoiceBox>
-        <StackPane fx:id="sqlDbIconPane"/>
+            <ChoiceBox fx:id="sqlConnectChoiceBox" styleClass="custom-connectname-choicebox" focusTraversable="false">
+            </ChoiceBox>
+            <StackPane fx:id="sqlDbIconPane"/>
         <ChoiceBox fx:id="sqlDbChoiceBox"  styleClass="custom-dbname-choicebox" focusTraversable="false">
         </ChoiceBox>
         <StackPane fx:id="sqlUserIconPane"/>
-        <CustomLabelTextField fx:id="sqlUserTextField" focusTraversable="false" style="-fx-padding: 0 0 0 5">
+        <CustomLabelTextField fx:id="sqlUserTextField" focusTraversable="false">
         </CustomLabelTextField>
         <ChoiceBox fx:id="sqlSqlModeChoiceBox" styleClass="custom-sqlmode-choicebox" focusTraversable="false">
         </ChoiceBox>
@@ -48,7 +48,7 @@
             <HBox alignment="CENTER_RIGHT">
                 <Label fx:id="sqlReadOnlyLabel" visible="false"/>
             </HBox>
-            <HBox>
+            <HBox alignment="CENTER_RIGHT">
                 <ChoiceBox fx:id="sqlCommitModeChoiceBox"  styleClass="custom-commitmode-choicebox" focusTraversable="false">
                 </ChoiceBox>
                 <Button fx:id="sqlRecordButton" styleClass="custom-button" focusTraversable="false">

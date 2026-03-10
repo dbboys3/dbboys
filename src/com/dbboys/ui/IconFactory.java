@@ -21,6 +21,8 @@ public final class IconFactory {
         icon.setScaleX(scaleX);
         icon.setScaleY(scaleY);
         icon.setFill(color);
+        // 标记为通用 SVG 图标，方便通过 CSS 统一控制颜色（例如按钮全部用白色）
+        icon.getStyleClass().add("svg-icon");
         return icon;
     }
 

@@ -38,11 +38,11 @@ import java.util.regex.Pattern;
 
 public class CustomTreeCell extends TreeCell<TreeData> {
     private static final String DRAG_PAYLOAD = "DATABASEOBJECTDRAG";
-    private static final Color PRIMARY_COLOR = Color.valueOf("#074675");
+    private static final Color PRIMARY_COLOR = Color.valueOf("#fff");
     private static final Color WARN_COLOR = Color.valueOf("#9f453c");
-    private static final Color INACTIVE_COLOR = Color.valueOf("#888");
-    private static final String CONNECTED_TEXT_STYLE = "-fx-text-fill:#074675;";
-    private static final String DISCONNECTED_TEXT_STYLE = "-fx-text-fill:#888;";
+    private static final Color INACTIVE_COLOR = Color.valueOf("#666");
+    private static final String CONNECTED_TEXT_STYLE = "-fx-text-fill:#fff;";
+    private static final String DISCONNECTED_TEXT_STYLE = "-fx-text-fill:#666;";
     private static final Pattern COUNT_INFO_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[个個](?:\\s*/\\s*(.+))?\\s*$");
     private static final Set<String> SYSTEM_DATABASES = Set.of(
             "sysmaster", "sysuser", "sysadmin", "sysutils", "sysha", "syscdr", "syscdcv1", "gbasedbt", "sys"

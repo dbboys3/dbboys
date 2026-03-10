@@ -37,8 +37,7 @@ public final class CustomWindowFrameUtil {
             "-fx-alignment: center-left;";
     private static final String ROOT_STYLE =
             "-fx-background-color: " + BODY_BG + ";" +
-            "-fx-border-color: " + BORDER_COLOR + ";" +
-            "-fx-border-width: 0;";
+            "-fx-border-color: " + BORDER_COLOR + ";";
     private static final String CLOSE_STYLE =
             "-fx-background-color: transparent;" +
             "-fx-text-fill: white;" +
@@ -141,7 +140,9 @@ public final class CustomWindowFrameUtil {
         pane.setStyle(ROOT_STYLE);
 
         StackPane root = new StackPane(pane);
-        root.setStyle(ROOT_STYLE);
+        // 主界面不需要边框，弹出框（通常没有最小化/最大化按钮）使用 0.5px 主题边框
+        String borderWidth = (!showMinButton && !showMaxButton) ? "0.5" : "0";
+        root.setStyle(ROOT_STYLE + "-fx-border-width: " + borderWidth + ";");
         root.setPrefSize(width, height);
         root.setMinSize(320, 180);
 

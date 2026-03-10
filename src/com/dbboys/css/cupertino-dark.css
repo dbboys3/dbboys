@@ -794,25 +794,25 @@ Text {
 }
 
 .choice-box {
-  -fx-background-color: -color-border-default, -color-bg-default;
-  -fx-background-insets: 0, 1px;
-  -fx-background-radius: 6px, 5px;
+  -fx-background-color: -color-bg-default;
+  -fx-background-insets: 0;
+  -fx-background-radius: 5px;
   -fx-text-fill: -color-fg-default;
   -fx-alignment: CENTER;
   -fx-content-display: LEFT;
-  -fx-padding: 6px 12px 6px 12px;
+  -fx-padding: 0px 4px 0px 4px;
 }
 .choice-box:disabled {
   -fx-opacity: 0.4;
 }
 .choice-box:success, .choice-box:success:focused {
-  -fx-background-color: -color-success-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .choice-box:danger, .choice-box:danger:focused {
-  -fx-background-color: -color-danger-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .choice-box:focused {
-  -fx-background-color: -color-accent-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .choice-box.left-pill {
   -fx-background-radius: 6px 0 0 6px, 5px 0 0 5px;
@@ -837,11 +837,18 @@ Text {
 }
 .choice-box > .label {
   -fx-text-fill: -color-fg-default;
+  -fx-padding: 0 2px 0 0;
+}
+.choice-box > .open-button {
+  -fx-padding: 0 6px 0 2px;
 }
 .choice-box > .open-button > .arrow {
   -fx-shape: "M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z";
   -fx-scale-shape: false;
   -fx-background-color: -color-accent-fg;
+  -fx-padding: 0.16em 0.1em 0.16em 0.1em;
+  -fx-scale-x: 0.72;
+  -fx-scale-y: 0.72;
 }
 .choice-box:success > .label {
   -fx-text-fill: -color-success-fg;
@@ -1158,13 +1165,24 @@ Text {
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-border-default;
   -color-disclosure: -color-fg-muted;
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 1px;
+  -fx-focus-color: transparent;
+  -fx-faint-focus-color: transparent;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
   -fx-border-radius: 0;
+  -fx-padding: 0;
 }
+
+.tree-view:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
 .tree-view > .virtual-flow > .corner {
-  -fx-background-color: -color-cell-border;
-  -fx-opacity: 0.4;
+  -fx-background-color: transparent;
+  -fx-opacity: 0;
 }
 .tree-view > .virtual-flow:disabled {
   -fx-opacity: 0.4;
@@ -1203,6 +1221,7 @@ Text {
 .tree-cell > .tree-disclosure-node > .arrow,
 .tree-table-row-cell > .tree-disclosure-node > .arrow {
   -fx-shape: "M10 17l5-5-5-5v10z";
+  -fx-rotate: 0;
   -fx-scale-shape: false;
   -fx-background-color: -color-disclosure;
   -fx-padding: 0.333333em 0.229em 0.333333em 0.229em;
@@ -1211,6 +1230,7 @@ Text {
 .tree-cell:expanded > .tree-disclosure-node > .arrow,
 .tree-table-row-cell:expanded > .tree-disclosure-node > .arrow {
   -fx-shape: "M7 10l5 5 5-5z";
+  -fx-rotate: 0;
   -fx-scale-shape: false;
 }
 
@@ -5086,6 +5106,11 @@ Text {
   -fx-background-color: #ddd;
 }
 
+/* 所有按钮上的 SVG 图标默认使用白色填充 */
+.button .svg-icon {
+  -fx-fill: white;
+}
+
 /* SQL 编辑框背景与文字颜色：比主界面稍浅一点的深色，文字默认白色 */
 .code-area {
   -fx-background-color: #1d1d1d;
@@ -5199,4 +5224,22 @@ Text {
  /* -fx-font-weight: bold;*/
   -fx-background-color: #333;
   /*-fx-text-fill: white;*/
+}
+
+/*SQL编辑面板连接名称和库名css*/
+.custom-connectname-choicebox,.custom-connectname-choicebox:hover{
+  -fx-pref-width: 200;
+}
+
+.custom-dbname-choicebox,.custom-dbname-choicebox:hover{
+  -fx-pref-width: 100;
+}
+
+.custom-sqlmode-choicebox,.custom-sqlmode-choicebox:hover{
+  -fx-pref-width: 125;
+}
+
+
+.custom-commitmode-choicebox,.custom-commitmode-choicebox:hover{
+  -fx-pref-width: 80;
 }
