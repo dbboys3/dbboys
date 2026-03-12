@@ -426,7 +426,7 @@ public class CreateConnectController {
         switchGroupOrIP.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.7, primary));
 
         connectingLoadingImageView.setImage(new Image(IconPaths.LOADING_GIF));
-        connectingStopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.7, danger));
+        connectingStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
     }
 
     private void applyTextFormatters() {

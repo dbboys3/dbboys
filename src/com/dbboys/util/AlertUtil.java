@@ -25,6 +25,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class AlertUtil {
     private static final double DIALOG_WIDTH = 400;
     private static final Insets CONTENT_PADDING = new Insets(10, 20, 10, 20);
+    private static final String ALERT_TITLE_STYLE =
+            "-fx-background-color: #b33029;" +
+            "-fx-padding: 0 0 0 6;" +
+            "-fx-min-height: 28;" +
+            "-fx-pref-height: 28;" +
+            "-fx-alignment: center-left;";
     private static final String BODY_STYLE =
             "-fx-background-color: #161616;" +
             "-fx-padding: 16 20 18 20;" +
@@ -68,7 +74,7 @@ public final class AlertUtil {
 
     private static ButtonType showDialog(String title, String message, ButtonType... buttonTypes) {
         Text text = new Text(message == null ? "" : message);
-        text.setStyle("-fx-fill: -color-fg-default; -fx-font-size: 12px;");
+        text.setStyle("-fx-fill: -color-fg-default;");
         text.setWrappingWidth(DIALOG_WIDTH - 40);
         return createContentDialog(title, text, DIALOG_WIDTH, 120, buttonTypes).showAndWait();
     }
@@ -99,7 +105,7 @@ public final class AlertUtil {
         Map<ButtonType, Button> buttonMap = new LinkedHashMap<>();
         for (ButtonType buttonType : buttonTypes) {
             Button button = new Button(buttonType.getText());
-            button.setFocusTraversable(false);
+            button.setFocusTraversable(true);
             button.setDefaultButton(buttonType == defaultButtonType);
             button.setCancelButton(buttonType == cancelButtonType);
             button.setOnAction(event -> {
@@ -127,6 +133,10 @@ public final class AlertUtil {
                 false
         );
         frame.root.setMinWidth(width);
+        frame.root.setStyle(frame.root.getStyle() +
+                "-fx-border-color: -color-fg-default;" +
+                "-fx-border-width: 1;");
+        frame.titleBar.setStyle(ALERT_TITLE_STYLE);
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButtonType != null ? cancelButtonType : defaultButtonType);
             stage.close();
@@ -142,6 +152,12 @@ public final class AlertUtil {
         });
 
         stage.setScene(frame.scene);
+        stage.setOnShown(event -> {
+            Button defaultButton = buttonMap.get(defaultButtonType);
+            if (defaultButton != null) {
+                defaultButton.requestFocus();
+            }
+        });
         return new ContentDialog(stage, frame, resultRef, buttonMap, defaultButtonType, cancelButtonType);
     }
 

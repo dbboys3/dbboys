@@ -194,7 +194,7 @@
             </Region>
             <StackPane>
                 <StackPane>
-                    <HBox>
+                    <HBox alignment="CENTER_LEFT">
                         <Button fx:id="snapshotRootButton" styleClass="small" focusTraversable="false">
                             <tooltip>
                                 <Tooltip/>

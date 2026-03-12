@@ -365,7 +365,7 @@ public class RemoteInstallerUtil {
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(machineInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             // 省略其他信息的显示代码（与原逻辑相同）
