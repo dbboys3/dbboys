@@ -29,14 +29,24 @@ public final class CustomWindowFrameUtil {
     private static final String TITLE_BG = "-color-bg-default";
     private static final String BODY_BG = "-color-bg-default";
     private static final String BORDER_COLOR = "-color-border-default";
+    private static final String POPUP_TITLE_BG = "derive(-color-bg-default, 6%)";
+    private static final String POPUP_BODY_BG = "derive(-color-bg-default, 6%)";
     private static final String TITLE_STYLE =
             "-fx-background-color: " + TITLE_BG + ";" +
             "-fx-padding: 0 0 0 6;" +
             "-fx-min-height: 28;" +
             "-fx-pref-height: 28;" +
             "-fx-alignment: center-left;";
+    private static final String POPUP_TITLE_STYLE =
+            "-fx-background-color: " + POPUP_TITLE_BG + ";" +
+            "-fx-padding: 0 0 0 6;" +
+            "-fx-min-height: 28;" +
+            "-fx-pref-height: 28;" +
+            "-fx-alignment: center-left;";
     private static final String ROOT_STYLE =
             "-fx-background-color: " + BODY_BG + ";";
+    private static final String POPUP_ROOT_STYLE =
+            "-fx-background-color: " + POPUP_BODY_BG + ";";
     private static final String CLOSE_STYLE =
             "-fx-background-color: transparent;" +
             "-fx-text-fill: white;" +
@@ -98,12 +108,18 @@ public final class CustomWindowFrameUtil {
                                boolean enableResize,
                                boolean showMinButton,
                                boolean showMaxButton) {
+        boolean popupStyle = titleBarLeft == null && !showMinButton && !showMaxButton;
         Region dragRegion = new Region();
         HBox.setHgrow(dragRegion, Priority.ALWAYS);
 
         Label titleLabel = new Label();
         titleLabel.textProperty().bind(titleBinding);
-        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
+        titleLabel.setMaxHeight(Double.MAX_VALUE);
+        titleLabel.setStyle(
+                "-fx-text-fill: -color-fg-default;" +
+                "-fx-font-size: 12px; -fx-font-weight: bold;" +
+                "-fx-alignment: center-left;"
+        );
 
         Button minButton = createWindowButton(IconPaths.WINDOW_MINIMIZE, 0.45);
         Button maxButton = createWindowButton(IconPaths.WINDOW_MAXIMIZE, 0.55);
@@ -132,16 +148,16 @@ public final class CustomWindowFrameUtil {
         }
         titleBar.getChildren().add(closeButton);
         titleBar.setAlignment(Pos.CENTER_LEFT);
-        titleBar.setStyle(TITLE_STYLE);
+        titleBar.setStyle(popupStyle ? POPUP_TITLE_STYLE : TITLE_STYLE);
 
         BorderPane pane = new BorderPane(content);
         pane.setTop(titleBar);
-        pane.setStyle(ROOT_STYLE);
+        pane.setStyle(popupStyle ? POPUP_ROOT_STYLE : ROOT_STYLE);
 
         StackPane root = new StackPane(pane);
         // 主界面不需要边框，弹出框（通常没有最小化/最大化按钮）使用 0.5px 主题边框
         String borderWidth = (!showMinButton && !showMaxButton) ? "0.5" : "0";
-        root.setStyle(ROOT_STYLE +
+        root.setStyle((popupStyle ? POPUP_ROOT_STYLE : ROOT_STYLE) +
                 "-fx-border-color: " + BORDER_COLOR + ";" +
                 "-fx-border-width: " + borderWidth + ";");
         root.setPrefSize(width, height);

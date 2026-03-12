@@ -288,7 +288,7 @@ public class TreeNavigator {
             dialogPane.setHeader(null);
             int dialogW = 520;
             int dialogH = 320;
-            int titleBarHeight = 20;
+            int titleBarHeight = 28;
             int contentH = dialogH - titleBarHeight;
 
             dialogPane.setMinSize(dialogW, contentH);

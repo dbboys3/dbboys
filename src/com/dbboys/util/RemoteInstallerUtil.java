@@ -14,6 +14,7 @@ import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
@@ -27,7 +28,9 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import com.jcraft.jsch.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -90,7 +93,9 @@ public class RemoteInstallerUtil {
 
     // 步骤管理
     private static StackPane contentStack; // 用于切换步骤内容
-    private static Dialog<ButtonType> mainDialog; // 主对话框
+    private static Stage mainDialog; // 主对话框
+    private static DialogPane mainDialogPane;
+    private static SimpleStringProperty mainDialogTitle;
 
     // 步骤内容面板（保存引用，用于状态保持）
     private static Node step1Pane, step2Pane, step3Pane, step4Pane, step5Pane;
@@ -175,27 +180,31 @@ public class RemoteInstallerUtil {
 
     // 初始化主对话框
     private static void initMainDialog(Stage parent) {
-        mainDialog = new Dialog<>();
-        mainDialog.titleProperty().bind(Bindings.createStringBinding(
+        mainDialog = new Stage(StageStyle.UNDECORATED);
+        mainDialog.initModality(Modality.APPLICATION_MODAL);
+        mainDialog.initOwner(parent);
+        mainDialog.setResizable(false);
+        mainDialog.getIcons().add(new Image(IconPaths.MAIN_LOGO));
+        mainDialogTitle = new SimpleStringProperty();
+        mainDialogTitle.bind(Bindings.createStringBinding(
                 () -> I18n.t("remote.install.title.format", "远程安装向导 - 步骤 %d/%d")
                         .formatted(currentStep.get(), TOTAL_STEPS),
                 I18n.localeProperty(),
                 currentStep
         ));
-        mainDialog.setWidth(DIALOG_WIDTH);
-        mainDialog.setHeight(DIALOG_HEIGHT);
-        mainDialog.initOwner(parent);
-
-
+        mainDialogPane = new DialogPane();
+        mainDialogPane.getButtonTypes().setAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
+        mainDialogPane.setHeader(null);
+        mainDialogPane.setMinSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setPrefSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setMaxSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
 
         // 创建按钮
-        mainDialog.getDialogPane().getButtonTypes().addAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
-
         // 获取按钮实例
-        Button previousBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS);
-        Button nextBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT);
-        Button finishBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH);
-        Button cancelBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+        Button previousBtn = (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS);
+        Button nextBtn = (Button) mainDialogPane.lookupButton(ButtonType.NEXT);
+        Button finishBtn = (Button) mainDialogPane.lookupButton(ButtonType.FINISH);
+        Button cancelBtn = (Button) mainDialogPane.lookupButton(ButtonType.CANCEL);
         previousBtn.textProperty().bind(I18n.bind("common.previous", "上一步"));
         nextBtn.textProperty().bind(I18n.bind("common.next", "下一步"));
         finishBtn.textProperty().bind(I18n.bind("common.finish", "完成"));
@@ -246,7 +255,19 @@ public class RemoteInstallerUtil {
 
 
         // 设置对话框内容
-        mainDialog.getDialogPane().setContent(contentStack);
+        mainDialogPane.setContent(contentStack);
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+                mainDialog,
+                mainDialogTitle,
+                mainDialogPane,
+                DIALOG_WIDTH,
+                DIALOG_HEIGHT,
+                null,
+                false,
+                false,
+                false
+        );
+        mainDialog.setScene(frame.scene);
         centerDialogToParent(mainDialog, parent);
 
         // 按钮事件
@@ -2178,10 +2199,10 @@ GBASEEOF
     private static void updateWizardState() {
         showCurrentStep();
         updateButtonStates(
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH),
-                        (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL)
+                (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS),
+                (Button) mainDialogPane.lookupButton(ButtonType.NEXT),
+                (Button) mainDialogPane.lookupButton(ButtonType.FINISH),
+                (Button) mainDialogPane.lookupButton(ButtonType.CANCEL)
         );
     }
 
@@ -2291,22 +2312,25 @@ GBASEEOF
         }
     }
 
-    private static void centerDialogToParent(Dialog<?> dialog, Stage parent) {
+    private static void centerDialogToParent(Stage dialog, Stage parent) {
         Platform.runLater(() -> {
             if (parent == null || !parent.isShowing()) {
                 return;
             }
 
-            dialog.getDialogPane().applyCss();
-            dialog.getDialogPane().layout();
+            if (dialog.getScene() == null || dialog.getScene().getRoot() == null) {
+                return;
+            }
+            dialog.getScene().getRoot().applyCss();
+            dialog.getScene().getRoot().layout();
 
             double parentX = parent.getX();
             double parentY = parent.getY();
             double parentWidth = parent.getWidth();
             double parentHeight = parent.getHeight();
 
-            double dialogWidth = dialog.getDialogPane().getWidth();
-            double dialogHeight = dialog.getDialogPane().getHeight();
+            double dialogWidth = dialog.getWidth() > 0 ? dialog.getWidth() : DIALOG_WIDTH;
+            double dialogHeight = dialog.getHeight() > 0 ? dialog.getHeight() : DIALOG_HEIGHT;
 
             double dialogX = parentX + (parentWidth - dialogWidth) / 2;
             double dialogY = parentY + (parentHeight - dialogHeight) / 2;
