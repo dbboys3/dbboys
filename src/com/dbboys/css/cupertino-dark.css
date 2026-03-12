@@ -5117,10 +5117,17 @@ Text {
   -fx-fill: -color-fg-default;
 }
 
-/* SQL 编辑框背景与文字颜色：比主界面稍浅一点的深色，文字默认白色 */
+/* ========== CodeArea / SQL 编辑器暗色高亮 ========== */
+
+/* SQL 编辑框背景与字体：比主界面稍浅一点的深色 */
 .code-area {
   -fx-background-color: #1d1d1d;
   -fx-font-size: 12; /* sql编辑框字体大小，有自己的默认字体，与系统字体不一样 */
+}
+
+/* 默认文本颜色（未加样式的代码） */
+.code-area .text {
+  -fx-fill: #d4d4d4;
 }
 
 /*sql编辑框右键弹出字体，设置为系统默认值，与其他字体保持一致*/
@@ -5260,4 +5267,58 @@ Text {
 
 .custom-commitmode-choicebox,.custom-commitmode-choicebox:hover{
   -fx-pref-width: 80;
+}
+
+/* ========== CodeArea / SQL 编辑器暗色高亮（覆盖旧规则） ========== */
+
+/* 默认文本颜色（未加样式的代码） */
+.code-area .text {
+  -fx-fill: #d4d4d4;
+}
+
+/* 关键字、函数、数字、字符串、注释等语法高亮颜色 */
+.code-area .text.keyword {
+  -fx-fill: #569cd6;
+}
+.code-area .text.function {
+  -fx-fill: #dcdcaa;
+}
+.code-area .text.number {
+  -fx-fill: #b5cea8;
+}
+.code-area .text.string,
+.code-area .text.doublestring,
+.code-area .text.fanyinhao {
+  -fx-fill: #ce9178;
+}
+.code-area .text.comment {
+  -fx-fill: #6a9955;
+}
+.code-area .text.paren,
+.code-area .text.bracket,
+.code-area .text.brace,
+.code-area .text.semicolon {
+  -fx-fill: #d4d4d4;
+}
+.code-area .text.error {
+  -fx-fill: #f44747;
+  -fx-font-weight: bold;
+}
+
+/* 选中文本背景与前景色（暗色主题） */
+.styled-text-area .selection {
+  -fx-fill: #264f78;  /* VS Code 风格蓝色选区 */
+}
+.styled-text-area .selected-text {
+  -fx-fill: white;
+}
+
+/* 当前选定行背景色 */
+.paragraph-box:has-caret {
+  -fx-background-color: #2a2d2e;
+}
+
+/* 输入光标为白色 */
+.styled-text-area .caret {
+  -fx-stroke: white;
 }

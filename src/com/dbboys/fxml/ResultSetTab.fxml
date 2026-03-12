@@ -23,7 +23,7 @@
                 <CustomResultsetTableView fx:id="resultSetTableView">
                 </CustomResultsetTableView>
             </HBox>
-            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT">
+            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" style="-fx-background-color: -color-bg-default;">
                 <Label fx:id="resultSetLabelLeftBracket" />
                     <StackPane>
                         <Label visible="false" fx:id="resultSetEditableEnabledLabel" />
