@@ -133,9 +133,6 @@ public final class AlertUtil {
                 false
         );
         frame.root.setMinWidth(width);
-        frame.root.setStyle(frame.root.getStyle() +
-                "-fx-border-color: -color-fg-default;" +
-                "-fx-border-width: 1;");
         frame.titleBar.setStyle(ALERT_TITLE_STYLE);
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButtonType != null ? cancelButtonType : defaultButtonType);

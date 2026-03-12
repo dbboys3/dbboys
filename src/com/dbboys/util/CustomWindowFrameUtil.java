@@ -28,7 +28,7 @@ public final class CustomWindowFrameUtil {
     // Use theme variables so title bar / tabs / window border share the same colors
     private static final String TITLE_BG = "-color-bg-default";
     private static final String BODY_BG = "-color-bg-default";
-    private static final String BORDER_COLOR = "-color-border-default";
+    private static final String BORDER_COLOR = "-color-fg-default";
     private static final String POPUP_TITLE_BG = "derive(-color-bg-default, 6%)";
     private static final String POPUP_BODY_BG = "derive(-color-bg-default, 6%)";
     private static final String TITLE_STYLE =
@@ -156,7 +156,7 @@ public final class CustomWindowFrameUtil {
 
         StackPane root = new StackPane(pane);
         // 主界面不需要边框，弹出框（通常没有最小化/最大化按钮）使用 0.5px 主题边框
-        String borderWidth = (!showMinButton && !showMaxButton) ? "0.5" : "0";
+        String borderWidth = (!showMinButton && !showMaxButton) ? "1" : "0";
         root.setStyle((popupStyle ? POPUP_ROOT_STYLE : ROOT_STYLE) +
                 "-fx-border-color: " + BORDER_COLOR + ";" +
                 "-fx-border-width: " + borderWidth + ";");
