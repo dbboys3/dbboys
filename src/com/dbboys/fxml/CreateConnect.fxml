@@ -102,7 +102,7 @@
                 </CheckBox>
             </HBox>
         </VBox>
-            <HBox fx:id="connectingHBox" alignment="CENTER" style="-fx-background-color: rgba(0, 0, 0, 0.1);-fx-background-radius: 2;" visible="false">
+            <HBox fx:id="connectingHBox" alignment="CENTER" style="-fx-background-color: rgba(255, 255, 255, 0.1);-fx-background-radius: 2;" visible="false">
                 <HBox maxWidth="100" maxHeight="15" style="-fx-background-color: white;-fx-background-radius: 2;-fx-padding: 0 0 0 5" alignment="CENTER">
                 <ImageView fx:id="connectingLoadingImageView" fitHeight="12" fitWidth="12">
                 </ImageView>

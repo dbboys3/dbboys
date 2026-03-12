@@ -156,7 +156,7 @@ class DownloadTaskWrapper {
         pauseButton.getStyleClass().add("small");
         pauseButton.setFocusTraversable(false);
 
-        stopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.5, IconFactory.dangerColor()));
+        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
         stopButton.getStyleClass().add("small");
         stopButton.setFocusTraversable(false);
         stopButton.setOnAction(e -> cancelDownload());

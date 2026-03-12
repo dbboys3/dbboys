@@ -382,7 +382,7 @@ public class CustomInstanceTab extends CustomTab {
                 //加载指示器
                 ImageView imageView = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
                 Button processStopButton = new Button("");
-                processStopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.7, IconFactory.dangerColor()));
+                processStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
                 Label runningLabel=new Label(I18n.t("instance.dialog.init.progress", " 正在初始化...0.00%"));
                 HBox imageHBox = new HBox(imageView, runningLabel, processStopButton);
                 imageHBox.setStyle("-fx-background-color: white;-fx-background-radius: 2;-fx-padding: 0 0 0 5");
@@ -904,7 +904,7 @@ public class CustomInstanceTab extends CustomTab {
         startButton.setTooltip(startTooltip);
         stopButton=new Button();
         stopButton.getStyleClass().add("custom-button");
-        stopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.75, IconFactory.dangerColor()));
+        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.75, IconFactory.stopColor()));
         stopButton.setFocusTraversable(false);
         Tooltip stopTooltip = new Tooltip();
         stopTooltip.textProperty().bind(I18n.bind("instance.button.stop.tooltip", "点击关闭数据库"));
@@ -1969,5 +1969,3 @@ public class CustomInstanceTab extends CustomTab {
         return errorPane;
     }
 }
-
-

@@ -43,7 +43,7 @@ public class SqlTabUiHelper {
         ctrl.sqlExecuteLoadingLabel.setGraphic(IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true));
         ctrl.sqlRunButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.7, Color.valueOf("#074675")));
         ctrl.sqlExplainButton.setGraphic(IconFactory.group(IconPaths.SQL_EXPLAIN, 0.7, Color.valueOf("#074675")));
-        ctrl.sqlStopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.75, Color.valueOf("#9f453c")));
+        ctrl.sqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.75, IconFactory.stopColor()));
         ctrl.sqlRecordButton.setGraphic(IconFactory.group(IconPaths.SQL_HISTORY, 0.8, Color.valueOf("#074675")));
         ctrl.sqlReadOnlyLabel.setGraphic(IconFactory.group(IconPaths.SQL_READONLY, 0.5, Color.valueOf("#9f453c")));
 

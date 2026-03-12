@@ -129,7 +129,7 @@ public class TreeContextMenuHandler {
         CustomShortcutMenuItem onconfigItem = MenuItemUtil.createMenuItemI18n("metadata.menu.onconfig",
                 IconFactory.group(IconPaths.METADATA_ONCONFIG_ITEM, 0.55, 0.55));
         CustomShortcutMenuItem instanceStopItem = MenuItemUtil.createMenuItemI18n("metadata.menu.instance_start_stop",
-                IconFactory.group(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, 0.65, IconFactory.dangerColor()));
+                IconFactory.groupFixedColor(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, 0.65, IconFactory.stopColor()));
 
         Menu ddlMenu = new Menu();
         ddlMenu.textProperty().bind(I18n.bind("metadata.menu.ddl.title", "查看DDL"));

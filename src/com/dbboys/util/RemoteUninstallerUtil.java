@@ -110,7 +110,7 @@ public class RemoteUninstallerUtil {
         imageView.setFitWidth(12);
         imageView.setFitHeight(12);
         stopButton = new Button("");
-        stopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.7, IconFactory.dangerColor()));
+        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
         Tooltip stopTooltip = new Tooltip();
         stopTooltip.textProperty().bind(I18n.bind("remote.uninstall.tooltip.stop", "停止当前任务"));
         stopButton.setTooltip(stopTooltip);

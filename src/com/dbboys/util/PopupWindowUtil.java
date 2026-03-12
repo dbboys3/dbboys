@@ -296,7 +296,7 @@ public class PopupWindowUtil {
                             Tooltip stopTooltip = new Tooltip();
                             stopTooltip.textProperty().bind(stopTaskTooltipBinding);
                             status_sqlStopButton.setTooltip(stopTooltip);
-                            status_sqlStopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.5, Color.valueOf("#9f453c")));
+                            status_sqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
                             status_sqlStopButton.setFocusTraversable(false);
                             setGraphic(status_sqlStopButton);
                             status_sqlStopButton.setOnAction(event -> {

@@ -617,23 +617,23 @@ Text {
 .check-box {
   -fx-text-fill: -color-fg-default;
   -fx-label-padding: 0 2px 0 6px;
-  -fx-alignment: TOP-LEFT;
+  -fx-alignment: CENTER-LEFT;
 }
 .check-box > .box {
   -fx-background-color: -color-border-default, -color-bg-default;
   -fx-background-insets: 0, 1.5px;
-  -fx-background-radius: 6px, 5px;
-  -fx-padding: 3px 4px 3px 4px;
+  -fx-background-radius: 1px, 1px;
+  -fx-padding: 2px 2.8px 2px 2.8px;
   -fx-alignment: CENTER;
 }
 .check-box > .box > .mark {
   -fx-background-color: -color-bg-default;
   -fx-shape: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
   -fx-scale-shape: true;
-  -fx-min-height: 0.85em;
-  -fx-max-height: 0.85em;
-  -fx-min-width: 0.85em;
-  -fx-max-width: 0.85em;
+  -fx-min-height: 0.6em;
+  -fx-max-height: 0.6em;
+  -fx-min-width: 0.6em;
+  -fx-max-width: 0.6em;
 }
 .check-box > .box:hover {
   -fx-background-color: -color-fg-subtle, -color-bg-subtle;
@@ -5276,19 +5276,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 
-/*codearea选中文字背景色,有效*/
-.styled-text-area .selection {
-  /*-fx-fill: #ddd;*/
-  -fx-fill: #333;
-}
-
-/*codearea选中文字背景色,有效*/
-.styled-text-area .selection .text{
-  /*-fx-fill: #ddd;*/
-  -fx-fill: red;
-}
-
-
 
 /* 选中文本白字,无效 
 .styled-text-area .selected-text {
@@ -5319,39 +5306,24 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-background-color: #333;
 }
 
-.brace, .bracket {
-  -fx-fill: #333;
-}
-
-.comment {
-  -fx-fill: #aaa;
-//    -fx-font-style: italic;
-}
-.currentline{
- // -fx-background-color: #eaf6fc;
-  //-rtfx-background-color: yellow;
-  //-fx-padding: 0 10000px 0 0;
-}
-
-
 
 /*codearea行号css*/
 .lineno{
   -fx-alignment: center-right; /* 垂直居中 */
-  -fx-background-color: #333333;
+  -fx-background-color: #1d1d1d;
   -fx-padding: 0;
-  /*
-  -fx-font-family: system;
-
-   */
+  -fx-font-weight: normal;
 }
 
+.lineno .text {
+  -fx-font-weight: normal;
+}
 
 
 /*当前行号*/
 .paragraph-box:has-caret .lineno {
  /* -fx-font-weight: bold;*/
-  -fx-background-color: #333;
+  -fx-background-color: #1d1d1d;
   /*-fx-text-fill: white;*/
 }
 

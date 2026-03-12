@@ -136,7 +136,7 @@ public class CustomInstanceInfoTableView extends CustomResultsetTableView {
         );
         CustomShortcutMenuItem instanceStartStopItem = MenuItemUtil.createMenuItemI18n(
                 "metadata.menu.instance_start_stop",
-                IconFactory.group(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, IconFactory.dangerColor())
+                IconFactory.groupFixedColor(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, IconFactory.stopColor())
         );
         CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n(
                 "genericstyled.menu.copy",

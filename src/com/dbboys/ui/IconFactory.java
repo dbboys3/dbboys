@@ -9,10 +9,15 @@ import javafx.scene.shape.SVGPath;
 public final class IconFactory {
     private static final Color MENU_ICON_COLOR = Color.WHITE;
     private static final Color DANGER_ICON_COLOR = Color.valueOf("#9f453c");
+    private static final Color STOP_ICON_COLOR = Color.valueOf("#b33029");
     private IconFactory() {}
 
     public static Color dangerColor() {
         return DANGER_ICON_COLOR;
+    }
+
+    public static Color stopColor() {
+        return STOP_ICON_COLOR;
     }
 
     public static SVGPath create(String path, double scaleX, double scaleY, Color color) {
@@ -52,6 +57,35 @@ public final class IconFactory {
 
     public static Group group(String path, double scale) {
         return new Group(create(path, scale, scale, MENU_ICON_COLOR));
+    }
+
+    public static SVGPath createFixedColor(String path, double scaleX, double scaleY, Color color) {
+        SVGPath icon = create(path, scaleX, scaleY, color);
+        icon.setStyle("-fx-fill: " + toCssColor(color) + ";");
+        return icon;
+    }
+
+    public static SVGPath createFixedColor(String path, double scale, Color color) {
+        return createFixedColor(path, scale, scale, color);
+    }
+
+    public static Group groupFixedColor(String path, double scaleX, double scaleY, Color color) {
+        return new Group(createFixedColor(path, scaleX, scaleY, color));
+    }
+
+    public static Group groupFixedColor(String path, double scale, Color color) {
+        return new Group(createFixedColor(path, scale, scale, color));
+    }
+
+    private static String toCssColor(Color color) {
+        int red = (int) Math.round(color.getRed() * 255);
+        int green = (int) Math.round(color.getGreen() * 255);
+        int blue = (int) Math.round(color.getBlue() * 255);
+        double opacity = color.getOpacity();
+        if (opacity >= 0.999) {
+            return String.format("#%02x%02x%02x", red, green, blue);
+        }
+        return String.format("rgba(%d,%d,%d,%.3f)", red, green, blue, opacity);
     }
 
     public static ImageView loadingImageView(double scaleX, double scaleY) {

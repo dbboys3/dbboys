@@ -246,7 +246,7 @@ public class MainController {
         connectSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65, Color.valueOf("#074675")));
         rebuildMarkdownIndexButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.65, Color.valueOf("#074675")));
         markdownSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65, Color.valueOf("#074675")));
-        statusBackSqlStopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.5, Color.valueOf("#9f453c")));
+        statusBackSqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
         statusBackSqlListButton.setGraphic(IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.45, Color.valueOf("#074675")));
         statusBackSqlProgress.setImage(new Image(IconPaths.LOADING_GIF));
         statusBackSqlProgress.setFitWidth(10);
