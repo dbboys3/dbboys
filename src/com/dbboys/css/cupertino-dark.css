@@ -847,13 +847,13 @@ Text {
   -fx-padding: 0 6px 0 2px;
 }
 .choice-box > .open-button > .arrow {
-  -fx-shape: "M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z";
-  -fx-scale-shape: false;
-  -fx-background-color: -color-accent-fg;
-  -fx-padding: 0.16em 0.1em 0.16em 0.1em;
-  -fx-scale-x: 0.72;
-  -fx-scale-y: 0.72;
-}
+    -fx-shape: "M7 10l5 5 5-5z";
+    -fx-scale-shape: false;
+    -fx-background-color: -color-accent-fg;
+    -fx-padding: 0.24em 0.18em 0.24em 0.18em;
+    -fx-scale-x: 0.95;
+    -fx-scale-y: 0.95;
+  }
 .choice-box:success > .label {
   -fx-text-fill: -color-success-fg;
 }
