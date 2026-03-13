@@ -2158,27 +2158,27 @@ Text {
 }
 
 .radio-button {
-  -fx-background-color: -color-bg-default;
-  -fx-text-fill: -color-fg-default;
-  -fx-label-padding: 0 2px 0 6px;
-  -fx-alignment: TOP-LEFT;
-}
+    -fx-background-color: -color-bg-default;
+    -fx-text-fill: -color-fg-default;
+    -fx-label-padding: 0 2px 0 6px;
+    -fx-alignment: CENTER-LEFT;
+  }
 .radio-button > .radio {
-  -fx-background-color: -color-border-default, -color-bg-default;
-  -fx-background-insets: 0, 1.5px;
-  -fx-background-radius: 1em;
-  -fx-padding: 3px;
-  -fx-alignment: CENTER;
-}
+    -fx-background-color: -color-border-default, -color-bg-default;
+    -fx-background-insets: 0, 1.5px;
+    -fx-background-radius: 1em;
+    -fx-padding: 1.5px;
+    -fx-alignment: CENTER;
+  }
 .radio-button > .radio > .dot {
-  -fx-background-color: transparent, transparent;
-  -fx-background-insets: 0, 1px;
-  -fx-background-radius: 1em;
-  -fx-min-height: 0.85em;
-  -fx-max-height: 0.85em;
-  -fx-min-width: 0.85em;
-  -fx-max-width: 0.85em;
-}
+    -fx-background-color: transparent, transparent;
+    -fx-background-insets: 0, 1px;
+    -fx-background-radius: 1em;
+    -fx-min-height: 0.72em;
+    -fx-max-height: 0.72em;
+    -fx-min-width: 0.72em;
+    -fx-max-width: 0.72em;
+  }
 .radio-button > .radio:hover {
   -fx-background-color: -color-fg-muted, -color-bg-subtle;
 }
@@ -5248,22 +5248,8 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 */
   /*当前选定行背景色*/
 .paragraph-box:has-caret {
-  -fx-background-color: #333;
+  -fx-background-color: #2a2d2e;
 }
-
-
-/*codearea行号css*/
-.lineno{
-  -fx-alignment: center-right; /* 垂直居中 */
-  -fx-background-color: #1d1d1d;
-  -fx-padding: 0;
-  -fx-font-weight: normal;
-}
-
-.lineno .text {
-  -fx-font-weight: normal;
-}
-
 
 /*当前行号*/
 .paragraph-box:has-caret .lineno {
@@ -5271,6 +5257,17 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-background-color: #1d1d1d;
   /*-fx-text-fill: white;*/
 }
+/*codearea行号css*/
+.lineno{
+  -fx-alignment: center-right; /* 垂直居中 */
+  -fx-background-color: #1d1d1d;
+  -fx-padding: 0;
+}
+
+
+
+
+
 
 /*SQL编辑面板连接名称和库名css*/
 .custom-connectname-choicebox,.custom-connectname-choicebox:hover{
@@ -5335,10 +5332,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-fill: white;
 }
 
-/* 当前选定行背景色 */
-.paragraph-box:has-caret {
-  -fx-background-color: #2a2d2e;
-}
 
 /* 输入光标为白色 */
 .styled-text-area .caret {

@@ -18,13 +18,16 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 
 import java.io.*;
 import java.util.Properties;
@@ -43,7 +46,8 @@ public class RemoteCheckEnvUtil {
     private static String password;
     private static Session session;
     private static StackPane contentStack;
-    private static Dialog<ButtonType> mainDialog;
+    private static Stage mainDialog;
+    private static DialogPane mainDialogPane;
     private static Node step1Pane;
     private static Node step2Pane;
 
@@ -65,23 +69,28 @@ public class RemoteCheckEnvUtil {
     }
 
     private static void initMainDialog(Stage parent) {
-        mainDialog = new Dialog<>();
+        mainDialog = new Stage(StageStyle.UNDECORATED);
+        mainDialog.initModality(Modality.APPLICATION_MODAL);
+        mainDialog.initOwner(parent);
+        mainDialog.setResizable(false);
+        mainDialog.getIcons().add(new Image(IconPaths.MAIN_LOGO));
         mainDialog.titleProperty().bind(Bindings.createStringBinding(
                 () -> I18n.t("remote.check.title.format", "安装环境检查 - 步骤 %d/%d")
                         .formatted(currentStep.get(), TOTAL_STEPS),
                 I18n.localeProperty(),
                 currentStep
         ));
-        mainDialog.setWidth(DIALOG_WIDTH);
-        mainDialog.setHeight(DIALOG_HEIGHT);
-        mainDialog.initOwner(parent);
+        mainDialogPane = new DialogPane();
+        mainDialogPane.getButtonTypes().setAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
+        mainDialogPane.setHeader(null);
+        mainDialogPane.setMinSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setPrefSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setMaxSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
 
-        mainDialog.getDialogPane().getButtonTypes().addAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
-
-        Button previousBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS);
-        Button nextBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT);
-        Button finishBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH);
-        Button cancelBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+        Button previousBtn = (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS);
+        Button nextBtn = (Button) mainDialogPane.lookupButton(ButtonType.NEXT);
+        Button finishBtn = (Button) mainDialogPane.lookupButton(ButtonType.FINISH);
+        Button cancelBtn = (Button) mainDialogPane.lookupButton(ButtonType.CANCEL);
         previousBtn.textProperty().bind(I18n.bind("common.previous", "上一步"));
         nextBtn.textProperty().bind(I18n.bind("common.next", "下一步"));
         finishBtn.textProperty().bind(I18n.bind("common.finish", "完成"));
@@ -97,14 +106,14 @@ public class RemoteCheckEnvUtil {
         stopButton.setTooltip(stopTooltip);
         runningLabel=new Label("");
         HBox imageHBox = new HBox(imageView, runningLabel, stopButton);
-        imageHBox.setStyle("-fx-background-color: white;-fx-background-radius: 2;-fx-padding: 0 0 0 5");
+        imageHBox.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5");
         imageHBox.setAlignment(Pos.CENTER);
         imageHBox.setMaxHeight(15);
         stopButton.setFocusTraversable(false);
         stopButton.getStyleClass().add("small");
         backgroundHBox = new HBox(imageHBox);
         backgroundHBox.setAlignment(Pos.CENTER);
-        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.1);-fx-background-radius: 2;");
+        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);-fx-background-radius: 2;");
         backgroundHBox.setVisible(false);
 
         previousBtn.disableProperty().bind(backgroundHBox.visibleProperty());
@@ -119,7 +128,20 @@ public class RemoteCheckEnvUtil {
 
         showCurrentStep();
 
-        mainDialog.getDialogPane().setContent(contentStack);
+        mainDialogPane.setContent(contentStack);
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+                mainDialog,
+                mainDialog.titleProperty(),
+                mainDialogPane,
+                DIALOG_WIDTH,
+                DIALOG_HEIGHT,
+                null,
+                false,
+                false,
+                false
+        );
+        mainDialog.setScene(frame.scene);
+        frame.closeButton.setOnAction(event -> mainDialog.close());
         centerDialogToParent(mainDialog, parent);
 
         previousBtn.addEventFilter(ActionEvent.ACTION, event -> {
@@ -129,6 +151,7 @@ public class RemoteCheckEnvUtil {
             }
             event.consume();
         });
+        cancelBtn.setOnAction(event -> mainDialog.close());
 
         installProgressListener();
         nextBtn.addEventFilter(ActionEvent.ACTION, event -> {
@@ -204,26 +227,26 @@ public class RemoteCheckEnvUtil {
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.machine", "服务器型号") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(machineInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.machine", "服务器型号") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(machineInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.os", "操作系统版本") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(osInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.os", "操作系统版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(osInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.kernel", "内核版本") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(kernelInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.kernel", "内核版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(kernelInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.cpu", "CPU信息") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(cpuInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.cpu", "CPU信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(cpuInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.memory", "内存信息") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(memInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.memory", "内存信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(memInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.disk", "磁盘信息") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(diskInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.disk", "磁盘信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(diskInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.filesystem", "文件系统信息") + "\n", "-fx-fill: #074675;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(fileSystemInfo + "\n\n", "-fx-fill: #000; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.filesystem", "文件系统信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(fileSystemInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.showParagraphAtTop(0);
                                         });
@@ -334,21 +357,21 @@ public class RemoteCheckEnvUtil {
         // 图标和标签
         Label ipLabel = new Label();
         ipLabel.textProperty().bind(I18n.bind("remote.check.field.host", "主机名/IP"));
-        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6, Color.valueOf("#888")));
+        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
         ipLabel.setAlignment(Pos.CENTER_LEFT);
         ipLabel.setContentDisplay(ContentDisplay.LEFT);
         ipLabel.setGraphicTextGap(6);
 
         Label portLabel = new Label();
         portLabel.textProperty().bind(I18n.bind("remote.check.field.port", "端口"));
-        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45, Color.valueOf("#888")));
+        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45));
         portLabel.setAlignment(Pos.CENTER_LEFT);
         portLabel.setContentDisplay(ContentDisplay.LEFT);
         portLabel.setGraphicTextGap(6);
 
         Label passwdLabel = new Label();
         passwdLabel.textProperty().bind(I18n.bind("remote.check.field.root_password", "root密码"));
-        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5, Color.valueOf("#888")));
+        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5));
         passwdLabel.setAlignment(Pos.CENTER_LEFT);
         passwdLabel.setContentDisplay(ContentDisplay.LEFT);
         passwdLabel.setGraphicTextGap(6);
@@ -383,10 +406,10 @@ public class RemoteCheckEnvUtil {
     private static void updateWizardState() {
         showCurrentStep();
         updateButtonStates(
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL)
+                (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS),
+                (Button) mainDialogPane.lookupButton(ButtonType.NEXT),
+                (Button) mainDialogPane.lookupButton(ButtonType.FINISH),
+                (Button) mainDialogPane.lookupButton(ButtonType.CANCEL)
         );
     }
 
@@ -413,6 +436,9 @@ public class RemoteCheckEnvUtil {
         finish.setManaged(showFinish);
         cancel.setVisible(!showFinish);
         cancel.setManaged(!showFinish);
+        if (cancel.isVisible() && !backgroundHBox.isVisible()) {
+            cancel.setOnAction(event -> mainDialog.close());
+        }
     }
 
     private static void installProgressListener() {
@@ -474,22 +500,25 @@ public class RemoteCheckEnvUtil {
         }
     }
 
-    private static void centerDialogToParent(Dialog<?> dialog, Stage parent) {
+    private static void centerDialogToParent(Stage dialog, Stage parent) {
         Platform.runLater(() -> {
             if (parent == null || !parent.isShowing()) {
                 return;
             }
 
-            dialog.getDialogPane().applyCss();
-            dialog.getDialogPane().layout();
+            if (dialog.getScene() == null || dialog.getScene().getRoot() == null) {
+                return;
+            }
+            dialog.getScene().getRoot().applyCss();
+            dialog.getScene().getRoot().layout();
 
             double parentX = parent.getX();
             double parentY = parent.getY();
             double parentWidth = parent.getWidth();
             double parentHeight = parent.getHeight();
 
-            double dialogWidth = dialog.getDialogPane().getWidth();
-            double dialogHeight = dialog.getDialogPane().getHeight();
+            double dialogWidth = dialog.getWidth() > 0 ? dialog.getWidth() : DIALOG_WIDTH;
+            double dialogHeight = dialog.getHeight() > 0 ? dialog.getHeight() : DIALOG_HEIGHT;
 
             double dialogX = parentX + (parentWidth - dialogWidth) / 2;
             double dialogY = parentY + (parentHeight - dialogHeight) / 2;

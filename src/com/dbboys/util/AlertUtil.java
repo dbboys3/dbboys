@@ -131,7 +131,7 @@ public final class AlertUtil {
         body.setStyle(ALERT_BODY_STYLE);
         body.setFillWidth(true);
         VBox.setVgrow(content, Priority.ALWAYS);
-        prepareAutoSizeContent(content, width);
+        prepareContent(content, width, autoHeight);
 
         CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
                 stage,
@@ -179,6 +179,8 @@ public final class AlertUtil {
         stage.setOnShown(event -> {
             if (autoHeight) {
                 resizeStageToContent(stage, frame, body);
+            } else {
+                layoutFixedHeightContent(stage, frame, body, content, buttonBar);
             }
             centerStageToOwner(stage);
             Button defaultButton = buttonMap.get(defaultButtonType);
@@ -208,22 +210,26 @@ public final class AlertUtil {
         return null;
     }
 
-    private static void prepareAutoSizeContent(Node content, double width) {
+    private static void prepareContent(Node content, double width, boolean autoHeight) {
         if (content instanceof Label label) {
             double textWidth = getTextContentWidth(width);
             label.setWrapText(true);
             label.setPrefWidth(textWidth);
             label.setMaxWidth(textWidth);
-            label.setMinHeight(Region.USE_PREF_SIZE);
-            label.setPrefHeight(Region.USE_COMPUTED_SIZE);
-            label.setMaxHeight(Region.USE_PREF_SIZE);
+            if (autoHeight) {
+                label.setMinHeight(Region.USE_PREF_SIZE);
+                label.setPrefHeight(Region.USE_COMPUTED_SIZE);
+                label.setMaxHeight(Region.USE_PREF_SIZE);
+            } else {
+                label.setMaxHeight(Double.MAX_VALUE);
+            }
             return;
         }
 
         if (content instanceof Region region) {
             double contentWidth = getRegionContentWidth(width);
-            region.setMinHeight(Region.USE_PREF_SIZE);
-            region.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            region.setMinHeight(autoHeight ? Region.USE_PREF_SIZE : 0);
+            region.setPrefHeight(autoHeight ? Region.USE_COMPUTED_SIZE : Region.USE_PREF_SIZE);
             region.setMaxHeight(Double.MAX_VALUE);
             region.setPrefWidth(contentWidth);
             region.setMaxWidth(contentWidth);
@@ -250,6 +256,41 @@ public final class AlertUtil {
             frame.root.setPrefHeight(adjustedHeight);
             stage.setHeight(adjustedHeight);
             centerStageToOwner(stage);
+        });
+    }
+
+    private static void layoutFixedHeightContent(Stage stage,
+                                                 CustomWindowFrameUtil.Frame frame,
+                                                 VBox body,
+                                                 Node content,
+                                                 HBox buttonBar) {
+        Platform.runLater(() -> {
+            frame.root.applyCss();
+            frame.root.layout();
+            body.applyCss();
+            body.layout();
+            buttonBar.applyCss();
+            buttonBar.layout();
+
+            if (content instanceof Region region) {
+                double titleHeight = Math.ceil(frame.titleBar.prefHeight(stage.getWidth()));
+                double buttonHeight = Math.ceil(buttonBar.prefHeight(body.getWidth()));
+                double availableHeight = Math.max(
+                        80,
+                        stage.getHeight()
+                                - titleHeight
+                                - CONTENT_TOP
+                                - CONTENT_BOTTOM
+                                - body.getSpacing()
+                                - buttonHeight
+                                - 4
+                );
+                region.setMinHeight(0);
+                region.setPrefHeight(availableHeight);
+                region.setMaxHeight(Double.MAX_VALUE);
+                body.applyCss();
+                body.layout();
+            }
         });
     }
 

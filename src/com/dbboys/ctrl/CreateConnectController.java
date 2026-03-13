@@ -613,7 +613,7 @@ public class CreateConnectController {
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         VBox contentBox = new VBox();
         contentBox.setId("modifyProps");
-        contentBox.setAlignment(Pos.CENTER_LEFT);
+        contentBox.setAlignment(Pos.TOP_LEFT);
         contentBox.getChildren().add(tableView);
         VBox.setVgrow(tableView, Priority.ALWAYS);
         tableView.setMaxHeight(Double.MAX_VALUE);
@@ -649,7 +649,7 @@ public class CreateConnectController {
     
         VBox contentBox = new VBox();
         contentBox.setId("modifyProps");
-        contentBox.setAlignment(Pos.CENTER_LEFT);
+        contentBox.setAlignment(Pos.TOP_LEFT);
         Path file = Paths.get("extlib/GBase 8S/sqlhosts");
         String content="";
         String defaultContent="db_group\tgroup\t-\t-\ngbase01\tonsoctcp\t192.168.1.1\t9088\tg=db_group\ngbase02\tonsoctcp\t192.168.1.2\t9088\tg=db_group";

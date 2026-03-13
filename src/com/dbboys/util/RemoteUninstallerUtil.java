@@ -18,6 +18,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -25,7 +26,9 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 
 import java.util.Properties;
 
@@ -56,7 +59,8 @@ public class RemoteUninstallerUtil {
 
     // 步骤管理
     private static StackPane contentStack; // 用于切换步骤内容
-    private static Dialog<ButtonType> mainDialog; // 主对话框
+    private static Stage mainDialog; // 主对话框
+    private static DialogPane mainDialogPane;
 
     // 步骤内容面板（保存引用，用于状态保持）
     private static Node step1Pane, step2Pane, step3Pane, step4Pane, step5Pane;
@@ -79,25 +83,29 @@ public class RemoteUninstallerUtil {
 
     // 初始化主对话框
     private static void initMainDialog(Stage parent) {
-        mainDialog = new Dialog<>();
+        mainDialog = new Stage(StageStyle.UNDECORATED);
+        mainDialog.initModality(Modality.APPLICATION_MODAL);
+        mainDialog.initOwner(parent);
+        mainDialog.setResizable(false);
+        mainDialog.getIcons().add(new Image(IconPaths.MAIN_LOGO));
         mainDialog.titleProperty().bind(Bindings.createStringBinding(
                 () -> I18n.t("remote.uninstall.title.format", "远程卸载向导 - 步骤 %d/%d")
                         .formatted(currentStep.get(), TOTAL_STEPS),
                 I18n.localeProperty(),
                 currentStep
         ));
-        mainDialog.setWidth(DIALOG_WIDTH);
-        mainDialog.setHeight(DIALOG_HEIGHT);
-        mainDialog.initOwner(parent);
-
-        // 创建按钮
-        mainDialog.getDialogPane().getButtonTypes().addAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
+        mainDialogPane = new DialogPane();
+        mainDialogPane.getButtonTypes().setAll(ButtonType.PREVIOUS, ButtonType.NEXT, ButtonType.FINISH, ButtonType.CANCEL);
+        mainDialogPane.setHeader(null);
+        mainDialogPane.setMinSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setPrefSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
+        mainDialogPane.setMaxSize(DIALOG_WIDTH, DIALOG_HEIGHT - 28);
 
         // 获取按钮实例
-        Button previousBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS);
-        Button nextBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT);
-        Button finishBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH);
-        Button cancelBtn = (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+        Button previousBtn = (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS);
+        Button nextBtn = (Button) mainDialogPane.lookupButton(ButtonType.NEXT);
+        Button finishBtn = (Button) mainDialogPane.lookupButton(ButtonType.FINISH);
+        Button cancelBtn = (Button) mainDialogPane.lookupButton(ButtonType.CANCEL);
         previousBtn.textProperty().bind(I18n.bind("common.previous", "上一步"));
         nextBtn.textProperty().bind(I18n.bind("common.next", "下一步"));
         finishBtn.textProperty().bind(I18n.bind("common.finish", "完成"));
@@ -116,7 +124,7 @@ public class RemoteUninstallerUtil {
         stopButton.setTooltip(stopTooltip);
         runningLabel=new Label("");
         HBox imageHBox = new HBox(imageView, runningLabel, stopButton);
-        imageHBox.setStyle("-fx-background-color: white;-fx-background-radius: 2;-fx-padding: 0 0 0 5");
+        imageHBox.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5");
         imageHBox.setAlignment(Pos.CENTER);
         imageHBox.setMaxHeight(15);
         //imageHBox.setMaxWidth(100);
@@ -124,7 +132,7 @@ public class RemoteUninstallerUtil {
         stopButton.getStyleClass().add("small");
         backgroundHBox = new HBox(imageHBox);
         backgroundHBox.setAlignment(Pos.CENTER);
-        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.1);-fx-background-radius: 2;");
+        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);-fx-background-radius: 2;");
         backgroundHBox.setVisible(false);
 
 
@@ -147,7 +155,20 @@ public class RemoteUninstallerUtil {
 
 
         // 设置对话框内容
-        mainDialog.getDialogPane().setContent(contentStack);
+        mainDialogPane.setContent(contentStack);
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+                mainDialog,
+                mainDialog.titleProperty(),
+                mainDialogPane,
+                DIALOG_WIDTH,
+                DIALOG_HEIGHT,
+                null,
+                false,
+                false,
+                false
+        );
+        mainDialog.setScene(frame.scene);
+        frame.closeButton.setOnAction(event -> mainDialog.close());
         centerDialogToParent(mainDialog, parent);
 
         // 按钮事件
@@ -158,6 +179,7 @@ public class RemoteUninstallerUtil {
             }
             event.consume();
         });
+        cancelBtn.setOnAction(event -> mainDialog.close());
 
         progress.addListener((obs, old, val) -> {
             int percentage = (int) (val.doubleValue() * 100);
@@ -299,7 +321,7 @@ public class RemoteUninstallerUtil {
                                 customInstallStepHbox5.iconLabel.setVisible(true);
                             });
                             if((executeCommandWithExitStatus("id gbasedbt") == 0)) {
-                                if(executeCommandWithExitStatus("userdel gbasedbt")!=0) {
+                                if(executeCommandWithExitStatus("userdel -r -f gbasedbt")!=0) {
                                     throw new Exception(I18n.t("remote.uninstall.error.remove_user_failed", "删除用户gbasedbt失败！"));
                                 }
                                 executeCommandWithExitStatus("groupdel gbasedbt");
@@ -403,15 +425,15 @@ public class RemoteUninstallerUtil {
         // 图标和标签
         Label ipLabel = new Label();
         ipLabel.textProperty().bind(I18n.bind("remote.uninstall.label.host", "主机名/IP"));
-        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6, Color.valueOf("#888")));
+        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
 
         Label portLabel = new Label();
         portLabel.textProperty().bind(I18n.bind("remote.uninstall.label.port", "端口"));
-        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45, Color.valueOf("#888")));
+        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45));
 
         Label passwdLabel = new Label();
         passwdLabel.textProperty().bind(I18n.bind("remote.uninstall.label.password", "root密码"));
-        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5, Color.valueOf("#888")));
+        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5));
 
 
 
@@ -459,6 +481,11 @@ public class RemoteUninstallerUtil {
         customInstallStepHbox3=new CustomInstallStepHbox("", "");
         customInstallStepHbox4=new CustomInstallStepHbox("", "");
         customInstallStepHbox5=new CustomInstallStepHbox("", "");
+        customInstallStepHbox1.checkBox.setDisable(true);
+        customInstallStepHbox2.checkBox.setDisable(true);
+        customInstallStepHbox3.checkBox.setDisable(true);
+        customInstallStepHbox4.checkBox.setDisable(true);
+        customInstallStepHbox5.checkBox.setDisable(true);
         bindUninstallStepTexts();
         Label titleLabel = new Label();
         titleLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.title", "点击【下一步】开始卸载"));
@@ -497,10 +524,10 @@ public class RemoteUninstallerUtil {
     private static void updateWizardState() {
         showCurrentStep();
         updateButtonStates(
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.PREVIOUS),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.NEXT),
-                (Button) mainDialog.getDialogPane().lookupButton(ButtonType.FINISH),
-                        (Button) mainDialog.getDialogPane().lookupButton(ButtonType.CANCEL)
+                (Button) mainDialogPane.lookupButton(ButtonType.PREVIOUS),
+                (Button) mainDialogPane.lookupButton(ButtonType.NEXT),
+                (Button) mainDialogPane.lookupButton(ButtonType.FINISH),
+                        (Button) mainDialogPane.lookupButton(ButtonType.CANCEL)
         );
     }
 
@@ -532,6 +559,9 @@ public class RemoteUninstallerUtil {
         finish.setManaged(showFinish);
         cancel.setVisible(!showFinish);
         cancel.setManaged(!showFinish);
+        if (cancel.isVisible() && !backgroundHBox.isVisible()) {
+            cancel.setOnAction(event -> mainDialog.close());
+        }
     }
 
     private static void bindUninstallStepTexts() {
@@ -547,22 +577,25 @@ public class RemoteUninstallerUtil {
         customInstallStepHbox5.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step5.desc", "删除gbasedbt用户及gbasedbt组。"));
     }
 
-    private static void centerDialogToParent(Dialog<?> dialog, Stage parent) {
+    private static void centerDialogToParent(Stage dialog, Stage parent) {
         Platform.runLater(() -> {
             if (parent == null || !parent.isShowing()) {
                 return;
             }
 
-            dialog.getDialogPane().applyCss();
-            dialog.getDialogPane().layout();
+            if (dialog.getScene() == null || dialog.getScene().getRoot() == null) {
+                return;
+            }
+            dialog.getScene().getRoot().applyCss();
+            dialog.getScene().getRoot().layout();
 
             double parentX = parent.getX();
             double parentY = parent.getY();
             double parentWidth = parent.getWidth();
             double parentHeight = parent.getHeight();
 
-            double dialogWidth = dialog.getDialogPane().getWidth();
-            double dialogHeight = dialog.getDialogPane().getHeight();
+            double dialogWidth = dialog.getWidth() > 0 ? dialog.getWidth() : DIALOG_WIDTH;
+            double dialogHeight = dialog.getHeight() > 0 ? dialog.getHeight() : DIALOG_HEIGHT;
 
             double dialogX = parentX + (parentWidth - dialogWidth) / 2;
             double dialogY = parentY + (parentHeight - dialogHeight) / 2;
