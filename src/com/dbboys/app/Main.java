@@ -12,12 +12,15 @@ import com.dbboys.vo.Version;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.paint.Color;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.scene.Node;
 import javafx.scene.layout.HBox;
@@ -78,23 +81,83 @@ public class Main extends Application {
             }
 
             // 创建加载窗口
-            Stage loadingStage = new Stage(StageStyle.UNDECORATED);
-            Label loadLabel = new Label("DBboys Loading...");
-            loadLabel.setStyle("-fx-font-weight: normal");
-            StackPane loadStackpane = new StackPane(loadLabel);
-            loadStackpane.getChildren().add(loadProgressBar);
-            loadStackpane.setAlignment(loadProgressBar, Pos.BOTTOM_CENTER);
-            //loadStackpane.setStyle("-fx-background-color: green;-fx-background-insets: 0");
-            Scene bootscene = new Scene(loadStackpane,180,30);
+            Stage loadingStage = new Stage(StageStyle.TRANSPARENT);
+            ImageView bootLogo = new ImageView(new Image("file:images/logo.png"));
+            bootLogo.setFitWidth(42);
+            bootLogo.setFitHeight(42);
+            bootLogo.setPreserveRatio(true);
+
+            Label bootTitle = new Label("DBboys");
+            bootTitle.setStyle(
+                    "-fx-font-size: 20px;" +
+                    "-fx-font-weight: bold;" +
+                    "-fx-text-fill: -color-fg-default;"
+            );
+            Label bootSubtitle = new Label("Database Toolkit");
+            bootSubtitle.setStyle(
+                    "-fx-font-size: 11px;" +
+                    "-fx-text-fill: -color-fg-muted;"
+            );
+            Label bootVersion = new Label(VERSION_NAME);
+            bootVersion.setStyle(
+                    "-fx-font-size: 10px;" +
+                    "-fx-text-fill: -color-fg-subtle;"
+            );
+
+            loadProgressBar.getStyleClass().remove("loadProgressBar");
+            loadProgressBar.setPrefWidth(260);
+            loadProgressBar.setPrefHeight(6);
+            loadProgressBar.setMaxWidth(Double.MAX_VALUE);
+            loadProgressBar.setStyle(
+                    "-fx-accent: -color-accent-emphasis;" +
+                    "-fx-control-inner-background: -color-bg-subtle;" +
+                    "-fx-background-color: transparent;"
+            );
+
+            Label bootStatus = new Label("Loading workspace...");
+            bootStatus.setStyle(
+                    "-fx-font-size: 11px;" +
+                    "-fx-text-fill: -color-fg-muted;"
+            );
+
+            VBox textBox = new VBox(2, bootTitle, bootSubtitle, bootVersion);
+            textBox.setAlignment(Pos.CENTER_LEFT);
+
+            HBox headerBox = new HBox(12, bootLogo, textBox);
+            headerBox.setAlignment(Pos.CENTER_LEFT);
+
+            VBox loadCard = new VBox(16, headerBox, loadProgressBar, bootStatus);
+            loadCard.setAlignment(Pos.CENTER_LEFT);
+            loadCard.setStyle(
+                    "-fx-background-color: -color-bg-default;" +
+                    "-fx-background-radius: 14;" +
+                    "-fx-border-color: -color-border-default;" +
+                    "-fx-border-radius: 14;" +
+                    "-fx-padding: 18 22 18 22;"
+            );
+            loadCard.setPrefSize(320, 132);
+            loadCard.setMaxSize(320, 132);
+
+            StackPane loadStackpane = new StackPane(loadCard);
+            loadStackpane.setStyle("-fx-background-color: transparent; -fx-padding: 12;");
+            Scene bootscene = new Scene(loadStackpane, 344, 156);
+            bootscene.setFill(Color.TRANSPARENT);
             AppState.applyAppStylesheet(bootscene);
-            loadProgressBar.getStyleClass().add("loadProgressBar");
             loadingStage.setScene(bootscene);
+            loadingStage.centerOnScreen();
 
             // 显示加载窗口
             loadingStage.show();
 
             //使用线程后台加载界面
             AppExecutor.runAsync(() -> {
+                /* 
+                try {
+                    Thread.sleep(100000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                */
                 //初始化数据库和配置文件
                 Path dataDir = Paths.get("data");
                 Path configFile = dataDir.resolve("dbboys.dat");
@@ -132,6 +195,7 @@ public class Main extends Application {
                 Node logo = oldTitleBar.getChildren().get(0);
                 Node menuBar = oldTitleBar.getChildren().get(1);
                 HBox titleBarLeft = new HBox(logo, menuBar);
+                HBox.setMargin(logo, new Insets(0, 0, 0, 5));
                 titleBarLeft.getStyleClass().add("window-title-bar-left");
                 titleBarLeft.setAlignment(Pos.CENTER_LEFT);
                 titleBarLeft.setStyle("-fx-background-color: transparent;");
@@ -240,7 +304,3 @@ public class Main extends Application {
         launch(args);
     }
 }
-
-
-
-
