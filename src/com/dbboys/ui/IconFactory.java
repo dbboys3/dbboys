@@ -9,7 +9,6 @@ import javafx.scene.shape.SVGPath;
 public final class IconFactory {
     private static final String DEFAULT_ICON_STYLE = "-fx-fill: -color-button-default;";
     private static final String DANGER_ICON_STYLE = "-fx-fill: -color-danger-7;";
-    private static final Color LEGACY_DEFAULT_ICON_COLOR = Color.valueOf("#074675");
     private static final Color LEGACY_DARK_ICON_COLOR = Color.BLACK;
     private static final Color LEGACY_LIGHT_ICON_COLOR = Color.WHITE;
     private static final Color DANGER_ICON_COLOR = Color.valueOf("#9f453c");
@@ -115,8 +114,7 @@ public final class IconFactory {
     }
 
     private static boolean isDefaultColor(Color color) {
-        return sameColor(color, LEGACY_DEFAULT_ICON_COLOR)
-                || sameColor(color, LEGACY_DARK_ICON_COLOR)
+        return sameColor(color, LEGACY_DARK_ICON_COLOR)
                 || sameColor(color, LEGACY_LIGHT_ICON_COLOR);
     }
 
