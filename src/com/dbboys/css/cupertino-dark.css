@@ -1255,6 +1255,11 @@ Text {
   -fx-padding: 0.4em 0 0.4em 0;
   -fx-indent: 1.2em;
 }
+
+.tree-cell:hover {
+  -fx-background-color: #2a2d2e;
+}
+
 .tree-cell > .tree-disclosure-node {
   -fx-padding: 0.35em 0.5em 0 0.5em;
   -fx-background-color: transparent;
