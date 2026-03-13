@@ -36,6 +36,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PopupWindowUtil {
+    private static final String POPUP_FRAME_BORDER_STYLE =
+            "-fx-border-color: -color-fg-default;" +
+            "-fx-border-width: 1px;";
     private static final String PRIMARY_BUTTON_STYLE =
             "-fx-background-color: #2d6f9f;" +
             "-fx-text-fill: white;" +
@@ -121,13 +124,15 @@ public class PopupWindowUtil {
         aboutPopupStageStackPane.setAlignment(Pos.CENTER);
         aboutPopupStage.initStyle(StageStyle.UNDECORATED);
         aboutPopupStage.setResizable(true);
-        aboutPopupStageScene = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame aboutFrame = CustomWindowFrameUtil.create(
                 aboutPopupStage,
                 aboutTitleBinding,
                 aboutPopupStageStackPane,
                 400,
                 300
-        ).scene;
+        );
+        applyPopupFrameBorder(aboutFrame);
+        aboutPopupStageScene = aboutFrame.scene;
         aboutPopupStage.getIcons().add(aboutPopupStageIcon);
         aboutPopupStage.setScene(aboutPopupStageScene);
         aboutPopupStage.titleProperty().bind(aboutTitleBinding);
@@ -136,13 +141,15 @@ public class PopupWindowUtil {
         //巡检双击弹出命令输出
         checkOutputPopupStage.initStyle(StageStyle.UNDECORATED);
         checkOutputPopupStage.setResizable(true);
-        checkOutputPopupStageScene = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame checkOutputFrame = CustomWindowFrameUtil.create(
                 checkOutputPopupStage,
                 cmdOutputTitleBinding,
                 checkOutputPopupStageStackPane,
                 600,
                 400
-        ).scene;
+        );
+        applyPopupFrameBorder(checkOutputFrame);
+        checkOutputPopupStageScene = checkOutputFrame.scene;
         checkOutputPopupStage.getIcons().add(checkOutputPopupStageIcon);
         checkOutputPopupStage.setScene(checkOutputPopupStageScene);
         checkOutputPopupStage.titleProperty().bind(cmdOutputTitleBinding);
@@ -162,13 +169,15 @@ public class PopupWindowUtil {
         sqlHistoryPopupStage.initStyle(StageStyle.UNDECORATED);
         sqlHistoryPopupStage.setResizable(true);
         sqlHistoryPopupStage.initModality(Modality.APPLICATION_MODAL);
-        sqlHistoryPopupStageScene = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame sqlHistoryFrame = CustomWindowFrameUtil.create(
                 sqlHistoryPopupStage,
                 sqlHistoryTitleBinding,
                 sqlHistoryPopupStageStackPane,
                 1000,
                 500
-        ).scene;
+        );
+        applyPopupFrameBorder(sqlHistoryFrame);
+        sqlHistoryPopupStageScene = sqlHistoryFrame.scene;
         sqlHistoryPopupStage.getIcons().add(sqlHistoryPopupStageIcon);
         sqlHistoryPopupStage.setScene(sqlHistoryPopupStageScene);
         sqlHistoryPopupStage.titleProperty().bind(sqlHistoryTitleBinding);
@@ -200,13 +209,15 @@ public class PopupWindowUtil {
         backSqlPopupStage.initStyle(StageStyle.UNDECORATED);
         backSqlPopupStage.setResizable(true);
         backSqlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        backSqlPopupStageScene = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame backSqlFrame = CustomWindowFrameUtil.create(
                 backSqlPopupStage,
                 backSqlTitleBinding,
                 backSqlPopupStageStackPane,
                 1000,
                 500
-        ).scene;
+        );
+        applyPopupFrameBorder(backSqlFrame);
+        backSqlPopupStageScene = backSqlFrame.scene;
         backSqlPopupStage.getIcons().add(backSqlPopupStageIcon);
         backSqlPopupStage.setScene(backSqlPopupStageScene);
         backSqlPopupStageStackPane.getChildren().add(noticePane);
@@ -330,13 +341,15 @@ public class PopupWindowUtil {
         ddlPopupStage.initStyle(StageStyle.UNDECORATED);
         ddlPopupStage.setResizable(true);
         ddlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        ddlPopupStageScene = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame ddlFrame = CustomWindowFrameUtil.create(
                 ddlPopupStage,
                 ddlTitleBinding,
                 ddlPopupStageStackPane,
                 400,
                 300
-        ).scene;
+        );
+        applyPopupFrameBorder(ddlFrame);
+        ddlPopupStageScene = ddlFrame.scene;
         ddlPopupStage.getIcons().add(ddlPopupStageIcon);
         ddlPopupStage.setScene(ddlPopupStageScene);
         ddlPopupStage.titleProperty().bind(ddlTitleBinding);
@@ -549,6 +562,7 @@ public class PopupWindowUtil {
                 width,
                 height
         );
+        applyPopupFrameBorder(frame);
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButton != null ? cancelButton : defaultButton);
             stage.close();
@@ -584,6 +598,18 @@ public class PopupWindowUtil {
             }
         }
         return null;
+    }
+
+    private static void applyPopupFrameBorder(CustomWindowFrameUtil.Frame frame) {
+        String style = frame.root.getStyle();
+        if (style == null || style.isBlank()) {
+            frame.root.setStyle(POPUP_FRAME_BORDER_STYLE);
+            return;
+        }
+        frame.root.setStyle(style
+                .replaceAll("-fx-border-width\\s*:[^;]*;", "")
+                .replaceAll("-fx-border-color\\s*:[^;]*;", "")
+                + POPUP_FRAME_BORDER_STYLE);
     }
 
 
