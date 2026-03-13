@@ -1,8 +1,6 @@
 package com.dbboys.util;
 
-import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
-import com.dbboys.ui.IconPaths;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
@@ -15,9 +13,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.stage.StageStyle;
 import javafx.stage.Window;
 
 import java.util.LinkedHashMap;
@@ -93,18 +89,8 @@ public final class AlertUtil {
 
     public static ContentDialog createContentDialog(String title, Node content, double width, double height, ButtonType... buttonTypes) {
         boolean autoHeight = height <= 0 || height == Region.USE_COMPUTED_SIZE;
-        Stage stage = new Stage(StageStyle.UNDECORATED);
+        Stage stage = new Stage();
         stage.setTitle(title == null ? "" : title);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setResizable(false);
-
-        Window owner = AppState.getWindow();
-        if (owner != null) {
-            stage.initOwner(owner);
-        }
-        if (stage.getIcons().isEmpty()) {
-            stage.getIcons().add(new javafx.scene.image.Image(IconPaths.MAIN_LOGO));
-        }
 
         AtomicReference<ButtonType> resultRef = new AtomicReference<>();
         ButtonType defaultButtonType = findDefaultButton(buttonTypes);
@@ -133,23 +119,22 @@ public final class AlertUtil {
         VBox.setVgrow(content, Priority.ALWAYS);
         prepareContent(content, width, autoHeight);
 
-        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.createModalPopup(
                 stage,
                 stage.titleProperty(),
                 body,
                 width,
                 autoHeight ? DIALOG_MIN_HEIGHT : height,
-                null,
                 false,
-                false,
-                false
+                null
         );
 
         frame.root.setMinWidth(width);
         frame.root.setStyle(
-                "-fx-background-color: -color-fg-default, -color-bg-default;" +
-                "-fx-background-insets: 0, 1;" +
-                "-fx-padding: 1;"
+                "-fx-background-color: -color-bg-default;" +
+                "-fx-border-color: -color-fg-default;" +
+                "-fx-border-width: 0.5;" +
+                "-fx-padding: 0;"
         );
         if (autoHeight) {
             body.setMinHeight(Region.USE_PREF_SIZE);
@@ -174,8 +159,6 @@ public final class AlertUtil {
                 stage.close();
             }
         });
-
-        stage.setScene(frame.scene);
         stage.setOnShown(event -> {
             if (autoHeight) {
                 resizeStageToContent(stage, frame, body);

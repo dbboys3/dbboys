@@ -1,6 +1,5 @@
 package com.dbboys.util;
 
-import com.dbboys.app.AppState;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
@@ -25,10 +24,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.stage.StageStyle;
-import javafx.stage.Window;
 import javafx.util.Callback;
 
 import java.util.ArrayList;
@@ -36,9 +32,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PopupWindowUtil {
-    private static final String POPUP_FRAME_BORDER_STYLE =
-            "-fx-border-color: -color-fg-default;" +
-            "-fx-border-width: 0.5px;";
     private static final String PRIMARY_BUTTON_STYLE =
             "-fx-background-color: #2d6f9f;" +
             "-fx-text-fill: white;" +
@@ -122,38 +115,28 @@ public class PopupWindowUtil {
     static {
         //关于弹出面板
         aboutPopupStageStackPane.setAlignment(Pos.CENTER);
-        aboutPopupStage.initStyle(StageStyle.UNDECORATED);
-        aboutPopupStage.setResizable(true);
-        CustomWindowFrameUtil.Frame aboutFrame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame aboutFrame = CustomWindowFrameUtil.createModalPopup(
                 aboutPopupStage,
                 aboutTitleBinding,
                 aboutPopupStageStackPane,
                 400,
-                300
+                300,
+                true
         );
-        applyPopupFrameBorder(aboutFrame);
         aboutPopupStageScene = aboutFrame.scene;
-        aboutPopupStage.getIcons().add(aboutPopupStageIcon);
-        aboutPopupStage.setScene(aboutPopupStageScene);
         aboutPopupStage.titleProperty().bind(aboutTitleBinding);
-        aboutPopupStage.initModality(Modality.APPLICATION_MODAL);
 
         //巡检双击弹出命令输出
-        checkOutputPopupStage.initStyle(StageStyle.UNDECORATED);
-        checkOutputPopupStage.setResizable(true);
-        CustomWindowFrameUtil.Frame checkOutputFrame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame checkOutputFrame = CustomWindowFrameUtil.createModalPopup(
                 checkOutputPopupStage,
                 cmdOutputTitleBinding,
                 checkOutputPopupStageStackPane,
                 600,
-                400
+                400,
+                true
         );
-        applyPopupFrameBorder(checkOutputFrame);
         checkOutputPopupStageScene = checkOutputFrame.scene;
-        checkOutputPopupStage.getIcons().add(checkOutputPopupStageIcon);
-        checkOutputPopupStage.setScene(checkOutputPopupStageScene);
         checkOutputPopupStage.titleProperty().bind(cmdOutputTitleBinding);
-        checkOutputPopupStage.initModality(Modality.APPLICATION_MODAL);
 
         //初始化通知面板
         noticePane.setStyle("-fx-background-color: none;-fx-alignment: center");
@@ -166,20 +149,15 @@ public class PopupWindowUtil {
         //sql_his_tableview.getStyleClass().clear();
         //sql_his_tableview.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/test.css").toExternalForm());
 
-        sqlHistoryPopupStage.initStyle(StageStyle.UNDECORATED);
-        sqlHistoryPopupStage.setResizable(true);
-        sqlHistoryPopupStage.initModality(Modality.APPLICATION_MODAL);
-        CustomWindowFrameUtil.Frame sqlHistoryFrame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame sqlHistoryFrame = CustomWindowFrameUtil.createModalPopup(
                 sqlHistoryPopupStage,
                 sqlHistoryTitleBinding,
                 sqlHistoryPopupStageStackPane,
                 1000,
-                500
+                500,
+                true
         );
-        applyPopupFrameBorder(sqlHistoryFrame);
         sqlHistoryPopupStageScene = sqlHistoryFrame.scene;
-        sqlHistoryPopupStage.getIcons().add(sqlHistoryPopupStageIcon);
-        sqlHistoryPopupStage.setScene(sqlHistoryPopupStageScene);
         sqlHistoryPopupStage.titleProperty().bind(sqlHistoryTitleBinding);
         sqlHistoryTableView.setStyle("-fx-background-insets: 0;");
 
@@ -207,20 +185,15 @@ public class PopupWindowUtil {
 
 
         //初始化后台任务表格
-        backSqlPopupStage.initStyle(StageStyle.UNDECORATED);
-        backSqlPopupStage.setResizable(true);
-        backSqlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        CustomWindowFrameUtil.Frame backSqlFrame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame backSqlFrame = CustomWindowFrameUtil.createModalPopup(
                 backSqlPopupStage,
                 backSqlTitleBinding,
                 backSqlPopupStageStackPane,
                 1000,
-                500
+                500,
+                true
         );
-        applyPopupFrameBorder(backSqlFrame);
         backSqlPopupStageScene = backSqlFrame.scene;
-        backSqlPopupStage.getIcons().add(backSqlPopupStageIcon);
-        backSqlPopupStage.setScene(backSqlPopupStageScene);
         backSqlPopupStageStackPane.getChildren().add(noticePane);
         backSqlPopupStage.titleProperty().bind(backSqlTitleBinding);
         sqlTaskRowNumTableColumn = new TableColumn<>("");
@@ -339,20 +312,15 @@ public class PopupWindowUtil {
         sqlTaskTableView.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 
         //初始化ddl显示面板
-        ddlPopupStage.initStyle(StageStyle.UNDECORATED);
-        ddlPopupStage.setResizable(true);
-        ddlPopupStage.initModality(Modality.APPLICATION_MODAL);
-        CustomWindowFrameUtil.Frame ddlFrame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame ddlFrame = CustomWindowFrameUtil.createModalPopup(
                 ddlPopupStage,
                 ddlTitleBinding,
                 ddlPopupStageStackPane,
                 400,
-                300
+                300,
+                true
         );
-        applyPopupFrameBorder(ddlFrame);
         ddlPopupStageScene = ddlFrame.scene;
-        ddlPopupStage.getIcons().add(ddlPopupStageIcon);
-        ddlPopupStage.setScene(ddlPopupStageScene);
         ddlPopupStage.titleProperty().bind(ddlTitleBinding);
         ddlPopupStageStackPane.showNoticeInMain=false;
         ImageView loadingImage = new ImageView(new Image(IconPaths.LOADING_GIF));
@@ -524,15 +492,9 @@ public class PopupWindowUtil {
     }
 
     private static ButtonType showCustomDialog(String title, javafx.scene.Node content, double width, double height, ButtonType... buttonTypes) {
-        Stage stage = new Stage(StageStyle.UNDECORATED);
+        Stage stage = new Stage();
         stage.setTitle(title == null ? "" : title);
-        stage.initModality(Modality.APPLICATION_MODAL);
         stage.setResizable(true);
-        Window owner = AppState.getWindow();
-        if (owner != null) {
-            stage.initOwner(owner);
-        }
-        stage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
 
         AtomicReference<ButtonType> resultRef = new AtomicReference<>();
         HBox buttonBar = new HBox(10);
@@ -556,14 +518,14 @@ public class PopupWindowUtil {
         body.setStyle("-fx-background-color: #151a1f; -fx-padding: 16; -fx-spacing: 0;");
         VBox.setVgrow(content, Priority.ALWAYS);
 
-        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.createModalPopup(
                 stage,
                 stage.titleProperty(),
                 body,
                 width,
-                height
+                height,
+                true
         );
-        applyPopupFrameBorder(frame);
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButton != null ? cancelButton : defaultButton);
             stage.close();
@@ -600,18 +562,4 @@ public class PopupWindowUtil {
         }
         return null;
     }
-
-    private static void applyPopupFrameBorder(CustomWindowFrameUtil.Frame frame) {
-        String style = frame.root.getStyle();
-        if (style == null || style.isBlank()) {
-            frame.root.setStyle(POPUP_FRAME_BORDER_STYLE);
-            return;
-        }
-        frame.root.setStyle(style
-                .replaceAll("-fx-border-width\\s*:[^;]*;", "")
-                .replaceAll("-fx-border-color\\s*:[^;]*;", "")
-                + POPUP_FRAME_BORDER_STYLE);
-    }
-
-
 }

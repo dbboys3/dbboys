@@ -9,6 +9,7 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -18,8 +19,11 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
+import javafx.stage.Window;
 
 import java.util.List;
 
@@ -73,6 +77,39 @@ public final class CustomWindowFrameUtil {
                                double width,
                                double height) {
         return create(stage, titleBinding, content, width, height, null);
+    }
+
+    public static Frame createModalPopup(Stage stage,
+                                         ObservableValue<String> titleBinding,
+                                         Node content,
+                                         double width,
+                                         double height,
+                                         boolean resizable) {
+        return createModalPopup(stage, titleBinding, content, width, height, resizable, null);
+    }
+
+    public static Frame createModalPopup(Stage stage,
+                                         ObservableValue<String> titleBinding,
+                                         Node content,
+                                         double width,
+                                         double height,
+                                         boolean resizable,
+                                         Window owner) {
+        stage.initStyle(StageStyle.UNDECORATED);
+        stage.setResizable(resizable);
+        stage.initModality(Modality.APPLICATION_MODAL);
+
+        Window resolvedOwner = owner != null ? owner : AppState.getWindow();
+        if (resolvedOwner != null) {
+            stage.initOwner(resolvedOwner);
+        }
+        if (stage.getIcons().isEmpty()) {
+            stage.getIcons().add(new Image(IconPaths.MAIN_LOGO));
+        }
+
+        Frame frame = create(stage, titleBinding, content, width, height, null, resizable, false, false);
+        stage.setScene(frame.scene);
+        return frame;
     }
 
     /** Same as create(...) but with optional left content in the title bar (e.g. logo + menu). */

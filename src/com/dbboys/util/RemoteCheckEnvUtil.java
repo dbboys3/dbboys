@@ -18,16 +18,13 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.stage.StageStyle;
 
 import java.io.*;
 import java.util.Properties;
@@ -69,11 +66,7 @@ public class RemoteCheckEnvUtil {
     }
 
     private static void initMainDialog(Stage parent) {
-        mainDialog = new Stage(StageStyle.UNDECORATED);
-        mainDialog.initModality(Modality.APPLICATION_MODAL);
-        mainDialog.initOwner(parent);
-        mainDialog.setResizable(false);
-        mainDialog.getIcons().add(new Image(IconPaths.MAIN_LOGO));
+        mainDialog = new Stage();
         mainDialog.titleProperty().bind(Bindings.createStringBinding(
                 () -> I18n.t("remote.check.title.format", "安装环境检查 - 步骤 %d/%d")
                         .formatted(currentStep.get(), TOTAL_STEPS),
@@ -129,18 +122,15 @@ public class RemoteCheckEnvUtil {
         showCurrentStep();
 
         mainDialogPane.setContent(contentStack);
-        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.createModalPopup(
                 mainDialog,
                 mainDialog.titleProperty(),
                 mainDialogPane,
                 DIALOG_WIDTH,
                 DIALOG_HEIGHT,
-                null,
                 false,
-                false,
-                false
+                parent
         );
-        mainDialog.setScene(frame.scene);
         frame.closeButton.setOnAction(event -> mainDialog.close());
         centerDialogToParent(mainDialog, parent);
 
