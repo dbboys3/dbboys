@@ -1018,6 +1018,12 @@ public class CustomInstanceTab extends CustomTab {
         spaceTab.textProperty().bind(I18n.bind("metadata.menu.space_manager", "容量管理"));
         paramsTab.textProperty().bind(I18n.bind("metadata.menu.onconfig", "参数管理"));
         startTab.textProperty().bind(I18n.bind("metadata.menu.instance_start_stop", "实例启停"));
+        infoTab.setContextMenu(null);
+        checkTab.setContextMenu(null);
+        logTab.setContextMenu(null);
+        spaceTab.setContextMenu(null);
+        paramsTab.setContextMenu(null);
+        startTab.setContextMenu(null);
 
         refreshButton = new Button();
         refreshButton.getStyleClass().add("codearea-camera-button");
@@ -1042,7 +1048,7 @@ public class CustomInstanceTab extends CustomTab {
         }else{
             mainTabPane.getTabs().addAll(infoTab);
         }
-        //去掉实例信息子 tab 页头的右键菜单（改为整个 mainTabPane 不显示菜单）
+        //实例信息子 tab 不需要右键菜单
         mainTabPane.setContextMenu(null);
         mainTabPane.setStyle("-fx-background-color: -color-bg-content;");
         StackPane  stackPane=new StackPane(mainTabPane,refreshButton,instanceInfoLabel);

@@ -1265,7 +1265,7 @@ Text {
   -fx-indent: 1.2em;
 }
 
-.tree-cell:hover {
+.tree-cell:filled:hover {
   -fx-background-color: #2a2d2e;
 }
 
@@ -1304,6 +1304,7 @@ Text {
 .tree-cell:leaf-node > .tree-disclosure-node > .arrow {
   -fx-background-color: -color-fg-muted;
 }
+
 
 .tree-table-view {
   -color-cell-bg: -color-bg-default;
@@ -5346,3 +5347,13 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-stroke: white;
 }
 
+/*标题栏边距*/
+#instanceManagerTabPane .tab-header-area {
+  -fx-padding: 0;
+  -fx-font-size: 9;
+}
+/*文字边距*/
+#instanceManagerTabPane .tab-header-area .tab {
+  -fx-padding: 0 10 0 10;
+  -fx-font-size: 9;
+}

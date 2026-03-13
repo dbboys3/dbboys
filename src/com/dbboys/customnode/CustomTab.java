@@ -27,9 +27,7 @@ public class CustomTab extends Tab {
         installSqlTabPaneDoubleClickHandler();
 
         ContextMenu tabMenu = new ContextMenu();
-        if (AppState.getSqlTabPane() != null) {
-            AppState.getSqlTabPane().setContextMenu(tabMenu);
-        }
+        setContextMenu(tabMenu);
         CustomShortcutMenuItem closeAllItem = MenuItemUtil.createMenuItemI18n(
                 "customtab.menu.close_all",
                 IconFactory.group(IconPaths.TAB_CLOSE_MENU_ITEM, 0.5, 0.5, Color.web("#e81123"))
@@ -163,4 +161,3 @@ public class CustomTab extends Tab {
 
 
 }
-

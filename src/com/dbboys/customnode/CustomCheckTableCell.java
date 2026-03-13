@@ -21,7 +21,7 @@ public class CustomCheckTableCell<S,T> extends CustomTableCell<S,T> {
     private final Group groupError;
 
     public CustomCheckTableCell(){
-        groupOk = IconFactory.group(IconPaths.CHECK_OK, 0.5, Color.valueOf("#1c7629"));
+        groupOk = IconFactory.group(IconPaths.CHECK_OK, 0.5, Color.valueOf("#2bb740"));
         groupWarn = IconFactory.group(IconPaths.CHECK_WARN, 0.5, Color.valueOf("#ffbf00"));
         groupError = IconFactory.group(IconPaths.CHECK_ERROR, 0.05, Color.valueOf("#cf2311"));
         I18n.localeProperty().addListener((obs, oldLocale, newLocale) -> {
