@@ -1235,12 +1235,18 @@ Text {
 .tree-view.alt-icon .tree-cell > .tree-disclosure-node > .arrow {
   -fx-shape: "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z";
   -fx-scale-shape: false;
-  -fx-padding: 0.333333em;
+  -fx-effect: none;
+  -fx-padding: 0.233333em;
+  -fx-scale-x: 0.7;
+  -fx-scale-y: 0.7;
 }
 .tree-view.alt-icon .tree-cell:expanded > .tree-disclosure-node > .arrow {
   -fx-shape: "M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z";
   -fx-scale-shape: false;
-  -fx-padding: 0.333333em;
+  -fx-effect: none;
+  -fx-padding: 0.233333em;
+  -fx-scale-x: 0.7;
+  -fx-scale-y: 0.7;
 }
 
 .tree-cell {
@@ -1256,18 +1262,33 @@ Text {
 
 .tree-cell > .tree-disclosure-node > .arrow,
 .tree-table-row-cell > .tree-disclosure-node > .arrow {
-  -fx-shape: "M10 17l5-5-5-5v10z";
+  -fx-shape: "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z";
   -fx-rotate: 0;
   -fx-scale-shape: false;
-  -fx-background-color: -color-disclosure;
-  -fx-padding: 0.333333em 0.229em 0.333333em 0.229em;
+  -fx-background-color: -color-fg-muted;
+  -fx-effect: none;
+  -fx-padding: 0.233333em;
+  -fx-scale-x: 0.7;
+  -fx-scale-y: 0.7;
 }
 
 .tree-cell:expanded > .tree-disclosure-node > .arrow,
 .tree-table-row-cell:expanded > .tree-disclosure-node > .arrow {
-  -fx-shape: "M7 10l5 5 5-5z";
+  -fx-shape: "M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z";
   -fx-rotate: 0;
   -fx-scale-shape: false;
+  -fx-effect: none;
+  -fx-padding: 0.233333em;
+  -fx-scale-x: 0.7;
+  -fx-scale-y: 0.7;
+}
+
+.tree-cell:branch-node > .tree-disclosure-node > .arrow {
+  -fx-background-color: -color-accent-emphasis;
+}
+
+.tree-cell:leaf-node > .tree-disclosure-node > .arrow {
+  -fx-background-color: -color-fg-muted;
 }
 
 .tree-table-view {
