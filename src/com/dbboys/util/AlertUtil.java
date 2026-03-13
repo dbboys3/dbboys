@@ -3,17 +3,18 @@ package com.dbboys.util;
 import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconPaths;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.input.KeyCode;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -25,20 +26,22 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class AlertUtil {
     private static final double DIALOG_WIDTH = 400;
-    private static final Insets CONTENT_PADDING = new Insets(10, 20, 10, 20);
+    private static final double DIALOG_MIN_HEIGHT = 120;
+    private static final double CONTENT_TOP = 10;
+    private static final double CONTENT_RIGHT = 10;
+    private static final double CONTENT_BOTTOM = 10;
+    private static final double CONTENT_LEFT = 10;
+    private static final Insets CONTENT_PADDING = new Insets(CONTENT_TOP, CONTENT_RIGHT, CONTENT_BOTTOM, CONTENT_LEFT);
     private static final String ALERT_TITLE_STYLE =
             "-fx-background-color: -color-bg-default;" +
             "-fx-padding: 0 0 0 6;" +
             "-fx-min-height: 28;" +
             "-fx-pref-height: 28;" +
             "-fx-alignment: center-left;";
-    private static final String BODY_STYLE =
+    private static final String ALERT_BODY_STYLE =
             "-fx-background-color: -color-bg-default;" +
             "-fx-padding: 16 20 18 20;" +
             "-fx-spacing: 16;";
-    private static final String TEXT_CONTENT_STYLE =
-            "-fx-background-color: -color-base-6;" +
-            "-fx-alignment: center-left;";
 
     private AlertUtil() {
     }
@@ -66,31 +69,35 @@ public final class AlertUtil {
         return showConfirm(title, message);
     }
 
-    // Backward-compatible wrappers for existing call sites.
     public static void CustomAlert(String title, String alertText) {
         showAlert(title, alertText);
     }
 
-    // Backward-compatible wrappers for existing call sites.
     public static boolean CustomAlertConfirm(String title, String contentText) {
         return showConfirm(title, contentText);
     }
 
     private static ButtonType showDialog(String title, String message, ButtonType... buttonTypes) {
-        Text text = new Text(message == null ? "" : message);
-        //text.setWrappingWidth(DIALOG_WIDTH - 40);
-        return createContentDialog(title, text, DIALOG_WIDTH, 120, buttonTypes).showAndWait();
+        Label label = new Label(message == null ? "" : message);
+        label.setWrapText(true);
+        double textWidth = getTextContentWidth(DIALOG_WIDTH);
+        label.setPrefWidth(textWidth);
+        label.setMaxWidth(textWidth);
+        label.setStyle("-fx-text-fill: -color-fg-default;");
+        return createContentDialog(title, label, DIALOG_WIDTH, Region.USE_COMPUTED_SIZE, buttonTypes).showAndWait();
     }
 
     public static ContentDialog createContentDialog(String title, Node content, ButtonType... buttonTypes) {
-        return createContentDialog(title, content, DIALOG_WIDTH, 120, buttonTypes);
+        return createContentDialog(title, content, DIALOG_WIDTH, Region.USE_COMPUTED_SIZE, buttonTypes);
     }
 
     public static ContentDialog createContentDialog(String title, Node content, double width, double height, ButtonType... buttonTypes) {
+        boolean autoHeight = height <= 0 || height == Region.USE_COMPUTED_SIZE;
         Stage stage = new Stage(StageStyle.UNDECORATED);
         stage.setTitle(title == null ? "" : title);
         stage.initModality(Modality.APPLICATION_MODAL);
         stage.setResizable(false);
+
         Window owner = AppState.getWindow();
         if (owner != null) {
             stage.initOwner(owner);
@@ -121,22 +128,38 @@ public final class AlertUtil {
 
         VBox body = new VBox(content, buttonBar);
         body.setPadding(CONTENT_PADDING);
-        body.setStyle(BODY_STYLE);
+        body.setStyle(ALERT_BODY_STYLE);
+        body.setFillWidth(true);
         VBox.setVgrow(content, Priority.ALWAYS);
+        prepareAutoSizeContent(content, width);
 
         CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.create(
                 stage,
                 stage.titleProperty(),
                 body,
                 width,
-                height,
+                autoHeight ? DIALOG_MIN_HEIGHT : height,
                 null,
                 false,
                 false,
                 false
         );
+
         frame.root.setMinWidth(width);
-        frame.root.setPadding(new Insets(1));
+        frame.root.setStyle(
+                "-fx-background-color: -color-fg-default, -color-bg-default;" +
+                "-fx-background-insets: 0, 1;" +
+                "-fx-padding: 1;"
+        );
+        if (autoHeight) {
+            body.setMinHeight(Region.USE_PREF_SIZE);
+            body.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            body.setMaxHeight(Region.USE_PREF_SIZE);
+            frame.root.setMinHeight(Region.USE_PREF_SIZE);
+            frame.root.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            frame.root.setMaxHeight(Region.USE_PREF_SIZE);
+        }
+
         frame.titleBar.setStyle(ALERT_TITLE_STYLE);
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButtonType != null ? cancelButtonType : defaultButtonType);
@@ -154,11 +177,16 @@ public final class AlertUtil {
 
         stage.setScene(frame.scene);
         stage.setOnShown(event -> {
+            if (autoHeight) {
+                resizeStageToContent(stage, frame, body);
+            }
+            centerStageToOwner(stage);
             Button defaultButton = buttonMap.get(defaultButtonType);
             if (defaultButton != null) {
                 defaultButton.requestFocus();
             }
         });
+
         return new ContentDialog(stage, frame, resultRef, buttonMap, defaultButtonType, cancelButtonType);
     }
 
@@ -178,6 +206,70 @@ public final class AlertUtil {
             }
         }
         return null;
+    }
+
+    private static void prepareAutoSizeContent(Node content, double width) {
+        if (content instanceof Label label) {
+            double textWidth = getTextContentWidth(width);
+            label.setWrapText(true);
+            label.setPrefWidth(textWidth);
+            label.setMaxWidth(textWidth);
+            label.setMinHeight(Region.USE_PREF_SIZE);
+            label.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            label.setMaxHeight(Region.USE_PREF_SIZE);
+            return;
+        }
+
+        if (content instanceof Region region) {
+            double contentWidth = getRegionContentWidth(width);
+            region.setMinHeight(Region.USE_PREF_SIZE);
+            region.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            region.setMaxHeight(Double.MAX_VALUE);
+            region.setPrefWidth(contentWidth);
+            region.setMaxWidth(contentWidth);
+        }
+    }
+
+    private static void resizeStageToContent(Stage stage, CustomWindowFrameUtil.Frame frame, VBox body) {
+        Platform.runLater(() -> {
+            double rootWidth = Math.max(DIALOG_WIDTH, stage.getWidth());
+            double innerWidth = Math.max(120, rootWidth - 2);
+            double bodyWidth = Math.max(120, innerWidth);
+
+            body.setPrefWidth(bodyWidth);
+            body.setMaxWidth(bodyWidth);
+            body.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            body.applyCss();
+            body.layout();
+
+            double bodyHeight = Math.ceil(body.prefHeight(bodyWidth));
+            double titleHeight = Math.ceil(frame.titleBar.prefHeight(bodyWidth));
+            double adjustedHeight = Math.max(DIALOG_MIN_HEIGHT, titleHeight + bodyHeight + 2);
+
+            frame.root.setMinHeight(adjustedHeight);
+            frame.root.setPrefHeight(adjustedHeight);
+            stage.setHeight(adjustedHeight);
+            centerStageToOwner(stage);
+        });
+    }
+
+    private static void centerStageToOwner(Stage stage) {
+        Window owner = stage.getOwner();
+        if (owner == null || !owner.isShowing()) {
+            return;
+        }
+        double x = owner.getX() + (owner.getWidth() - stage.getWidth()) / 2;
+        double y = owner.getY() + (owner.getHeight() - stage.getHeight()) / 2;
+        stage.setX(x);
+        stage.setY(y);
+    }
+
+    private static double getTextContentWidth(double width) {
+        return Math.max(120, width - CONTENT_LEFT - CONTENT_RIGHT - 2);
+    }
+
+    private static double getRegionContentWidth(double width) {
+        return Math.max(120, width - CONTENT_LEFT - CONTENT_RIGHT);
     }
 
     public static final class ContentDialog {

@@ -33,6 +33,9 @@ import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -608,16 +611,18 @@ public class CreateConnectController {
         tableView.getItems().clear();
         tableView.getItems().addAll(datalist);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        HBox hbox = new HBox();
-        hbox.setId("modifyProps");
-        hbox.setAlignment(Pos.CENTER_LEFT);
-        hbox.getChildren().add(tableView);
+        VBox contentBox = new VBox();
+        contentBox.setId("modifyProps");
+        contentBox.setAlignment(Pos.CENTER_LEFT);
+        contentBox.getChildren().add(tableView);
+        VBox.setVgrow(tableView, Priority.ALWAYS);
+        tableView.setMaxHeight(Double.MAX_VALUE);
 
         ButtonType buttonTypeOk = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         ButtonType result = AlertUtil.createContentDialog(
                 I18n.t("createconnect.dialog.edit_props.title"),
-                hbox,
+                contentBox,
                 420,
                 600,
                 buttonTypeOk,
@@ -642,9 +647,9 @@ public class CreateConnectController {
     //编辑组信息
     public void modifyGroupProps(){
     
-        HBox hbox = new HBox();
-        hbox.setId("modifyProps");
-        hbox.setAlignment(Pos.CENTER_LEFT);
+        VBox contentBox = new VBox();
+        contentBox.setId("modifyProps");
+        contentBox.setAlignment(Pos.CENTER_LEFT);
         Path file = Paths.get("extlib/GBase 8S/sqlhosts");
         String content="";
         String defaultContent="db_group\tgroup\t-\t-\ngbase01\tonsoctcp\t192.168.1.1\t9088\tg=db_group\ngbase02\tonsoctcp\t192.168.1.2\t9088\tg=db_group";
@@ -661,9 +666,11 @@ public class CreateConnectController {
         }
         CustomInfoCodeArea codeArea = new CustomInfoCodeArea();
         VirtualizedScrollPane<CustomInfoCodeArea> virtualizedScrollPane = new VirtualizedScrollPane<>(codeArea);
-        hbox.getChildren().add(virtualizedScrollPane);
+        contentBox.getChildren().add(virtualizedScrollPane);
+        VBox.setVgrow(virtualizedScrollPane, Priority.ALWAYS);
+        virtualizedScrollPane.setMaxHeight(Double.MAX_VALUE);
         codeArea.setPrefWidth(400);
-        codeArea.setPrefHeight(100);
+        codeArea.setPrefHeight(Region.USE_COMPUTED_SIZE);
         codeArea.setEditable(true);
         codeArea.replaceText(content);
 
@@ -671,7 +678,7 @@ public class CreateConnectController {
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         ButtonType result = AlertUtil.createContentDialog(
                 I18n.t("createconnect.dialog.edit_group.title"),
-                hbox,
+                contentBox,
                 460,
                 240,
                 buttonTypeOk,

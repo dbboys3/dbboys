@@ -159,7 +159,7 @@ public final class CustomWindowFrameUtil {
         String borderWidth = (!showMinButton && !showMaxButton) ? "0.5" : "0";
         root.setStyle((popupStyle ? POPUP_ROOT_STYLE : ROOT_STYLE) +
                 "-fx-border-color: " + BORDER_COLOR + ";" +
-                "-fx-border-width: " + borderWidth + ";-fx-padding: 0;");
+                "-fx-border-width: " + borderWidth + ";");
         root.setPrefSize(width, height);
         root.setMinSize(320, 180);
 
