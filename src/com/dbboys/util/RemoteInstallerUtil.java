@@ -231,7 +231,7 @@ public class RemoteInstallerUtil {
         stopButton.getStyleClass().add("small");
         backgroundHBox = new HBox(imageHBox);
         backgroundHBox.setAlignment(Pos.CENTER);
-        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.1);-fx-background-radius: 2;");
+        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);-fx-background-radius: 2;");
         backgroundHBox.setVisible(false);
 
 
@@ -1854,6 +1854,15 @@ GBASEEOF
                         customInstallStepHbox12.iconLabel.setVisible(false);
                         customInstallStepHbox13.iconLabel.setVisible(false);
                         customInstallStepHbox14.iconLabel.setVisible(false);
+                        customInstallStepHbox6.checkBox.setDisable(false);
+                        customInstallStepHbox7.checkBox.setDisable(false);
+                        customInstallStepHbox8.checkBox.setDisable(false);
+                        customInstallStepHbox9.checkBox.setDisable(false);
+                        customInstallStepHbox10.checkBox.setDisable(false);
+                        customInstallStepHbox11.checkBox.setDisable(false);
+                        customInstallStepHbox12.checkBox.setDisable(false);
+                        customInstallStepHbox13.checkBox.setDisable(false);
+                        customInstallStepHbox14.checkBox.setDisable(false);
 
                     });
                     mainDialog.setOnCloseRequest(event1 -> {
