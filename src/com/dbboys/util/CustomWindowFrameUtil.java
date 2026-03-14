@@ -327,6 +327,9 @@ public final class CustomWindowFrameUtil {
         }
         state.maximized = !state.maximized;
         stage.getProperties().put(MAXIMIZED_KEY, state.maximized);
+        if (stage.getScene() != null) {
+            stage.getScene().setCursor(Cursor.DEFAULT);
+        }
     }
 
     /** Maximizes the stage using the frame's state and button; call after show if you want to start maximized. */
@@ -345,6 +348,7 @@ public final class CustomWindowFrameUtil {
         frame.maxButton.setGraphic(IconFactory.group(IconPaths.WINDOW_RESTORE, 0.4));
         frame.state.maximized = true;
         stage.getProperties().put(MAXIMIZED_KEY, true);
+        stage.getScene().setCursor(Cursor.DEFAULT);
     }
 
     private static Rectangle2D getVisualBounds(Stage stage) {
@@ -419,20 +423,27 @@ public final class CustomWindowFrameUtil {
         Region handle = new Region();
         handle.setManaged(false);
         handle.setStyle("-fx-background-color: transparent;");
-        handle.setCursor(direction.cursor);
+        handle.setCursor(Cursor.DEFAULT);
         final DragResizeState[] dragState = new DragResizeState[]{new DragResizeState()};
         handle.addEventHandler(MouseEvent.MOUSE_ENTERED, event -> {
             if (isResizable(stage)) {
+                handle.setCursor(direction.cursor);
                 scene.setCursor(direction.cursor);
+            } else {
+                handle.setCursor(Cursor.DEFAULT);
+                scene.setCursor(Cursor.DEFAULT);
             }
         });
         handle.addEventHandler(MouseEvent.MOUSE_EXITED, event -> {
+            handle.setCursor(Cursor.DEFAULT);
             if (!event.isPrimaryButtonDown()) {
                 scene.setCursor(Cursor.DEFAULT);
             }
         });
         handle.addEventHandler(MouseEvent.MOUSE_PRESSED, event -> {
             if (!isResizable(stage)) {
+                handle.setCursor(Cursor.DEFAULT);
+                scene.setCursor(Cursor.DEFAULT);
                 return;
             }
             dragState[0] = new DragResizeState(
@@ -443,20 +454,26 @@ public final class CustomWindowFrameUtil {
                     event.getScreenX(),
                     event.getScreenY()
             );
+            handle.setCursor(direction.cursor);
             scene.setCursor(direction.cursor);
             event.consume();
         });
         handle.addEventHandler(MouseEvent.MOUSE_DRAGGED, event -> {
             if (!isResizable(stage)) {
+                handle.setCursor(Cursor.DEFAULT);
                 scene.setCursor(Cursor.DEFAULT);
                 return;
             }
             applyResize(stage, direction, dragState[0], event.getScreenX(), event.getScreenY());
+            handle.setCursor(direction.cursor);
             scene.setCursor(direction.cursor);
             event.consume();
         });
         handle.addEventHandler(MouseEvent.MOUSE_RELEASED, event -> {
+            handle.setCursor(isResizable(stage) ? direction.cursor : Cursor.DEFAULT);
             if (!isPointerOnResizeHandle((StackPane) scene.getRoot(), event.getSceneX(), event.getSceneY())) {
+                scene.setCursor(Cursor.DEFAULT);
+            } else if (!isResizable(stage)) {
                 scene.setCursor(Cursor.DEFAULT);
             } else {
                 scene.setCursor(direction.cursor);
