@@ -209,10 +209,15 @@ public final class CustomWindowFrameUtil {
         StackPane root = new StackPane(pane);
         root.setStyle(mainWindow ? ROOT_STYLE : POPUP_FRAME_STYLE);
         root.setPrefSize(width, height);
-        root.setMinWidth(320);
+        if (!mainWindow) {
+            root.setMinSize(200, 100);
+        }
 
         Scene scene = new Scene(root, width, height);
-        stage.setMinWidth(Math.max(320, width));
+        if (!mainWindow) {
+            stage.setMinWidth(Math.max(200, width));
+            stage.setMinHeight(Math.max(100, height));
+        }
         AppState.applyAppStylesheet(scene);
         if (enableResize) {
             installResizeHandles(stage, root, scene);
