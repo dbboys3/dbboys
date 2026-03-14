@@ -32,21 +32,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PopupWindowUtil {
-    private static final String PRIMARY_BUTTON_STYLE =
-            "-fx-background-color: #2d6f9f;" +
-            "-fx-text-fill: white;" +
-            "-fx-border-color: #2d6f9f;" +
-            "-fx-background-radius: 3;" +
-            "-fx-border-radius: 3;" +
-            "-fx-padding: 6 18 6 18;";
-    private static final String SECONDARY_BUTTON_STYLE =
-            "-fx-background-color: #2b2b2b;" +
-            "-fx-text-fill: #e6e6e6;" +
-            "-fx-border-color: #575757;" +
-            "-fx-background-radius: 3;" +
-            "-fx-border-radius: 3;" +
-            "-fx-padding: 6 18 6 18;";
-
     public static StackPane noticePane = new StackPane();
     @Deprecated
     public static StackPane notice_pane = noticePane;
@@ -383,8 +368,8 @@ public class PopupWindowUtil {
     ) {
         CustomInfoStackPane sqlPreviewPane = new CustomInfoStackPane(new CustomInfoCodeArea());
         sqlPreviewPane.showNoticeInMain = false;
-        sqlPreviewPane.setPrefWidth(920);
-        sqlPreviewPane.setPrefHeight(520);
+        sqlPreviewPane.setPrefWidth(600);
+        sqlPreviewPane.setPrefHeight(600);
         sqlContent = SqlParserUtil.formatSql(sqlContent);
         sqlPreviewPane.codeArea.replaceText(sqlContent == null ? "" : sqlContent);
         sqlPreviewPane.codeArea.moveTo(0);
@@ -405,8 +390,8 @@ public class PopupWindowUtil {
         ButtonType clicked = showCustomDialog(
                 I18n.t(titleKey, titleFallback),
                 contentBox,
-                960,
-                620,
+                600,
+                600,
                 executeButton,
                 cancelButton
         );
@@ -492,74 +477,8 @@ public class PopupWindowUtil {
     }
 
     private static ButtonType showCustomDialog(String title, javafx.scene.Node content, double width, double height, ButtonType... buttonTypes) {
-        Stage stage = new Stage();
-        stage.setTitle(title == null ? "" : title);
-        stage.setResizable(true);
-
-        AtomicReference<ButtonType> resultRef = new AtomicReference<>();
-        HBox buttonBar = new HBox(10);
-        buttonBar.setStyle("-fx-alignment: center-right; -fx-padding: 12 0 0 0;");
-        ButtonType defaultButton = findDefaultButton(buttonTypes);
-        ButtonType cancelButton = findCancelButton(buttonTypes);
-        for (ButtonType buttonType : buttonTypes) {
-            Button button = new Button(buttonType.getText());
-            button.setFocusTraversable(false);
-            button.setDefaultButton(buttonType == defaultButton);
-            button.setCancelButton(buttonType == cancelButton);
-            button.setStyle(buttonType == cancelButton ? SECONDARY_BUTTON_STYLE : PRIMARY_BUTTON_STYLE);
-            button.setOnAction(event -> {
-                resultRef.set(buttonType);
-                stage.close();
-            });
-            buttonBar.getChildren().add(button);
-        }
-
-        VBox body = new VBox(content, buttonBar);
-        body.setStyle("-fx-background-color: #151a1f; -fx-padding: 16; -fx-spacing: 0;");
-        VBox.setVgrow(content, Priority.ALWAYS);
-
-        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.createModalPopup(
-                stage,
-                stage.titleProperty(),
-                body,
-                width,
-                height,
-                true
-        );
-        frame.closeButton.setOnAction(event -> {
-            resultRef.set(cancelButton != null ? cancelButton : defaultButton);
-            stage.close();
-        });
-        frame.scene.setOnKeyPressed(event -> {
-            if (event.getCode() == KeyCode.ESCAPE) {
-                resultRef.set(cancelButton != null ? cancelButton : defaultButton);
-                stage.close();
-            } else if (event.getCode() == KeyCode.ENTER) {
-                resultRef.set(defaultButton);
-                stage.close();
-            }
-        });
-
-        stage.setScene(frame.scene);
-        stage.showAndWait();
-        return resultRef.get();
-    }
-
-    private static ButtonType findDefaultButton(ButtonType[] buttonTypes) {
-        for (ButtonType buttonType : buttonTypes) {
-            if (buttonType.getButtonData() == ButtonBar.ButtonData.OK_DONE) {
-                return buttonType;
-            }
-        }
-        return buttonTypes.length > 0 ? buttonTypes[0] : null;
-    }
-
-    private static ButtonType findCancelButton(ButtonType[] buttonTypes) {
-        for (ButtonType buttonType : buttonTypes) {
-            if (buttonType.getButtonData().isCancelButton()) {
-                return buttonType;
-            }
-        }
-        return null;
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(title, content, width, height, buttonTypes);
+        dialog.getStage().setResizable(true);
+        return dialog.showAndWait();
     }
 }
