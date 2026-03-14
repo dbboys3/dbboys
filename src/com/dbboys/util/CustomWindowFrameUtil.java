@@ -8,10 +8,12 @@ import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -156,6 +158,9 @@ public final class CustomWindowFrameUtil {
                                boolean showMinButton,
                                boolean showMaxButton) {
         boolean mainWindow = isMainWindowFrame(titleBarLeft, showMinButton, showMaxButton);
+        if (!mainWindow) {
+            applyPopupChoiceBoxStyle(content);
+        }
         Region dragRegion = new Region();
         HBox.setHgrow(dragRegion, Priority.ALWAYS);
 
@@ -204,11 +209,10 @@ public final class CustomWindowFrameUtil {
         StackPane root = new StackPane(pane);
         root.setStyle(mainWindow ? ROOT_STYLE : POPUP_FRAME_STYLE);
         root.setPrefSize(width, height);
-        root.setMinSize(320, 180);
+        root.setMinWidth(320);
 
         Scene scene = new Scene(root, width, height);
         stage.setMinWidth(Math.max(320, width));
-        stage.setMinHeight(Math.max(180, height));
         AppState.applyAppStylesheet(scene);
         if (enableResize) {
             installResizeHandles(stage, root, scene);
@@ -230,6 +234,18 @@ public final class CustomWindowFrameUtil {
             return "";
         }
         return DIALOG_TITLE_BORDER_STYLE;
+    }
+
+    private static void applyPopupChoiceBoxStyle(Node node) {
+        if (node instanceof ChoiceBox<?> choiceBox
+                && !choiceBox.getStyleClass().contains("choice-box-with-border")) {
+            choiceBox.getStyleClass().add("choice-box-with-border");
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                applyPopupChoiceBoxStyle(child);
+            }
+        }
     }
 
     private static Button createWindowButton(String iconPath, double scale) {
