@@ -12,6 +12,7 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.binding.StringBinding;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -379,8 +380,6 @@ public class PopupWindowUtil {
         sqlPreviewPane.codeArea.requestFollowCaret();
         sqlPreviewPane.codeArea.setStyleSpans(0, KeywordsHighlightUtil.applyHighlighting(sqlPreviewPane.codeArea.getText()));
 
-        VBox contentBox = new VBox(sqlPreviewPane);
-
         ButtonType executeButton = new ButtonType(
                 I18n.t(executeKey, executeFallback),
                 ButtonBar.ButtonData.OK_DONE
@@ -390,16 +389,57 @@ public class PopupWindowUtil {
                 ButtonBar.ButtonData.CANCEL_CLOSE
         );
 
-        ButtonType clicked = showCustomDialog(
-                I18n.t(titleKey, titleFallback),
+        AtomicReference<ButtonType> resultRef = new AtomicReference<>(cancelButton);
+
+        Button executeBtn = new Button(executeButton.getText());
+        executeBtn.setDefaultButton(true);
+        executeBtn.setOnAction(event -> {
+            resultRef.set(executeButton);
+            sqlPreviewPane.getScene().getWindow().hide();
+        });
+
+        Button cancelBtn = new Button(cancelButton.getText());
+        cancelBtn.setCancelButton(true);
+        cancelBtn.setOnAction(event -> {
+            resultRef.set(cancelButton);
+            sqlPreviewPane.getScene().getWindow().hide();
+        });
+
+        HBox buttonBar = new HBox(10, executeBtn, cancelBtn);
+        buttonBar.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox contentBox = new VBox(16, sqlPreviewPane, buttonBar);
+        contentBox.setPadding(new Insets(16, 20, 18, 20));
+        contentBox.setStyle("-fx-background-color: -color-bg-default;");
+        contentBox.setFillWidth(true);
+        VBox.setVgrow(sqlPreviewPane, Priority.ALWAYS);
+
+        Stage stage = new Stage();
+        stage.setTitle(I18n.t(titleKey, titleFallback));
+        CustomWindowFrameUtil.Frame frame = CustomWindowFrameUtil.createModalPopup(
+                stage,
+                stage.titleProperty(),
                 contentBox,
                 600,
                 600,
-                executeButton,
-                cancelButton
+                true
         );
+        frame.closeButton.setOnAction(event -> {
+            resultRef.set(cancelButton);
+            stage.close();
+        });
+        frame.scene.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ESCAPE) {
+                resultRef.set(cancelButton);
+                stage.close();
+            } else if (event.getCode() == KeyCode.ENTER) {
+                resultRef.set(executeButton);
+                stage.close();
+            }
+        });
+        stage.showAndWait();
         sqlPreviewPane.dispose();
-        return clicked == executeButton;
+        return resultRef.get() == executeButton;
     }
 
     public static List<Object> openParamWindow(int paramCount) {
@@ -481,7 +521,6 @@ public class PopupWindowUtil {
 
     private static ButtonType showCustomDialog(String title, javafx.scene.Node content, double width, double height, ButtonType... buttonTypes) {
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(title, content, width, height, buttonTypes);
-        dialog.getStage().setResizable(true);
         return dialog.showAndWait();
     }
 }
