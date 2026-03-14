@@ -3,6 +3,7 @@ package com.dbboys.ui;
 import javafx.scene.Group;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 
@@ -63,6 +64,7 @@ public final class IconFactory {
         return new Group(create(path, scale, scale));
     }
 
+
     public static SVGPath createFixedColor(String path, double scaleX, double scaleY, Color color) {
         SVGPath icon = create(path, scaleX, scaleY, color);
         icon.setStyle("-fx-fill: " + toCssColor(color) + ";");
@@ -80,6 +82,7 @@ public final class IconFactory {
     public static Group groupFixedColor(String path, double scale, Color color) {
         return new Group(createFixedColor(path, scale, scale, color));
     }
+
 
     public static void applyDefaultStyle(SVGPath icon) {
         icon.setStyle(DEFAULT_ICON_STYLE);

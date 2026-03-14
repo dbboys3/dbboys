@@ -79,7 +79,6 @@ public class CustomTableInfoTab extends CustomTab {
     private static final String[] COLUMN_I18N_FALLBACKS = {
             "列名", "列类型", "长度", "精度", "非空", "主键", "自增", "默认值", "注释"
     };
-    private static final Insets COLS_BUTTON_BOX_STACK_MARGIN = new Insets(0, 38, 0, 0);
     private TreeItem<TreeData> treeItem;
     private Connect connect;
     // 为每个需要懒加载的 Tab 定义「已加载」标记
@@ -389,6 +388,9 @@ public class CustomTableInfoTab extends CustomTab {
         // 刷新按钮
         refreshButton = new Button();
         refreshButton.setGraphic(IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.7));
+        refreshButton.setPrefHeight(25);
+        refreshButton.setMinHeight(25);
+        refreshButton.setMaxHeight(25);
         refreshButton.setFocusTraversable(false);
         Tooltip refreshTooltip = new Tooltip();
         refreshTooltip.textProperty().bind(I18n.bind("tableinfo.button.refresh", "刷新"));
@@ -400,7 +402,6 @@ public class CustomTableInfoTab extends CustomTab {
         
         // 新增列按钮
         addColumnButton = new Button();
-        addColumnButton.getStyleClass().add("codearea-camera-button");
         addColumnButton.setGraphic(IconFactory.group(IconPaths.TABLEINFO_ADD_COLUMN, 0.65));
         addColumnButton.setFocusTraversable(false);
         Tooltip addColumnTooltip = new Tooltip();
@@ -412,7 +413,6 @@ public class CustomTableInfoTab extends CustomTab {
         
         // 删除列按钮
         deleteColumnButton = new Button();
-        deleteColumnButton.getStyleClass().add("codearea-camera-button");
         deleteColumnButton.setGraphic(IconFactory.group(IconPaths.TABLEINFO_DELETE_COLUMN, 0.7, IconFactory.dangerColor()));
         deleteColumnButton.setFocusTraversable(false);
         Tooltip deleteColumnTooltip = new Tooltip();
@@ -424,7 +424,6 @@ public class CustomTableInfoTab extends CustomTab {
 
         // 删除列按钮
         saveColumnButton = new Button();
-        saveColumnButton.getStyleClass().add("codearea-camera-button");
         saveColumnButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
         saveColumnButton.setFocusTraversable(false);
         Tooltip saveColumnTooltip = new Tooltip();
@@ -779,7 +778,7 @@ public class CustomTableInfoTab extends CustomTab {
 
             colsStackPane = new StackPane(colsTableView, buttonBox);
             StackPane.setAlignment(buttonBox, Pos.BOTTOM_RIGHT);
-            StackPane.setMargin(buttonBox, new Insets(0, 83, -5, 0));
+            StackPane.setMargin(buttonBox, new Insets(0, 81, -4, 0));
             colsStackPane.setStyle("-fx-background-color: -color-bg-default;");
 
             VBox colsRoot = new VBox(tableInfoBox, colsStackPane);
