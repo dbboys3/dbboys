@@ -151,7 +151,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         xAxis.setTickLabelFormatter(new NumberAxis.DefaultFormatter(xAxis) {
             @Override
             public String toString(Number n) {
-                return String.format("%.1f", n.doubleValue());
+                return formatAxisLabel(n.doubleValue());
             }
         });
     }
@@ -601,7 +601,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         x.setTickLabelFormatter(new NumberAxis.DefaultFormatter(x) {
             @Override
             public String toString(Number n) {
-                return String.format("%.1f", n);
+                return formatAxisLabel(n.doubleValue());
             }
         });
         return x;
@@ -638,6 +638,13 @@ public class CustomSpaceChart extends BarChart<Number, String> {
 
     private static double niceTick(double niceMax) {
         return niceMax / 10.0;
+    }
+
+    private static String formatAxisLabel(double value) {
+        if (Math.abs(value) < 1) {
+            return String.format("%.2f", value);
+        }
+        return String.format("%.1f", value);
     }
     public Node createLegend() {
         HBox legend = new HBox(6);

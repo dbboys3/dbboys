@@ -79,6 +79,7 @@ public class CustomTableInfoTab extends CustomTab {
     private static final String[] COLUMN_I18N_FALLBACKS = {
             "列名", "列类型", "长度", "精度", "非空", "主键", "自增", "默认值", "注释"
     };
+    private static final Insets COLS_BUTTON_BOX_STACK_MARGIN = new Insets(0, 38, 0, 0);
     private TreeItem<TreeData> treeItem;
     private Connect connect;
     // 为每个需要懒加载的 Tab 定义「已加载」标记
@@ -387,7 +388,6 @@ public class CustomTableInfoTab extends CustomTab {
 
         // 刷新按钮
         refreshButton = new Button();
-        refreshButton.getStyleClass().add("codearea-camera-button");
         refreshButton.setGraphic(IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.7));
         refreshButton.setFocusTraversable(false);
         Tooltip refreshTooltip = new Tooltip();
@@ -685,8 +685,12 @@ public class CustomTableInfoTab extends CustomTab {
     
 
     private void loadColsTabContent(CustomTab checkTab) {
+        final ObservableList<ObservableList<String>> data;
+        final String finalTableName;
+        final String finalTableComment;
+
         if (createMode) {
-            ObservableList<ObservableList<String>> data = FXCollections.observableArrayList();
+            data = FXCollections.observableArrayList();
             ObservableList<String> defaultRow = FXCollections.observableArrayList();
             defaultRow.add("column1");
             defaultRow.add("VARCHAR");
@@ -698,118 +702,71 @@ public class CustomTableInfoTab extends CustomTab {
             defaultRow.add("");
             defaultRow.add("");
             data.add(defaultRow);
-            String finalTableName = tableName;
-            Platform.runLater(() -> {
-                colsTableView.getItems().clear();
-                colsTableView.getItems().setAll(data);
-                rebuildChangeBaselineFromCurrentTable();
-                tableNameField.setText(finalTableName);
-                tableCommentField.setText("");
-                originalTableName = "";
-                originalTableComment = "";
-                rowOriginalNameMap.put(defaultRow, null);
-                rowIsNewMap.put(defaultRow, Boolean.TRUE);
-
-                colsTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-                colsTableView.getSelectionModel().setCellSelectionEnabled(true);
-
-                HBox buttonBox = new HBox();
-                buttonBox.getChildren().addAll(addColumnButton, deleteColumnButton,saveColumnButton);
-
-                Label tableNameLabel = new Label();
-                tableNameLabel.textProperty().bind(I18n.bind("tableinfo.table_name", "表名"));
-                Label tableCommentLabel = new Label();
-                tableCommentLabel.textProperty().bind(I18n.bind("tableinfo.table_comment", "表描述"));
-                HBox tableInfoBox = new HBox(8, tableNameLabel, tableNameField, tableCommentLabel, tableCommentField);
-                tableInfoBox.setStyle("-fx-background-color:-color-bg-default;");
-                tableInfoBox.setAlignment(Pos.CENTER_LEFT);
-                tableInfoBox.setPadding(new Insets(8, 10, 6, 10));
-
-                buttonBox.setMaxHeight(15);
-                buttonBox.setMaxWidth(50);
-                colsStackPane = new StackPane(colsTableView, buttonBox);
-                StackPane.setAlignment(buttonBox, Pos.BOTTOM_RIGHT);
-                StackPane.setMargin(buttonBox, new Insets(0, 38, -1, 0));
-                colsStackPane.setStyle("-fx-background-color: -color-bg-default;");
-
-                VBox colsRoot = new VBox(tableInfoBox, colsStackPane);
-                VBox.setVgrow(colsStackPane, javafx.scene.layout.Priority.ALWAYS);
-                colsTab.setContent(colsRoot);
-            });
-            return;
-        }
-
-        // 获取列信息
-        ArrayList<ColumnsInfo> colInfo = new ArrayList<>();
-        String tableComment = "";
+            finalTableName = tableName;
+            finalTableComment = "";
+        } else {
+            ArrayList<ColumnsInfo> colInfo = new ArrayList<>();
+            String tableComment = "";
 
 
             try {
-                colInfo =  TreeViewUtil.tableService.getColumns(connect,database, tableName)
-                ;
-                tableComment = TreeViewUtil.tableService.getTableComment(
-                        connect,
-                        database,
-                        tableName
-                );
+                colInfo = TreeViewUtil.tableService.getColumns(connect, database, tableName);
+                tableComment = TreeViewUtil.tableService.getTableComment(connect, database, tableName);
             } catch (Exception e) {
-                // TODO Auto-generated catch block
                 AppErrorHandler.handle(e);
             }
-            
-
-        
-        // 准备表格数据
-        ObservableList<ObservableList<String>> data = FXCollections.observableArrayList();
-        
-        for (ColumnsInfo column : colInfo) {
-            ObservableList<String> row = FXCollections.observableArrayList();
-            //row.add(String.valueOf(column.getColNo()));
-            row.add(column.getColName());
-            String colType = column.getColType();
-            row.add(colType);
-            String colLength = String.valueOf(column.getTypeP());
-            if (isTypeWithoutLengthScale(colType)) {
-                colLength = "";
+            data = FXCollections.observableArrayList();
+            for (ColumnsInfo column : colInfo) {
+                ObservableList<String> row = FXCollections.observableArrayList();
+                row.add(column.getColName());
+                String colType = column.getColType();
+                row.add(colType);
+                String colLength = String.valueOf(column.getTypeP());
+                if (isTypeWithoutLengthScale(colType)) colLength = "";
+                row.add(colLength);
+                String colScale = String.valueOf(column.getTypeS()).equals("0") ? "" : String.valueOf(column.getTypeS());
+                if (isTypeWithoutLengthScale(colType)) colScale = "";
+                row.add(colScale);
+                row.add(column.isIsNullable() ? "否" : "是");
+                row.add(column.isIsPK() ? "是" : "否");
+                row.add(column.isIsAutoincrement() ? "是" : "否");
+                row.add(formatDefaultValueForDisplay(column));
+                row.add(column.getColComm() != null ? column.getColComm() : "");
+                data.add(row);
             }
-            row.add(colLength);
-            //row.add(String.valueOf(column.getTypeP()));
-            String colScale = String.valueOf(column.getTypeS()).equals("0") ? "" : String.valueOf(column.getTypeS());
-            if (isTypeWithoutLengthScale(colType)) {
-                colScale = "";
-            }
-            row.add(colScale);
-            row.add(column.isIsNullable() ? "否" : "是");
-            row.add(column.isIsPK() ? "是" : "否");
-            //row.add(column.getColDefType() != null ? column.getColDefType() : "");
-            row.add(column.isIsAutoincrement() ? "是" : "否");
-              row.add(formatDefaultValueForDisplay(column));
-              row.add(column.getColComm() != null ? column.getColComm() : "");
-              data.add(row);
-            rowOriginalNameMap.put(row, column.getColName());
-            rowIsNewMap.put(row, Boolean.FALSE);
+            finalTableName = (originalTableName != null && !originalTableName.trim().isEmpty())
+                    ? originalTableName.trim() : tableName;
+            finalTableComment = tableComment == null ? "" : tableComment;
         }
 
-        String finalTableComment = tableComment;
-        String finalTableName = (originalTableName != null && !originalTableName.trim().isEmpty())
-                ? originalTableName.trim()
-                : tableName;
         Platform.runLater(() -> {
             colsTableView.getItems().clear();
             colsTableView.getItems().setAll(data);
             rebuildChangeBaselineFromCurrentTable();
             tableNameField.setText(finalTableName);
-            tableCommentField.setText(finalTableComment == null ? "" : finalTableComment);
-            originalTableName = normalizeTableMetaValue(tableNameField.getText());
-            originalTableComment = normalizeTableMetaValue(tableCommentField.getText());
-            
-            // 启用单元格多选功能
+            tableCommentField.setText(finalTableComment);
+            if (createMode) {
+                ObservableList<String> firstRow = data.get(0);
+                rowOriginalNameMap.put(firstRow, null);
+                rowIsNewMap.put(firstRow, Boolean.TRUE);
+                originalTableName = "";
+                originalTableComment = "";
+            } else {
+                originalTableName = normalizeTableMetaValue(tableNameField.getText());
+                originalTableComment = normalizeTableMetaValue(tableCommentField.getText());
+            }
+
             colsTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             colsTableView.getSelectionModel().setCellSelectionEnabled(true);
-            
-            // 创建按钮容器
+
             HBox buttonBox = new HBox();
-            buttonBox.getChildren().addAll(addColumnButton, deleteColumnButton,saveColumnButton);
+            buttonBox.getChildren().addAll(addColumnButton, deleteColumnButton, saveColumnButton);
+            buttonBox.setMinHeight(28);
+            buttonBox.setPrefHeight(28);
+            buttonBox.setMaxHeight(28);
+            buttonBox.setMinWidth(50);
+            buttonBox.setPrefWidth(50);
+            buttonBox.setMaxWidth(50);
 
             Label tableNameLabel = new Label();
             tableNameLabel.textProperty().bind(I18n.bind("tableinfo.table_name", "表名"));
@@ -819,19 +776,12 @@ public class CustomTableInfoTab extends CustomTab {
             tableInfoBox.setStyle("-fx-background-color: -color-bg-default;");
             tableInfoBox.setAlignment(Pos.CENTER_LEFT);
             tableInfoBox.setPadding(new Insets(8, 10, 6, 10));
- 
-            
-            // 创建StackPane，将表格和按钮放在不同层
-            buttonBox.setMaxHeight(15);
-            buttonBox.setMaxWidth(50);
-            //buttonBox.setStyle("-fx-background-color: red;");
+
             colsStackPane = new StackPane(colsTableView, buttonBox);
             StackPane.setAlignment(buttonBox, Pos.BOTTOM_RIGHT);
-            //buttonBox.setPadding(new Insets(5, 15, 5, 5));
-            StackPane.setMargin(buttonBox, new Insets(0, 38, -1, 0));
+            StackPane.setMargin(buttonBox, new Insets(0, 83, -5, 0));
             colsStackPane.setStyle("-fx-background-color: -color-bg-default;");
-            
-            // 显示表格和按钮
+
             VBox colsRoot = new VBox(tableInfoBox, colsStackPane);
             VBox.setVgrow(colsStackPane, javafx.scene.layout.Priority.ALWAYS);
             colsTab.setContent(colsRoot);
