@@ -395,22 +395,38 @@ public class MainController {
     private void initMenuActions() {
         newSqlFileMenuItem.setOnAction(event -> {
             TabpaneUtil.addCustomSqlTab(null);});
-
-        fixSubmenuAutoClose(menuSettings);
+        installSettingsMenuBehavior();
     }
 
-    private void fixSubmenuAutoClose(Menu parentMenu) {
-        for (MenuItem item : parentMenu.getItems()) {
-            if (item instanceof CustomShortcutMenuItem csmi && csmi.getContent() != null) {
-                csmi.getContent().addEventHandler(MouseEvent.MOUSE_ENTERED, event -> {
-                    for (MenuItem sibling : parentMenu.getItems()) {
-                        if (sibling instanceof Menu sub && sub.isShowing()) {
-                            sub.hide();
+    private void installSettingsMenuBehavior() {
+        menuSettings.setOnShowing(event -> {
+            ContextMenu parentPopup = menuSettingsLanguage.getParentPopup();
+            if (parentPopup == null || parentPopup.getProperties().containsKey("settingsMenuHoverFixInstalled")) {
+                return;
+            }
+            parentPopup.getProperties().put("settingsMenuHoverFixInstalled", Boolean.TRUE);
+            parentPopup.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+                if (newSkin == null) {
+                    return;
+                }
+                Node skinRoot = newSkin.getNode();
+                skinRoot.addEventFilter(MouseEvent.MOUSE_ENTERED_TARGET, mouseEvent -> {
+                    if (!menuSettingsLanguage.isShowing()) {
+                        return;
+                    }
+                    Node target = (Node) mouseEvent.getTarget();
+                    while (target != null && target != skinRoot) {
+                        if (target.getStyleClass().contains("menu-item")) {
+                            if (!target.getStyleClass().contains("menu")) {
+                                menuSettingsLanguage.hide();
+                            }
+                            return;
                         }
+                        target = target.getParent();
                     }
                 });
-            }
-        }
+            });
+        });
     }
 
     private void initI18nBindings() {
