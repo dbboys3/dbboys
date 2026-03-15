@@ -1319,7 +1319,7 @@ Text {
 }
 
 .tree-cell > .tree-disclosure-node:hover {
-  -fx-background-color:-color-base-7;
+  -fx-background-color:-color-base-5;
   -fx-background-radius: 1px;
 }
 
