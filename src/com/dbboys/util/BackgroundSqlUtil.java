@@ -47,7 +47,7 @@ public class BackgroundSqlUtil {
             setBackSqlCountLabelText(
                     I18n.t("backsql.status.running_count", "有%d个后台任务正在运行").formatted(backSqlTaskList.size())
             );
-            AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-text-fill: black");
+            AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-opacity:1");
             PopupWindowUtil.sqlTaskTableView.getItems().clear();
             PopupWindowUtil.sqlTaskTableView.getItems().addAll(new ArrayList<>(backSqlTaskList));
         });
@@ -97,7 +97,7 @@ public class BackgroundSqlUtil {
                         "backsql.status.none_running",
                         "没有正在运行的后台任务"
                 );
-                AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-text-fill: #888");
+                AppState.getStatusBackSqlCountLabel().setStyle("-fx-font-size: 7;-fx-opacity:0.5");
             } else {
                 setBackSqlCountLabelText(
                         I18n.t("backsql.status.running_count_short", "有%d个正在运行的后台任务").formatted(backSqlTaskList.size())

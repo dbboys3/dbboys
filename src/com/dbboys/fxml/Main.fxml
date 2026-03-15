@@ -174,7 +174,7 @@
                     <Tooltip/>
                 </tooltip>
             </Button>
-            <Label fx:id="statusBackSqlCountLabel" style="-fx-font-size: 7;-fx-text-fill: #888" translateY="-1">
+            <Label fx:id="statusBackSqlCountLabel" style="-fx-font-size: 7;-fx-opacity:0.5" translateY="0">
             </Label>
             <Button fx:id="statusBackSqlListButton" styleClass="small" focusTraversable="false">
                 <tooltip>
@@ -192,10 +192,10 @@
                                 <Tooltip/>
                             </tooltip>
                         </Button>
-                        <CustomLabelTextField text="www.dbboys.com" prefWidth="90" translateY="1"></CustomLabelTextField>
+                        <CustomLabelTextField text="www.dbboys.com" prefWidth="90"></CustomLabelTextField>
                     </HBox>
                 </StackPane>
-                <StackPane fx:id="downloadStackPane" style="-fx-background-color: #f5f5f5">
+                <StackPane fx:id="downloadStackPane" style="-fx-background-color: -color-bg-default">
                 </StackPane>
             </StackPane>
         </HBox>

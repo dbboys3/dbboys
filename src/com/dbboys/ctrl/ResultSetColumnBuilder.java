@@ -107,6 +107,7 @@ public class ResultSetColumnBuilder {
                     customInfoStackPane.codeAreaSnapshotButton.setVisible(false);
                     Button saveBtn = new Button();
                     saveBtn.textProperty().bind(I18n.bind("common.save", "保存"));
+                    saveBtn.getStyleClass().add("accent");
                     VBox root = new VBox();
                     if (ctrl.resultSetEditableEnabledLabel.isVisible()) {
                         saveBtn.setOnAction(e -> {

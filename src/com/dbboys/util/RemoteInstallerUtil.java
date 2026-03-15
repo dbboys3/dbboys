@@ -210,7 +210,7 @@ public class RemoteInstallerUtil {
         imageView.setFitWidth(12);
         imageView.setFitHeight(12);
         stopButton = new Button("");
-        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
+        stopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
         Tooltip stopTooltip = new Tooltip();
         stopTooltip.textProperty().bind(I18n.bind("remote.install.tooltip.stop", "停止当前任务"));
         stopButton.setTooltip(stopTooltip);
@@ -1926,21 +1926,21 @@ GBASEEOF
 
         Label ipLabel = new Label();
         ipLabel.textProperty().bind(I18n.bind("remote.install.field.host", "主机名/IP"));
-        ipLabel.setGraphic(IconFactory.create(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
+        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
         ipLabel.setAlignment(Pos.CENTER_LEFT);
         ipLabel.setContentDisplay(ContentDisplay.LEFT);
         ipLabel.setGraphicTextGap(6);
 
         Label portLabel = new Label();
         portLabel.textProperty().bind(I18n.bind("remote.install.field.port", "端口"));
-        portLabel.setGraphic(IconFactory.create(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45));
+        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45));
         portLabel.setAlignment(Pos.CENTER_LEFT);
         portLabel.setContentDisplay(ContentDisplay.LEFT);
         portLabel.setGraphicTextGap(6);
 
         Label passwdLabel = new Label();
         passwdLabel.textProperty().bind(I18n.bind("remote.install.field.root_password", "root密码"));
-        passwdLabel.setGraphic(IconFactory.create(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5));
+        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5));
         passwdLabel.setAlignment(Pos.CENTER_LEFT);
         passwdLabel.setContentDisplay(ContentDisplay.LEFT);
         passwdLabel.setGraphicTextGap(6);

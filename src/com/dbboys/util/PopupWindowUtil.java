@@ -62,7 +62,7 @@ public class PopupWindowUtil {
     private static TableColumn<ObservableList<String>, Object> sqlHistoryDatabaseTableColumn;
 
     //后台sql
-    public static TableView<BackgroundSqlTask> sqlTaskTableView = new TableView<>();
+    public static CustomResultsetTableView<BackgroundSqlTask> sqlTaskTableView = new CustomResultsetTableView<>();
     @Deprecated public static TableView<BackgroundSqlTask> sql_task_tableview = sqlTaskTableView;
     private static Stage backSqlPopupStage = new Stage();
     private static StackPane backSqlPopupStageStackPane = new StackPane(sqlTaskTableView);
@@ -182,30 +182,6 @@ public class PopupWindowUtil {
         backSqlPopupStageScene = backSqlFrame.scene;
         backSqlPopupStageStackPane.getChildren().add(noticePane);
         backSqlPopupStage.titleProperty().bind(backSqlTitleBinding);
-        sqlTaskRowNumTableColumn = new TableColumn<>("");
-        sqlTaskRowNumTableColumn.setCellFactory(new Callback<>() {
-            @Override
-            public TableCell<BackgroundSqlTask, Object> call(TableColumn<BackgroundSqlTask, Object> param) {
-                return new TableCell<>() {
-                    @Override
-                    protected void updateItem(Object item, boolean empty) {
-                        super.updateItem(item, empty);
-                        if (empty) {
-                            setText(null); // 空行不显示行号
-                        } else {
-                            setText(String.valueOf(getIndex() + 1)); // 行号从 1 开始
-                            setStyle("-fx-background-color: #f2f2f2;-fx-text-fill: black");
-                            setOnMouseClicked(event -> {
-                                int rowIndex = getIndex();
-                                sqlTaskTableView.getSelectionModel().clearAndSelect(rowIndex);
-                            });
-                        }
-                    }
-                };
-            }
-        });
-        sqlTaskRowNumTableColumn.setSortable(false);
-        sqlTaskRowNumTableColumn.setPrefWidth(30);
 
         sqlTaskIdTableColumn = new TableColumn<>();
         sqlTaskIdTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.id", "ID"));
@@ -285,8 +261,6 @@ public class PopupWindowUtil {
 
 
         sqlTaskTableView.getColumns().addAll(
-                sqlTaskIdTableColumn,
-                sqlTaskRowNumTableColumn,
                 sqlTaskBeginTableColumn,
                 sqlTaskConnNameTableColumn,
                 sqlTaskDatabaseTableColumn,
@@ -296,6 +270,7 @@ public class PopupWindowUtil {
         sqlTaskTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         sqlTaskTableView.getSelectionModel().setCellSelectionEnabled(true);
         sqlTaskTableView.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        sqlTaskTableView.setStyle("-fx-background-insets: 0;");
 
         //初始化ddl显示面板
         CustomWindowFrameUtil.Frame ddlFrame = CustomWindowFrameUtil.createModalPopup(
