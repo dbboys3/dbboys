@@ -975,9 +975,9 @@ Text {
 .list-view {
   -color-cell-bg: -color-bg-default;
   -color-cell-fg: -color-fg-default;
-  -color-cell-bg-selected: -color-base-6;
+  -color-cell-bg-selected: -color-base-7;
   -color-cell-fg-selected: -color-fg-default;
-  -color-cell-bg-selected-focused: -color-base-6;
+  -color-cell-bg-selected-focused: -color-base-7;
   -color-cell-fg-selected-focused: -color-fg-default;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-border-default;
@@ -1023,9 +1023,9 @@ Text {
 .table-view {
   -color-cell-bg: -color-bg-default;
   -color-cell-fg: -color-fg-default;
-  -color-cell-bg-selected: -color-base-6;
+  -color-cell-bg-selected: -color-base-7;
   -color-cell-fg-selected: -color-fg-default;
-  -color-cell-bg-selected-focused: -color-base-6;
+  -color-cell-bg-selected-focused: -color-base-7;
   -color-cell-fg-selected-focused: -color-fg-default;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-border-default;
@@ -1203,9 +1203,9 @@ Text {
 .tree-view {
   -color-cell-bg: -color-bg-default;
   -color-cell-fg: -color-fg-default;
-  -color-cell-bg-selected: -color-base-6;
+  -color-cell-bg-selected: -color-base-7;
   -color-cell-fg-selected: -color-fg-default;
-  -color-cell-bg-selected-focused: -color-base-6;
+  -color-cell-bg-selected-focused: -color-base-7;
   -color-cell-fg-selected-focused: -color-fg-default;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-border-default;
@@ -1317,9 +1317,9 @@ Text {
 .tree-table-view {
   -color-cell-bg: -color-bg-default;
   -color-cell-fg: -color-fg-default;
-  -color-cell-bg-selected: -color-base-6;
+  -color-cell-bg-selected: -color-base-7;
   -color-cell-fg-selected: -color-fg-default;
-  -color-cell-bg-selected-focused: -color-base-6;
+  -color-cell-bg-selected-focused: -color-base-7;
   -color-cell-fg-selected-focused: -color-fg-default;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-border-default;

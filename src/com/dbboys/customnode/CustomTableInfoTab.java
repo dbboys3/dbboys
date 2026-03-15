@@ -424,7 +424,7 @@ public class CustomTableInfoTab extends CustomTab {
 
         // 删除列按钮
         saveColumnButton = new Button();
-        saveColumnButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
+        saveColumnButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.55));
         saveColumnButton.setFocusTraversable(false);
         Tooltip saveColumnTooltip = new Tooltip();
         saveColumnTooltip.textProperty().bind(I18n.bind("tableinfo.button.save_changes", "保存变更"));
