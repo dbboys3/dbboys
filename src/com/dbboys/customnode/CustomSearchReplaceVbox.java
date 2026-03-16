@@ -15,7 +15,7 @@ import java.util.Locale;
 
 public class CustomSearchReplaceVbox extends VBox {
     public static final double EDIT_PANEL_WIDTH = 328;
-    public static final double SEARCH_ONLY_PANEL_WIDTH = 304;
+    public static final double SEARCH_ONLY_PANEL_WIDTH = EDIT_PANEL_WIDTH;
     private static final double PANEL_PADDING_TOP = 6;
     private static final double PANEL_PADDING_RIGHT = 6;
     private static final double PANEL_PADDING_BOTTOM = 6;

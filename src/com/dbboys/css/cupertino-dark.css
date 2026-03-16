@@ -5439,13 +5439,13 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-fill: #264f78;  /* VS Code 风格蓝色选区 */
 }
 .styled-text-area .selected-text {
-  -fx-fill: white;
+  -fx-fill: -color-fg-default;
 }
 
 
 /* 输入光标为白色 */
 .styled-text-area .caret {
-  -fx-stroke: white;
+  -fx-stroke: -color-fg-default;
 }
 
 /*标题栏边距*/
@@ -5515,3 +5515,8 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-background-color: -color-base-7;
 }
 
+/*状态栏下载文字*/
+.download {
+  -fx-font-size: 7;
+  -fx-text-fill: -color-fg-muted;
+}

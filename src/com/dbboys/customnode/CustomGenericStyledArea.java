@@ -72,7 +72,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             "mkv", "txt", "csv", "json", "xml", "iso", "tar", "gz", "tar.gz",
             "sh", "chm", "jar", "yml"
     );
-    public static final String LINK_STYLE = "-fx-fill:-color-accent-emphasis; -fx-underline: true; -fx-cursor: hand;";
+    public static final String LINK_STYLE = "-fx-fill:-color-accent-3; -fx-underline: true; -fx-cursor: hand;";
     public static final String INVALID_LINK_STYLE = "-fx-fill: -color-danger-7; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
     public static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
     public static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
@@ -363,13 +363,13 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         } else if (seg.getStyle().contains("heading-2")) {
                             t.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 8 0 4 0;");
                         } else if (seg.getStyle().contains("heading-3")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 6 0 3 0;");
+                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 6 0 3 0;");
                         } else if (seg.getStyle().contains("heading-4")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 4 0 2 0;");
+                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 4 0 2 0;");
                         } else if (seg.getStyle().contains("heading-5")) {
                             t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 2 0 1 0;");
                         } else if (seg.getStyle().contains("heading-6")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 1 0 1 0;");
+                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 1 0 1 0;");
                         }
                     }
 

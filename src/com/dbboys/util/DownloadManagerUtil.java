@@ -136,6 +136,7 @@ class DownloadTaskWrapper {
         pauseStackPane.getChildren().addAll(pauseButton, resumeButton);
 
         HBox buttonBox = new HBox(5, pauseStackPane, stopButton);
+        buttonBox.setAlignment(Pos.CENTER);
         //rootPane.setStyle("-fx-padding: 10; -fx-background-color: #f8f8f8;");
 
         pauseButton.setOnAction(e -> {
