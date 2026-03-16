@@ -39,6 +39,7 @@ import com.dbboys.ui.IconPaths;
 public class MainController {
     private static final Logger log = LogManager.getLogger(MainController.class);
     private static final double USER_BUBBLE_MAX_WIDTH_RATIO = 0.7;
+    private static final int MESSAGE_BUBBLE_RADIUS = 6;
 
     @FXML
     private StackPane root;
@@ -682,8 +683,8 @@ public class MainController {
                 "-fx-padding: 6 10;" +
                 "-fx-background-color: -color-base-7;" +
                 "-fx-text-fill: -color-fg-emphasis;" +
-                "-fx-background-radius: 8;" +
-                "-fx-border-radius: 8;"
+                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
+                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
         );
         HBox placeholderBox = new HBox(assistantPlaceholder);
         placeholderBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -749,9 +750,25 @@ public class MainController {
         com.dbboys.customnode.CustomAiStyledArea area = new com.dbboys.customnode.CustomAiStyledArea();
         area.parseMarkdownWithStyles(content == null ? "" : content);
         area.setEditable(false);
-        area.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
-        area.setStyle(area.getStyle() + ";-fx-padding: 6 10 6 10;");
-        VBox messageGroup = new VBox(4, area, createMessageButtonRow(content, Pos.CENTER_LEFT));
+        area.setStyle(
+                area.getStyle() +
+                ";-fx-padding: 6 10 6 10;" +
+                "-fx-background-color: transparent;" +
+                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
+        );
+
+        StackPane bubble = new StackPane(area);
+        bubble.setStyle(
+                "-fx-background-color: -color-base-7;" +
+                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
+                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
+        );
+        bubble.prefWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
+        bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
+        area.prefWidthProperty().bind(bubble.widthProperty());
+        area.maxWidthProperty().bind(bubble.widthProperty());
+
+        VBox messageGroup = new VBox(4, bubble, createMessageButtonRow(content, Pos.CENTER_LEFT));
         messageGroup.setAlignment(Pos.CENTER_LEFT);
         messageGroup.setFillWidth(true);
         aiChatMessages.getChildren().add(messageGroup);
@@ -768,7 +785,8 @@ public class MainController {
         StackPane bubble = new StackPane(messageLabel);
         bubble.setStyle(
                 "-fx-background-color: -color-accent-emphasis;" +
-                "-fx-background-radius: 10;" +
+                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
+                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
                 "-fx-padding: 6 10 6 10;"
         );
         bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().multiply(USER_BUBBLE_MAX_WIDTH_RATIO));
