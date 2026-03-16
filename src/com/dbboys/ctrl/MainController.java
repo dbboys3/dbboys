@@ -400,11 +400,11 @@ public class MainController {
                     event.consume();
                 }
             });
-            if (aiInputField.getParent() instanceof HBox inputRow) {
-                inputRow.setMinHeight(AI_INPUT_HEIGHT);
-                inputRow.setPrefHeight(AI_INPUT_HEIGHT);
-                inputRow.setMaxHeight(AI_INPUT_HEIGHT);
-                VBox.setVgrow(inputRow, Priority.NEVER);
+            if (aiInputField.getParent() instanceof Region inputContainer) {
+                inputContainer.setMinHeight(AI_INPUT_HEIGHT);
+                inputContainer.setPrefHeight(AI_INPUT_HEIGHT);
+                inputContainer.setMaxHeight(AI_INPUT_HEIGHT);
+                VBox.setVgrow(inputContainer, Priority.NEVER);
             }
         }
 

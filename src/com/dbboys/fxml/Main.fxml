@@ -153,10 +153,10 @@
                                 <ScrollPane fx:id="aiChatScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS" >
                                     <VBox fx:id="aiChatMessages" spacing="8" style="-fx-padding: 8"/>
                                 </ScrollPane>
-                                <HBox alignment="CENTER_LEFT" spacing="6" >
-                                    <TextArea fx:id="aiInputField" HBox.hgrow="ALWAYS" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" />
-                                    <Button fx:id="aiSendButton" text="发送" styleClass="small" onAction="#sendAiMessage" focusTraversable="false"/>
-                                </HBox>
+                                <StackPane minHeight="90" prefHeight="90" maxHeight="90" VBox.vgrow="NEVER">
+                                    <TextArea fx:id="aiInputField" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" style="-fx-padding: 6 44 10 6;" />
+                                    <Button fx:id="aiSendButton" text="发送" styleClass="small" onAction="#sendAiMessage" focusTraversable="false" StackPane.alignment="BOTTOM_RIGHT" translateX="-6" translateY="-6"/>
+                                </StackPane>
                             </VBox>
                         </CustomTreeviewTab>
                     </TabPane>

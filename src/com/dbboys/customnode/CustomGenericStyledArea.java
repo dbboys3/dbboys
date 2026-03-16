@@ -705,7 +705,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         List<TextSegment> segments = new ArrayList<>();
         int lastIndex = 0;
 
-        // 查找所有行内代码
+        // 忽略行内代码解析，比如mysql的反引号，解析后就丢失了
+        /* 
         Matcher codeMatcher = INLINE_CODE_PATTERN.matcher(line);
         while (codeMatcher.find()) {
             // 添加代码前的普通文本
@@ -720,6 +721,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
             lastIndex = codeMatcher.end();
         }
+        */
 
         // 添加剩余文本
         if (lastIndex < line.length()) {
