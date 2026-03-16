@@ -4969,10 +4969,12 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .text-area {
   -fx-padding: 2px;
   -fx-cursor: default;
+  -fx-border-width: 0;
 }
 .text-area .content {
   -fx-cursor: text;
   -fx-padding: 6px 12px 6px 12px;
+  -fx-background-color: -color-bg-default;
 }
 
 .password-field {
