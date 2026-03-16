@@ -265,9 +265,6 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         );
 
                     } else if (seg.getStyle().contains("code-block")) {
-                        ContextMenu textAreaContextMenu = new ContextMenu();
-                        CustomShortcutMenuItem textAreaCopyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
-                        textAreaContextMenu.getItems().addAll(textAreaCopyItem);
                         if (e.getLeft().trim().isEmpty()) {
                             return new Text(""); // appendtext("\n")会继承上一个style，空段落不生成 TextArea，解决最后一个如果是```出现一个空白text
                         }
@@ -287,31 +284,15 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         textArea.prefWidthProperty().bind(
                                 Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 8)
                         );
-
-                        textArea.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
-                            if (!newFocus) {
-                                //textAreaContextMenu.hide();
-                                // TextArea 获取焦点时，取消 GenericStyledArea 的选择
-                                textArea.deselect();
-                                //customGenericStyledArea.deselect(); // 清除选区
-                            }else{
-                                ((CustomGenericStyledArea)textArea.getParent().getParent().getParent().getParent().getParent()).deselect();
+                        installCodeBlockContextMenu(textArea, () -> {
+                            if (textArea.getParent() != null
+                                    && textArea.getParent().getParent() != null
+                                    && textArea.getParent().getParent().getParent() != null
+                                    && textArea.getParent().getParent().getParent().getParent() != null
+                                    && textArea.getParent().getParent().getParent().getParent().getParent() instanceof CustomGenericStyledArea area) {
+                                area.deselect();
                             }
                         });
-
-                        textArea.setContextMenu(textAreaContextMenu);
-                        textAreaCopyItem.setOnAction(event1->{
-                            if(!textArea.getSelectedText().isEmpty()){
-                                textArea.copy();
-                            }else  {
-                                Clipboard clipboard = Clipboard.getSystemClipboard();
-                                ClipboardContent content = new ClipboardContent();
-                                content.putString(textArea.getText());
-                                clipboard.setContent(content);
-                                NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.code_block_copied"));
-                            }
-                        });
-
 
                         return textArea;
 
@@ -422,6 +403,37 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         });
         codeAreaSearchItem.setOnAction(event -> onSearchRequest.run());
 
+    }
+
+    protected static void installCodeBlockContextMenu(TextArea textArea, Runnable onFocusGained) {
+        ContextMenu textAreaContextMenu = new ContextMenu();
+        CustomShortcutMenuItem textAreaCopyItem = MenuItemUtil.createMenuItemI18n(
+                "genericstyled.menu.copy",
+                "Ctrl+C",
+                IconFactory.group(IconPaths.COPY, 0.7)
+        );
+        textAreaContextMenu.getItems().add(textAreaCopyItem);
+
+        textArea.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
+            if (!newFocus) {
+                textArea.deselect();
+            } else if (onFocusGained != null) {
+                onFocusGained.run();
+            }
+        });
+
+        textArea.setContextMenu(textAreaContextMenu);
+        textAreaCopyItem.setOnAction(event -> {
+            if (!textArea.getSelectedText().isEmpty()) {
+                textArea.copy();
+            } else {
+                Clipboard clipboard = Clipboard.getSystemClipboard();
+                ClipboardContent content = new ClipboardContent();
+                content.putString(textArea.getText());
+                clipboard.setContent(content);
+                NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.code_block_copied"));
+            }
+        });
     }
 
     public void setOnSearchRequest(Runnable onSearchRequest) {

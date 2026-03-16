@@ -363,6 +363,7 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         };
         textArea.textProperty().addListener(listener);
         textArea.widthProperty().addListener(listener);
+        installCodeBlockContextMenu(textArea, this::deselect);
 
         // 宽度填满 CustomAiStyledArea（预留一点内边距）
         textArea.prefWidthProperty().bind(widthProperty().subtract(27));
