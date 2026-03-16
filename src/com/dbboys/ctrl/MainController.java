@@ -9,8 +9,8 @@ import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
-import javafx.beans.value.ChangeListener;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.*;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -38,6 +38,7 @@ import com.dbboys.ui.IconPaths;
 
 public class MainController {
     private static final Logger log = LogManager.getLogger(MainController.class);
+    private static final double USER_BUBBLE_MAX_WIDTH_RATIO = 0.7;
 
     @FXML
     private StackPane root;
@@ -664,7 +665,7 @@ public class MainController {
         String text = aiInputField.getText();
         if (text == null || text.isBlank()) return;
 
-        // 用户消息使用 CustomGenericStyledArea 展示（支持 Markdown）
+        // 用户消息使用右侧气泡展示
         addUserMarkdownMessage(text);
         aiInputField.clear();
         scrollAiChatToBottom();
@@ -677,7 +678,13 @@ public class MainController {
         Label assistantPlaceholder = new Label(I18n.t("ai.replying"));
         assistantPlaceholder.setWrapText(true);
         assistantPlaceholder.setMaxWidth(1.0E7);
-        assistantPlaceholder.setStyle("-fx-padding: 6 10;-fx-background-color: #f0f0f0;-fx-background-radius: 8;-fx-border-radius: 8;");
+        assistantPlaceholder.setStyle(
+                "-fx-padding: 6 10;" +
+                "-fx-background-color: -color-base-7;" +
+                "-fx-text-fill: -color-fg-emphasis;" +
+                "-fx-background-radius: 8;" +
+                "-fx-border-radius: 8;"
+        );
         HBox placeholderBox = new HBox(assistantPlaceholder);
         placeholderBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         placeholderBox.setFillHeight(false);
@@ -744,53 +751,65 @@ public class MainController {
         area.setEditable(false);
         area.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
         area.setStyle(area.getStyle() + ";-fx-padding: 6 10 6 10;");
-        aiChatMessages.getChildren().add(area);
+        VBox messageGroup = new VBox(4, area, createMessageButtonRow(content, Pos.CENTER_LEFT));
+        messageGroup.setAlignment(Pos.CENTER_LEFT);
+        messageGroup.setFillWidth(true);
+        aiChatMessages.getChildren().add(messageGroup);
     }
 
     private void addUserMarkdownMessage(String content) {
         String text = content == null ? "" : content;
 
-        TextArea textArea = new TextArea(text);
-        textArea.setEditable(false);
-        textArea.setWrapText(true);
+        Label messageLabel = new Label(text);
+        messageLabel.setWrapText(true);
+        messageLabel.setMaxWidth(Double.MAX_VALUE);
+        messageLabel.setStyle("-fx-text-fill: -color-fg-emphasis;");
 
-        // 让 TextArea 本身透明，仅保留文本颜色和边距，背景由外层气泡承载
-        textArea.setStyle(
-                "-fx-background-color: transparent;" +
-                "-fx-control-inner-background: transparent;" +
-                "-fx-text-fill: -color-fg-emphasis;" +
-                "-fx-faint-focus-color: transparent;" +
-                "-fx-focus-color: transparent;" +
-                "-fx-padding: 2 4 2 4;"
-        );
-
-        textArea.setPrefRowCount(1);
-        textArea.setMinHeight(Region.USE_PREF_SIZE);
-        textArea.setPrefHeight(Region.USE_COMPUTED_SIZE);
-
-        // 外层气泡，负责蓝色背景和圆角
-        StackPane bubble = new StackPane(textArea);
+        StackPane bubble = new StackPane(messageLabel);
         bubble.setStyle(
                 "-fx-background-color: -color-accent-emphasis;" +
                 "-fx-background-radius: 10;" +
-                "-fx-padding: 4 8 4 8;"
+                "-fx-padding: 6 10 6 10;"
         );
+        bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().multiply(USER_BUBBLE_MAX_WIDTH_RATIO));
+        messageLabel.maxWidthProperty().bind(bubble.maxWidthProperty().subtract(20));
+        aiChatMessages.getChildren().add(createMessageRow(bubble, text, Pos.CENTER_RIGHT, Pos.CENTER_RIGHT));
+    }
 
-        // 宽度与内容匹配，但不超过聊天区域的 70%
-        bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().multiply(0.7));
+    private HBox createMessageRow(Node messageNode, String text, Pos rowAlignment, Pos buttonAlignment) {
+        VBox messageGroup = new VBox(4, messageNode, createMessageButtonRow(text, buttonAlignment));
+        messageGroup.setAlignment(buttonAlignment);
+        messageGroup.setFillWidth(true);
+        HBox messageRow = new HBox(messageGroup);
+        messageRow.setAlignment(rowAlignment);
+        messageRow.setFillHeight(false);
+        return messageRow;
+    }
 
-        // 文本或容器宽度变化时，重新计算高度以适配多行
-        ChangeListener<Object> sizeListener = (obs, o, n) -> {
-            textArea.setPrefHeight(Region.USE_COMPUTED_SIZE);
-            bubble.requestLayout();
-        };
-        textArea.textProperty().addListener(sizeListener);
-        bubble.widthProperty().addListener(sizeListener);
+    private HBox createMessageButtonRow(String text, Pos buttonAlignment) {
+        HBox buttonRow = new HBox(createMessageCopyButton(text));
+        buttonRow.setAlignment(buttonAlignment);
+        buttonRow.setFillHeight(false);
+        return buttonRow;
+    }
 
-        HBox userBox = new HBox(bubble);
-        userBox.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
-        userBox.setFillHeight(false);
-        aiChatMessages.getChildren().add(userBox);
+    private Button createMessageCopyButton(String text) {
+        Button copyButton = new Button();
+        copyButton.setText("");
+        copyButton.setGraphic(IconFactory.group(IconPaths.COPY, 0.62));
+        copyButton.getStyleClass().add("small");
+        copyButton.setFocusTraversable(false);
+        copyButton.setTooltip(new Tooltip(I18n.t("genericstyled.menu.copy")));
+        copyButton.setOnAction(event -> copyMessageText(text));
+        return copyButton;
+    }
+
+    private void copyMessageText(String text) {
+        Clipboard clipboard = Clipboard.getSystemClipboard();
+        ClipboardContent content = new ClipboardContent();
+        content.putString(text == null ? "" : text);
+        clipboard.setContent(content);
+        NotificationUtil.showMainNotification(I18n.t("resultset.notice.copied"));
     }
 
     private void scrollAiChatToBottom() {
