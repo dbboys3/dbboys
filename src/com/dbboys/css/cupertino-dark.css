@@ -5283,7 +5283,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 /* ========== CodeArea / SQL 编辑器暗色高亮 ========== */
 
 /* SQL 编辑框背景与字体：比主界面稍浅一点的深色 */
-.code-area {
+.styled-text-area {
   -fx-background-color: -color-bg-content;
   -fx-font-size: 12; /* sql编辑框字体大小，有自己的默认字体，与系统字体不一样 */
 }
@@ -5381,7 +5381,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 /* ========== CodeArea / SQL 编辑器暗色高亮（覆盖旧规则） ========== */
 
 /* 默认文本颜色（未加样式的代码） */
-.code-area .text {
+.styled-text-area .text {
   -fx-fill: -color-fg-default;
 }
 

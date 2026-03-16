@@ -72,8 +72,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             "mkv", "txt", "csv", "json", "xml", "iso", "tar", "gz", "tar.gz",
             "sh", "chm", "jar", "yml"
     );
-    public static final String LINK_STYLE = "-fx-fill: #0066cc; -fx-underline: true; -fx-cursor: hand;";
-    public static final String INVALID_LINK_STYLE = "-fx-fill: #f00; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
+    public static final String LINK_STYLE = "-fx-fill:-color-accent-emphasis; -fx-underline: true; -fx-cursor: hand;";
+    public static final String INVALID_LINK_STYLE = "-fx-fill: -color-danger-7; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
     public static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
     public static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
     public int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
@@ -259,7 +259,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                          */
                     } else if (seg.getStyle().contains("code-inline")) {
                         t.setStyle(
-                                "-fx-fill: #9f453c; " +
+                                "-fx-fill: -color-danger-7; " +
                                         "-fx-font-family: 'SimSun'; "
 
                         );
@@ -316,7 +316,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         return textArea;
 
                     }else if (seg.getStyle().contains("bold")) {
-                        t.setStyle("-fx-font-family: system;-fx-font-weight: bold;-fx-fill: #9f453c");
+                        t.setStyle("-fx-font-family: system;-fx-font-weight: bold;-fx-fill: -color-danger-7");
                     }else if (seg.getStyle() != null) {
                         if (seg.getStyle().contains("title")) {
                             ContextMenu contextMenu = new ContextMenu();
@@ -848,7 +848,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     public Node createTableView(List<List<String>> tableRows) {
         // 创建表格视图
         CustomResultsetTableView<List<String>> tableView = new CustomResultsetTableView<>();
-        tableView.setStyle("-fx-border-color: #dddddd; -fx-border-width: 1px;");
+       // tableView.setStyle("-fx-border-color: #dddddd; -fx-border-width: 1px;");
         tableView.prefWidthProperty().bind(widthProperty().subtract(20)); // 自适应宽度
 
         // 获取表头行（第一行）
