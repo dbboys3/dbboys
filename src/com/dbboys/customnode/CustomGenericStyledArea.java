@@ -766,11 +766,9 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                     int quoteIdx = linkUrl.indexOf('"');
                     if (quoteIdx >= 0) {
                         linkUrl = linkUrl.substring(0, quoteIdx).trim();
-                    } else {
-                        int spaceIdx = linkUrl.indexOf(' ');
-                        if (spaceIdx >= 0) {
-                            linkUrl = linkUrl.substring(0, spaceIdx).trim();
-                        }
+                    }
+                    if (linkUrl.startsWith("<") && linkUrl.endsWith(">") && linkUrl.length() > 1) {
+                        linkUrl = linkUrl.substring(1, linkUrl.length() - 1).trim();
                     }
 
                     append(Either.left(linkText), "link:" + linkUrl + ";");
