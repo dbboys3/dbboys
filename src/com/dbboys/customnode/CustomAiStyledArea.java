@@ -33,6 +33,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.Parent;
+import javafx.application.Platform;
 
 /**
  * 专用于 AI 对话消息展示的区域：
@@ -46,6 +47,8 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
     private final javafx.scene.control.ContextMenu aiImageContextMenu = new javafx.scene.control.ContextMenu();
     private final javafx.scene.control.MenuItem aiImageSaveAsItem =
             new javafx.scene.control.MenuItem(I18n.t("genericstyled.menu.image_save_as"));
+
+    private volatile boolean heightUpdateScheduled = false;
 
     public CustomAiStyledArea() {
         super(new java.io.File("ai-inline.md"));
@@ -64,11 +67,11 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         setPrefHeight(Region.USE_COMPUTED_SIZE);
         // 监听内容总高度估算，动态设置 prefHeight
         totalHeightEstimateProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                // +10 预留一点内边距，可根据需要调整
-                setPrefHeight((double)newVal + 10);
-            }
+            scheduleHeightUpdate();
         });
+
+        // 关键：宽度变化会触发自动换行，高度需要二次刷新
+        widthProperty().addListener((obs, oldVal, newVal) -> scheduleHeightUpdate());
 
         // 不在自身消费滚轮事件，将滚动转发给父容器（如外层 ScrollPane）
         addEventFilter(ScrollEvent.SCROLL, event -> {
@@ -77,6 +80,23 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                 parent.fireEvent(event.copyFor(parent, parent));
             }
             event.consume();
+        });
+    }
+
+    private void scheduleHeightUpdate() {
+        if (heightUpdateScheduled) {
+            return;
+        }
+        heightUpdateScheduled = true;
+        Platform.runLater(() -> {
+            try {
+                Object est = totalHeightEstimateProperty().getValue();
+                if (est instanceof Number n) {
+                    setPrefHeight(n.doubleValue() + 10);
+                }
+            } finally {
+                heightUpdateScheduled = false;
+            }
         });
     }
 
@@ -199,7 +219,14 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                 try {
                     if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
                         // 网络图片：直接使用 URL 加载，仅提供“另存为”右键菜单，参考通用下载逻辑
-                        imgView.setImage(new Image(imgUrl, true));
+                        Image netImage = new Image(imgUrl, true);
+                        imgView.setImage(netImage);
+                        // 网络图片异步加载完成后，高度可能变化，触发一次刷新
+                        netImage.progressProperty().addListener((o, ov, nv) -> {
+                            if (nv != null && nv.doubleValue() >= 1.0) {
+                                scheduleHeightUpdate();
+                            }
+                        });
                         pane.setOnContextMenuRequested(event -> {
                             // 复用同一个 ContextMenu，避免多次右键出现多个菜单
                             aiImageSaveAsItem.setOnAction(event1 -> {
@@ -250,7 +277,13 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                         Path path = getAbsPath(markdownFile, imgUrl);
 
                         if (Files.exists(path)) {
-                            imgView.setImage(new Image("file:" + path));
+                            Image localImage = new Image("file:" + path);
+                            imgView.setImage(localImage);
+                            localImage.progressProperty().addListener((o, ov, nv) -> {
+                                if (nv != null && nv.doubleValue() >= 1.0) {
+                                    scheduleHeightUpdate();
+                                }
+                            });
                         }
                         Image image = imgView.getImage();
                         if (Files.exists(path)) {
@@ -297,10 +330,12 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
                     }
                     append(Either.right(pane), "");
                     appendText("\n");
+                    scheduleHeightUpdate();
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                     append(Either.right(pane), "");
                     appendText("\n");
+                    scheduleHeightUpdate();
                 }
             }
             continue;
@@ -342,6 +377,9 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         for (int i = 0; i < getParagraphs().size(); i++) {
             setParagraphStyle(i, "-fx-line-spacing: 10px");
         }
+
+        // 解析完成后，延迟一帧做最终高度对齐（避免布局顺序导致高度偶发不匹配）
+        scheduleHeightUpdate();
     }
 
     /** 创建用于显示代码块的 TextArea，宽度随当前区域变化，高度随内容自适应。 */
