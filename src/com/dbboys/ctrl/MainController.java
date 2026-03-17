@@ -29,10 +29,12 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -45,7 +47,6 @@ public class MainController {
     private static final double USER_BUBBLE_MAX_WIDTH_RATIO = 0.7;
     private static final int MESSAGE_BUBBLE_RADIUS = 6;
     private static final double AI_INPUT_HEIGHT = 90;
-    private static final String AI_NETWORK_REPLY_MARKER = "[[DBBOYS_NETWORK]]";
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
             "doubao-seed-1-8-251228",
             "doubao-seed-2-0-mini-260215"
@@ -786,10 +787,7 @@ public class MainController {
         String safeQuestion = userQuestion == null ? "" : userQuestion.trim();
         StringBuilder prompt = new StringBuilder();
         prompt.append("请优先参考下面提供的知识库检索结果回答用户问题。");
-        prompt.append("如果检索内容不足以支撑结论，可以结合通用知识或网络信息回答，");
-        prompt.append("并在回答最后单独追加 ").append(AI_NETWORK_REPLY_MARKER).append("。");
-        prompt.append("不要解释这个标记，也不要在正文中提及它。");
-        prompt.append("如果回答主要依据下面的知识库内容，则不要输出这个标记。");
+        prompt.append("如果检索内容不足以支撑结论，可以结合通用知识或网络信息回答。");
         prompt.append("\n\n用户问题：\n").append(safeQuestion);
         if (!references.isEmpty()) {
             prompt.append("\n\n知识库检索结果（按相关性排序，最多3条）：");
@@ -807,10 +805,8 @@ public class MainController {
     }
 
     private String appendAiReferences(String reply, List<MarkdownSearchUtil.KnowledgeReference> references) {
-        String rawContent = reply == null ? "" : reply.trim();
-        boolean networkBased = isNetworkBasedReply(rawContent);
-        String content = stripAiReplyMarker(rawContent);
-        if (references == null || references.isEmpty() || networkBased) {
+        String content = sanitizeAiReplyForDisplay(reply == null ? "" : reply.trim()).trim();
+        if (references == null || references.isEmpty() || !shouldAppendKnowledgeReferences(content, references)) {
             return content;
         }
         StringBuilder builder = new StringBuilder(content);
@@ -832,27 +828,79 @@ public class MainController {
         return builder.toString().trim();
     }
 
-    private boolean isNetworkBasedReply(String content) {
-        return content != null && content.contains(AI_NETWORK_REPLY_MARKER);
+    private boolean shouldAppendKnowledgeReferences(String reply, List<MarkdownSearchUtil.KnowledgeReference> references) {
+        if (reply == null || reply.isBlank() || references == null || references.isEmpty()) {
+            return false;
+        }
+        String normalizedReply = normalizeForReferenceMatch(reply);
+        Set<String> replyTokens = extractReferenceTokens(normalizedReply);
+        int matchedRefs = 0;
+        for (MarkdownSearchUtil.KnowledgeReference ref : references) {
+            if (hasReferenceOverlap(normalizedReply, replyTokens, ref)) {
+                matchedRefs++;
+            }
+        }
+        return matchedRefs > 0;
     }
 
-    private String stripAiReplyMarker(String content) {
-        return sanitizeAiReplyForDisplay(content).trim();
+    private boolean hasReferenceOverlap(String normalizedReply,
+                                        Set<String> replyTokens,
+                                        MarkdownSearchUtil.KnowledgeReference ref) {
+        String refText = normalizeForReferenceMatch((ref.title() == null ? "" : ref.title()) + "\n" +
+                (ref.snippet() == null ? "" : ref.snippet()));
+        if (refText.isBlank()) {
+            return false;
+        }
+        if (containsSharedHanSubstring(normalizedReply, refText, 4)) {
+            return true;
+        }
+        Set<String> refTokens = extractReferenceTokens(refText);
+        int overlap = 0;
+        for (String token : refTokens) {
+            if (replyTokens.contains(token) && ++overlap >= 2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeForReferenceMatch(String text) {
+        return text == null ? "" : text.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean containsSharedHanSubstring(String left, String right, int windowSize) {
+        String leftHan = left.replaceAll("[^\\p{IsHan}]", "");
+        String rightHan = right.replaceAll("[^\\p{IsHan}]", "");
+        if (leftHan.length() < windowSize || rightHan.length() < windowSize) {
+            return false;
+        }
+        for (int i = 0; i <= rightHan.length() - windowSize; i++) {
+            String part = rightHan.substring(i, i + windowSize);
+            if (leftHan.contains(part)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Set<String> extractReferenceTokens(String text) {
+        Set<String> tokens = new HashSet<>();
+        if (text == null || text.isBlank()) {
+            return tokens;
+        }
+        for (String token : text.split("[^\\p{IsHan}A-Za-z0-9_]+")) {
+            if (token != null && token.length() >= 3) {
+                tokens.add(token);
+            }
+        }
+        return tokens;
     }
 
     private String sanitizeAiReplyForDisplay(String content) {
         if (content == null || content.isEmpty()) {
             return "";
         }
-        String sanitized = content.replace(AI_NETWORK_REPLY_MARKER, "");
-        for (int i = AI_NETWORK_REPLY_MARKER.length() - 1; i > 0; i--) {
-            String prefix = AI_NETWORK_REPLY_MARKER.substring(0, i);
-            if (sanitized.endsWith(prefix)) {
-                sanitized = sanitized.substring(0, sanitized.length() - i);
-                break;
-            }
-        }
-        return sanitized;
+        return content;
     }
 
     private void cancelAiRequest() {
