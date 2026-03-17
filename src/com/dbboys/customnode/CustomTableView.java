@@ -12,8 +12,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class CustomResultsetTableView<S> extends TableView<S> {
-    public CustomResultsetTableView() {
+public class CustomTableView<S> extends TableView<S> {
+    public CustomTableView() {
         super();
         TableColumn<S, Object> rowNumberColumn = new TableColumn<>("");
         rowNumberColumn.setCellFactory(new Callback<>() {

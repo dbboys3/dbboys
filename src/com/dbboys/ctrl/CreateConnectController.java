@@ -4,7 +4,7 @@ package com.dbboys.ctrl;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.CustomInfoCodeArea;
 import com.dbboys.customnode.CustomLostFocusCommitTableCell;
-import com.dbboys.customnode.CustomResultsetTableView;
+import com.dbboys.customnode.CustomTableView;
 import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.api.ConnectionService;
 import com.dbboys.i18n.I18n;
@@ -579,7 +579,7 @@ public class CreateConnectController {
             ObservableList<String> rowCopy = FXCollections.observableArrayList(row);
             datalist.add(rowCopy);
         }
-        CustomResultsetTableView<ObservableList<String>> tableView = new CustomResultsetTableView<>();
+        CustomTableView<ObservableList<String>> tableView = new CustomTableView<>();
         tableView.setEditable(true);
         tableView.setSortPolicy((param) -> false);//禁用排序
 

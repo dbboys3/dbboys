@@ -49,7 +49,7 @@ public class PopupWindowUtil {
 
     //sql历史记录
     private static Stage sqlHistoryPopupStage = new Stage();
-    private static CustomResultsetTableView sqlHistoryTableView = new CustomResultsetTableView();
+    private static CustomTableView sqlHistoryTableView = new CustomTableView();
     private static StackPane sqlHistoryPopupStageStackPane = new StackPane(sqlHistoryTableView);
     private static Scene sqlHistoryPopupStageScene = new Scene(sqlHistoryPopupStageStackPane, 1000, 500);
     private static Image sqlHistoryPopupStageIcon = new Image(IconPaths.MAIN_LOGO);
@@ -62,7 +62,7 @@ public class PopupWindowUtil {
     private static TableColumn<ObservableList<String>, Object> sqlHistoryDatabaseTableColumn;
 
     //后台sql
-    public static CustomResultsetTableView<BackgroundSqlTask> sqlTaskTableView = new CustomResultsetTableView<>();
+    public static CustomTableView<BackgroundSqlTask> sqlTaskTableView = new CustomTableView<>();
     @Deprecated public static TableView<BackgroundSqlTask> sql_task_tableview = sqlTaskTableView;
     private static Stage backSqlPopupStage = new Stage();
     private static StackPane backSqlPopupStageStackPane = new StackPane(sqlTaskTableView);
@@ -424,7 +424,7 @@ public class PopupWindowUtil {
         hbox.setId("modifyProps");
         hbox.setAlignment(Pos.CENTER_LEFT);
 
-        CustomResultsetTableView tableView = new CustomResultsetTableView();
+        CustomTableView tableView = new CustomTableView();
         TableColumn<ObservableList<String>, Object> paramcol = new TableColumn<>();
         paramcol.textProperty().bind(I18n.bind("popup.param_window.column.value", "参数值"));
         paramcol.setCellValueFactory(data -> Bindings.createObjectBinding(() ->

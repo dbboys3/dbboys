@@ -94,7 +94,7 @@ public class CustomTableInfoTab extends CustomTab {
 
 
     //configtab
-    private CustomResultsetTableView<ObservableList<String>> colsTableView = new CustomResultsetTableView<>();
+    private CustomTableView<ObservableList<String>> colsTableView = new CustomTableView<>();
     
     private List<ObservableList<String>> originalDataList = FXCollections.observableArrayList();//保存原始数据，用于比较生成SQL
     private java.util.IdentityHashMap<ObservableList<String>, String> rowOriginalNameMap = new java.util.IdentityHashMap<>();

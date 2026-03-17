@@ -2417,7 +2417,7 @@ GBASEEOF
                 .map(InstallConfigItem::new)
                 .collect(Collectors.toCollection(FXCollections::observableArrayList));
 
-        CustomResultsetTableView<InstallConfigItem> tableView = new CustomResultsetTableView<>();
+        CustomTableView<InstallConfigItem> tableView = new CustomTableView<>();
         tableView.setEditable(true);
         tableView.setSortPolicy((param) -> false);//禁用排序
 

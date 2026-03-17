@@ -3,7 +3,7 @@ package com.dbboys.ctrl;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.customnode.CustomLabelTextField;
-import com.dbboys.customnode.CustomResultsetTableView;
+import com.dbboys.customnode.CustomTableView;
 import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
@@ -45,7 +45,7 @@ public class ResultSetTabController {
     @FXML
     public VBox resultSetVBox;
     @FXML
-    public CustomResultsetTableView resultSetTableView;
+    public CustomTableView resultSetTableView;
     @FXML
     public HBox resultSetButtonHBox;
     @FXML

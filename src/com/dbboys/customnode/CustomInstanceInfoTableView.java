@@ -14,7 +14,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.MouseButton;
 
-public class CustomInstanceInfoTableView extends CustomResultsetTableView {
+public class CustomInstanceInfoTableView extends CustomTableView {
     private static final int TAB_INSTANCE_INFO = 0;
     private static final int TAB_HEALTH_CHECK = 1;
     private static final int TAB_ONLINE_LOG = 2;

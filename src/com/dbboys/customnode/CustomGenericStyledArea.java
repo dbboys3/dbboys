@@ -856,7 +856,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
      */
     public Node createTableView(List<List<String>> tableRows) {
         // 创建表格视图
-        CustomResultsetTableView<List<String>> tableView = new CustomResultsetTableView<>();
+        CustomTableView<List<String>> tableView = new CustomTableView<>();
        // tableView.setStyle("-fx-border-color: #dddddd; -fx-border-width: 1px;");
         tableView.prefWidthProperty().bind(widthProperty()); // 自适应宽度
 

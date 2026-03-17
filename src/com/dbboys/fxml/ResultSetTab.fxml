@@ -9,7 +9,7 @@
 <?import com.dbboys.customnode.CustomLabelTextField?>
 <?import com.dbboys.customnode.CustomUserTextField?>
 <?import com.dbboys.customnode.CustomInfoStackPane?>
-<?import com.dbboys.customnode.CustomResultsetTableView?>
+<?import com.dbboys.customnode.CustomTableView?>
 <VBox fx:id="resultSetVBox"  fx:controller="com.dbboys.ctrl.ResultSetTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
     <HBox alignment="CENTER_LEFT" style="-fx-background-color: #1c1c1e;">
         <Button fx:id="lastSqlCopyButton" styleClass="small" focusTraversable="false" />
@@ -20,8 +20,8 @@
     <StackPane>
         <VBox>
             <HBox style="-fx-background-color: #1c1c1e;">
-                <CustomResultsetTableView fx:id="resultSetTableView">
-                </CustomResultsetTableView>
+                <CustomTableView fx:id="resultSetTableView">
+                </CustomTableView>
             </HBox>
             <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" style="-fx-background-color: -color-bg-default;">
                 <Label fx:id="resultSetLabelLeftBracket" />

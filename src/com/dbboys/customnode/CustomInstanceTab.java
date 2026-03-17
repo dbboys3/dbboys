@@ -76,12 +76,12 @@ public class CustomInstanceTab extends CustomTab {
 
     //checktab
 
-    private CustomResultsetTableView<HealthCheck> checkTableView = new CustomResultsetTableView<>();
+    private CustomTableView<HealthCheck> checkTableView = new CustomTableView<>();
     private List<HealthCheck> checkDatalist = FXCollections.observableArrayList();//如果确认，返回更新后的list
     private StackPane checkStackPane;
 
     //configtab
-    private CustomResultsetTableView<ObservableList<String>> configTableView = new CustomResultsetTableView<>();
+    private CustomTableView<ObservableList<String>> configTableView = new CustomTableView<>();
     private List<ObservableList<String>> configDatalist = FXCollections.observableArrayList();//如果确认，返回更新后的list
     private StackPane configStackPane;
 

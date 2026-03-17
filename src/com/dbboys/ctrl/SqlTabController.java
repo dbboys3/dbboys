@@ -126,7 +126,7 @@ public class SqlTabController {
     @FXML
     Tab resultsetSummaryTab;
     @FXML
-    CustomResultsetTableView resultsetTotalTableView;
+    CustomTableView resultsetTotalTableView;
     @FXML
     StackPane resultsetStackPane;
     //执行过程中提示面板

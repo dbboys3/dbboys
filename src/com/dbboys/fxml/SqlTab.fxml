@@ -12,7 +12,7 @@
 <?import com.dbboys.customnode.CustomInfoStackPane?>
 <?import com.dbboys.customnode.CustomUserTextField?>
 <?import org.controlsfx.control.tableview2.TableView2?>
-<?import com.dbboys.customnode.CustomResultsetTableView?>
+<?import com.dbboys.customnode.CustomTableView?>
 <VBox fx:id="sqlTab" fx:controller="com.dbboys.ctrl.SqlTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
     <HBox alignment="CENTER_LEFT">
         <Button fx:id="sqlRunButton" styleClass="custom-button" focusTraversable="false">
@@ -92,8 +92,8 @@
                 <TabPane fx:id="resultsetTabPane" tabClosingPolicy="ALL_TABS">
                     <Tab fx:id="resultsetSummaryTab" closable="false" style="-fx-pref-height: 18;">
                         <StackPane fx:id="resultsetStackPane">
-                            <CustomResultsetTableView fx:id="resultsetTotalTableView">
-                            </CustomResultsetTableView>
+                            <CustomTableView fx:id="resultsetTotalTableView">
+                            </CustomTableView>
                         </StackPane>
 
                     </Tab>
