@@ -33,6 +33,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 
@@ -73,8 +76,39 @@ public class MainController {
     @FXML
     public ChoiceBox<String> aiModelChoiceBox;
     private java.util.concurrent.Future<?> aiTaskFuture;
-    private HBox aiThinkingPlaceholder;
+    private AiMessageView aiStreamingMessage;
     private volatile boolean aiCancelled = false;
+
+    private static final class AiMessageView {
+        private final CustomAiStyledArea area = new CustomAiStyledArea();
+        private final AtomicBoolean renderScheduled = new AtomicBoolean(false);
+        private final AtomicInteger revision = new AtomicInteger();
+        private final AtomicInteger renderedRevision = new AtomicInteger(-1);
+        private final VBox messageGroup;
+        private final StackPane bubble;
+        private final StringBuilder rawContent = new StringBuilder();
+
+        private AiMessageView(VBox messageGroup, StackPane bubble) {
+            this.messageGroup = messageGroup;
+            this.bubble = bubble;
+        }
+
+        private synchronized void appendRaw(String delta) {
+            rawContent.append(delta);
+            revision.incrementAndGet();
+        }
+
+        private synchronized void setRaw(String text) {
+            rawContent.setLength(0);
+            rawContent.append(text == null ? "" : text);
+            revision.incrementAndGet();
+        }
+
+        private synchronized String getRaw() {
+            return rawContent.toString();
+        }
+    }
+
     @FXML
     private Menu menuFile;
     @FXML
@@ -710,22 +744,8 @@ public class MainController {
             return;
         }
 
-        Label assistantPlaceholder = new Label(I18n.t("ai.replying"));
-        assistantPlaceholder.setWrapText(true);
-        assistantPlaceholder.setMaxWidth(1.0E7);
-        assistantPlaceholder.setStyle(
-                "-fx-padding: 6 10;" +
-                "-fx-background-color: -color-base-7;" +
-                "-fx-text-fill: -color-fg-emphasis;" +
-                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
-                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
-        );
-        HBox placeholderBox = new HBox(assistantPlaceholder);
-        placeholderBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        placeholderBox.setFillHeight(false);
-        aiThinkingPlaceholder = placeholderBox;
-        aiChatMessages.getChildren().add(placeholderBox);
-        scrollAiChatToBottom();
+        AiMessageView messageView = addStreamingAiMessage(I18n.t("ai.replying"));
+        aiStreamingMessage = messageView;
         updateAiSendButtonText(true);
         aiCancelled = false;
 
@@ -737,20 +757,25 @@ public class MainController {
             System.out.println("=== AI request prompt begin ===");
             System.out.println(prompt);
             System.out.println("=== AI request prompt end ===");
-            String reply = com.dbboys.util.AiApiUtil.chat(prompt);
+            String reply = com.dbboys.util.AiApiUtil.chatStream(prompt, delta -> {
+                if (aiCancelled || delta == null || delta.isEmpty()) {
+                    return;
+                }
+                messageView.appendRaw(delta);
+                scheduleAiMessageRender(messageView);
+            });
             Platform.runLater(() -> {
-                aiChatMessages.getChildren().remove(placeholderBox);
-                aiThinkingPlaceholder = null;
                 if (aiCancelled) {
+                    aiStreamingMessage = null;
                     aiTaskFuture = null;
                     updateAiSendButtonText(false);
                     return;
                 }
                 String content = reply != null && !reply.isEmpty() ? reply : I18n.t("ai.notice.api_error");
                 content = appendAiReferences(content, references);
-                // AI 回复同样通过 CustomGenericStyledArea 展示
-                addAiMarkdownMessage(content);
+                renderAiMessage(messageView, content, true);
                 scrollAiChatToBottom();
+                aiStreamingMessage = null;
                 aiTaskFuture = null;
                 updateAiSendButtonText(false);
             });
@@ -812,10 +837,22 @@ public class MainController {
     }
 
     private String stripAiReplyMarker(String content) {
+        return sanitizeAiReplyForDisplay(content).trim();
+    }
+
+    private String sanitizeAiReplyForDisplay(String content) {
         if (content == null || content.isEmpty()) {
             return "";
         }
-        return content.replace(AI_NETWORK_REPLY_MARKER, "").trim();
+        String sanitized = content.replace(AI_NETWORK_REPLY_MARKER, "");
+        for (int i = AI_NETWORK_REPLY_MARKER.length() - 1; i > 0; i--) {
+            String prefix = AI_NETWORK_REPLY_MARKER.substring(0, i);
+            if (sanitized.endsWith(prefix)) {
+                sanitized = sanitized.substring(0, sanitized.length() - i);
+                break;
+            }
+        }
+        return sanitized;
     }
 
     private void cancelAiRequest() {
@@ -824,10 +861,7 @@ public class MainController {
             aiTaskFuture.cancel(true);
         }
         aiTaskFuture = null;
-        if (aiThinkingPlaceholder != null) {
-            aiChatMessages.getChildren().remove(aiThinkingPlaceholder);
-            aiThinkingPlaceholder = null;
-        }
+        aiStreamingMessage = null;
         updateAiSendButtonText(false);
     }
 
@@ -850,17 +884,30 @@ public class MainController {
     }
 
     private void addAiMarkdownMessage(String content) {
-        com.dbboys.customnode.CustomAiStyledArea area = new com.dbboys.customnode.CustomAiStyledArea();
-        area.parseMarkdownWithStyles(content == null ? "" : content);
-        area.setEditable(false);
-        area.setStyle(
-                area.getStyle() +
-                ";-fx-padding: 6 10 6 10;" +
-                "-fx-background-color: transparent;" +
-                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
-        );
+        AiMessageView view = createAiMessageView(() -> content == null ? "" : content);
+        aiChatMessages.getChildren().add(view.messageGroup);
+        keepAiMessageVisible(view.area, view.messageGroup);
+        renderAiMessage(view, content, true);
+        scrollAiChatToBottom();
+    }
 
-        StackPane bubble = new StackPane(area);
+    private AiMessageView addStreamingAiMessage(String initialContent) {
+        AiMessageView[] ref = new AiMessageView[1];
+        AiMessageView view = createAiMessageView(() -> sanitizeAiReplyForDisplay(ref[0].getRaw()));
+        ref[0] = view;
+        aiChatMessages.getChildren().add(view.messageGroup);
+        keepAiMessageVisible(view.area, view.messageGroup);
+        renderAiMessage(view, initialContent, false);
+        scrollAiChatToBottom();
+        return view;
+    }
+
+    private AiMessageView createAiMessageView(Supplier<String> textSupplier) {
+        VBox messageGroup = new VBox();
+        StackPane bubble = new StackPane();
+        AiMessageView view = new AiMessageView(messageGroup, bubble);
+        configureAiMessageArea(view.area);
+        bubble.getChildren().add(view.area);
         bubble.setStyle(
                 "-fx-background-color: -color-bg-content;" +
                 "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
@@ -868,15 +915,53 @@ public class MainController {
         );
         bubble.prefWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
         bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
-        area.prefWidthProperty().bind(bubble.widthProperty());
-        area.maxWidthProperty().bind(bubble.widthProperty());
-
-        VBox messageGroup = new VBox(4, bubble, createMessageButtonRow(content, Pos.CENTER_LEFT));
+        view.area.prefWidthProperty().bind(bubble.widthProperty());
+        view.area.maxWidthProperty().bind(bubble.widthProperty());
+        messageGroup.getChildren().setAll(bubble, createMessageButtonRow(textSupplier, Pos.CENTER_LEFT));
+        messageGroup.setSpacing(4);
         messageGroup.setAlignment(Pos.CENTER_LEFT);
         messageGroup.setFillWidth(true);
-        aiChatMessages.getChildren().add(messageGroup);
-        keepAiMessageVisible(area, messageGroup);
-        scrollAiChatToBottom();
+        return view;
+    }
+
+    private void configureAiMessageArea(CustomAiStyledArea area) {
+        area.setEditable(false);
+        area.setStyle(
+                area.getStyle() +
+                        ";-fx-padding: 6 10 6 10;" +
+                        "-fx-background-color: transparent;" +
+                        "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
+        );
+    }
+
+    private void scheduleAiMessageRender(AiMessageView view) {
+        if (view == null || !view.renderScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            try {
+                int revision = view.revision.get();
+                String displayContent = sanitizeAiReplyForDisplay(view.getRaw());
+                renderAiMessage(view, displayContent, false);
+                view.renderedRevision.set(revision);
+            } finally {
+                view.renderScheduled.set(false);
+                if (view.revision.get() != view.renderedRevision.get()) {
+                    scheduleAiMessageRender(view);
+                }
+            }
+        });
+    }
+
+    private void renderAiMessage(AiMessageView view, String content, boolean updateRaw) {
+        if (view == null) {
+            return;
+        }
+        if (updateRaw) {
+            view.setRaw(content);
+        }
+        view.area.clear();
+        view.area.parseMarkdownWithStyles(content == null ? "" : content);
     }
 
     private void addUserMarkdownMessage(String content) {
@@ -896,14 +981,14 @@ public class MainController {
         );
         bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().multiply(USER_BUBBLE_MAX_WIDTH_RATIO));
         messageLabel.maxWidthProperty().bind(bubble.maxWidthProperty().subtract(20));
-        HBox messageRow = createMessageRow(bubble, text, Pos.CENTER_RIGHT, Pos.CENTER_RIGHT);
+        HBox messageRow = createMessageRow(bubble, () -> text, Pos.CENTER_RIGHT, Pos.CENTER_RIGHT);
         aiChatMessages.getChildren().add(messageRow);
         keepAiMessageVisible(bubble, messageRow);
         scrollAiChatToBottom();
     }
 
-    private HBox createMessageRow(Node messageNode, String text, Pos rowAlignment, Pos buttonAlignment) {
-        VBox messageGroup = new VBox(4, messageNode, createMessageButtonRow(text, buttonAlignment));
+    private HBox createMessageRow(Node messageNode, Supplier<String> textSupplier, Pos rowAlignment, Pos buttonAlignment) {
+        VBox messageGroup = new VBox(4, messageNode, createMessageButtonRow(textSupplier, buttonAlignment));
         messageGroup.setAlignment(buttonAlignment);
         messageGroup.setFillWidth(true);
         HBox messageRow = new HBox(messageGroup);
@@ -912,21 +997,21 @@ public class MainController {
         return messageRow;
     }
 
-    private HBox createMessageButtonRow(String text, Pos buttonAlignment) {
-        HBox buttonRow = new HBox(createMessageCopyButton(text));
+    private HBox createMessageButtonRow(Supplier<String> textSupplier, Pos buttonAlignment) {
+        HBox buttonRow = new HBox(createMessageCopyButton(textSupplier));
         buttonRow.setAlignment(buttonAlignment);
         buttonRow.setFillHeight(false);
         return buttonRow;
     }
 
-    private Button createMessageCopyButton(String text) {
+    private Button createMessageCopyButton(Supplier<String> textSupplier) {
         Button copyButton = new Button();
         copyButton.setText("");
         copyButton.setGraphic(IconFactory.group(IconPaths.COPY, 0.62));
         copyButton.getStyleClass().add("small");
         copyButton.setFocusTraversable(false);
         copyButton.setTooltip(new Tooltip(I18n.t("genericstyled.menu.copy")));
-        copyButton.setOnAction(event -> copyMessageText(text));
+        copyButton.setOnAction(event -> copyMessageText(textSupplier == null ? "" : textSupplier.get()));
         return copyButton;
     }
 
