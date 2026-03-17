@@ -734,7 +734,7 @@ public class MainController {
             prompt.append("\n\n知识库检索结果（按相关性排序，最多3条）：");
             for (int i = 0; i < references.size(); i++) {
                 MarkdownSearchUtil.KnowledgeReference ref = references.get(i);
-                prompt.append("\n\n[").append(i + 1).append("] 文档：").append(ref.path());
+                prompt.append("\n\n[").append(i + 1).append("]");
                 if (ref.snippet() != null && !ref.snippet().isBlank()) {
                     prompt.append("\n摘要：").append(ref.snippet());
                 }
