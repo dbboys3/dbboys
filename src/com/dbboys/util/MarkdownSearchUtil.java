@@ -325,6 +325,7 @@ public class MarkdownSearchUtil {
                     setText(null);
                     setGraphic(null);
                 } else {
+                    setText(null);
                     TextFlow flow = buildHighlightedText(item, keywordField == null ? "" : keywordField.trim());
                     setGraphic(flow);
                     setOnMouseClicked(event -> {
@@ -390,8 +391,7 @@ public class MarkdownSearchUtil {
                 flow.getChildren().add(normal);
             }
             Text match = new Text(fullPath.substring(pathMatcher.start(), pathMatcher.end()));
-            //match.setFill(Color.RED);
-            match.setFill(Color.valueOf("#d53829"));
+            match.setStyle("-fx-fill: -color-danger-7;");
             match.setFont(Font.font("System", FontWeight.BOLD, 10));
             flow.getChildren().add(match);
             last = pathMatcher.end();
@@ -421,21 +421,19 @@ public class MarkdownSearchUtil {
         while (snippetMatcher.find()) {
             if (snippetMatcher.start() > last) {
                 Text normal = new Text(limitedSnippet.substring(last, snippetMatcher.start()));
-                normal.setFill(Color.GRAY);
+                normal.setStyle("-fx-fill: #8a8f98;");
                 normal.setFont(Font.font("System", FontWeight.NORMAL, 8));
                 flow.getChildren().add(normal);
             }
             Text match = new Text(limitedSnippet.substring(snippetMatcher.start(), snippetMatcher.end()));
-            //match.setFill(Color.RED);
-            match.setFill(Color.valueOf("#d53829"));
-
+            match.setStyle("-fx-fill: -color-danger-7;");
             match.setFont(Font.font("System", FontWeight.NORMAL, 8));
             flow.getChildren().add(match);
             last = snippetMatcher.end();
         }
         if (last < limitedSnippet.length()) {
             Text tail = new Text(limitedSnippet.substring(last));
-            tail.setFill(Color.GRAY);
+            tail.setStyle("-fx-fill: #8a8f98;");
             tail.setFont(Font.font("System", FontWeight.NORMAL, 8));
             flow.getChildren().add(tail);
         }
@@ -529,15 +527,15 @@ public class MarkdownSearchUtil {
                 }
                 resultList.setItems(FXCollections.observableArrayList(results));
                 resultList.getSelectionModel().select(null);//避免第一个被选中显示背景色
-                resultList.setPrefHeight(mainStage.getHeight()-86);
-                resultList.setStyle("-fx-border-color: #888;-fx-border-width: 0.5;-fx-border-radius: 5");
+                resultList.setPrefHeight(mainStage.getHeight()-80);
+                resultList.setStyle("-fx-border-color: -color-fg-default;-fx-border-width: 0.5;-fx-background-color: -color-bg-default;-fx-border-radius: 5");
                 //这个设置可以避免出现search_result_popup在第一次搜索“配置”时靠顶显示
                 searchResultPopup.setAutoFix(false);
                 if(resultList.getItems().size()>0){
                     resultList.scrollTo(0);
                     searchResultPopup.show(mainStage,
-                            mainStage.getX() + 20,
-                            mainStage.getY() + 56);
+                            mainStage.getX() + 28,
+                            mainStage.getY() + 50);
                 }else{
                     searchResultPopup.hide();
                     NotificationUtil.showMainNotification(noMatchBinding.get());
