@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Locale;
 import com.dbboys.ui.IconFactory;
@@ -700,7 +701,9 @@ public class MainController {
         aiCancelled = false;
 
         aiTaskFuture = com.dbboys.app.AppExecutor.submit(() -> {
-            String reply = com.dbboys.util.AiApiUtil.chat(text);
+            List<MarkdownSearchUtil.KnowledgeReference> references =
+                    MarkdownSearchUtil.searchKnowledgeReferences(text, 3);
+            String reply = com.dbboys.util.AiApiUtil.chat(buildAiPrompt(text, references));
             Platform.runLater(() -> {
                 aiChatMessages.getChildren().remove(placeholderBox);
                 aiThinkingPlaceholder = null;
@@ -710,6 +713,7 @@ public class MainController {
                     return;
                 }
                 String content = reply != null && !reply.isEmpty() ? reply : I18n.t("ai.notice.api_error");
+                content = appendAiReferences(content, references);
                 // AI 回复同样通过 CustomGenericStyledArea 展示
                 addAiMarkdownMessage(content);
                 scrollAiChatToBottom();
@@ -717,6 +721,52 @@ public class MainController {
                 updateAiSendButtonText(false);
             });
         });
+    }
+
+    private String buildAiPrompt(String userQuestion, List<MarkdownSearchUtil.KnowledgeReference> references) {
+        String safeQuestion = userQuestion == null ? "" : userQuestion.trim();
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是数据库助手。请优先参考下面提供的知识库检索结果回答用户问题。");
+        prompt.append("如果检索内容不足以支撑结论，就明确说明不确定，不要编造。");
+        prompt.append("界面会在回答末尾追加参考文档链接，所以你不用自己再列参考链接。");
+        prompt.append("\n\n用户问题：\n").append(safeQuestion);
+        if (!references.isEmpty()) {
+            prompt.append("\n\n知识库检索结果（按相关性排序，最多3条）：");
+            for (int i = 0; i < references.size(); i++) {
+                MarkdownSearchUtil.KnowledgeReference ref = references.get(i);
+                prompt.append("\n\n[").append(i + 1).append("] 文档：").append(ref.path());
+                if (ref.snippet() != null && !ref.snippet().isBlank()) {
+                    prompt.append("\n摘要：").append(ref.snippet());
+                }
+            }
+        } else {
+            prompt.append("\n\n知识库检索结果：未匹配到相关文档。");
+        }
+        return prompt.toString();
+    }
+
+    private String appendAiReferences(String reply, List<MarkdownSearchUtil.KnowledgeReference> references) {
+        String content = reply == null ? "" : reply.trim();
+        if (references == null || references.isEmpty()) {
+            return content;
+        }
+        StringBuilder builder = new StringBuilder(content);
+        if (!content.isEmpty()) {
+            builder.append("\n\n");
+        }
+        builder.append("参考文档：\n");
+        for (int i = 0; i < references.size(); i++) {
+            MarkdownSearchUtil.KnowledgeReference ref = references.get(i);
+            String linkTarget = ref.path().replace('\\', '/');
+            String title = ref.title() == null || ref.title().isBlank() ? linkTarget : ref.title();
+            builder.append(i + 1)
+                    .append(". [")
+                    .append(title)
+                    .append("](")
+                    .append(linkTarget)
+                    .append(")\n");
+        }
+        return builder.toString().trim();
     }
 
     private void cancelAiRequest() {

@@ -1008,13 +1008,14 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     }
 
     public static Path getAbsPath(File file,String url){
+        Path relative  = Paths.get(url);
+        if (relative.isAbsolute()) {
+            return relative.normalize();
+        }
         Path appDir = Path.of(System.getProperty("user.dir"));
         Path baseFile = Path.of(file.getPath());
-        Path relative  = Paths.get(url);
-        Path absolutePath = baseFile
-                .getParent()      // 以“文件所在目录”为基准
-                .resolve(relative)
-                .normalize();
+        Path baseDir = baseFile.getParent();
+        Path absolutePath = (baseDir == null ? relative : baseDir.resolve(relative)).normalize();
         if (absolutePath.startsWith(appDir) && absolutePath.getNameCount() > appDir.getNameCount()) {
             return absolutePath.subpath(
                     appDir.getNameCount(),

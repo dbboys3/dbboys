@@ -40,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -312,6 +313,8 @@ public class MarkdownSearchUtil {
     private static String keywordField;
     private static boolean popupListenersAdded = false;
 
+    public record KnowledgeReference(String path, String title, String snippet) {}
+
     static {
         resultList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             //if (newVal != null) showPreview(newVal.path);
@@ -578,6 +581,35 @@ public class MarkdownSearchUtil {
             List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
         } catch (Exception e) {
             log.debug("Index warm-up failed", e);
+        }
+    }
+
+    public static List<KnowledgeReference> searchKnowledgeReferences(String keyword, int limit) {
+        if (keyword == null || keyword.isBlank() || limit <= 0) {
+            return Collections.emptyList();
+        }
+        try {
+            LuceneSearcher searcher = new LuceneSearcher(indexDir);
+            List<LuceneSearcher.SearchResult> results = searcher.search(keyword.trim(), limit);
+            List<KnowledgeReference> references = new ArrayList<>();
+            for (LuceneSearcher.SearchResult item : results) {
+                String path = item.path == null ? "" : item.path.trim();
+                if (path.isEmpty()) {
+                    continue;
+                }
+                String title;
+                try {
+                    title = Paths.get(path).getFileName().toString();
+                } catch (Exception ex) {
+                    title = path;
+                }
+                String snippet = item.snippet == null ? "" : item.snippet.replace("\r", "").trim();
+                references.add(new KnowledgeReference(path, title, snippet));
+            }
+            return references;
+        } catch (Exception e) {
+            log.warn("Knowledge search for AI failed: {}", keyword, e);
+            return Collections.emptyList();
         }
     }
 
