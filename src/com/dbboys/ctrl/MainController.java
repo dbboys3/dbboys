@@ -735,8 +735,7 @@ public class MainController {
         String safeQuestion = userQuestion == null ? "" : userQuestion.trim();
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是数据库助手。请优先参考下面提供的知识库检索结果回答用户问题。");
-        prompt.append("如果检索内容不足以支撑结论，就明确说明不确定，不要编造。");
-        prompt.append("界面会在回答末尾追加参考文档链接，所以你不用自己再列参考链接。");
+        prompt.append("如果检索内容不足以支撑结论，就明确说明不确定，不要编造，不要列参考文档链接。");
         prompt.append("\n\n用户问题：\n").append(safeQuestion);
         if (!references.isEmpty()) {
             prompt.append("\n\n知识库检索结果（按相关性排序，最多3条）：");
