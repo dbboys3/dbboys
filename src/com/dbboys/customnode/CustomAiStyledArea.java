@@ -16,6 +16,7 @@ import com.dbboys.i18n.I18n;
 import com.dbboys.util.AlertUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import javafx.scene.input.ContextMenuEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.Parent;
 import javafx.application.Platform;
@@ -37,8 +38,14 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         setEditable(false);
         setWrapText(true);
         setStyle("-fx-font-family: system; -fx-font-size: 10px;");
-        // AI 对话不需要右键菜单，避免误操作
-        setContextMenu(null);
+        contextMenu.getItems().setAll(copyItem);
+        setContextMenu(contextMenu);
+        addEventFilter(ContextMenuEvent.CONTEXT_MENU_REQUESTED, event -> {
+            if (getSelectedText().isEmpty()) {
+                contextMenu.hide();
+                event.consume();
+            }
+        });
 
         // 关键：高度随内容变化
         setMinHeight(Region.USE_PREF_SIZE);
