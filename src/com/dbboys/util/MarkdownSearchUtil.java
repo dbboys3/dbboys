@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -58,6 +59,7 @@ import java.util.stream.Stream;
  * - buildIndex 可选择覆盖(CREATE)或追加(APPEND)模式。
  */
 class LuceneIndexer {
+    private static final Logger log = LogManager.getLogger(LuceneIndexer.class);
 
     private final Path indexDir;
     private final Analyzer analyzer;
@@ -98,7 +100,8 @@ class LuceneIndexer {
                         try {
                             if (progress != null) progress.accept(p.toString());
                             indexFile(writer, p);
-                        } catch (IOException ex) {
+                        } catch (Exception ex) {
+                            log.warn("Indexing file failed: {}", p, ex);
                             System.err.println(INDEX_FILE_ERROR_BINDING.get().formatted(p, ex.getMessage()));
                         }
                     });
@@ -332,6 +335,7 @@ public class MarkdownSearchUtil {
     private static final StringBinding warmUpKeywordBinding = I18n.bind("markdown.search.warmup.keyword", "安装配置");
     private static String keywordField;
     private static boolean popupListenersAdded = false;
+    private static final AtomicBoolean indexBuildRunning = new AtomicBoolean(false);
 
     public record KnowledgeReference(String path, String title, String snippet) {}
 
@@ -469,41 +473,44 @@ public class MarkdownSearchUtil {
         buildIndex(true);
     }
     public static void buildIndex(boolean isNeedNotice) {
+        if (!indexBuildRunning.compareAndSet(false, true)) {
+            return;
+        }
+        Platform.runLater(() -> AppState.getRebuildMarkdownIndexButton().setVisible(false));
         AppExecutor.runAsync(() -> {
-            Platform.runLater(()->{
-                AppState.getRebuildMarkdownIndexButton().setVisible(false);
-            });
+        long start = System.currentTimeMillis();
         try {
             if (Files.exists(indexDir)) {
-                Files.walk(indexDir)
-                        .sorted(Comparator.reverseOrder())
-                        .forEach(path -> {
-                            try {
-                                Files.delete(path);
-                            } catch (IOException e) {
-                               // System.err.println("删除失败: " + path + " => " + e.getMessage());
-                            }
-                        });
+                try (Stream<Path> walk = Files.walk(indexDir)) {
+                    walk.sorted(Comparator.reverseOrder())
+                            .forEach(path -> {
+                                try {
+                                    Files.delete(path);
+                                } catch (IOException e) {
+                                   // System.err.println("删除失败: " + path + " => " + e.getMessage());
+                                }
+                            });
+                }
             }
             LuceneIndexer indexer = new LuceneIndexer(indexDir);
             indexer.buildIndex(Paths.get("docs"));
-            Platform.runLater(()->{
-                if(isNeedNotice){
-                    NotificationUtil.showMainNotification(rebuildDoneBinding.get());
-                }
-                Platform.runLater(()->{
-                    AppState.getRebuildMarkdownIndexButton().setVisible(true);
-                });
-            });
+            log.info("Markdown index rebuild finished in {} ms", System.currentTimeMillis() - start);
+            if(isNeedNotice){
+                Platform.runLater(MarkdownSearchUtil::notifyIndexBuildSuccess);
+            }
         } catch (Exception e) {
-            Platform.runLater(()-> {
-                        AppState.getRebuildMarkdownIndexButton().setVisible(true);
-                        AlertUtil.CustomAlert(errorTitleBinding.get(),
-                                buildFailedBinding.get().formatted(e.getMessage()));
-                    });
+            Platform.runLater(() -> AlertUtil.CustomAlert(errorTitleBinding.get(),
+                    buildFailedBinding.get().formatted(e.getMessage())));
             log.error("Operation failed", e);
+        } finally {
+            indexBuildRunning.set(false);
+            Platform.runLater(() -> AppState.getRebuildMarkdownIndexButton().setVisible(true));
         }
         });
+    }
+
+    private static void notifyIndexBuildSuccess() {
+        NotificationUtil.showMainNotification(rebuildDoneBinding.get());
     }
 
     public static void performSearch(String searchText) {

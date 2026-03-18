@@ -2,6 +2,8 @@ package com.dbboys.util;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -9,6 +11,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,7 +31,7 @@ import java.util.zip.ZipFile;
 
 final class DocumentIndexTextExtractor {
     private static final Logger log = LogManager.getLogger(DocumentIndexTextExtractor.class);
-    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("md", "markdown", "pdf", "docx", "doc");
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("md", "markdown", "pdf", "docx", "docm", "doc");
     private static final Pattern PDF_STREAM_PATTERN =
             Pattern.compile("(?s)(<<.*?>>)\\s*stream\\r?\\n(.*?)\\r?\\nendstream");
     private static final Pattern PDF_TEXT_BLOCK_PATTERN = Pattern.compile("(?s)BT(.*?)ET");
@@ -46,7 +49,7 @@ final class DocumentIndexTextExtractor {
         String extension = getExtension(file);
         String text = switch (extension) {
             case "md", "markdown" -> Files.readString(file);
-            case "docx" -> extractDocxText(file);
+            case "docx", "docm" -> extractDocxText(file);
             case "doc" -> extractLegacyWordText(file);
             case "pdf" -> extractPdfText(file);
             default -> "";
@@ -55,6 +58,16 @@ final class DocumentIndexTextExtractor {
     }
 
     private static String extractDocxText(Path file) throws IOException {
+        try (XWPFDocument document = new XWPFDocument(Files.newInputStream(file));
+             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
+            return extractor.getText();
+        } catch (Exception ex) {
+            log.warn("POI DOCX extraction failed for {}, falling back to XML parsing", file, ex);
+        }
+        return extractDocxXmlFallback(file);
+    }
+
+    private static String extractDocxXmlFallback(Path file) throws IOException {
         List<ZipEntry> xmlEntries = new ArrayList<>();
         try (ZipFile zipFile = new ZipFile(file.toFile(), ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
             Collections.list(zipFile.entries()).stream()
@@ -118,6 +131,19 @@ final class DocumentIndexTextExtractor {
     }
 
     private static String extractLegacyWordText(Path file) throws IOException {
+        try {
+            Class<?> documentClass = Class.forName("org.apache.poi.hwpf.HWPFDocument");
+            Class<?> extractorClass = Class.forName("org.apache.poi.hwpf.extractor.WordExtractor");
+            try (InputStream input = Files.newInputStream(file);
+                 AutoCloseable document = (AutoCloseable) documentClass.getConstructor(InputStream.class).newInstance(input);
+                 AutoCloseable extractor = (AutoCloseable) extractorClass.getConstructor(documentClass).newInstance(document)) {
+                return (String) extractorClass.getMethod("getText").invoke(extractor);
+            }
+        } catch (ClassNotFoundException ex) {
+            log.info("POI HWPF support is unavailable, falling back to binary extraction for {}", file);
+        } catch (Exception ex) {
+            log.warn("POI DOC extraction failed for {}, falling back to binary extraction", file, ex);
+        }
         byte[] bytes = Files.readAllBytes(file);
         return extractBinaryTextRuns(bytes, 4, 6);
     }
