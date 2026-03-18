@@ -853,75 +853,122 @@ public class CustomGenericStyledArea extends GenericStyledArea {
      * 根据表格数据生成JavaFX TableView组件
      */
     public Node createTableView(List<List<String>> tableRows) {
-        // 创建表格视图
         CustomTableView<List<String>> tableView = new CustomTableView<>();
-       // tableView.setStyle("-fx-border-color: #dddddd; -fx-border-width: 1px;");
-        tableView.prefWidthProperty().bind(widthProperty()); // 自适应宽度
+        tableView.getStyleClass().add("MarkdownTableView");
+        tableView.setTableMenuButtonVisible(false);
 
-        // 获取表头行（第一行）
+        final double fixedCellSize = 22.0;
+        tableView.setFixedCellSize(fixedCellSize);
+
         List<String> headers = tableRows.get(0);
+        Text measure = new Text();
+        measure.setFont(javafx.scene.text.Font.font("System", 11));
+        final int maxMeasureChars = 280;
+        final double maxColWidth = 420;
 
-        //如果只有一列，宽度计算不对单独处理
-        if(headers.size()==1){
-
+        double[] naturalColWidth = new double[headers.size()];
+        for (int c = 0; c < headers.size(); c++) {
+            String h = headers.get(c) == null ? "" : headers.get(c);
+            measure.setText(h);
+            double w = Math.min(measure.getLayoutBounds().getWidth() + 20, maxColWidth);
+            naturalColWidth[c] = Math.max(w, 44);
+            for (int r = 1; r < tableRows.size(); r++) {
+                List<String> row = tableRows.get(r);
+                String v = (c < row.size() && row.get(c) != null) ? row.get(c) : "";
+                if (v.length() > maxMeasureChars) {
+                    v = v.substring(0, maxMeasureChars);
+                }
+                measure.setText(v);
+                w = Math.min(measure.getLayoutBounds().getWidth() + 20, maxColWidth);
+                naturalColWidth[c] = Math.max(naturalColWidth[c], Math.max(w, 44));
+            }
         }
-        // 创建表格列（根据表头）
+
         for (int i = 0; i < headers.size(); i++) {
             final int columnIndex = i;
             TableColumn<List<String>, String> column = new TableColumn<>(headers.get(i));
             column.setCellFactory(col -> new CustomTableCell<>());
             column.setCellValueFactory(cellData -> {
-                // 获取当前行数据，若索引越界则返回空字符串
                 List<String> rowData = cellData.getValue();
                 String value = (columnIndex < rowData.size()) ? rowData.get(columnIndex) : "";
                 return new SimpleStringProperty(value);
             });
-            // 列宽自适应内容（也可设置固定宽度）
-            column.prefWidthProperty().bind(tableView.widthProperty().divide(headers.size()));
-           // double avgColWidth = (tableView.getWidth() - 30) / headers.size();
-            //Sstem.out.println("tableView.getWidth():"+tableView.getWidth()
-            // ;
-
-            //System.out.println("avgColWidth:"+avgColWidth);
-            //column.setPrefWidth(Math.max(80,avgColWidth));
-            tableView.getColumns().add(column);
             column.setSortable(false);
             column.setReorderable(false);
+            column.setResizable(false);
+            tableView.getColumns().add(column);
         }
 
-        // 添加表格内容行（跳过表头行）
         for (int i = 1; i < tableRows.size(); i++) {
             tableView.getItems().add(tableRows.get(i));
         }
 
-        // 关键：计算表格总高度（表头高度 + 内容行高度 + 边框）
-        double rowHeight = 21; // 单行高度（可根据字体调整）
-        double headerHeight = 18; // 表头高度
-        int dataRowCount = tableView.getItems().size(); // 实际数据行数
-        double totalHeight = headerHeight + (dataRowCount * rowHeight) +2; // +4是边框高度
-
-        // 限制最大高度（避免表格过高超出容器）
-        double maxHeight = 300; // 最大高度阈值
-        totalHeight = Math.min(totalHeight, maxHeight);
-
-        // 设置表格固定高度（根据内容计算）
+        int dataRowCount = tableView.getItems().size();
+        double headerBand = 26;
+        double totalHeight = headerBand + dataRowCount * fixedCellSize + 8;
         tableView.setPrefHeight(totalHeight);
         tableView.setMaxHeight(totalHeight);
         tableView.setMinHeight(totalHeight);
+
         tableView.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        tableView.getStyleClass().add("MarkdownTableView");
+
+        final int colCount = headers.size();
+        Runnable relayout = () -> layoutMarkdownTableView(tableView, naturalColWidth, colCount, this);
+        relayout.run();
+        Platform.runLater(relayout);
+        widthProperty().addListener((obs, o, n) -> Platform.runLater(relayout));
+
         tableView.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
             if (!newFocus) {
-                //textAreaContextMenu.hide();
-                // TextArea 获取焦点时，取消 GenericStyledArea 的选择
                 tableView.getSelectionModel().clearSelection();
-                //customGenericStyledArea.deselect(); // 清除选区
-            }else{
-                ((CustomGenericStyledArea)tableView.getParent().getParent().getParent().getParent().getParent()).deselect();
+            } else {
+                deselect();
             }
         });
 
         return tableView;
+    }
+
+    /** Markdown 表格：行号列 + 数据列按内容宽度布局，超出宿主宽度时等比压缩，避免内部滚动条。 */
+    private static void layoutMarkdownTableView(
+            CustomTableView<List<String>> tableView,
+            double[] naturalColWidth,
+            int numDataCols,
+            CustomGenericStyledArea host) {
+        if (tableView.getColumns().size() < numDataCols + 1) {
+            return;
+        }
+        final double rowNumW = 34;
+        TableColumn<List<String>, ?> rowCol = tableView.getColumns().get(0);
+        rowCol.setPrefWidth(rowNumW);
+        rowCol.setMinWidth(rowNumW);
+        rowCol.setMaxWidth(rowNumW);
+
+        double sumNatural = 0;
+        for (int i = 0; i < numDataCols; i++) {
+            sumNatural += naturalColWidth[i];
+        }
+
+        double pw = host != null ? host.getWidth() : 0;
+        if (pw <= 0) {
+            pw = 640;
+        }
+        double maxTable = Math.max(200, pw - 16);
+        double dataBudget = Math.max(120, maxTable - rowNumW - 12);
+        double scale = sumNatural > dataBudget && sumNatural > 0 ? dataBudget / sumNatural : 1.0;
+
+        double dataSum = 0;
+        for (int i = 0; i < numDataCols; i++) {
+            double w = Math.max(naturalColWidth[i] * scale, 36);
+            TableColumn<List<String>, ?> col = tableView.getColumns().get(i + 1);
+            col.setPrefWidth(w);
+            col.setMinWidth(32);
+            dataSum += w;
+        }
+        double totalW = Math.min(rowNumW + dataSum + 10, maxTable);
+        tableView.setPrefWidth(totalW);
+        tableView.setMinWidth(totalW);
+        tableView.setMaxWidth(totalW);
     }
 
     private static String getFileExtension(String url) {

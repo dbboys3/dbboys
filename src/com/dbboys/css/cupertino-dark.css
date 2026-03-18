@@ -1061,6 +1061,79 @@ Text {
   -fx-background-color: -color-cell-border;
   -fx-opacity: 0.4;
 }
+
+/* Markdown 内嵌表格（CustomGenericStyledArea）：高度已按行数撑开，隐藏内部滚动条 */
+.MarkdownTableView .scroll-bar:vertical,
+.MarkdownTableView .scroll-bar:horizontal {
+  -fx-opacity: 0;
+  -fx-pref-width: 0;
+  -fx-pref-height: 0;
+  -fx-min-width: 0;
+  -fx-min-height: 0;
+}
+
+/* Markdown 内嵌表格：表格与单元格背景透明 */
+.table-view.MarkdownTableView {
+  -fx-background-color: transparent;
+}
+.table-view.MarkdownTableView > .virtual-flow > .corner {
+  -fx-background-color: transparent;
+}
+.table-view.MarkdownTableView > .column-header-background {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.table-view.MarkdownTableView > .column-header-background .column-header {
+  -fx-background-color: transparent;
+  -fx-border-color: -color-border-default;
+}
+.table-view.MarkdownTableView > .column-header-background > .filler {
+  -fx-background-color: transparent;
+}
+.table-view.MarkdownTableView .table-row-cell,
+.table-view.MarkdownTableView .table-row-cell:filled,
+.table-view.MarkdownTableView .table-row-cell:filled:odd,
+.table-view.MarkdownTableView .table-row-cell:filled:even {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.table-view.MarkdownTableView .table-row-cell > .table-cell {
+  -fx-background-color: transparent;
+}
+.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:selected:focused {
+  -fx-background-color: -color-base-7;
+  -fx-background-insets: 0;
+}
+.table-view.MarkdownTableView .table-row-cell:filled:selected {
+  -fx-background-color: -color-base-7;
+}
+.table-view.MarkdownTableView .table-row-cell:filled > .table-cell:selected {
+  -fx-background-color: -color-base-7;
+}
+
+/* 覆盖全局 .table-view … :selected（Markdown 表格选中单元格用 base-7） */
+.table-view.MarkdownTableView > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:selected {
+  -fx-background-color: -color-base-7;
+  -color-cell-fg: -color-fg-default;
+}
+.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:selected {
+  -fx-background-color: -color-base-7;
+  -color-cell-fg: -color-fg-default;
+}
+.table-view.MarkdownTableView > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected,
+.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected {
+  -fx-background-color: -color-base-7;
+  -fx-background-insets: 0;
+}
+
 .table-view > .virtual-flow:disabled {
   -fx-opacity: 0.4;
 }
