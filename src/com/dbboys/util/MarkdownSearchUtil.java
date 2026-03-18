@@ -26,10 +26,15 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BoostQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchNoDocsQuery;
+import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -43,8 +48,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -60,6 +65,19 @@ import java.util.stream.Stream;
  */
 class LuceneIndexer {
     private static final Logger log = LogManager.getLogger(LuceneIndexer.class);
+    static final String LEGACY_FIELD_PATH = "path";
+    static final String LEGACY_FIELD_FILENAME = "filename";
+    static final String FIELD_PATH_RAW = "path_raw";
+    static final String FIELD_PATH_TEXT = "path_text";
+    static final String FIELD_FILENAME_RAW = "filename_raw";
+    static final String FIELD_FILENAME_TEXT = "filename_text";
+    static final String FIELD_TITLE_TEXT = "title_text";
+    static final String FIELD_CONTENT = "content";
+    static final String FIELD_MODIFIED = "modified";
+    static final String FIELD_MODIFIED_STORED = "modified_stored";
+    private static final Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("(?m)^#{1,6}\\s+(.+?)\\s*$");
+    private static final int MAX_TITLE_PARTS = 8;
+    private static final int MAX_TITLE_TEXT_LENGTH = 800;
 
     private final Path indexDir;
     private final Analyzer analyzer;
@@ -122,33 +140,67 @@ class LuceneIndexer {
 
         String content = DocumentIndexTextExtractor.extractText(file);
         long modified = Files.getLastModifiedTime(file).toMillis();
+        String rawPath = file.toString();
+        String fileName = file.getFileName().toString();
+        String fileStem = stripExtension(fileName);
+        String titleText = buildTitleText(file, content, fileStem);
 
         Document doc = new Document();
 
-        // path 字段：存储并索引（便于精确匹配/打开文件）
-        //doc.add(new StringField("path", file.toString(), Field.Store.YES));
-        //分词匹配
-        doc.add(new org.apache.lucene.document.TextField("path", file.toString(), Field.Store.YES));
-
-
-        // fileName 便于展示/加权
-        String fileName = file.getFileName().toString();
-        doc.add(new StringField("filename", fileName, Field.Store.YES));
+        doc.add(new StringField(FIELD_PATH_RAW, rawPath, Field.Store.YES));
+        doc.add(new org.apache.lucene.document.TextField(
+                FIELD_PATH_TEXT, rawPath.replace('\\', ' ').replace('/', ' '), Field.Store.NO));
+        doc.add(new StringField(FIELD_FILENAME_RAW, fileName, Field.Store.YES));
+        doc.add(new org.apache.lucene.document.TextField(
+                FIELD_FILENAME_TEXT, (fileStem + " " + fileName).trim(), Field.Store.NO));
+        if (!titleText.isBlank()) {
+            doc.add(new org.apache.lucene.document.TextField(FIELD_TITLE_TEXT, titleText, Field.Store.NO));
+        }
 
         // content: 存储并分词（便于高亮与显示）
-        doc.add(new org.apache.lucene.document.TextField("content", content, Field.Store.YES));
+        doc.add(new org.apache.lucene.document.TextField(FIELD_CONTENT, content, Field.Store.YES));
 
         // modified 时间：用于排序或权重
-        doc.add(new LongPoint("modified", modified));
+        doc.add(new LongPoint(FIELD_MODIFIED, modified));
         // 同时存储 modified 以便检索后取得值
-        doc.add(new StoredField("modified_stored", modified));
-
-        // 如果想让 filename / path 在查询时权重更高，可以在构建 Query 时为这些字段 boost
-        // 或者在创建 Document 时使用 FieldType 并 setBoost()（Lucene 9 推荐在 Query 侧处理）
+        doc.add(new StoredField(FIELD_MODIFIED_STORED, modified));
 
         // 增量更新：删除已存在的同 path 文档后添加新文档
         // 这保证了 path 的唯一性（避免重复）
-        writer.updateDocument(new Term("path", file.toString()), doc);
+        writer.updateDocument(new Term(FIELD_PATH_RAW, rawPath), doc);
+    }
+
+    private static String buildTitleText(Path file, String content, String fileStem) {
+        LinkedHashSet<String> parts = new LinkedHashSet<>();
+        if (fileStem != null && !fileStem.isBlank()) {
+            parts.add(fileStem.trim());
+        }
+        String lowerName = file.getFileName().toString().toLowerCase();
+        if ((lowerName.endsWith(".md") || lowerName.endsWith(".markdown")) && content != null && !content.isBlank()) {
+            Matcher matcher = MARKDOWN_HEADING_PATTERN.matcher(content);
+            while (matcher.find() && parts.size() < MAX_TITLE_PARTS) {
+                String heading = matcher.group(1) == null ? "" : matcher.group(1).replaceAll("[`*_#>\\[\\]]", "").trim();
+                if (!heading.isBlank()) {
+                    parts.add(heading);
+                }
+            }
+        }
+        String joined = String.join("\n", parts);
+        if (joined.length() <= MAX_TITLE_TEXT_LENGTH) {
+            return joined;
+        }
+        return joined.substring(0, MAX_TITLE_TEXT_LENGTH);
+    }
+
+    private static String stripExtension(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "";
+        }
+        int dot = fileName.lastIndexOf('.');
+        if (dot <= 0) {
+            return fileName;
+        }
+        return fileName.substring(0, dot);
     }
 
     /**
@@ -182,55 +234,42 @@ class LuceneSearcher {
     }
 
     public List<LuceneSearcher.SearchResult> search(String keyword, int limit) throws Exception {
-        return search(keyword, limit, DEFAULT_SNIPPET_CONTEXT_CHARS, DEFAULT_FALLBACK_SNIPPET_CHARS, DEFAULT_BOUNDARY_WINDOW_CHARS);
+        return search(keyword, limit, DEFAULT_SNIPPET_CONTEXT_CHARS, DEFAULT_FALLBACK_SNIPPET_CHARS,
+                DEFAULT_BOUNDARY_WINDOW_CHARS, false);
     }
 
     public List<LuceneSearcher.SearchResult> searchForAi(String keyword, int limit) throws Exception {
-        return search(keyword, limit, AI_SNIPPET_CONTEXT_CHARS, AI_FALLBACK_SNIPPET_CHARS, AI_BOUNDARY_WINDOW_CHARS);
+        return search(keyword, limit, AI_SNIPPET_CONTEXT_CHARS, AI_FALLBACK_SNIPPET_CHARS,
+                AI_BOUNDARY_WINDOW_CHARS, true);
     }
 
     private List<LuceneSearcher.SearchResult> search(String keyword,
                                                      int limit,
                                                      int contextChars,
                                                      int fallbackSnippetChars,
-                                                     int boundaryWindowChars) throws Exception {
+                                                     int boundaryWindowChars,
+                                                     boolean strict) throws Exception {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        List<String> tokens = analyzeQueryTerms(normalizedKeyword);
+        Query query = buildQuery(normalizedKeyword, tokens, strict);
+        if (query instanceof MatchNoDocsQuery) {
+            return Collections.emptyList();
+        }
         try (Directory dir = FSDirectory.open(indexDir);
              DirectoryReader reader = DirectoryReader.open(dir)) {
             IndexSearcher searcher = new IndexSearcher(reader);
-
-            String[] fields = {"path", "filename", "content"};
-            Map<String, Float> boosts = Map.of(
-                    "path", 1.5f,
-                    "filename", 2.0f,
-                    "content", 1.0f
-            );
-
-            MultiFieldQueryParser parser = new MultiFieldQueryParser(fields, analyzer, boosts);
-            Query query = parser.parse(keyword);
 
             TopDocs topDocs = searcher.search(query, limit);
             List<LuceneSearcher.SearchResult> results = new ArrayList<>();
 
             for (ScoreDoc sd : topDocs.scoreDocs) {
                 Document doc = searcher.storedFields().document(sd.doc);
-                String path = doc.get("path");
-                String content = doc.get("content");
-                if (content == null) content = "";
-
-            // --------- 1) 分词提取搜索 token（和你原来的一样） ----------
-            List<String> tokens = new ArrayList<>();
-            try (TokenStream ts = analyzer.tokenStream("content", keyword)) {
-                ts.reset();
-                while (ts.incrementToken()) {
-                    String term = ts.getAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute.class).toString();
-                    if (!term.isBlank()) tokens.add(term);
+                String path = doc.get(LuceneIndexer.FIELD_PATH_RAW);
+                if (path == null || path.isBlank()) {
+                    path = doc.get(LuceneIndexer.LEGACY_FIELD_PATH);
                 }
-                ts.end();
-            } catch (Exception e) {
-                log.debug("Tokenizer failed, falling back to raw keyword", e);
-            }
-
-            if (tokens.isEmpty()) tokens.add(keyword);
+                String content = doc.get(LuceneIndexer.FIELD_CONTENT);
+                if (content == null) content = "";
 
             // --------- 2) 收集所有匹配区间（去重） ----------
             String lowerContent = content.toLowerCase();
@@ -304,6 +343,127 @@ class LuceneSearcher {
 
             return results;
         }
+    }
+
+    private Query buildQuery(String keyword, List<String> tokens, boolean strict) {
+        BooleanQuery.Builder root = new BooleanQuery.Builder();
+        root.setMinimumNumberShouldMatch(1);
+
+        addQuery(root, buildExactNameQuery(keyword), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, strict ? 8.0f : 7.0f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, strict ? 7.0f : 6.0f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_CONTENT, tokens, strict ? 2.4f : 1.8f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, minimumShouldMatch(tokens.size(), strict, true),
+                strict ? 6.0f : 5.0f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, minimumShouldMatch(tokens.size(), strict, true),
+                strict ? 5.2f : 4.5f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_CONTENT, tokens, minimumShouldMatch(tokens.size(), strict, false),
+                strict ? 2.2f : 1.5f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_PATH_TEXT, tokens, 1, strict ? 0.5f : 0.8f), BooleanClause.Occur.SHOULD);
+
+        BooleanQuery built = root.build();
+        if (built.clauses().isEmpty()) {
+            return new MatchNoDocsQuery();
+        }
+        return built;
+    }
+
+    private Query buildExactNameQuery(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        String normalized = keyword.trim();
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_FILENAME_RAW, normalized)), 12.0f),
+                BooleanClause.Occur.SHOULD);
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.LEGACY_FIELD_FILENAME, normalized)), 11.0f),
+                BooleanClause.Occur.SHOULD);
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_PATH_RAW, normalized)), 10.0f),
+                BooleanClause.Occur.SHOULD);
+        BooleanQuery built = builder.build();
+        return built.clauses().isEmpty() ? null : built;
+    }
+
+    private Query buildPhraseQuery(String field, List<String> tokens, float boost) {
+        if (tokens == null || tokens.isEmpty()) {
+            return null;
+        }
+        Query query;
+        if (tokens.size() == 1) {
+            query = new TermQuery(new Term(field, tokens.get(0)));
+        } else {
+            PhraseQuery.Builder builder = new PhraseQuery.Builder();
+            for (int i = 0; i < tokens.size(); i++) {
+                builder.add(new Term(field, tokens.get(i)), i);
+            }
+            query = builder.build();
+        }
+        return new BoostQuery(query, boost);
+    }
+
+    private Query buildTermSetQuery(String field, List<String> tokens, int minShouldMatch, float boost) {
+        if (tokens == null || tokens.isEmpty()) {
+            return null;
+        }
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        int added = 0;
+        for (String token : tokens) {
+            if (token == null || token.isBlank()) {
+                continue;
+            }
+            builder.add(new TermQuery(new Term(field, token)), BooleanClause.Occur.SHOULD);
+            added++;
+        }
+        if (added == 0) {
+            return null;
+        }
+        if (added > 1) {
+            builder.setMinimumNumberShouldMatch(Math.min(Math.max(minShouldMatch, 1), added));
+        }
+        return new BoostQuery(builder.build(), boost);
+    }
+
+    private List<String> analyzeQueryTerms(String keyword) {
+        LinkedHashSet<String> tokens = new LinkedHashSet<>();
+        if (keyword == null || keyword.isBlank()) {
+            return new ArrayList<>();
+        }
+        try (TokenStream ts = analyzer.tokenStream(LuceneIndexer.FIELD_CONTENT, keyword)) {
+            ts.reset();
+            while (ts.incrementToken()) {
+                String term = ts.getAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute.class).toString();
+                if (term != null && !term.isBlank()) {
+                    tokens.add(term);
+                }
+            }
+            ts.end();
+        } catch (Exception e) {
+            log.debug("Tokenizer failed, falling back to raw keyword", e);
+        }
+        if (tokens.isEmpty()) {
+            tokens.add(keyword.trim().toLowerCase());
+        }
+        return new ArrayList<>(tokens);
+    }
+
+    private int minimumShouldMatch(int tokenCount, boolean strict, boolean shortField) {
+        if (tokenCount <= 1) {
+            return tokenCount;
+        }
+        if (shortField) {
+            return strict ? Math.min(tokenCount, Math.max(1, tokenCount - 1)) : Math.min(tokenCount, Math.max(1, tokenCount - 2));
+        }
+        if (strict) {
+            return Math.min(tokenCount, Math.max(2, (int) Math.ceil(tokenCount * 0.7)));
+        }
+        return Math.min(tokenCount, Math.max(1, (int) Math.ceil(tokenCount * 0.5)));
+    }
+
+    private void addQuery(BooleanQuery.Builder builder, Query query, BooleanClause.Occur occur) {
+        if (builder == null || query == null) {
+            return;
+        }
+        builder.add(query, occur);
     }
 
     public static class SearchResult {
