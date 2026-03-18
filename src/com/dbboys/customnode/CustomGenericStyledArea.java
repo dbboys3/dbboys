@@ -13,18 +13,18 @@ import com.dbboys.util.TabpaneUtil;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.value.ChangeListener;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
+import javafx.scene.Parent;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.stage.FileChooser;
@@ -264,38 +264,6 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                         );
 
-                    } else if (seg.getStyle().contains("code-block")) {
-                        if (e.getLeft().trim().isEmpty()) {
-                            return new Text(""); // appendtext("\n")会继承上一个style，空段落不生成 TextArea，解决最后一个如果是```出现一个空白text
-                        }
-                        TextArea textArea = new TextArea();
-                        // 代码块：高度完全跟随内容，不需要内部滚动条
-                        textArea.setWrapText(false);
-                        textArea.setMinHeight(14);
-                        textArea.setEditable(false);
-                        ChangeListener<Object> listener = (obs, oldVal, newVal) -> {
-                            double textHeight = computeTextHeight(textArea);
-                            textArea.setPrefHeight(textHeight);
-                        };
-                        textArea.textProperty().addListener(listener);
-                        textArea.widthProperty().addListener(listener);
-                        textArea.setText(e.getLeft());
-                        // 宽度撑满父容器（预留一点内边距）
-                        textArea.prefWidthProperty().bind(
-                                Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 8)
-                        );
-                        installCodeBlockContextMenu(textArea, () -> {
-                            if (textArea.getParent() != null
-                                    && textArea.getParent().getParent() != null
-                                    && textArea.getParent().getParent().getParent() != null
-                                    && textArea.getParent().getParent().getParent().getParent() != null
-                                    && textArea.getParent().getParent().getParent().getParent().getParent() instanceof CustomGenericStyledArea area) {
-                                area.deselect();
-                            }
-                        });
-
-                        return textArea;
-
                     }else if (seg.getStyle().contains("bold")) {
                         t.setStyle("-fx-font-family: system;-fx-font-weight: bold;-fx-fill: -color-danger-7");
                     }else if (seg.getStyle() != null) {
@@ -405,33 +373,47 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
     }
 
-    protected static void installCodeBlockContextMenu(TextArea textArea, Runnable onFocusGained) {
-        ContextMenu textAreaContextMenu = new ContextMenu();
-        CustomShortcutMenuItem textAreaCopyItem = MenuItemUtil.createMenuItemI18n(
-                "genericstyled.menu.copy",
-                "Ctrl+C",
-                IconFactory.group(IconPaths.COPY, 0.7)
+    protected CustomInfoCodeArea createCodeBlockArea(String code) {
+        CustomInfoCodeArea codeArea = new CustomInfoCodeArea();
+        codeArea.replaceText(code == null ? "" : code);
+        codeArea.setWrapText(false);
+        codeArea.setEditable(false);
+        codeArea.setParagraphGraphicFactory(null);
+        codeArea.setStyle(
+                "-fx-background-color: -color-bg-subtle;" +
+                        "-fx-background-radius: 4px;" +
+                        "-fx-border-color: -color-border-subtle;" +
+                        "-fx-border-radius: 4px;" +
+                        "-fx-padding: 0;" +
+                        "-fx-font-size: 10px;"
         );
-        textAreaContextMenu.getItems().add(textAreaCopyItem);
+        updateCodeBlockHeight(codeArea);
+        bindCodeBlockWidth(codeArea);
+        bindCodeBlockScroll(codeArea);
+        return codeArea;
+    }
 
-        textArea.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
-            if (!newFocus) {
-                textArea.deselect();
-            } else if (onFocusGained != null) {
-                onFocusGained.run();
-            }
-        });
+    protected void bindCodeBlockWidth(CustomInfoCodeArea codeArea) {
+        if (AppState.getSqlTabPane() != null) {
+            codeArea.prefWidthProperty().bind(Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 8));
+        }
+    }
 
-        textArea.setContextMenu(textAreaContextMenu);
-        textAreaCopyItem.setOnAction(event -> {
-            if (!textArea.getSelectedText().isEmpty()) {
-                textArea.copy();
-            } else {
-                Clipboard clipboard = Clipboard.getSystemClipboard();
-                ClipboardContent content = new ClipboardContent();
-                content.putString(textArea.getText());
-                clipboard.setContent(content);
-                NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.code_block_copied"));
+    protected static void updateCodeBlockHeight(CustomInfoCodeArea codeArea) {
+        int lines = Math.max(codeArea.getParagraphs().size(), 1);
+        double lineHeight = 12;
+        double height = Math.max(16, Math.ceil(lines * lineHeight + 4));
+        codeArea.setPrefHeight(height);
+        codeArea.setMinHeight(height);
+        codeArea.setMaxHeight(height);
+    }
+
+    protected void bindCodeBlockScroll(CustomInfoCodeArea codeArea) {
+        codeArea.addEventFilter(ScrollEvent.SCROLL, event -> {
+            Parent parent = codeArea.getParent();
+            if (parent != null) {
+                parent.fireEvent(event.copyFor(parent, parent));
+                event.consume();
             }
         });
     }
@@ -459,7 +441,6 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         boolean inCodeBlock = false;
         String codeLanguage = "";
         StringBuilder codeBlock = new StringBuilder();
-        int currentParagraph = 0;
 
         for (String line : lines) {
             //去掉空行
@@ -500,7 +481,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                     // 添加代码内容
                     if (codeBlock.length() > 0) {
-                        append(Either.left(codeBlock.toString().trim()), "code-block");
+                        CustomInfoCodeArea codeArea = createCodeBlockArea(codeBlock.toString().trim());
+                        append(Either.right(codeArea), "");
                         appendText("\n");
                     }
                     codeBlock.setLength(0);
@@ -688,9 +670,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
         // 如果代码块没有正确结束，确保添加剩余内容
         if (inCodeBlock && codeBlock.length() > 0) {
-            append(Either.left(codeBlock.toString()), "");
-            currentParagraph = getParagraphs().size() - 1;
-            setParagraphStyle(currentParagraph, ("code-block"));
+            CustomInfoCodeArea codeArea = createCodeBlockArea(codeBlock.toString().trim());
+            append(Either.right(codeArea), "");
         }
         for(int i=0;i<getParagraphs().size();i++) {
             setParagraphStyle(i, "-fx-line-spacing: 10px");
@@ -794,16 +775,6 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             append(Either.left(text.substring(lastIndex)), "");
         }
     }
-
-
-    private static double computeTextHeight(TextArea textArea) {
-        // 按文本中的换行数估算行数（wrap 关闭，避免受宽度影响）
-        String text = textArea.getText() == null ? "" : textArea.getText();
-        int lines = text.isEmpty() ? 1 : text.split("\\R", -1).length;
-        double lineHeight = 14;
-        return lines * lineHeight + 8;
-    }
-
     // 辅助类，用于存储文本段及其样式
     public static class TextSegment {
         String text;

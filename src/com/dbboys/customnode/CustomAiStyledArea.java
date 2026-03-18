@@ -380,37 +380,9 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         scheduleHeightUpdate();
     }
 
-    /** 创建用于显示代码块的 CustomInfoCodeArea。 */
-    private CustomInfoCodeArea createCodeBlockArea(String code) {
-        CustomInfoCodeArea codeArea = new CustomInfoCodeArea();
-        codeArea.replaceText(code == null ? "" : code);
-        codeArea.setWrapText(false);
-        codeArea.setEditable(false);
-        codeArea.setParagraphGraphicFactory(null);
-        codeArea.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 4px;" +
-                "-fx-border-color: -color-border-subtle;" +
-                "-fx-border-radius: 4px;" +
-                "-fx-padding: 0;" +
-                "-fx-font-size: 10px;"
-        );
-        updateCodeBlockHeight(codeArea);
-
-        // 宽度填满 CustomAiStyledArea（预留一点内边距）
+    @Override
+    protected void bindCodeBlockWidth(CustomInfoCodeArea codeArea) {
         codeArea.prefWidthProperty().bind(widthProperty().subtract(27));
-
-        return codeArea;
-    }
-
-    /** 用固定行高按段落数收紧代码块，避免额外监听。 */
-    private static void updateCodeBlockHeight(CustomInfoCodeArea codeArea) {
-        int lines = Math.max(codeArea.getParagraphs().size(), 1);
-        double lineHeight = 12;
-        double height = Math.max(16, Math.ceil(lines * lineHeight + 4));
-        codeArea.setPrefHeight(height);
-        codeArea.setMinHeight(height);
-        codeArea.setMaxHeight(height);
     }
 
     @Override
