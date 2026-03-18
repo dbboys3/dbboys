@@ -384,12 +384,19 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         "-fx-background-radius: 4px;" +
                         "-fx-border-color: -color-border-subtle;" +
                         "-fx-border-radius: 4px;" +
-                        "-fx-padding: 0;" +
+                        "-fx-padding: 3;" +
                         "-fx-font-size: 10px;"
         );
         updateCodeBlockHeight(codeArea);
         bindCodeBlockWidth(codeArea);
         bindCodeBlockScroll(codeArea);
+        codeArea.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
+            if (newFocus) {
+                deselect();
+            }else{
+                codeArea.deselect();
+            }
+        });
         return codeArea;
     }
 
@@ -402,7 +409,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     protected static void updateCodeBlockHeight(CustomInfoCodeArea codeArea) {
         int lines = Math.max(codeArea.getParagraphs().size(), 1);
         double lineHeight = 12;
-        double height = Math.max(16, Math.ceil(lines * lineHeight + 4));
+        double height = Math.max(16, Math.ceil(lines * lineHeight + 8));
         codeArea.setPrefHeight(height);
         codeArea.setMinHeight(height);
         codeArea.setMaxHeight(height);
