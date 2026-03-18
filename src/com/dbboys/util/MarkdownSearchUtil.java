@@ -350,16 +350,16 @@ class LuceneSearcher {
         root.setMinimumNumberShouldMatch(1);
 
         addQuery(root, buildExactNameQuery(keyword), BooleanClause.Occur.SHOULD);
-        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, strict ? 8.0f : 7.0f), BooleanClause.Occur.SHOULD);
-        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, strict ? 7.0f : 6.0f), BooleanClause.Occur.SHOULD);
-        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_CONTENT, tokens, strict ? 2.4f : 1.8f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, strict ? 2.4f : 2.0f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, strict ? 2.8f : 2.4f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_CONTENT, tokens, strict ? 7.0f : 5.5f), BooleanClause.Occur.SHOULD);
         addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, minimumShouldMatch(tokens.size(), strict, true),
-                strict ? 6.0f : 5.0f), BooleanClause.Occur.SHOULD);
+                strict ? 1.8f : 1.5f), BooleanClause.Occur.SHOULD);
         addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, minimumShouldMatch(tokens.size(), strict, true),
-                strict ? 5.2f : 4.5f), BooleanClause.Occur.SHOULD);
+                strict ? 2.0f : 1.6f), BooleanClause.Occur.SHOULD);
         addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_CONTENT, tokens, minimumShouldMatch(tokens.size(), strict, false),
-                strict ? 2.2f : 1.5f), BooleanClause.Occur.SHOULD);
-        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_PATH_TEXT, tokens, 1, strict ? 0.5f : 0.8f), BooleanClause.Occur.SHOULD);
+                strict ? 4.5f : 3.5f), BooleanClause.Occur.SHOULD);
+        addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_PATH_TEXT, tokens, 1, strict ? 0.3f : 0.5f), BooleanClause.Occur.SHOULD);
 
         BooleanQuery built = root.build();
         if (built.clauses().isEmpty()) {
@@ -373,12 +373,15 @@ class LuceneSearcher {
             return null;
         }
         String normalized = keyword.trim();
+        if (!looksLikeExactNameQuery(normalized)) {
+            return null;
+        }
         BooleanQuery.Builder builder = new BooleanQuery.Builder();
-        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_FILENAME_RAW, normalized)), 12.0f),
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_FILENAME_RAW, normalized)), 6.0f),
                 BooleanClause.Occur.SHOULD);
-        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.LEGACY_FIELD_FILENAME, normalized)), 11.0f),
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.LEGACY_FIELD_FILENAME, normalized)), 5.5f),
                 BooleanClause.Occur.SHOULD);
-        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_PATH_RAW, normalized)), 10.0f),
+        builder.add(new BoostQuery(new TermQuery(new Term(LuceneIndexer.FIELD_PATH_RAW, normalized)), 4.0f),
                 BooleanClause.Occur.SHOULD);
         BooleanQuery built = builder.build();
         return built.clauses().isEmpty() ? null : built;
@@ -457,6 +460,18 @@ class LuceneSearcher {
             return Math.min(tokenCount, Math.max(2, (int) Math.ceil(tokenCount * 0.7)));
         }
         return Math.min(tokenCount, Math.max(1, (int) Math.ceil(tokenCount * 0.5)));
+    }
+
+    private boolean looksLikeExactNameQuery(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return false;
+        }
+        String normalized = keyword.trim();
+        return normalized.contains("\\")
+                || normalized.contains("/")
+                || normalized.contains(".")
+                || normalized.contains("_")
+                || normalized.contains("-");
     }
 
     private void addQuery(BooleanQuery.Builder builder, Query query, BooleanClause.Occur occur) {
