@@ -50,6 +50,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -122,7 +123,8 @@ final class MarkdownSearchNormalizer {
  * LuceneIndexer - 为 Markdown 文件夹建立 Lucene 索引
  *
  * 说明：
- * - content 字段被存储（Store.YES），便于在检索后读取原文或做高亮。
+ * - content 字段仅用于分词检索，不再存储整篇正文，避免搜索时反序列化大文档。
+ * - content_preview 单独存储较短预览，用于搜索结果摘要与 AI 参考片段。
  * - buildIndex 可选择覆盖(CREATE)或追加(APPEND)模式。
  */
 class LuceneIndexer {
@@ -135,11 +137,13 @@ class LuceneIndexer {
     static final String FIELD_FILENAME_TEXT = "filename_text";
     static final String FIELD_TITLE_TEXT = "title_text";
     static final String FIELD_CONTENT = "content";
+    static final String FIELD_CONTENT_PREVIEW = "content_preview";
     static final String FIELD_MODIFIED = "modified";
     static final String FIELD_MODIFIED_STORED = "modified_stored";
     private static final Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("(?m)^#{1,6}\\s+(.+?)\\s*$");
     private static final int MAX_TITLE_PARTS = 8;
     private static final int MAX_TITLE_TEXT_LENGTH = 800;
+    private static final int MAX_CONTENT_PREVIEW_CHARS = 20_000;
 
     private final Path indexDir;
     private final Analyzer analyzer;
@@ -201,6 +205,7 @@ class LuceneIndexer {
     private static void indexFile(IndexWriter writer, Path file) throws IOException {
 
         String content = DocumentIndexTextExtractor.extractText(file);
+        String contentPreview = buildContentPreview(content);
         long modified = Files.getLastModifiedTime(file).toMillis();
         String rawPath = file.toString();
         String fileName = file.getFileName().toString();
@@ -226,8 +231,9 @@ class LuceneIndexer {
                     Field.Store.NO));
         }
 
-        // content: 存储并分词（便于高亮与显示）
-        doc.add(new org.apache.lucene.document.TextField(FIELD_CONTENT, content, Field.Store.YES));
+        // content: 仅用于分词检索，不存整篇正文，避免搜索命中后把大文档整篇读回内存。
+        doc.add(new org.apache.lucene.document.TextField(FIELD_CONTENT, content, Field.Store.NO));
+        doc.add(new StoredField(FIELD_CONTENT_PREVIEW, contentPreview));
 
         // modified 时间：用于排序或权重
         doc.add(new LongPoint(FIELD_MODIFIED, modified));
@@ -272,6 +278,16 @@ class LuceneIndexer {
         return fileName.substring(0, dot);
     }
 
+    private static String buildContentPreview(String content) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        if (content.length() <= MAX_CONTENT_PREVIEW_CHARS) {
+            return content;
+        }
+        return content.substring(0, MAX_CONTENT_PREVIEW_CHARS);
+    }
+
     /**
      * 删除索引目录（谨慎使用）
      */
@@ -292,10 +308,15 @@ class LuceneSearcher {
     private static final int DEFAULT_SNIPPET_CONTEXT_CHARS = 30;
     private static final int DEFAULT_FALLBACK_SNIPPET_CHARS = 120;
     private static final int DEFAULT_BOUNDARY_WINDOW_CHARS = 50;
-    /** 生成摘要/加分时只扫描正文前若干字符，避免 PDF/DOCX 等大文档全文 toLowerCase + 多次 indexOf 极慢 */
-    private static final int MAX_CONTENT_SCAN_CHARS = 200_000;
+    /** 生成摘要/加分时只扫描预览片段，避免 PDF/DOCX 等大文档命中后整篇反序列化与全文扫描 */
+    private static final int MAX_CONTENT_SCAN_CHARS = 20_000;
     /** 单关键词在正文中最多收集的匹配区间数，避免极端长文重复词导致大量 indexOf */
     private static final int MAX_POSITIONS_PER_TOKEN = 40;
+    private static final Set<String> STORED_SEARCH_FIELDS = Set.of(
+            LuceneIndexer.FIELD_PATH_RAW,
+            LuceneIndexer.LEGACY_FIELD_PATH,
+            LuceneIndexer.FIELD_CONTENT_PREVIEW,
+            LuceneIndexer.FIELD_CONTENT);
     private final Path indexDir;
     private final Analyzer analyzer = new SmartChineseAnalyzer();
 
@@ -326,12 +347,15 @@ class LuceneSearcher {
             List<LuceneSearcher.SearchResult> results = new ArrayList<>();
 
             for (ScoreDoc sd : topDocs.scoreDocs) {
-                Document doc = searcher.storedFields().document(sd.doc);
+                Document doc = searcher.storedFields().document(sd.doc, STORED_SEARCH_FIELDS);
                 String path = doc.get(LuceneIndexer.FIELD_PATH_RAW);
                 if (path == null || path.isBlank()) {
                     path = doc.get(LuceneIndexer.LEGACY_FIELD_PATH);
                 }
-                String content = doc.get(LuceneIndexer.FIELD_CONTENT);
+                String content = doc.get(LuceneIndexer.FIELD_CONTENT_PREVIEW);
+                if (content == null || content.isBlank()) {
+                    content = doc.get(LuceneIndexer.FIELD_CONTENT);
+                }
                 if (content == null) content = "";
 
             // --------- 2) 收集所有匹配区间（去重） ----------
