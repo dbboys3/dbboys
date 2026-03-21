@@ -56,6 +56,68 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+final class MarkdownSearchNormalizer {
+    private static final Pattern ASCII_HAN_BOUNDARY_1 = Pattern.compile("(?<=[A-Za-z0-9])(?=\\p{IsHan})");
+    private static final Pattern ASCII_HAN_BOUNDARY_2 = Pattern.compile("(?<=\\p{IsHan})(?=[A-Za-z0-9])");
+    private static final Pattern ASCII_TOKEN_SPACES = Pattern.compile("(?<=[A-Za-z0-9])\\s+(?=[A-Za-z0-9])");
+    private static final Pattern MULTI_SPACE = Pattern.compile("\\s+");
+    private static final Pattern QUERY_CONCEPT_PATTERN = Pattern.compile("[A-Za-z0-9]+|\\p{IsHan}+");
+
+    private MarkdownSearchNormalizer() {
+    }
+
+    static String normalizeQuery(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return "";
+        }
+        String normalized = keyword.trim();
+        normalized = ASCII_HAN_BOUNDARY_1.matcher(normalized).replaceAll(" ");
+        normalized = ASCII_HAN_BOUNDARY_2.matcher(normalized).replaceAll(" ");
+        normalized = MULTI_SPACE.matcher(normalized).replaceAll(" ").trim();
+        return normalized;
+    }
+
+    static String enrichIndexText(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = MULTI_SPACE.matcher(text.trim()).replaceAll(" ");
+        String compactAscii = ASCII_TOKEN_SPACES.matcher(normalized).replaceAll("");
+        if (compactAscii.equals(normalized)) {
+            return normalized;
+        }
+        return normalized + "\n" + compactAscii;
+    }
+
+    static String compactAsciiText(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = MULTI_SPACE.matcher(text.trim()).replaceAll(" ");
+        return ASCII_TOKEN_SPACES.matcher(normalized).replaceAll("");
+    }
+
+    static List<String> extractQueryConcepts(String keyword) {
+        String normalized = normalizeQuery(keyword).toLowerCase();
+        if (normalized.isBlank()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> concepts = new LinkedHashSet<>();
+        Matcher matcher = QUERY_CONCEPT_PATTERN.matcher(normalized);
+        while (matcher.find()) {
+            String concept = matcher.group();
+            if (concept == null || concept.isBlank()) {
+                continue;
+            }
+            if (concept.matches("[a-z0-9]+") && concept.length() <= 1) {
+                continue;
+            }
+            concepts.add(concept);
+        }
+        return new ArrayList<>(concepts);
+    }
+}
+
 /**
  * LuceneIndexer - 为 Markdown 文件夹建立 Lucene 索引
  *
@@ -149,12 +211,19 @@ class LuceneIndexer {
 
         doc.add(new StringField(FIELD_PATH_RAW, rawPath, Field.Store.YES));
         doc.add(new org.apache.lucene.document.TextField(
-                FIELD_PATH_TEXT, rawPath.replace('\\', ' ').replace('/', ' '), Field.Store.NO));
+                FIELD_PATH_TEXT,
+                MarkdownSearchNormalizer.enrichIndexText(rawPath.replace('\\', ' ').replace('/', ' ')),
+                Field.Store.NO));
         doc.add(new StringField(FIELD_FILENAME_RAW, fileName, Field.Store.YES));
         doc.add(new org.apache.lucene.document.TextField(
-                FIELD_FILENAME_TEXT, (fileStem + " " + fileName).trim(), Field.Store.NO));
+                FIELD_FILENAME_TEXT,
+                MarkdownSearchNormalizer.enrichIndexText((fileStem + " " + fileName).trim()),
+                Field.Store.NO));
         if (!titleText.isBlank()) {
-            doc.add(new org.apache.lucene.document.TextField(FIELD_TITLE_TEXT, titleText, Field.Store.NO));
+            doc.add(new org.apache.lucene.document.TextField(
+                    FIELD_TITLE_TEXT,
+                    MarkdownSearchNormalizer.enrichIndexText(titleText),
+                    Field.Store.NO));
         }
 
         // content: 存储并分词（便于高亮与显示）
@@ -249,8 +318,9 @@ class LuceneSearcher {
                                                      int fallbackSnippetChars,
                                                      int boundaryWindowChars,
                                                      boolean strict) throws Exception {
-        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        String normalizedKeyword = MarkdownSearchNormalizer.normalizeQuery(keyword);
         List<String> tokens = analyzeQueryTerms(normalizedKeyword);
+        List<String> queryConcepts = MarkdownSearchNormalizer.extractQueryConcepts(normalizedKeyword);
         Query query = buildQuery(normalizedKeyword, tokens, strict);
         if (query instanceof MatchNoDocsQuery) {
             return Collections.emptyList();
@@ -288,11 +358,12 @@ class LuceneSearcher {
             }
 
             // 如果没有找到任何位置，则给出文首一小段作为 snippet
-            if (positions.isEmpty()) {
-                String fallback = content.length() > fallbackSnippetChars
-                        ? content.substring(0, fallbackSnippetChars) + " ... "
-                        : content;
-                results.add(new LuceneSearcher.SearchResult(path, sd.score, fallback));
+                if (positions.isEmpty()) {
+                    String fallback = content.length() > fallbackSnippetChars
+                            ? content.substring(0, fallbackSnippetChars) + " ... "
+                            : content;
+                float adjustedScore = sd.score + computeHeuristicBonus(path, content, queryConcepts);
+                results.add(new LuceneSearcher.SearchResult(path, adjustedScore, fallback));
                 continue;
             }
 
@@ -338,9 +409,11 @@ class LuceneSearcher {
             // 如果你想返回带 <mark> 的 snippet，可以在此用正则替换 token 为 <mark>xxx</mark>
             // 但注意：你现在的 UI 用 TextFlow 对 snippet 做高亮，这里返回原文更灵活。
 
-                results.add(new LuceneSearcher.SearchResult(path, sd.score, snippet));
+                float adjustedScore = sd.score + computeHeuristicBonus(path, content, queryConcepts);
+                results.add(new LuceneSearcher.SearchResult(path, adjustedScore, snippet));
             }
 
+            results.sort(Comparator.comparingDouble((LuceneSearcher.SearchResult item) -> item.score).reversed());
             return results;
         }
     }
@@ -350,6 +423,17 @@ class LuceneSearcher {
         root.setMinimumNumberShouldMatch(1);
 
         addQuery(root, buildExactNameQuery(keyword), BooleanClause.Occur.SHOULD);
+        if (tokens != null && tokens.size() > 1) {
+            int allTerms = tokens.size();
+            addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, allTerms, strict ? 4.2f : 3.8f),
+                    BooleanClause.Occur.SHOULD);
+            addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, allTerms, strict ? 4.8f : 4.2f),
+                    BooleanClause.Occur.SHOULD);
+            addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_PATH_TEXT, tokens, allTerms, strict ? 3.6f : 3.0f),
+                    BooleanClause.Occur.SHOULD);
+            addQuery(root, buildTermSetQuery(LuceneIndexer.FIELD_CONTENT, tokens, allTerms, strict ? 8.0f : 6.5f),
+                    BooleanClause.Occur.SHOULD);
+        }
         addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_FILENAME_TEXT, tokens, strict ? 2.4f : 2.0f), BooleanClause.Occur.SHOULD);
         addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_TITLE_TEXT, tokens, strict ? 2.8f : 2.4f), BooleanClause.Occur.SHOULD);
         addQuery(root, buildPhraseQuery(LuceneIndexer.FIELD_CONTENT, tokens, strict ? 7.0f : 5.5f), BooleanClause.Occur.SHOULD);
@@ -462,6 +546,53 @@ class LuceneSearcher {
         return Math.min(tokenCount, Math.max(1, (int) Math.ceil(tokenCount * 0.5)));
     }
 
+    private float computeHeuristicBonus(String path, String content, List<String> queryConcepts) {
+        if (queryConcepts == null || queryConcepts.isEmpty()) {
+            return 0f;
+        }
+        String pathText = path == null ? "" : path.toLowerCase();
+        String pathCompact = MarkdownSearchNormalizer.compactAsciiText(pathText);
+        String contentText = content == null ? "" : content.toLowerCase();
+        String contentCompact = MarkdownSearchNormalizer.compactAsciiText(contentText);
+
+        int pathHits = 0;
+        int contentHits = 0;
+        for (String concept : queryConcepts) {
+            if (containsConcept(pathText, pathCompact, concept)) {
+                pathHits++;
+            }
+            if (containsConcept(contentText, contentCompact, concept)) {
+                contentHits++;
+            }
+        }
+
+        float bonus = 0f;
+        if (pathHits == queryConcepts.size()) {
+            bonus += 26f;
+        } else if (pathHits >= Math.max(1, queryConcepts.size() - 1)) {
+            bonus += 10f;
+        }
+        if (contentHits == queryConcepts.size()) {
+            bonus += 14f;
+        } else if (contentHits >= Math.max(1, queryConcepts.size() - 1)) {
+            bonus += 6f;
+        }
+        if (queryConcepts.contains("安装") && (pathText.contains("安装配置") || pathText.contains("安装"))) {
+            bonus += 12f;
+        }
+        return bonus;
+    }
+
+    private boolean containsConcept(String text, String compactText, String concept) {
+        if (concept == null || concept.isBlank()) {
+            return false;
+        }
+        if (text.contains(concept)) {
+            return true;
+        }
+        return concept.matches("[a-z0-9]+") && compactText.contains(concept);
+    }
+
     private boolean looksLikeExactNameQuery(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return false;
@@ -555,7 +686,8 @@ public class MarkdownSearchUtil {
         TextFlow flow = new TextFlow();
         flow.setLineSpacing(2);
 
-        if (keyword == null || keyword.isBlank()) {
+        String normalizedKeyword = MarkdownSearchNormalizer.normalizeQuery(keyword);
+        if (normalizedKeyword.isBlank()) {
             flow.getChildren().add(new Text(item.path + "\n"));
             return flow;
         }
@@ -563,7 +695,7 @@ public class MarkdownSearchUtil {
         // ====== 分词提取 ======
         List<String> tokens = new ArrayList<>();
         try (Analyzer analyzer = new SmartChineseAnalyzer();
-             TokenStream ts = analyzer.tokenStream("content", keyword)) {
+             TokenStream ts = analyzer.tokenStream("content", normalizedKeyword)) {
             ts.reset();
             while (ts.incrementToken()) {
                 String term = ts.getAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute.class).toString();
@@ -574,14 +706,14 @@ public class MarkdownSearchUtil {
             log.debug("Tokenizer failed, falling back to raw keyword", e);
         }
 
-        if (tokens.isEmpty()) tokens.add(keyword);
+        if (tokens.isEmpty()) tokens.add(normalizedKeyword);
 
         // ====== 高亮路径 ======
         String fullPath = item.path;
         String tokenPattern = tokens.stream()
                 .map(Pattern::quote)
                 .reduce((a, b) -> a + "|" + b)
-                .orElse(Pattern.quote(keyword));
+                .orElse(Pattern.quote(normalizedKeyword));
         Pattern pathPattern = Pattern.compile(tokenPattern, Pattern.CASE_INSENSITIVE);
         Matcher pathMatcher = pathPattern.matcher(fullPath);
 
