@@ -1955,6 +1955,7 @@ Text {
 .CustomGenericStyledArea .text-area .viewport,
 .CustomGenericStyledArea .text-area .content {
   -fx-background-color: transparent;
+  -fx-padding: 0;
 }
 
 .radio-menu-item:checked > .left-container > .radio,
