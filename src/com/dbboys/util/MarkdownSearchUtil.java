@@ -295,6 +295,10 @@ class LuceneSearcher {
     private static final int AI_SNIPPET_CONTEXT_CHARS = DEFAULT_SNIPPET_CONTEXT_CHARS * 2;
     private static final int AI_FALLBACK_SNIPPET_CHARS = DEFAULT_FALLBACK_SNIPPET_CHARS * 2;
     private static final int AI_BOUNDARY_WINDOW_CHARS = DEFAULT_BOUNDARY_WINDOW_CHARS * 2;
+    /** 生成摘要/加分时只扫描正文前若干字符，避免 PDF/DOCX 等大文档全文 toLowerCase + 多次 indexOf 极慢 */
+    private static final int MAX_CONTENT_SCAN_CHARS = 200_000;
+    /** 单关键词在正文中最多收集的匹配区间数，避免极端长文重复词导致大量 indexOf */
+    private static final int MAX_POSITIONS_PER_TOKEN = 40;
     private final Path indexDir;
     private final Analyzer analyzer = new SmartChineseAnalyzer();
 
@@ -325,11 +329,8 @@ class LuceneSearcher {
         if (query instanceof MatchNoDocsQuery) {
             return Collections.emptyList();
         }
-        try (Directory dir = FSDirectory.open(indexDir);
-             DirectoryReader reader = DirectoryReader.open(dir)) {
-            IndexSearcher searcher = new IndexSearcher(reader);
-
-            TopDocs topDocs = searcher.search(query, limit);
+        IndexSearcher searcher = MarkdownSearchUtil.acquireIndexSearcher(indexDir);
+        TopDocs topDocs = searcher.search(query, limit);
             List<LuceneSearcher.SearchResult> results = new ArrayList<>();
 
             for (ScoreDoc sd : topDocs.scoreDocs) {
@@ -342,17 +343,22 @@ class LuceneSearcher {
                 if (content == null) content = "";
 
             // --------- 2) 收集所有匹配区间（去重） ----------
-            String lowerContent = content.toLowerCase();
+            // 仅对正文前 MAX_CONTENT_SCAN_CHARS 扫描，避免大文档全文 toLowerCase/indexOf 卡顿
+            int scanLen = Math.min(content.length(), MAX_CONTENT_SCAN_CHARS);
+            String scanSlice = scanLen == content.length() ? content : content.substring(0, scanLen);
+            String lowerContent = scanSlice.toLowerCase();
             List<int[]> positions = new ArrayList<>();
 
             for (String token : tokens) {
                 if (token == null || token.isBlank()) continue;
                 String lowerToken = token.toLowerCase();
                 int idx = 0;
-                while ((idx = lowerContent.indexOf(lowerToken, idx)) >= 0) {
+                int found = 0;
+                while (found < MAX_POSITIONS_PER_TOKEN && (idx = lowerContent.indexOf(lowerToken, idx)) >= 0) {
                     int start = Math.max(0, idx - contextChars);
                     int end = Math.min(content.length(), idx + lowerToken.length() + contextChars);
                     positions.add(new int[]{start, end});
+                    found++;
                     idx = idx + Math.max(1, lowerToken.length()); // 避免无限循环
                 }
             }
@@ -413,9 +419,8 @@ class LuceneSearcher {
                 results.add(new LuceneSearcher.SearchResult(path, adjustedScore, snippet));
             }
 
-            results.sort(Comparator.comparingDouble((LuceneSearcher.SearchResult item) -> item.score).reversed());
-            return results;
-        }
+        results.sort(Comparator.comparingDouble((LuceneSearcher.SearchResult item) -> item.score).reversed());
+        return results;
     }
 
     private Query buildQuery(String keyword, List<String> tokens, boolean strict) {
@@ -552,7 +557,11 @@ class LuceneSearcher {
         }
         String pathText = path == null ? "" : path.toLowerCase();
         String pathCompact = MarkdownSearchNormalizer.compactAsciiText(pathText);
-        String contentText = content == null ? "" : content.toLowerCase();
+        String raw = content == null ? "" : content;
+        if (raw.length() > MAX_CONTENT_SCAN_CHARS) {
+            raw = raw.substring(0, MAX_CONTENT_SCAN_CHARS);
+        }
+        String contentText = raw.toLowerCase();
         String contentCompact = MarkdownSearchNormalizer.compactAsciiText(contentText);
 
         int pathHits = 0;
@@ -632,6 +641,69 @@ public class MarkdownSearchUtil {
     private static final Logger log = LogManager.getLogger(MarkdownSearchUtil.class);
     private static final Popup searchResultPopup = new Popup();
     private static final Path indexDir = Paths.get("index");
+
+    /** 复用 DirectoryReader，避免每次搜索都 FSDirectory.open + DirectoryReader.open（磁盘与 inode 开销大） */
+    private static volatile Directory mdSharedDirectory;
+    private static volatile DirectoryReader mdSharedReader;
+    private static Path mdCachedIndexPath;
+    private static final Object MD_INDEX_LOCK = new Object();
+
+    /**
+     * 获取共享的 {@link IndexSearcher}；同一索引目录下使用 openIfChanged 自动感知段合并/外部更新。
+     * 重建索引前须调用 {@link #invalidateIndexReader()} 以关闭句柄、避免 Windows 下删除索引文件失败。
+     */
+    static IndexSearcher acquireIndexSearcher(Path path) throws IOException {
+        synchronized (MD_INDEX_LOCK) {
+            Path normalized = path.toAbsolutePath().normalize();
+            if (!Files.exists(normalized)) {
+                throw new IOException("Index directory does not exist: " + normalized);
+            }
+            if (mdSharedReader == null || mdCachedIndexPath == null || !mdCachedIndexPath.equals(normalized)) {
+                closeIndexReaderUnsafe();
+                mdSharedDirectory = FSDirectory.open(normalized);
+                if (!DirectoryReader.indexExists(mdSharedDirectory)) {
+                    mdSharedDirectory.close();
+                    mdSharedDirectory = null;
+                    throw new IOException("No valid Lucene index in: " + normalized);
+                }
+                mdSharedReader = DirectoryReader.open(mdSharedDirectory);
+                mdCachedIndexPath = normalized;
+            } else {
+                DirectoryReader newReader = DirectoryReader.openIfChanged(mdSharedReader);
+                if (newReader != null) {
+                    mdSharedReader.close();
+                    mdSharedReader = newReader;
+                }
+            }
+            return new IndexSearcher(mdSharedReader);
+        }
+    }
+
+    static void invalidateIndexReader() {
+        synchronized (MD_INDEX_LOCK) {
+            mdCachedIndexPath = null;
+            closeIndexReaderUnsafe();
+        }
+    }
+
+    private static void closeIndexReaderUnsafe() {
+        if (mdSharedReader != null) {
+            try {
+                mdSharedReader.close();
+            } catch (IOException e) {
+                log.debug("Close shared DirectoryReader", e);
+            }
+            mdSharedReader = null;
+        }
+        if (mdSharedDirectory != null) {
+            try {
+                mdSharedDirectory.close();
+            } catch (IOException e) {
+                log.debug("Close shared Directory", e);
+            }
+            mdSharedDirectory = null;
+        }
+    }
     private static final ListView<LuceneSearcher.SearchResult> resultList = new ListView<>();
     private static final Label resultPlaceholderLabel = new Label();
     private static final StringBinding errorTitleBinding = I18n.bind("common.error", "错误");
@@ -787,6 +859,8 @@ public class MarkdownSearchUtil {
         AppExecutor.runAsync(() -> {
         long start = System.currentTimeMillis();
         try {
+            // 先关闭共享 Reader，释放文件句柄，否则 Windows 下删除 index 目录可能失败
+            invalidateIndexReader();
             if (Files.exists(indexDir)) {
                 try (Stream<Path> walk = Files.walk(indexDir)) {
                     walk.sorted(Comparator.reverseOrder())
@@ -824,8 +898,10 @@ public class MarkdownSearchUtil {
         if (searchText.isEmpty()) {
             return;
         }
+        keywordField = searchText;
+        // 在后台线程执行 Lucene 检索与摘要生成，避免阻塞 JavaFX 线程导致界面卡顿
+        AppExecutor.runAsync(() -> {
         try {
-            keywordField=searchText;
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
             List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
             Platform.runLater(()->{
@@ -892,6 +968,7 @@ public class MarkdownSearchUtil {
             });
             log.error("Operation failed", e);
         }
+        });
     }
 
     /*
