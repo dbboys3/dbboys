@@ -53,7 +53,8 @@ public class MainController {
     private static final int AI_REFERENCE_DISPLAY_LIMIT = 3;
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
             "doubao-seed-1-8-251228",
-            "doubao-seed-2-0-mini-260215"
+            "doubao-seed-2-0-mini-260215",
+            "doubao-seed-2-0-pro-260215"
     );
 
     @FXML
