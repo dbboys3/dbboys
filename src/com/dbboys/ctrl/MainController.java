@@ -414,17 +414,7 @@ public class MainController {
         sreach_running_label.visibleProperty().bind(markdownSearchButton.visibleProperty().not());
 
         markdownSearchButton.setOnAction(event -> {
-
-            AppExecutor.runAsync(() -> {
-                Platform.runLater(()->{
-                    markdownSearchButton.setVisible(false);
-                });
-                MarkdownSearchUtil.performSearch(markdownSearchTextField.getText());
-                Platform.runLater(()->{
-                    markdownSearchButton.setVisible(true);
-                });
-            });
-
+            MarkdownSearchUtil.performSearch(markdownSearchTextField.getText());
         });
 
         markdownSearchTextField.textProperty().addListener((observable, oldValue, newValue) -> {

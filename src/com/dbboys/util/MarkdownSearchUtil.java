@@ -199,6 +199,41 @@ final class MarkdownSearchNormalizer {
         return token == null ? "" : token.trim().toLowerCase();
     }
 
+    static List<String> pruneShortQueryTokens(List<String> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> prunedTokens = new ArrayList<>();
+        for (String token : tokens) {
+            String normalizedToken = normalizeConcept(token);
+            if (normalizedToken.isBlank()) {
+                continue;
+            }
+            if (shouldIgnoreShortQueryToken(normalizedToken)) {
+                continue;
+            }
+            prunedTokens.add(normalizedToken);
+        }
+        return prunedTokens;
+    }
+
+    private static boolean shouldIgnoreShortQueryToken(String token) {
+        return isSingleHanToken(token) || isSingleAsciiLetterToken(token);
+    }
+
+    private static boolean isSingleHanToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        return token.codePointCount(0, token.length()) == 1
+                && token.codePoints().allMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN);
+    }
+
+    private static boolean isSingleAsciiLetterToken(String token) {
+        return token != null && token.length() == 1 && ((token.charAt(0) >= 'a' && token.charAt(0) <= 'z')
+                || (token.charAt(0) >= 'A' && token.charAt(0) <= 'Z'));
+    }
+
     private static String filterStopWordsBeforeSearch(String text) {
         if (text == null || text.isBlank()) {
             return "";
@@ -225,7 +260,7 @@ final class MarkdownSearchNormalizer {
                 filteredTokens.add(normalizedToken);
             }
         }
-        return String.join(" ", filteredTokens);
+        return String.join(" ", pruneShortQueryTokens(new ArrayList<>(filteredTokens)));
     }
 }
 
@@ -786,7 +821,7 @@ class LuceneSearcher {
         if (tokens.isEmpty()) {
             tokens.add(keyword.trim().toLowerCase());
         }
-        return new ArrayList<>(tokens);
+        return MarkdownSearchNormalizer.pruneShortQueryTokens(new ArrayList<>(tokens));
     }
 
     private int minimumShouldMatch(int tokenCount, boolean strict, boolean shortField) {
@@ -1080,9 +1115,9 @@ public class MarkdownSearchUtil {
             log.debug("Tokenizer failed, falling back to raw keyword", e);
         }
 
-        List<String> tokens = new ArrayList<>(tokenSet);
+        List<String> tokens = MarkdownSearchNormalizer.pruneShortQueryTokens(new ArrayList<>(tokenSet));
         tokens.sort(Comparator.comparingInt(String::length).reversed());
-        if (tokens.isEmpty()) {
+        if (tokens.isEmpty() && !MarkdownSearchNormalizer.pruneShortQueryTokens(List.of(normalizedKeyword)).isEmpty()) {
             tokens.add(normalizedKeyword);
         }
 
@@ -1200,13 +1235,25 @@ public class MarkdownSearchUtil {
         NotificationUtil.showMainNotification(rebuildDoneBinding.get());
     }
 
+    private static void setSearchButtonRunning(boolean running) {
+        Platform.runLater(() -> {
+            Button searchButton = AppState.getMarkdownSearchButton();
+            if (searchButton != null) {
+                searchButton.setVisible(!running);
+            }
+        });
+    }
+
     public static void performSearch(String searchText) {
+        setSearchButtonRunning(true);
         if (searchText.isEmpty()) {
+            setSearchButtonRunning(false);
             return;
         }
         String normalizedKeyword = MarkdownSearchNormalizer.normalizeQuery(searchText);
         if (normalizedKeyword.isBlank()) {
             searchResultPopup.hide();
+            setSearchButtonRunning(false);
             return;
         }
         keywordField = searchText.trim();
@@ -1278,6 +1325,8 @@ public class MarkdownSearchUtil {
                 AlertUtil.CustomAlert(errorTitleBinding.get(), e.getMessage());
             });
             log.error("Operation failed", e);
+        } finally {
+            setSearchButtonRunning(false);
         }
         });
     }
