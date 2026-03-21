@@ -213,7 +213,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         t.setOnMouseClicked(event -> {
                             if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 1) {
                                 // 常见文件扩展名集合
-                                if (DOC_TYPES.contains(ext)) {
+                                if (isHttpLink && DOC_TYPES.contains(ext)) {
                                     File desktopDir = FileSystemView.getFileSystemView().getHomeDirectory();
                                     String defaultName;
                                     try {
@@ -863,9 +863,14 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                 URI uri = new URI(url);
                 java.awt.Desktop.getDesktop().browse(uri);
             }else{
-                if(Files.exists(Paths.get(url))){
-                    //markdown里点击的链接打开的文件是相对路径，比对文档里的相对路径会出现问题，这里需要转换为使用绝对路径
-                    TabpaneUtil.addCustomMarkdownTab(new File(new File(url).getAbsolutePath()),false);
+                File file = new File(url).getAbsoluteFile();
+                if(file.exists()){
+                    String lowerPath = file.getName().toLowerCase(Locale.ROOT);
+                    if (lowerPath.endsWith(".md") || lowerPath.endsWith(".markdown")) {
+                        TabpaneUtil.addCustomMarkdownTab(file, false);
+                    } else {
+                        java.awt.Desktop.getDesktop().open(file);
+                    }
                 }else{
                     String finalUrl = url;
                     Platform.runLater(() -> {
