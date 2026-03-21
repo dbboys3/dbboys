@@ -32,12 +32,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -51,8 +48,6 @@ public class MainController {
     private static final int MESSAGE_BUBBLE_RADIUS = 6;
     private static final double AI_INPUT_HEIGHT = 90;
     private static final int AI_HISTORY_TURNS = 3;
-    private static final int AI_REFERENCE_LIMIT = 5;
-    private static final int AI_REFERENCE_DISPLAY_LIMIT = 3;
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
             "doubao-seed-1-8-251228",
             "doubao-seed-2-0-mini-260215",
@@ -825,8 +820,9 @@ public class MainController {
         aiCancelled = false;
 
         aiTaskFuture = com.dbboys.app.AppExecutor.submit(() -> {
+            // 与 Markdown 侧边栏「搜索」同一套结果：前 5 条片段入提示词，回复末尾展示前 3 条文档链接
             List<MarkdownSearchUtil.KnowledgeReference> references =
-                    MarkdownSearchUtil.searchKnowledgeReferences(text, AI_REFERENCE_LIMIT);
+                    MarkdownSearchUtil.loadAiKnowledgeFromSearch(text);
             List<AiConversationMessage> historySnapshot = snapshotAiConversationHistory();
             String prompt = buildAiPrompt(text, references, historySnapshot);
             log.info("AI request prompt:\n{}", prompt);
@@ -882,9 +878,9 @@ public class MainController {
         }
         prompt.append("\n\n当前用户问题：\n").append(safeQuestion);
         if (!references.isEmpty()) {
-            prompt.append("\n\n知识库检索结果（按相关性排序，最多")
-                    .append(AI_REFERENCE_LIMIT)
-                    .append("条）：");
+            prompt.append("\n\n知识库检索结果（与侧边栏搜索一致，按相关性排序，共")
+                    .append(references.size())
+                    .append("条片段）：");
             for (int i = 0; i < references.size(); i++) {
                 MarkdownSearchUtil.KnowledgeReference ref = references.get(i);
                 prompt.append("\n\n[").append(i + 1).append("]");
@@ -900,7 +896,7 @@ public class MainController {
 
     private String appendAiReferences(String reply, List<MarkdownSearchUtil.KnowledgeReference> references) {
         String content = sanitizeAiReplyForDisplay(reply == null ? "" : reply.trim()).trim();
-        if (references == null || references.isEmpty() || !shouldAppendKnowledgeReferences(content, references)) {
+        if (references == null || references.isEmpty()) {
             return content;
         }
         StringBuilder builder = new StringBuilder(content);
@@ -908,7 +904,7 @@ public class MainController {
             builder.append("\n\n");
         }
         builder.append("参考文档：\n");
-        int displayCount = Math.min(references.size(), AI_REFERENCE_DISPLAY_LIMIT);
+        int displayCount = Math.min(references.size(), MarkdownSearchUtil.AI_UI_REFERENCE_LINK_COUNT);
         for (int i = 0; i < displayCount; i++) {
             MarkdownSearchUtil.KnowledgeReference ref = references.get(i);
             String linkTarget = ref.path().replace('\\', '/');
@@ -921,74 +917,6 @@ public class MainController {
                     .append(")\n");
         }
         return builder.toString().trim();
-    }
-
-    private boolean shouldAppendKnowledgeReferences(String reply, List<MarkdownSearchUtil.KnowledgeReference> references) {
-        if (reply == null || reply.isBlank() || references == null || references.isEmpty()) {
-            return false;
-        }
-        String normalizedReply = normalizeForReferenceMatch(reply);
-        Set<String> replyTokens = extractReferenceTokens(normalizedReply);
-        int matchedRefs = 0;
-        for (MarkdownSearchUtil.KnowledgeReference ref : references) {
-            if (hasReferenceOverlap(normalizedReply, replyTokens, ref)) {
-                matchedRefs++;
-            }
-        }
-        return matchedRefs > 0;
-    }
-
-    private boolean hasReferenceOverlap(String normalizedReply,
-                                        Set<String> replyTokens,
-                                        MarkdownSearchUtil.KnowledgeReference ref) {
-        String refText = normalizeForReferenceMatch((ref.title() == null ? "" : ref.title()) + "\n" +
-                (ref.snippet() == null ? "" : ref.snippet()));
-        if (refText.isBlank()) {
-            return false;
-        }
-        if (containsSharedHanSubstring(normalizedReply, refText, 4)) {
-            return true;
-        }
-        Set<String> refTokens = extractReferenceTokens(refText);
-        int overlap = 0;
-        for (String token : refTokens) {
-            if (replyTokens.contains(token) && ++overlap >= 2) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String normalizeForReferenceMatch(String text) {
-        return text == null ? "" : text.toLowerCase(Locale.ROOT);
-    }
-
-    private boolean containsSharedHanSubstring(String left, String right, int windowSize) {
-        String leftHan = left.replaceAll("[^\\p{IsHan}]", "");
-        String rightHan = right.replaceAll("[^\\p{IsHan}]", "");
-        if (leftHan.length() < windowSize || rightHan.length() < windowSize) {
-            return false;
-        }
-        for (int i = 0; i <= rightHan.length() - windowSize; i++) {
-            String part = rightHan.substring(i, i + windowSize);
-            if (leftHan.contains(part)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private Set<String> extractReferenceTokens(String text) {
-        Set<String> tokens = new HashSet<>();
-        if (text == null || text.isBlank()) {
-            return tokens;
-        }
-        for (String token : text.split("[^\\p{IsHan}A-Za-z0-9_]+")) {
-            if (token != null && token.length() >= 3) {
-                tokens.add(token);
-            }
-        }
-        return tokens;
     }
 
     private List<AiConversationMessage> snapshotAiConversationHistory() {

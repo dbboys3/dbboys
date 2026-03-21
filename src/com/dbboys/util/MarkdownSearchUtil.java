@@ -292,9 +292,6 @@ class LuceneSearcher {
     private static final int DEFAULT_SNIPPET_CONTEXT_CHARS = 30;
     private static final int DEFAULT_FALLBACK_SNIPPET_CHARS = 120;
     private static final int DEFAULT_BOUNDARY_WINDOW_CHARS = 50;
-    private static final int AI_SNIPPET_CONTEXT_CHARS = DEFAULT_SNIPPET_CONTEXT_CHARS * 2;
-    private static final int AI_FALLBACK_SNIPPET_CHARS = DEFAULT_FALLBACK_SNIPPET_CHARS * 2;
-    private static final int AI_BOUNDARY_WINDOW_CHARS = DEFAULT_BOUNDARY_WINDOW_CHARS * 2;
     /** 生成摘要/加分时只扫描正文前若干字符，避免 PDF/DOCX 等大文档全文 toLowerCase + 多次 indexOf 极慢 */
     private static final int MAX_CONTENT_SCAN_CHARS = 200_000;
     /** 单关键词在正文中最多收集的匹配区间数，避免极端长文重复词导致大量 indexOf */
@@ -309,11 +306,6 @@ class LuceneSearcher {
     public List<LuceneSearcher.SearchResult> search(String keyword, int limit) throws Exception {
         return search(keyword, limit, DEFAULT_SNIPPET_CONTEXT_CHARS, DEFAULT_FALLBACK_SNIPPET_CHARS,
                 DEFAULT_BOUNDARY_WINDOW_CHARS, false);
-    }
-
-    public List<LuceneSearcher.SearchResult> searchForAi(String keyword, int limit) throws Exception {
-        return search(keyword, limit, AI_SNIPPET_CONTEXT_CHARS, AI_FALLBACK_SNIPPET_CHARS,
-                AI_BOUNDARY_WINDOW_CHARS, true);
     }
 
     private List<LuceneSearcher.SearchResult> search(String keyword,
@@ -642,6 +634,18 @@ public class MarkdownSearchUtil {
     private static final Popup searchResultPopup = new Popup();
     private static final Path indexDir = Paths.get("index");
 
+    /**
+     * 与 {@link #performSearch(String)} 从 Lucene 拉取的候选条数一致。
+     * 检索在候选集上会做启发式重排；若只拉前几条再重排，前几位会与侧边栏（50 条候选）不一致。
+     */
+    public static final int SEARCH_UI_FETCH_LIMIT = 50;
+
+    /** 发给大模型的知识库片段条数（与侧边栏「搜索」同一套 {@link LuceneSearcher#search(String, int)} 排序与摘要） */
+    public static final int AI_PROMPT_SNIPPET_COUNT = 5;
+
+    /** AI 回复末尾「参考文档」展示的链接条数（取 {@link #loadAiKnowledgeFromSearch(String)} 结果的前若干条） */
+    public static final int AI_UI_REFERENCE_LINK_COUNT = 3;
+
     /** 复用 DirectoryReader，避免每次搜索都 FSDirectory.open + DirectoryReader.open（磁盘与 inode 开销大） */
     private static volatile Directory mdSharedDirectory;
     private static volatile DirectoryReader mdSharedReader;
@@ -903,7 +907,7 @@ public class MarkdownSearchUtil {
         AppExecutor.runAsync(() -> {
         try {
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
-            List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
+            List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, SEARCH_UI_FETCH_LIMIT);
             Platform.runLater(()->{
                 Stage mainStage = (Stage) AppState.getWindow();
                 if (!popupListenersAdded) {
@@ -988,21 +992,30 @@ public class MarkdownSearchUtil {
         try  {
             keywordField=warmUpKeywordBinding.get();
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
-            List<LuceneSearcher.SearchResult> results = searcher.search(keywordField, 50);
+            searcher.search(keywordField, SEARCH_UI_FETCH_LIMIT);
         } catch (Exception e) {
             log.debug("Index warm-up failed", e);
         }
     }
 
-    public static List<KnowledgeReference> searchKnowledgeReferences(String keyword, int limit) {
-        if (keyword == null || keyword.isBlank() || limit <= 0) {
+    /**
+     * 为 AI 加载知识库：与 {@link #performSearch(String)} 使用相同的 {@link LuceneSearcher#search(String, int)}，
+     * 即与侧边栏「搜索」相同的排序与摘要片段；在重排后取前 {@link #AI_PROMPT_SNIPPET_COUNT} 条发给模型，
+     * 回复中可再只展示前 {@link #AI_UI_REFERENCE_LINK_COUNT} 条文档链接。
+     */
+    public static List<KnowledgeReference> loadAiKnowledgeFromSearch(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
             return Collections.emptyList();
         }
         try {
             LuceneSearcher searcher = new LuceneSearcher(indexDir);
-            List<LuceneSearcher.SearchResult> results = searcher.searchForAi(keyword.trim(), limit);
+            int fetchSize = Math.max(AI_PROMPT_SNIPPET_COUNT, SEARCH_UI_FETCH_LIMIT);
+            List<LuceneSearcher.SearchResult> results = searcher.search(keyword.trim(), fetchSize);
             List<KnowledgeReference> references = new ArrayList<>();
             for (LuceneSearcher.SearchResult item : results) {
+                if (references.size() >= AI_PROMPT_SNIPPET_COUNT) {
+                    break;
+                }
                 String path = item.path == null ? "" : item.path.trim();
                 if (path.isEmpty()) {
                     continue;
