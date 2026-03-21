@@ -587,17 +587,49 @@ class LuceneIndexer {
         boolean foundHeading = false;
         while (matcher.find()) {
             foundHeading = true;
-            String sectionText = source.substring(sectionStart, matcher.start()).trim();
-            order = appendSectionChunks(chunks, currentHeading, sectionText, order);
+            String sectionText = source.substring(sectionStart, matcher.start());
+            order = appendMarkdownSectionChunks(chunks, currentHeading, sectionText, source, sectionStart, order);
             currentHeading = cleanMarkdownHeading(matcher.group(1));
             sectionStart = matcher.end();
         }
-        String tailSection = source.substring(Math.min(sectionStart, source.length())).trim();
-        appendSectionChunks(chunks, currentHeading, tailSection, order);
+        String tailSection = source.substring(Math.min(sectionStart, source.length()));
+        appendMarkdownSectionChunks(chunks, currentHeading, tailSection, source, sectionStart, order);
         if (!foundHeading && chunks.isEmpty()) {
             return buildGenericAiChunks(source, fileStem);
         }
         return chunks;
+    }
+
+    private static int appendMarkdownSectionChunks(List<AiChunk> chunks,
+                                                   String heading,
+                                                   String rawSectionText,
+                                                   String source,
+                                                   int rawSectionStart,
+                                                   int startOrder) {
+        if (rawSectionText == null || rawSectionText.isBlank()) {
+            return startOrder;
+        }
+        int trimmedStart = leadingTrimOffset(rawSectionText);
+        String sectionText = rawSectionText.trim();
+        if (sectionText.isBlank()) {
+            return startOrder;
+        }
+        int sectionBaseLine = lineNumberAtOffset(source, rawSectionStart + trimmedStart);
+        int order = startOrder;
+        int searchFrom = 0;
+        for (String chunkText : splitIntoAiChunkTexts(sectionText)) {
+            if (chunkText.isBlank()) {
+                continue;
+            }
+            int chunkOffset = sectionText.indexOf(chunkText, searchFrom);
+            if (chunkOffset < 0) {
+                chunkOffset = Math.max(0, searchFrom);
+            }
+            int chunkLine = sectionBaseLine + countNewlines(sectionText, chunkOffset);
+            chunks.add(new AiChunk(buildMarkdownChunkHeading(heading, chunkLine), chunkText, order++));
+            searchFrom = Math.min(sectionText.length(), chunkOffset + chunkText.length());
+        }
+        return order;
     }
 
     private static int appendSectionChunks(List<AiChunk> chunks, String heading, String sectionText, int startOrder) {
@@ -719,6 +751,57 @@ class LuceneIndexer {
 
     private static String cleanMarkdownHeading(String heading) {
         return heading == null ? "" : heading.replaceAll("[`*_#>\\[\\]]", "").trim();
+    }
+
+    private static String buildMarkdownChunkHeading(String heading, int lineNumber) {
+        String safeHeading = heading == null ? "" : heading.trim();
+        String lineLabel = lineNumber > 0 ? "第" + lineNumber + "行" : "";
+        if (safeHeading.isBlank()) {
+            return lineLabel;
+        }
+        if (lineLabel.isBlank()) {
+            return safeHeading;
+        }
+        return safeHeading + "（" + lineLabel + "）";
+    }
+
+    private static int leadingTrimOffset(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int offset = 0;
+        while (offset < text.length() && Character.isWhitespace(text.charAt(offset))) {
+            offset++;
+        }
+        return offset;
+    }
+
+    private static int lineNumberAtOffset(String text, int offset) {
+        if (text == null || text.isEmpty()) {
+            return 1;
+        }
+        int safeOffset = Math.max(0, Math.min(offset, text.length()));
+        int line = 1;
+        for (int i = 0; i < safeOffset; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
+    }
+
+    private static int countNewlines(String text, int endExclusive) {
+        if (text == null || text.isEmpty() || endExclusive <= 0) {
+            return 0;
+        }
+        int safeEnd = Math.min(endExclusive, text.length());
+        int lines = 0;
+        for (int i = 0; i < safeEnd; i++) {
+            if (text.charAt(i) == '\n') {
+                lines++;
+            }
+        }
+        return lines;
     }
 
     private static boolean isPdfFile(Path file) {

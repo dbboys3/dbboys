@@ -46,7 +46,7 @@ import com.dbboys.ui.IconPaths;
 
 public class MainController {
     private static final Logger log = LogManager.getLogger(MainController.class);
-    private static final Pattern AI_REFERENCE_PAGE_PATTERN = Pattern.compile("第\\d+页");
+    private static final Pattern AI_REFERENCE_LOCATION_PATTERN = Pattern.compile("第\\d+[页行]");
     private static final double USER_BUBBLE_MAX_WIDTH_RATIO = 0.7;
     private static final int MESSAGE_BUBBLE_RADIUS = 6;
     private static final double AI_INPUT_HEIGHT = 90;
@@ -915,7 +915,7 @@ public class MainController {
                 pageLabels = new java.util.LinkedHashSet<>();
                 shownPaths.put(ref.path(), pageLabels);
             }
-            pageLabels.addAll(extractAiReferencePageLabels(ref.title()));
+            pageLabels.addAll(extractAiReferenceLocationLabels(ref.title()));
         }
         for (java.util.Map.Entry<String, java.util.LinkedHashSet<String>> entry : shownPaths.entrySet()) {
             String path = entry.getKey();
@@ -941,7 +941,7 @@ public class MainController {
         return builder.toString().trim();
     }
 
-    private List<String> extractAiReferencePageLabels(String title) {
+    private List<String> extractAiReferenceLocationLabels(String title) {
         if (title == null || title.isBlank()) {
             return List.of();
         }
@@ -951,7 +951,7 @@ public class MainController {
             detail = detail.substring(splitIndex + 3);
         }
         List<String> pageLabels = new ArrayList<>();
-        Matcher matcher = AI_REFERENCE_PAGE_PATTERN.matcher(detail);
+        Matcher matcher = AI_REFERENCE_LOCATION_PATTERN.matcher(detail);
         while (matcher.find()) {
             pageLabels.add(matcher.group());
         }
