@@ -4,10 +4,13 @@ import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.TableView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.transform.Transform;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -63,24 +66,29 @@ public class SnapshotUtil {
     }
 
     public static void snapshotSceneRoot() {
-        WritableImage image = new WritableImage(
-                (int) (AppState.getSceneRoot().getBoundsInParent().getWidth() * SNAPSHOT_SCALE),
-                (int) (AppState.getSceneRoot().getBoundsInParent().getHeight() * SNAPSHOT_SCALE)
+        Node sceneRoot = AppState.getSceneRoot();
+        if (sceneRoot == null) {
+            return;
+        }
+        prepareNodeForSnapshot(sceneRoot);
+        WritableImage image = createSnapshot(
+                sceneRoot,
+                sceneRoot.getLayoutBounds().getWidth(),
+                sceneRoot.getLayoutBounds().getHeight()
         );
-        SnapshotParameters params = new SnapshotParameters();
-        params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
-        AppState.getSceneRoot().snapshot(params, image);
         copyToClipboard(image, AppState.getNoticePane());
     }
 
     public static void snapshotNode(Node node) {
-        WritableImage image = new WritableImage(
-                (int) (node.getBoundsInParent().getWidth() * SNAPSHOT_SCALE),
-                (int) (node.getBoundsInParent().getHeight() * SNAPSHOT_SCALE)
+        if (node == null) {
+            return;
+        }
+        prepareNodeForSnapshot(node);
+        WritableImage image = createSnapshot(
+                node,
+                node.getLayoutBounds().getWidth(),
+                node.getLayoutBounds().getHeight()
         );
-        SnapshotParameters params = new SnapshotParameters();
-        params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
-        node.snapshot(params, image);
         copyToClipboard(image, AppState.getNoticePane());
     }
 
@@ -101,19 +109,36 @@ public class SnapshotUtil {
             tableView.applyCss();
             tableView.layout();
 
-            WritableImage image = new WritableImage(
-                    (int) (tableView.getWidth() * SNAPSHOT_SCALE),
-                    (int) (newHeight * SNAPSHOT_SCALE)
-            );
-
-            SnapshotParameters params = new SnapshotParameters();
-            params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
-            tableView.snapshot(params, image);
+            WritableImage image = createSnapshot(tableView, tableView.getWidth(), newHeight);
             copyToClipboard(image, AppState.getNoticePane());
         } finally {
             tableView.setPrefHeight(originalPrefHeight);
             tableView.setMinHeight(originalMinHeight);
             tableView.setMaxHeight(originalMaxHeight);
+        }
+    }
+
+    private static WritableImage createSnapshot(Node node, double width, double height) {
+        double safeWidth = Math.max(1, width);
+        double safeHeight = Math.max(1, height);
+
+        WritableImage image = new WritableImage(
+                Math.max(1, (int) Math.ceil(safeWidth * SNAPSHOT_SCALE)),
+                Math.max(1, (int) Math.ceil(safeHeight * SNAPSHOT_SCALE))
+        );
+
+        SnapshotParameters params = new SnapshotParameters();
+        params.setTransform(Transform.scale(SNAPSHOT_SCALE, SNAPSHOT_SCALE));
+        params.setViewport(new Rectangle2D(0, 0, safeWidth, safeHeight));
+        params.setFill(Color.TRANSPARENT);
+        node.snapshot(params, image);
+        return image;
+    }
+
+    private static void prepareNodeForSnapshot(Node node) {
+        node.applyCss();
+        if (node instanceof Parent parent) {
+            parent.layout();
         }
     }
 
