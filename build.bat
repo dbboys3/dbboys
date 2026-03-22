@@ -20,9 +20,6 @@ echo Source compilation completed.
 xcopy /e /h /y /q "src\com\dbboys\fxml\*" "bin\com\dbboys\fxml\"
 xcopy /e /h /y /q "src\com\dbboys\css\*" "bin\com\dbboys\css\"
 copy /y "src\IKAnalyzer.cfg.xml" "bin\" >nul
-copy /y "src\ik-domain-commands.dic" "bin\" >nul
-copy /y "src\ik-domain-envvars.dic" "bin\" >nul
-copy /y "src\ik-domain-system-objects.dic" "bin\" >nul
 copy /y "src\ik-stopwords.dic" "bin\" >nul
 
 :: Build jar file

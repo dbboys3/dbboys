@@ -41,11 +41,7 @@ import org.wltea.analyzer.lucene.IKAnalyzer;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.BufferedReader;
 import java.awt.Desktop;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -58,6 +54,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,7 +75,6 @@ final class MarkdownSearchAnalyzers {
 }
 
 final class MarkdownSearchNormalizer {
-    private static final Logger log = LogManager.getLogger(MarkdownSearchNormalizer.class);
     private static final Pattern ASCII_HAN_BOUNDARY_1 = Pattern.compile("(?<=[A-Za-z0-9_])(?=\\p{IsHan})");
     private static final Pattern ASCII_HAN_BOUNDARY_2 = Pattern.compile("(?<=\\p{IsHan})(?=[A-Za-z0-9_])");
     private static final Pattern ASCII_TOKEN_SPACES = Pattern.compile("(?<=[A-Za-z0-9_])\\s+(?=[A-Za-z0-9_])");
@@ -91,27 +90,21 @@ final class MarkdownSearchNormalizer {
             Pattern.compile("(?i)(?<![A-Za-z0-9_])([A-Za-z0-9_]+@[A-Za-z0-9_]+:[A-Za-z0-9_]+|[A-Za-z0-9_]+:[A-Za-z0-9_]+)(?![A-Za-z0-9_])");
     private static final Pattern SYSTEM_OBJECT_PATTERN =
             Pattern.compile("(?i)(?<![A-Za-z0-9_])(sys[a-z0-9_]{2,})(?![A-Za-z0-9_])");
-    private static final Set<String> DEFAULT_KNOWN_COMMANDS = Set.of(
+    private static final Set<String> KNOWN_COMMANDS = Set.of(
             "onstat", "onmode", "onbar", "ontape", "oninit", "oncheck", "onspaces", "ondblog",
             "onparams", "onload", "onunload", "dbaccess", "dbexport", "dbimport", "dbschema",
             "tbmode", "xctl");
-    private static final Set<String> KNOWN_COMMANDS =
-            loadNormalizedDictionary("ik-domain-commands.dic", DEFAULT_KNOWN_COMMANDS);
     private static final Map<String, String> COMMAND_ALIASES = Map.of(
             "db-access", "dbaccess"
     );
-    private static final Set<String> DEFAULT_KNOWN_ENV_VARS = Set.of(
+    private static final Set<String> KNOWN_ENV_VARS = Set.of(
             "gbasedbtserver", "gbasedbtdir", "gbasedbtsqlhosts", "db_locale", "client_locale",
             "server_locale", "dblang", "lang", "onconfig", "dbservername", "dbserveraliases",
             "ifx_lock_mode_wait", "ifx_isolation_level", "ifx_trimtrailingspaces",
             "allow_newline", "auto_reprepare", "ltapedev", "msgpath");
-    private static final Set<String> KNOWN_ENV_VARS =
-            loadNormalizedDictionary("ik-domain-envvars.dic", DEFAULT_KNOWN_ENV_VARS);
-    private static final Set<String> DEFAULT_KNOWN_SYSTEM_OBJECTS = Set.of(
+    private static final Set<String> KNOWN_SYSTEM_OBJECTS = Set.of(
             "sysmaster", "systables", "sysindexes", "syscolumns", "sysdatabases", "sysdbslocale",
             "syssynonyms", "sysnewdepend", "sysuser", "sysusers", "sysadmin", "dual");
-    private static final Set<String> KNOWN_SYSTEM_OBJECTS =
-            loadNormalizedDictionary("ik-domain-system-objects.dic", DEFAULT_KNOWN_SYSTEM_OBJECTS);
     private static final List<String> QUERY_NOISE_PHRASES = List.of(
             "麻烦帮我看一下", "麻烦帮我查一下", "麻烦帮我搜一下", "麻烦帮我找一下",
             "请帮我看一下", "请帮我查一下", "请帮我搜一下", "请帮我找一下",
@@ -315,50 +308,6 @@ final class MarkdownSearchNormalizer {
         return token == null ? "" : token.trim().toLowerCase();
     }
 
-    private static Set<String> loadNormalizedDictionary(String resourceName, Set<String> fallbackValues) {
-        LinkedHashSet<String> loadedValues = new LinkedHashSet<>();
-        if (resourceName != null && !resourceName.isBlank()) {
-            try (InputStream inputStream = MarkdownSearchNormalizer.class.getClassLoader().getResourceAsStream(resourceName)) {
-                if (inputStream != null) {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            String normalized = normalizeConcept(stripDictionaryComment(line));
-                            if (!normalized.isBlank()) {
-                                loadedValues.add(normalized);
-                            }
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                log.warn("Failed to load dictionary resource: {}", resourceName, e);
-            }
-        }
-        if (!loadedValues.isEmpty()) {
-            return Collections.unmodifiableSet(loadedValues);
-        }
-        if (fallbackValues == null || fallbackValues.isEmpty()) {
-            return Collections.emptySet();
-        }
-        LinkedHashSet<String> normalizedFallback = new LinkedHashSet<>();
-        for (String fallbackValue : fallbackValues) {
-            String normalized = normalizeConcept(fallbackValue);
-            if (!normalized.isBlank()) {
-                normalizedFallback.add(normalized);
-            }
-        }
-        return Collections.unmodifiableSet(normalizedFallback);
-    }
-
-    private static String stripDictionaryComment(String line) {
-        if (line == null || line.isBlank()) {
-            return "";
-        }
-        int commentIndex = line.indexOf('#');
-        String effective = commentIndex >= 0 ? line.substring(0, commentIndex) : line;
-        return effective.trim();
-    }
-
     private static void collectPatternMatches(Pattern pattern, String text, LinkedHashSet<String> target) {
         if (pattern == null || text == null || text.isBlank() || target == null) {
             return;
@@ -526,6 +475,7 @@ class LuceneIndexer {
     private static final int MAX_CONTENT_PREVIEW_CHARS = 20_000;
     private static final int MAX_AI_CHUNK_CHARS = 1_600;
     private static final int MIN_AI_CHUNK_CHARS = 280;
+    private static final int MAX_INDEX_WORKERS = 6;
 
     private record AiChunk(String heading, String text, int order) {}
 
@@ -554,26 +504,20 @@ class LuceneIndexer {
             throw new IllegalArgumentException(FOLDER_NOT_EXISTS_BINDING.get().formatted(markdownFolder));
         }
 
+        List<Path> filesToIndex;
+        try (Stream<Path> stream = Files.walk(markdownFolder)) {
+            filesToIndex = stream.filter(Files::isRegularFile)
+                    .filter(DocumentIndexTextExtractor::isSupported)
+                    .toList();
+        }
+
         Directory dir = FSDirectory.open(indexDir);
         IndexWriterConfig.OpenMode mode = overwrite ? IndexWriterConfig.OpenMode.CREATE : IndexWriterConfig.OpenMode.CREATE_OR_APPEND;
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
         config.setOpenMode(mode);
 
-        try (IndexWriter writer = new IndexWriter(dir, config);
-             Stream<Path> stream = Files.walk(markdownFolder)) {
-
-            stream.filter(Files::isRegularFile)
-                    .filter(DocumentIndexTextExtractor::isSupported)
-                    .forEach(p -> {
-                        try {
-                            if (progress != null) progress.accept(p.toString());
-                            indexFile(writer, p);
-                        } catch (Exception ex) {
-                            log.warn("Indexing file failed: {}", p, ex);
-                            System.err.println(INDEX_FILE_ERROR_BINDING.get().formatted(p, ex.getMessage()));
-                        }
-                    });
-
+        try (IndexWriter writer = new IndexWriter(dir, config)) {
+            indexFilesInParallel(writer, filesToIndex, progress);
             // 强制提交
             writer.commit();
         }
@@ -607,6 +551,68 @@ class LuceneIndexer {
         docs.addAll(buildAiChunkDocuments(file, rawPath, fileName, fileStem, content, aiSections, modified));
         writer.deleteDocuments(new Term(FIELD_OWNER_PATH_RAW, rawPath));
         writer.addDocuments(docs);
+    }
+
+    private void indexFilesInParallel(IndexWriter writer, List<Path> filesToIndex, Consumer<String> progress) throws IOException {
+        if (writer == null || filesToIndex == null || filesToIndex.isEmpty()) {
+            return;
+        }
+
+        int workerCount = Math.max(1, Math.min(MAX_INDEX_WORKERS,
+                Math.min(Runtime.getRuntime().availableProcessors(), filesToIndex.size())));
+        if (workerCount == 1) {
+            for (Path file : filesToIndex) {
+                indexSingleFile(writer, file, progress);
+            }
+            return;
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(workerCount, runnable -> {
+            Thread thread = new Thread(runnable);
+            thread.setDaemon(true);
+            thread.setName("markdown-index-" + thread.getId());
+            return thread;
+        });
+        List<Future<?>> futures = new ArrayList<>(filesToIndex.size());
+        try {
+            for (Path file : filesToIndex) {
+                futures.add(executor.submit(() -> {
+                    indexSingleFile(writer, file, progress);
+                    return null;
+                }));
+            }
+            for (Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Markdown index build interrupted", e);
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof IOException ioException) {
+                        throw ioException;
+                    }
+                    throw new IOException("Markdown index build failed", cause == null ? e : cause);
+                }
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void indexSingleFile(IndexWriter writer, Path file, Consumer<String> progress) {
+        if (file == null) {
+            return;
+        }
+        try {
+            if (progress != null) {
+                progress.accept(file.toString());
+            }
+            indexFile(writer, file);
+        } catch (Exception ex) {
+            log.warn("Indexing file failed: {}", file, ex);
+            System.err.println(INDEX_FILE_ERROR_BINDING.get().formatted(file, ex.getMessage()));
+        }
     }
 
     private static Document buildFileDocument(String rawPath,
