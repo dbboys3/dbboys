@@ -42,7 +42,7 @@ import java.util.Locale;
 public class Main extends Application {
     private static final Logger log = LogManager.getLogger(Main.class);
 
-    private static final String VERSION_NAME = "DBboys V1.0.0beta.20260322";
+    private static final String VERSION_NAME = "DBboys V2.0.0beta.20260322";
     private static final int BUILD_NUMBER = 9;
     private static final String VERSION_URL = "";
     private static final String CHANGELOG = "";
@@ -130,7 +130,7 @@ public class Main extends Application {
             loadCard.setAlignment(Pos.CENTER_LEFT);
             loadCard.setStyle(
                     "-fx-background-color: -color-bg-default;" +
-                    "-fx-background-radius: 14;" +
+                    "-fx-background-radius: 8;" +
                     "-fx-border-color: -color-border-default;" +
                     "-fx-border-radius: 8;" +
                     "-fx-padding: 18 22 18 22;"
