@@ -48,10 +48,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -1443,7 +1441,6 @@ public class MarkdownSearchUtil {
 
     /** AI 回复末尾「参考文档」展示的链接条数（取 {@link #loadAiKnowledgeFromSearch(String)} 结果的前若干条） */
     public static final int AI_UI_REFERENCE_LINK_COUNT = 3;
-    private static final int AI_MAX_CHUNKS_PER_FILE = 2;
 
     /** 复用 DirectoryReader，避免每次搜索都 FSDirectory.open + DirectoryReader.open（磁盘与 inode 开销大） */
     private static volatile Directory mdSharedDirectory;
@@ -1835,7 +1832,6 @@ public class MarkdownSearchUtil {
             int fetchSize = Math.max(AI_PROMPT_SNIPPET_COUNT, SEARCH_UI_FETCH_LIMIT);
             List<LuceneSearcher.SearchResult> results = searcher.searchForAi(keyword, fetchSize);
             List<KnowledgeReference> references = new ArrayList<>();
-            Map<String, Integer> perPathCount = new HashMap<>();
             for (LuceneSearcher.SearchResult item : results) {
                 if (references.size() >= AI_PROMPT_SNIPPET_COUNT) {
                     break;
@@ -1844,15 +1840,10 @@ public class MarkdownSearchUtil {
                 if (path.isEmpty()) {
                     continue;
                 }
-                int currentCount = perPathCount.getOrDefault(path, 0);
-                if (currentCount >= AI_MAX_CHUNKS_PER_FILE) {
-                    continue;
-                }
                 String heading = item.title == null ? "" : item.title.trim();
                 String title = heading.isBlank() ? path : path + " · " + heading;
                 String snippet = item.snippet == null ? "" : item.snippet.replace("\r", "").trim();
                 references.add(new KnowledgeReference(path, title, snippet));
-                perPathCount.put(path, currentCount + 1);
             }
             return references;
         } catch (Exception e) {
