@@ -33,6 +33,31 @@ public class SqlParserUtil {
             "(?i)\\bfunction\\s+(?<FUNC>[a-zA-Z0-9_$.]+)\\s*(\\([\\s\\S]*?\\))?\\s+return\\s+([a-zA-Z0-9_$.]+)\\s*(PIPELINED\\s+|DETERMINISTIC\\s+|RESULT_CACHE\\s+)?(AS|IS|;)"
             + "|"
             + "(?i)\\bprocedure\\s+(?<PROC>[a-zA-Z0-9_$.]+)\\s*(\\([\\s\\S]*?\\))?\\s*(AS|IS|;)";
+    private static final Pattern STATEMENT_PROTECT_PATTERN = Pattern.compile(
+            STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + FANYINHAO_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
+    );
+    private static final Pattern BLOCK_DEPTH_TOKEN_PATTERN = Pattern.compile(
+            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
+                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
+                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
+                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
+                    + "|(?<BEGIN>(?i)\\bbegin\\b(?!\\s*work\\b))"
+                    + "|(?<PLAINEND>(?i)\\bend\\s*;)"
+    );
+    private static final Pattern PLAIN_BLOCK_END_PATTERN = Pattern.compile(
+            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
+                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
+                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
+                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
+                    + "|(?<PLAINEND>(?i)\\bend\\s*;)"
+    );
+    private static final Pattern NAMED_BLOCK_END_PATTERN = Pattern.compile(
+            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
+                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
+                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
+                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
+                    + "|(?<NAMEDEND>(?i)\\bend\\s+(?<ENDNAME>[a-zA-Z_][a-zA-Z0-9_$.]*|\"[^\"]+\")\\s*;)"
+    );
     private static final Pattern FORMAT_PROTECT_PATTERN = Pattern.compile(
             "(?<STRING>" + STRING_PATTERN_TEXT + ")"
                     + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
@@ -121,75 +146,10 @@ public class SqlParserUtil {
     }
 
     public static boolean isSingleStatement(String sql) {
-        if (sql == null || sql.isEmpty()) {
+        if (sql == null || sql.isBlank()) {
             return true;
         }
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        boolean inBrackets = false;
-
-        int length = sql.length();
-        for (int i = 0; i < length; i++) {
-            char current = sql.charAt(i);
-            char next = (i + 1 < length) ? sql.charAt(i + 1) : '\0';
-
-            if (!inSingleQuote && !inDoubleQuote && !inBlockComment && !inBrackets) {
-                if (!inLineComment && current == '-' && next == '-') {
-                    inLineComment = true;
-                    i++;
-                    continue;
-                } else if (inLineComment && current == '\n') {
-                    inLineComment = false;
-                }
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBrackets) {
-                if (!inBlockComment && current == '/' && next == '*') {
-                    inBlockComment = true;
-                    i++;
-                    continue;
-                } else if (inBlockComment && current == '*' && next == '/') {
-                    inBlockComment = false;
-                    i++;
-                    continue;
-                }
-            }
-
-            if (!inDoubleQuote && !inLineComment && !inBlockComment && !inBrackets && current == '\'') {
-                inSingleQuote = !inSingleQuote;
-            }
-
-            if (!inSingleQuote && !inLineComment && !inBlockComment && !inBrackets && current == '\"') {
-                inDoubleQuote = !inDoubleQuote;
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment) {
-                if (current == '{') {
-                    inBrackets = true;
-                } else if (current == '}') {
-                    inBrackets = false;
-                }
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment && !inBrackets && current == ';') {
-                if (hasNonWhitespaceAfter(sql, i + 1)) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private static boolean hasNonWhitespaceAfter(String sql, int start) {
-        for (int i = start; i < sql.length(); i++) {
-            char c = sql.charAt(i);
-            if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
-                return true;
-            }
-        }
-        return false;
+        return collectExecutableStatements(sql).size() <= 1;
     }
 
     public static List<Segment> split(String sql) {
@@ -264,6 +224,16 @@ public class SqlParserUtil {
             addSql = sql.getSqlRemainder() + addSql;
             sql.setSqlRemainder("");
         }
+        if (sql.getSqlstr().isEmpty()) {
+            sql.setBlockDepth(0);
+            sql.setBlockName("");
+            sql.setPlainBlockMode(false);
+            addSql = stripLeadingSqlDelimiter(addSql);
+            if (addSql.isBlank()) {
+                sql.setSqlEnd(false);
+                return sql;
+            }
+        }
         sql.setSqlEnd(false);
 
         Pattern pattern = Pattern.compile(
@@ -298,19 +268,23 @@ public class SqlParserUtil {
                 while (matcher.find()) {
                     if (matcher.group("START") != null) {
                         sql.setSqlType("MULTI_LINE_SQL");
+                        configureBlockState(sql, addSql);
                         break;
                     }
                 }
 
-                pattern = Pattern.compile(
-                        STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                + "|(?<BLOCK>" + NO_NAME_BLOCK + ")"
-                );
-                matcher = pattern.matcher(addSql);
-                while (matcher.find()) {
-                    if (matcher.group("BLOCK") != null) {
-                        sql.setSqlType("CALL_BLOCK");
-                        break;
+                if (sql.getSqlType().isEmpty()) {
+                    pattern = Pattern.compile(
+                            STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
+                                    + "|(?<BLOCK>" + NO_NAME_BLOCK + ")"
+                    );
+                    matcher = pattern.matcher(addSql);
+                    while (matcher.find()) {
+                        if (matcher.group("BLOCK") != null) {
+                            sql.setSqlType("CALL_BLOCK");
+                            configureBlockState(sql, addSql);
+                            break;
+                        }
                     }
                 }
 
@@ -326,6 +300,18 @@ public class SqlParserUtil {
                         sql.setSqlEnd(true);
                         break;
                     }
+                }
+
+                if (!sql.getSqlEnd() && sql.getPlainBlockMode()) {
+                    updateBlockDepth(sql, addSql);
+                    if (sql.getBlockDepth() <= 0 && containsPlainBlockEnd(addSql)) {
+                        sql.setSqlEnd(true);
+                        sql.setBlockDepth(0);
+                    }
+                }
+                if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
+                    sql.setSqlEnd(true);
+                    sql.setBlockDepth(0);
                 }
 
                 if (!sql.getSqlType().equals("MULTI_LINE_SQL") && !sql.getSqlType().equals("CALL_BLOCK")) {
@@ -357,6 +343,17 @@ public class SqlParserUtil {
                         sql.setSqlEnd(true);
                         break;
                     }
+                }
+                if (!sql.getSqlEnd() && sql.getPlainBlockMode()) {
+                    updateBlockDepth(sql, addSql);
+                    if (sql.getBlockDepth() <= 0 && containsPlainBlockEnd(addSql)) {
+                        sql.setSqlEnd(true);
+                        sql.setBlockDepth(0);
+                    }
+                }
+                if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
+                    sql.setSqlEnd(true);
+                    sql.setBlockDepth(0);
                 }
                 sql.setSqlStr(sql.getSqlstr() + addSql);
             }
@@ -417,6 +414,150 @@ public class SqlParserUtil {
             }
         }
         return result;
+    }
+
+    private static List<String> collectExecutableStatements(String sqlText) {
+        List<String> statements = new ArrayList<>();
+        Sql sql = new Sql();
+        for (Segment segment : split(sqlText)) {
+            String sqlChunk = segment.getText();
+            boolean sqlContainsCommit;
+            do {
+                sql = modifySql(sql, sqlChunk);
+                if (sql.getSqlEnd() && !stripProtectedContent(sql.getSqlstr()).trim().isEmpty()) {
+                    statements.add(sql.getSqlstr());
+                    sql.setSqlStr("");
+                    sql.setSqlEnd(false);
+                    sql.setSqlType("");
+                    sql.setBlockDepth(0);
+                    sql.setBlockName("");
+                    sql.setPlainBlockMode(false);
+                }
+                sqlChunk = "";
+                sqlContainsCommit = sqlContrainCommit(sql.getSqlRemainder());
+            } while (sqlContainsCommit);
+        }
+        if (!stripProtectedContent(sql.getSqlstr()).trim().isEmpty()) {
+            statements.add(sql.getSqlstr());
+        }
+        return statements;
+    }
+
+    private static String stripProtectedContent(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return "";
+        }
+        return STATEMENT_PROTECT_PATTERN.matcher(sql).replaceAll("");
+    }
+
+    private static String stripLeadingSqlDelimiter(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return "";
+        }
+        int offset = 0;
+        while (offset < sql.length()) {
+            int lineEnd = offset;
+            while (lineEnd < sql.length() && sql.charAt(lineEnd) != '\n' && sql.charAt(lineEnd) != '\r') {
+                lineEnd++;
+            }
+            String line = sql.substring(offset, lineEnd);
+            String trimmedLine = line.trim();
+            int nextLineStart = lineEnd;
+            if (nextLineStart < sql.length() && sql.charAt(nextLineStart) == '\r') {
+                nextLineStart++;
+            }
+            if (nextLineStart < sql.length() && sql.charAt(nextLineStart) == '\n') {
+                nextLineStart++;
+            }
+            if (trimmedLine.isEmpty() || trimmedLine.equals("/")) {
+                offset = nextLineStart;
+                continue;
+            }
+            break;
+        }
+        return sql.substring(offset);
+    }
+
+    private static void updateBlockDepth(Sql sql, String addSql) {
+        int blockDepth = sql.getBlockDepth();
+        Matcher matcher = BLOCK_DEPTH_TOKEN_PATTERN.matcher(addSql);
+        while (matcher.find()) {
+            if (matcher.group("BEGIN") != null) {
+                blockDepth++;
+            } else if (matcher.group("PLAINEND") != null && blockDepth > 0) {
+                blockDepth--;
+            }
+        }
+        sql.setBlockDepth(blockDepth);
+    }
+
+    private static void configureBlockState(Sql sql, String addSql) {
+        sql.setBlockName(extractBlockName(addSql));
+        sql.setPlainBlockMode(usesPlainBlockEnd(sql.getSqlType(), addSql));
+    }
+
+    private static boolean usesPlainBlockEnd(String sqlType, String addSql) {
+        if ("CALL_BLOCK".equals(sqlType)) {
+            return true;
+        }
+        if (!"MULTI_LINE_SQL".equals(sqlType)) {
+            return false;
+        }
+        String normalized = stripProtectedContent(addSql).trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("create procedure ")
+                || normalized.startsWith("create function ")
+                || normalized.startsWith("create trigger ")
+                || normalized.startsWith("create procedure if not exists ")
+                || normalized.startsWith("create function if not exists ");
+    }
+
+    private static String extractBlockName(String addSql) {
+        String normalized = stripProtectedContent(addSql).trim();
+        Pattern pattern = Pattern.compile(
+                "(?i)^create\\s+(or\\s+replace\\s+)?(package(\\s+body)?|procedure|function|trigger)\\s+(if\\s+not\\s+exists\\s+)?(?<NAME>[a-zA-Z0-9_$.]+|\"[^\"]+\")"
+        );
+        Matcher matcher = pattern.matcher(normalized);
+        if (matcher.find()) {
+            return normalizeIdentifier(matcher.group("NAME"));
+        }
+        return "";
+    }
+
+    private static String normalizeIdentifier(String identifier) {
+        if (identifier == null) {
+            return "";
+        }
+        String normalized = identifier.trim();
+        if (normalized.startsWith("\"") && normalized.endsWith("\"") && normalized.length() >= 2) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        return normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean containsPlainBlockEnd(String addSql) {
+        Matcher matcher = PLAIN_BLOCK_END_PATTERN.matcher(addSql);
+        while (matcher.find()) {
+            if (matcher.group("PLAINEND") != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsNamedBlockEnd(String addSql, String blockName) {
+        if (blockName == null || blockName.isBlank()) {
+            return false;
+        }
+        Matcher matcher = NAMED_BLOCK_END_PATTERN.matcher(addSql);
+        while (matcher.find()) {
+            if (matcher.group("NAMEDEND") != null) {
+                String matchedName = normalizeIdentifier(matcher.group("ENDNAME"));
+                if (blockName.equals(matchedName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static String getFromTable(String sql) {

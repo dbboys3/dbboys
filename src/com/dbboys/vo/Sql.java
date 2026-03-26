@@ -5,6 +5,9 @@ public class Sql {
     private String sqlText="";
     private String sql_remainder="";
     private Boolean sql_end=true;
+    private int block_depth=0;
+    private String block_name="";
+    private boolean plain_block_mode=false;
     public String getSqlstr() {
         return sqlText;
     }
@@ -35,5 +38,29 @@ public class Sql {
 
     public void setSqlRemainder(String sql_remainder) {
         this.sql_remainder = sql_remainder;
+    }
+
+    public int getBlockDepth() {
+        return block_depth;
+    }
+
+    public void setBlockDepth(int block_depth) {
+        this.block_depth = block_depth;
+    }
+
+    public String getBlockName() {
+        return block_name;
+    }
+
+    public void setBlockName(String block_name) {
+        this.block_name = block_name;
+    }
+
+    public boolean getPlainBlockMode() {
+        return plain_block_mode;
+    }
+
+    public void setPlainBlockMode(boolean plain_block_mode) {
+        this.plain_block_mode = plain_block_mode;
     }
 }
