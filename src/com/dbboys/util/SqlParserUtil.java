@@ -559,7 +559,7 @@ public class SqlParserUtil {
         Stack<Integer> indentStack = new Stack<>();
         int currentIndent = 0;
         //String tab = "\t";
-        String tab = "    ";
+        String tab = "  ";
 
 
         String[] sqls = sql.split("(?<=;)");

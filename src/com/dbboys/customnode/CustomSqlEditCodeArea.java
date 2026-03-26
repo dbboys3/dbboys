@@ -18,6 +18,9 @@ import org.fxmisc.richtext.model.PlainTextChange;
 import org.fxmisc.richtext.model.TwoDimensional.Bias;
 
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
@@ -27,7 +30,12 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private static final int LOCAL_HIGHLIGHT_MAX = 4000;
     private static final int LOOKBACK_RANGE = 2000; // 上文最多回溯这么多字符尝试局部高亮
 
-    private final int[] sqlEditCodeAreaCursorPosition = {0, 0};
+    private final int[] sqlEditCodeAreaCursorPosition = {-1, -1};
+    @SuppressWarnings("unchecked")
+    private final Collection<String>[] sqlEditCodeAreaCursorStyles = new Collection[]{
+            Collections.emptyList(),
+            Collections.emptyList()
+    };
     private int styleChangeFlag = 0;
     private final AtomicLong highlightSeq = new AtomicLong(0);
     private Runnable onSaveRequest = () -> {};
@@ -180,7 +188,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
 
         caretPositionProperty().addListener((obs, oldPos, newPos) -> Platform.runLater(() -> {
             styleChangeFlag=1;
-            highlightMatchingBracket(this, newPos, sqlEditCodeAreaCursorPosition);
+            updateMatchingBracketHighlight();
             styleChangeFlag=0;
         }));
 
@@ -221,55 +229,74 @@ public class CustomSqlEditCodeArea extends CodeArea {
         this.executeDisabledSupplier = executeDisabledSupplier == null ? () -> true : executeDisabledSupplier;
     }
 
-    public void highlightMatchingBracket(CodeArea codeArea, int caretPosition,int[] last_pos) {
-        String text = codeArea.getText();
+    private void updateMatchingBracketHighlight() {
+        resetLastBracketStyle(this);
+        applyMatchingBracketHighlight(getCaretPosition());
+    }
+
+    private void applyMatchingBracketHighlight(int caretPosition) {
+        String text = getText();
         int matchPos = -1;
         if (caretPosition < text.length()) {
-            resetLastBracketStyle(codeArea, text, last_pos);
             char rightChar = text.charAt(caretPosition);
             if ("()[]{}".indexOf(rightChar) != -1) {
                 matchPos = findMatchingBracket(text, caretPosition, rightChar);
                 if (matchPos != -1) {
-                    codeArea.setStyleClass(caretPosition, caretPosition + 1, "bracket-highlight");
-                    codeArea.setStyleClass(matchPos, matchPos + 1, "bracket-highlight");
-                    last_pos[0] = caretPosition;
-                    last_pos[1] = matchPos;
+                    highlightBracketPair(caretPosition, matchPos);
                     return;
                 }
             }
         }
         if (caretPosition > 0) {
-            resetLastBracketStyle(codeArea, text, last_pos);
             char leftChar = text.charAt(caretPosition - 1);
             if ("()[]{}".indexOf(leftChar) != -1) {
                 matchPos = findMatchingBracket(text, caretPosition - 1, leftChar);
                 if (matchPos != -1) {
-                    codeArea.setStyleClass(caretPosition - 1, caretPosition, "bracket-highlight");
-                    codeArea.setStyleClass(matchPos, matchPos + 1, "bracket-highlight");
-                    last_pos[0] = caretPosition-1;
-                    last_pos[1] = matchPos;
+                    highlightBracketPair(caretPosition - 1, matchPos);
                 }
             }
         }
     }
 
-    private void resetLastBracketStyle(CodeArea codeArea, String text, int[] last_pos) {
-        if(last_pos[0]==0){
+    private void highlightBracketPair(int firstPos, int secondPos) {
+        sqlEditCodeAreaCursorStyles[0] = snapshotStyle(firstPos);
+        sqlEditCodeAreaCursorStyles[1] = snapshotStyle(secondPos);
+        setStyleClass(firstPos, firstPos + 1, "bracket-highlight");
+        setStyleClass(secondPos, secondPos + 1, "bracket-highlight");
+        sqlEditCodeAreaCursorPosition[0] = firstPos;
+        sqlEditCodeAreaCursorPosition[1] = secondPos;
+    }
+
+    private Collection<String> snapshotStyle(int pos) {
+        Collection<String> style = getStyleOfChar(pos);
+        return style == null ? Collections.emptyList() : List.copyOf(style);
+    }
+
+    private void resetLastBracketStyle(CodeArea codeArea) {
+        if (sqlEditCodeAreaCursorPosition[0] < 0 || sqlEditCodeAreaCursorPosition[1] < 0) {
             return;
         }
         try {
-            if((text.charAt(last_pos[0])=='{'&&text.charAt(last_pos[1])=='}')||(text.charAt(last_pos[0])=='}'&&text.charAt(last_pos[1])=='{')){
-                codeArea.setStyleClass(last_pos[0], last_pos[0] + 1, "comment");
-                codeArea.setStyleClass(last_pos[1], last_pos[1] + 1, "comment");
-            }else if((text.charAt(last_pos[0])=='('&&text.charAt(last_pos[1])==')')||(text.charAt(last_pos[0])==')'&&text.charAt(last_pos[1])=='(')){
-                codeArea.setStyleClass(last_pos[0], last_pos[0] + 1, "paren");
-                codeArea.setStyleClass(last_pos[1], last_pos[1] + 1, "paren");
-            }
+            restoreTrackedStyle(codeArea, sqlEditCodeAreaCursorPosition[0], sqlEditCodeAreaCursorStyles[0]);
+            restoreTrackedStyle(codeArea, sqlEditCodeAreaCursorPosition[1], sqlEditCodeAreaCursorStyles[1]);
         }catch (Exception ignored){
         }finally {
-            last_pos[0]=0;
-            last_pos[1]=0;
+            clearLastBracketTracking();
         }
+    }
+
+    private void restoreTrackedStyle(CodeArea codeArea, int pos, Collection<String> style) {
+        if (pos < 0 || pos >= codeArea.getLength()) {
+            return;
+        }
+        codeArea.setStyle(pos, pos + 1, style == null ? Collections.emptyList() : style);
+    }
+
+    private void clearLastBracketTracking() {
+        sqlEditCodeAreaCursorPosition[0] = -1;
+        sqlEditCodeAreaCursorPosition[1] = -1;
+        sqlEditCodeAreaCursorStyles[0] = Collections.emptyList();
+        sqlEditCodeAreaCursorStyles[1] = Collections.emptyList();
     }
 
     private void fireExecute() {
@@ -381,7 +408,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     return; // outdated result
                 }
                 styleChangeFlag = 1;
+                resetLastBracketStyle(this);
                 setStyleSpans(effectiveStart, spans);
+                applyMatchingBracketHighlight(getCaretPosition());
                 styleChangeFlag = 0;
             });
         });
@@ -427,7 +456,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     return; // outdated result
                 }
                 styleChangeFlag = 1;
+                resetLastBracketStyle(this);
                 setStyleSpans(0, spans);
+                applyMatchingBracketHighlight(getCaretPosition());
                 styleChangeFlag = 0;
             });
         });

@@ -5532,6 +5532,11 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .code-area .text.error {
   -fx-fill: #f44747;
 }
+.code-area .text.bracket-highlight {
+  -fx-fill: #ffd866;
+  -fx-font-weight: bold;
+  -rtfx-background-color: #3d3a22;
+}
 
 /* 选中文本背景与前景色（暗色主题） */
 .styled-text-area .selection {
@@ -5625,5 +5630,4 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .tree-cell-drag-over {
   -fx-background-color: -color-base-7;
 }
-
 
