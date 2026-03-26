@@ -4,9 +4,9 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class PrimaryKeyInfo {
-    private StringProperty constrName = new SimpleStringProperty();
-    private StringProperty constrType = new SimpleStringProperty();
-    private StringProperty idxCols = new SimpleStringProperty();
+    private StringProperty constrName = new SimpleStringProperty();     // 主键约束名
+    private StringProperty constrType = new SimpleStringProperty();     // 主键约束类型
+    private StringProperty idxCols = new SimpleStringProperty();        // 索引字段列表
 
     public String getConstrName() {
         return constrName.get();
@@ -42,6 +42,13 @@ public class PrimaryKeyInfo {
 
     public void setIdxCols(String idxCols) {
         this.idxCols.set(idxCols);
+    }
+
+    @Override
+    public String toString(){
+        return "constrName: " + this.constrName.get() + "\n" +
+                "constrType: " + this.constrType.get() + "\n" +
+                "index columns: " + this.idxCols.get();
     }
 }
 

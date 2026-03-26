@@ -84,6 +84,22 @@ public class ColumnsInfo {
         this.colLength.set(colLength);
     }
 
+    /**
+     * 设置TypeP和TypeS
+     * @param colLength
+     * @param colType
+     */
+    public void setColTypePS(int colLength,String colType,int dbVersion){
+        // this.colLength.set(colLength);
+        this.typeP.set(getPrecision(colType,colLength,dbVersion));
+        if(("DECIMAL".equals(colType) || "MONEY".equals(colType)) && colLength % 256 != 255){
+            this.typeS.set(colLength % 256);
+        } else if("VARCHAR".equals(colType) || "NVARCHAR".equals(colType) || 
+                  "VARCHAR2".equals(colType) || "NVARCHAR2".equals(colType)) {
+            this.typeS.set(colLength/65536);
+        }
+    }
+
     public int getTypeP() {
         return typeP.get();
     }
@@ -194,5 +210,35 @@ public class ColumnsInfo {
                 "ColDef: " + this.colDef.get() + "\n" +
                 "ColComm: " + this.colComm.get() + "\n" +
                 "isAutoincrement: " + this.isAutoincrement.get() + "\n\n";
+    }
+
+    /**
+     * 获取Precision。。  需补充及测试
+     * @param coltype
+     * @param collength
+     * @return
+     */
+    private static int getPrecision(String coltype, int collength, int dbver){
+        int myp = 0;
+        if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)) { myp=collength/256; }
+        else if("FLOAT".equals(coltype) || "SMALLFLOAT".equals(coltype)) {  myp=2; }
+        else if("VARCHAR".equals(coltype) || "NVARCHAR".equals(coltype) || "VARCHAR2".equals(coltype) ||
+                "NVARCHAR".equals(coltype) || "LVARCHAR".equals(coltype)) { 
+            if (dbver == 3) {
+                if(collength > 0){
+                    myp = collength%65536;
+                } else {
+                    myp = Long.valueOf((collength + 4294967296L) % 65536).intValue();
+                }
+            } else {
+                if(collength > 0){
+                    myp=collength%256;
+                } else {
+                    myp = (collength + 65536) % 256;
+                }
+            }
+        }
+        else {myp=collength;}
+        return myp;
     }
 }

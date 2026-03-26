@@ -6,6 +6,17 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class FragmentInfo {
+    /*
+    分片定义
+    Strategy 分段分布策略的类型的代码：
+    R = 循环分段存储策略
+    E = 基于表达式的分段存储策略
+    I = IN DBSPACE 子句指定作为分段存储策略一部分的存储位置
+    N = 时间间隔（或滚动窗口）分段存储策略
+    L = 列表分段存储策略
+    T = 基于表的分段存储策略
+    H = 表是表层次结构内的子表
+    */
     private StringProperty fragName = new SimpleStringProperty();
     private IntegerProperty colNo = new SimpleIntegerProperty();
     private StringProperty strategy = new SimpleStringProperty();

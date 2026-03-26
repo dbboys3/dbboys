@@ -9,6 +9,7 @@ public class Procedure extends TreeData{
 
     //created by liaosnet
     private StringProperty procBoday = new SimpleStringProperty();
+    private IntegerProperty procId = new SimpleIntegerProperty();
 
     /*
      * 函数/过程标识(int 4字节)：
@@ -51,6 +52,18 @@ public class Procedure extends TreeData{
 
     public void setProcBoday(String procBoday) {
         this.procBoday.set(procBoday);
+    }
+
+    public int getProcId() {
+        return procId.get();
+    }
+
+    public IntegerProperty procIdProperty() {
+        return procId;
+    }
+
+    public void setProcId(int procId) {
+        this.procId.set(procId);
     }
 
     public int getProcFlags() {

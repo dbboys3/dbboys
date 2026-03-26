@@ -8,10 +8,30 @@ import javafx.beans.property.StringProperty;
 public class Trigger extends TreeData{
     //created by liaosnet
     private StringProperty triggerBody = new SimpleStringProperty();
+    private StringProperty triggerMode = new SimpleStringProperty();     // sqlmode
 
     public String toString(){
         return "TriggerName: " + this.getName() + "\n" +
+                "TriggerMode: " + this.getTriggerMode() + "\n" + 
                 "TriggerBoday: " + this.getTriggerBody();
+    }
+
+    /**
+     * 返回触发器的数据库模式
+     */
+    public String getTriggerSqlMode() {
+        if ("O".equals(this.triggerMode.get())) {
+            return "Oracle";
+        }
+        return "GBase";
+    }
+
+    public String getTriggerMode() {
+        return triggerMode.get();
+    }
+
+    public void setTriggerMode(String triggerMode) {
+        this.triggerMode.set(triggerMode);
     }
 
     public String getTriggerBody() {

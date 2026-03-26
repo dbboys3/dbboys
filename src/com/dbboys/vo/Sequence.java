@@ -17,7 +17,7 @@ public class Sequence extends TreeData {
     private LongProperty maxVal = new SimpleLongProperty();        // max value
     private LongProperty minVal = new SimpleLongProperty();        // min value
     private StringProperty isCycle = new SimpleStringProperty();   // 0 nocycle, 1 cycle
-    private IntegerProperty cache = new SimpleIntegerProperty();   // 0 nocache
+    private LongProperty cache = new SimpleLongProperty();         // 0 nocache
     private StringProperty isOrder = new SimpleStringProperty();   // 0 noorder, 1 order
     /*
      * 表标识(smallint两字节)：
@@ -206,15 +206,15 @@ public class Sequence extends TreeData {
         this.nextVal.set(nextVal);
     }
 
-    public int getCache() {
+    public long getCache() {
         return cache.get();
     }
 
-    public IntegerProperty cacheProperty() {
+    public LongProperty cacheProperty() {
         return cache;
     }
 
-    public void setCache(int cache) {
+    public void setCache(long cache) {
         this.cache.set(cache);
     }
 

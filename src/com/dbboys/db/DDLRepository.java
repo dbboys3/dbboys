@@ -1,14 +1,20 @@
 package com.dbboys.db;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.CheckInfo;
+import com.dbboys.vo.ColumnsCommInfo;
 import com.dbboys.vo.ExtTableDfiles;
 import com.dbboys.vo.ExtTableInfo;
 import com.dbboys.vo.ForeignKeyInfo;
@@ -19,12 +25,175 @@ import com.dbboys.vo.Procedure;
 import com.dbboys.vo.Sequence;
 import com.dbboys.vo.Synonym;
 import com.dbboys.vo.Table;
+import com.dbboys.vo.TableColumn;
 import com.dbboys.vo.Trigger;
 import com.dbboys.vo.View;
 
 
 public class DDLRepository {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 30;
+
+    /**
+     * 获取当前的数据库
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private static String getActiveDbname(Connection connection) throws SQLException {
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        String sqlstr = "select dbinfo('dbname') as dbname from dual";
+        String currdatabase = "sysmaster";
+        try {
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()){
+                currdatabase = resultSet.getString("dbname").trim();
+            }
+        } finally {
+            if(resultSet != null)  resultSet.close();
+            if(preparedStatement != null) preparedStatement.close();
+        }
+        return currdatabase;
+    }
+
+    /**
+     * 设置当前数据库名
+     * @param connection
+     * @param database
+     */
+    private static void setActiveDbname(Connection connection, String database) throws SQLException {
+        PreparedStatement preparedStatement = null;
+        String sqlstr = "database " + database;
+        try {
+            preparedStatement = connection.prepareStatement(sqlstr);
+            preparedStatement.executeUpdate();
+        } finally {
+            if(preparedStatement != null) preparedStatement.close();
+        }
+    }
+
+    /**
+     * 是否需要打印sqlmode？3.5.1之前无此功能。
+     * @param version
+     * @return
+     */
+    public static boolean displaySqlMode(int version){
+        return (version < 30501)?false:true;
+    }
+
+    /**
+     * 获取数据库产品号，小版本号，大版本号v8.8/v8.7无实际意义。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    public static int getDataBaseProductVersionNumber(Connection connection) {
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        String sqlstr = "select dbinfo('version_gbase','minor') as version from dual";
+        // AEE_3.5.1_3X2_8_25d861
+        String pattern = "\\d+\\.\\d+\\.\\d+";
+        Pattern r = Pattern.compile(pattern);
+        String tmpversion = "TL_3.1.0_1";
+        int version = 30100;                    // version 3.2.0
+
+        // version_gbase 在 3.2.x及之后的版本中支持；
+        // 3.5.1及之后支持sqlmode写法
+        try {
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()) {
+                tmpversion = trim(resultSet.getString("version"));
+            }
+        } catch (SQLException e){   // 没有version_gbase, 使用默认的tmpversion
+            // 不做任何事
+        } finally {
+            if(resultSet != null) {
+                try {
+                    resultSet.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if(preparedStatement != null) {
+                try {
+                    preparedStatement.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        Matcher m = r.matcher(tmpversion);
+        if (m.find()){
+            tmpversion = m.group(0);
+            String[] tmpsplit = tmpversion.split("\\.");
+            version = Integer.parseInt(tmpsplit[0]) * 10000 + Integer.parseInt(tmpsplit[1]) * 100 + Integer.parseInt(tmpsplit[2]);
+        }
+        return version;
+    }
+
+    /**
+     * 获取数据库产品号，返回字符串
+     * @param connection
+     * @return
+     */
+    public static String getDataBaseProductVersion(Connection connection) {
+        String version = "unkown version";
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        String sqlstr = "select dbinfo('version_gbase','full') as version from dual";
+
+        try {
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()){
+                version = trim(resultSet.getString("version"));
+            }
+        } catch (SQLException e) {      // 版本低于3.2.x
+            sqlstr = "select dbinfo('version','full') as version from dual";
+            try {
+                preparedStatement = connection.prepareStatement(sqlstr);
+                resultSet = preparedStatement.executeQuery();
+                while (resultSet.next()){
+                    version = trim(resultSet.getString("version"));
+                }
+            } catch (SQLException e1) {
+                // 不做任何事情
+            } finally {
+                if(resultSet != null) {
+                    try {
+                        resultSet.close();
+                    } catch (SQLException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+                if(preparedStatement != null) {
+                    try {
+                        preparedStatement.close();
+                    } catch (SQLException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+            }
+        } finally {
+            if(resultSet != null) {
+                try {
+                    resultSet.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            if(preparedStatement != null) {
+                try {
+                    preparedStatement.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return version;
+    }
 
     /**
      * 删除前后空格
@@ -257,34 +426,34 @@ public class DDLRepository {
         else if(mycoltype == 65){ coltypeName = "TIMESTAMP WITH TIME ZONE"; }
         return coltypeName;
     }
-
+    
     /**
-     * 获取标度。。  需补充及测试
-     * @param coltype
-     * @param collength
+     * 获取注释标识，1为有syscomms表，10为表syscomms表有seqno字段（用于排序）
+     * @param connection
      * @return
+     * @throws SQLException
      */
-    private static int getScale(String coltype, int collength){
-        int mys = 0;
-        if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)) { mys=collength%256 ;}
-        else if("VARCHAR".equals(coltype) || "NVARCHAR".equals(coltype) || "VARCHAR2".equals(coltype) ||
-                "NVARCHAR".equals(coltype)) { mys=collength/65536; }
-        return mys;
-    }
+    private static int getCommentFlags(Connection connection) throws SQLException {
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        int commflags = 0;
+        String sqlstr = """
+                select sum(comm) as commflags  
+                from ( 
+                    select 1 as comm from systables t where t.tabname = 'syscomms' 
+                    union all 
+                    select 10 as comm from syscolumns c,systables t where c.tabid = t.tabid and t.tabname = 'syscomms' and c.colname = 'segno' 
+                );
+                """;     
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()){
+            commflags = resultSet.getInt("commflags");
+        }
+        if(resultSet != null) resultSet.close();
+        if(preparedStatement != null) preparedStatement.close();
 
-    /**
-     * 获取精度。。  需补充及测试
-     * @param coltype
-     * @param collength
-     * @return
-     */
-    private static int getPrecision(String coltype, int collength){
-        int myp = 0;
-        if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)) { myp=collength/256; }
-        else if("FLOAT".equals(coltype) || "SMALLFLOAT".equals(coltype)) {  myp=2; }
-        else if("VARCHAR".equals(coltype) || "NVARCHAR".equals(coltype) || "VARCHAR2".equals(coltype) ||
-                "NVARCHAR".equals(coltype) || "LVARCHAR".equals(coltype)) { myp=collength%256; }
-        return myp;
+        return commflags;
     }
 
     /**
@@ -297,13 +466,15 @@ public class DDLRepository {
      */
     private static Table getTableInfo(Connection connection, String tablename) throws SQLException {
         Table tableInfo = null;
+        int commflags = getCommentFlags(connection);
         int dbVersion = 3; // 默认数据库JDBC版本
+        // 考虑syscomments表是否存在，是否存在多行的问题，将tablecomm移出主表查询。
         String sql = """
-                select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype,
-                t.fextsize as firstextsize, t.nextsize as nextextsize, c.comments as tablecomm, t.tabtype as tabletype,
-                t.flags as tableflags
-                from systables t left join syscomments c on t.tabname = c.tabname
-                where t.tabname = ?
+                select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype, 
+                t.fextsize as firstextsize, t.nextsize as nextextsize, t.tabtype as tabletype,
+                t.flags as tableflags 
+                from systables t 
+                where t.tabname = ? 
                 """;
         SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
         List<Table> tables = runner.query(sql, List.of(tablename), resultSet -> {
@@ -313,23 +484,54 @@ public class DDLRepository {
             rowTableInfo.setLockType(trim(resultSet.getString("locktype")));
             rowTableInfo.setFirstExtSize(resultSet.getInt("firstextsize"));
             rowTableInfo.setNextExtSize(resultSet.getInt("nextextsize"));
-            rowTableInfo.setTableComm(trim(resultSet.getString("tablecomm")));
             rowTableInfo.setTableTypeCode(trim(resultSet.getString("tabletype")));
             rowTableInfo.setFlags(resultSet.getInt("tableflags"));
             return rowTableInfo;
         });
-        if (!tables.isEmpty()) {
+        if (! tables.isEmpty()) {
             tableInfo = tables.get(0);
         } else {
             tableInfo = new Table(tablename);
         }
         tableInfo.setName(tablename);
 
+        // comment， comm
+        if(commflags == 11){        // 有segno
+            sql = """
+            select c.comments as tablecomm 
+            from syscomms c, systables t 
+            where c.tabid = t.tabid and t.tabname = ? 
+            order by c.segno asc;
+            """;
+        } else if(commflags == 1){  // 无segno
+            sql = """
+            select c.comments as tablecomm 
+            from syscomms c, systables t 
+            where c.tabid = t.tabid and t.tabname = ?         
+            """;
+        }
+
+        if (commflags > 0){
+            List<String> commStrings = runner.query(sql, List.of(tablename), resultSet-> {
+                String commstr = resultSet.getString("tablecomm");
+                return commstr;
+            });
+
+            if(! commStrings.isEmpty()){
+                tableInfo.setTableComm(commStrings.get(0));
+                for(int i=1; i<commStrings.size(); i++) {
+                    tableInfo.setTableComm(tableInfo.getTableComm() + commStrings.get(i));
+                }
+                tableInfo.setTableComm(tableInfo.getTableComm().replace("'","''").trim());
+            }
+        }
+
         String jdbcVersion = connection.getMetaData().getDriverVersion();
         dbVersion=Integer.parseInt(jdbcVersion.substring(0,1));
         tableInfo.setDbVersion(dbVersion);
         return tableInfo;
     }
+
     //added by L3 20260205，用于返回字段列表
     public static ArrayList<ColumnsInfo> getColInfo(Connection connection,String tabname) throws SQLException {
         ArrayList<ColumnsInfo> arrayList = new ArrayList<ColumnsInfo>();
@@ -347,8 +549,10 @@ public class DDLRepository {
      */
     private static ArrayList<ColumnsInfo> getColInfo(Connection connection, Table tableInfo) throws SQLException {
         ArrayList<ColumnsInfo> arrayList = new ArrayList<>();
+        ArrayList<ColumnsCommInfo> columnsCommInfos = getColCommInfo(connection,tableInfo);
         // 对于default默认值，C=Current，L=Literal value,N=Null,S=Dbservername or Sitename，T=Today, U=User
         // 对于虚拟表，sysdefaultsexpr可能多行定义
+        // 是否存在comments多行的问题，将colcomm移出主表查询。
         String sql = """
                 SELECT
                    sc.colno colno
@@ -368,12 +572,10 @@ public class DDLRepository {
                          WHEN 'E' THEN de.default::VARCHAR(254) || ' '
                          ELSE          NULL::VARCHAR(254)
                    END as coldef
-                  ,cc.comments as colcomm
                   ,CASE WHEN mod(sc.coltype,256) in (6,18,53) THEN 1 ELSE 0 END as ISAUTOINCREMENT
                   ,sx.name sxname
                 FROM systables t
                 LEFT JOIN syscolumns sc ON t.tabid = sc.tabid
-                LEFT JOIN syscolcomments cc ON (t.tabname = cc.tabname AND sc.colname = cc.colname)
                 LEFT JOIN sysdefaults df ON (t.tabid = df.tabid AND sc.colno = df.colno)
                 LEFT JOIN sysdefaultsexpr de ON (t.tabid = de.tabid AND sc.colno = de.colno and de.type='T')
                 LEFT JOIN sysxtdtypes sx ON (sx.type = mod(sc.coltype,256) AND sx.extended_id = sc.extended_id)
@@ -385,15 +587,14 @@ public class DDLRepository {
             ColumnsInfo columnsInfo = new ColumnsInfo();
             columnsInfo.setColNo(resultSet.getInt("colno"));
             columnsInfo.setColName(resultSet.getString("colname"));
-            columnsInfo.setColType(getColTypeName(resultSet.getInt("coltype"), resultSet.getInt("collength"), 0, 0, resultSet.getString("sxname")));
-            columnsInfo.setColLength(getLength(columnsInfo.getColType(), resultSet.getInt("collength"), tableInfo.getDbVersion()));
-            columnsInfo.setTypeP(getPrecision(columnsInfo.getColType(), resultSet.getInt("collength")));
-            columnsInfo.setTypeS(getScale(columnsInfo.getColType(), resultSet.getInt("collength")));
+            String coltypename = getColTypeName(resultSet.getInt("coltype"), resultSet.getInt("collength"), 0, 0, resultSet.getString("sxname"));
+            columnsInfo.setColType(coltypename);
+            columnsInfo.setColLength(resultSet.getInt("collength"));  
+            columnsInfo.setColTypePS(resultSet.getInt("collength"), coltypename, tableInfo.getDbVersion());     
             columnsInfo.setIsNullable((resultSet.getInt("isnullable") == 1));
             columnsInfo.setIsPK((resultSet.getInt("ispk") == 1));
             columnsInfo.setColDefType(resultSet.getString("coldeftype"));
             columnsInfo.setColDef(trim(resultSet.getString("coldef")));
-            columnsInfo.setColComm(trim(resultSet.getString("colcomm")));
             columnsInfo.setIsAutoincrement((resultSet.getInt("isautoincrement") == 1));
             return columnsInfo;
         });
@@ -411,68 +612,120 @@ public class DDLRepository {
                 columnsInfo.setIsPK(last.isIsPK());
                 columnsInfo.setColDefType(last.getColDefType());
                 columnsInfo.setColDef(last.getColDef() + trim(columnsInfo.getColDef()));
-                columnsInfo.setColComm(last.getColComm());
                 columnsInfo.setIsAutoincrement(last.isIsAutoincrement());
-                arrayList.set(size - 1, columnsInfo);
+                arrayList.set(size - 1, columnsInfo); 
             } else {
+                // 增加注释
+                for(ColumnsCommInfo commInfo : columnsCommInfos){
+                    if (commInfo.getColName().equals(columnsInfo.getColName())){
+                        columnsInfo.setColComm(commInfo.getColComm());
+                        break;
+                    }
+                }
                 arrayList.add(columnsInfo);
             }
         }
         return arrayList;
     }
 
-    private static String getTableSqlMode(Table tableInfo) {
-        if ((tableInfo.getFlags() & 16384) == 16384) {
-            return "Oracle";
+    /**
+     * 获取字段的注释信息，基于可能存在注释可能超过nvarchar256的情况，适用于指定单表
+     * @param connection
+     * @param tableInfo
+     * @return
+     * @throws SQLException
+     */
+    private static ArrayList<ColumnsCommInfo> getColCommInfo(Connection connection,Table tableInfo) throws SQLException {
+        ArrayList<ColumnsCommInfo> arrayList = new ArrayList<>();
+        int commflags = getCommentFlags(connection);
+        String sql = "";
+        int colno;
+        String colname;
+        String colcomm;
+        if (commflags == 11){           // 有segno的版本
+            sql = """
+            select c.colname,cc.colno,cc.comments,cc.segno 
+            from syscolcomms cc, systables t, syscolumns c 
+            where cc.tabid = t.tabid  
+            and t.tabid = c.tabid 
+            and cc.colno = c.colno  
+            and t.tabname = ? 
+            order by cc.colno asc, cc.segno asc;
+            """;
+        } else if (commflags == 1){     // 无segno的版本
+            sql = """
+            select c.colname,cc.colno,cc.comments 
+            from syscolcomms cc, systables t, syscolumns c 
+            where cc.tabid = t.tabid  
+            and t.tabid = c.tabid 
+            and cc.colno = c.colno  
+            and t.tabname = ? 
+            order by cc.colno asc;        
+            """;
+        } else if (commflags == 0){            // 无注释
+            return null;
         }
-        return "GBase";
-    }
 
-    private static String getTableGlobalTemporary(Table tableInfo) {
-        if ((tableInfo.getFlags() & 4096) == 4096) {
-            return "GLOBAL TEMPORARY";
-        }
-        return "";
-    }
+        SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
+        List<ColumnsCommInfo> rows = runner.query(sql, List.of(tableInfo.getName()), resultSet -> {
+            ColumnsCommInfo columnsCommInfo = new ColumnsCommInfo();
+            columnsCommInfo.setColName(resultSet.getString("colname"));
+            columnsCommInfo.setColNo(resultSet.getInt("colno"));
+            columnsCommInfo.setColComm(resultSet.getString("comments"));
+            return columnsCommInfo;
+        });
 
-    private static String getTableGlobalTemporaryLevel(Table tableInfo) {
-        if ((tableInfo.getFlags() & 8192) == 8192) {
-            return "ON COMMIT DELETE ROWS";
+        if (! rows.isEmpty()){
+            colname = rows.get(0).getColName();
+            colno = rows.get(0).getColNo();
+            colcomm = rows.get(0).getColComm();
+            for (int i=1; i<rows.size(); i++){
+                if (colno == rows.get(i).getColNo()){
+                    colcomm = colcomm + rows.get(i).getColComm();
+                } else {
+                    colcomm = trim(colcomm.replace("'", "''"));
+                    ColumnsCommInfo columnsCommInfo = new ColumnsCommInfo();
+                    columnsCommInfo.setTabName(tableInfo.getName());
+                    columnsCommInfo.setColName(colname);
+                    columnsCommInfo.setColNo(colno);
+                    columnsCommInfo.setColComm(colcomm);
+                    arrayList.add(columnsCommInfo);
+                    colname = rows.get(i).getColName();
+                    colno = rows.get(i).getColNo();
+                    colcomm = rows.get(i).getColComm();
+                }
+            }
+            colcomm = trim(colcomm.replace("'", "''"));
+            ColumnsCommInfo columnsCommInfo = new ColumnsCommInfo();
+            columnsCommInfo.setTabName(tableInfo.getName());
+            columnsCommInfo.setColName(colname);
+            columnsCommInfo.setColNo(colno);
+            columnsCommInfo.setColComm(colcomm);
+            arrayList.add(columnsCommInfo);
         }
-        return "ON COMMIT PRESERVE ROWS";
-    }
-
-    private static String getTableLockType(Table tableInfo) {
-        if("P".equals(tableInfo.getLockType())){
-            return "PAGE";
-        } else if("B".equals(tableInfo.getLockType())){
-            return "PAGE,ROW";
-        }
-        return "ROW";
+        return arrayList;
     }
 
     /**
-     * 有精度和标度的数据类型需要处理。
+     * 有精度和标度的数据类型需要处理
      * @param coltype
      * @param collength
-     * @param typep
-     * @param types
      * @return
      */
-    private static String getColTypeName(String coltype, int collength, int typep, int types){
+    private static String getColTypeName(String coltype, int collength){
         String coltypename = coltype;
         // 有最小字段长度，需处理
         if (coltype.startsWith("VARCHAR") || coltype.startsWith("NVARCHAR")) {
-            if (types > 0){
-                coltypename = coltypename + "(" + collength + "," + types + ")";
+            if (collength/65536 > 0){
+                coltypename = coltypename + "(" + collength + "," + collength/65536 + ")";
             } else {
                 coltypename = coltypename + "(" + collength + ")";
             }
         } else if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)){
-            if (types == 255){
-                coltypename = coltypename + "(" + typep + ")";
+            if (collength%256 == 255){
+                coltypename = coltypename + "(" + collength/256 + ")";
             } else {
-                coltypename = coltypename + "(" + typep + "," + types + ")";
+                coltypename = coltypename + "(" + collength/256 + "," + collength%256 + ")";
             }
         } else if ("LVARCHAR".equals(coltype) || "CHAR".equals(coltype) || "NCHAR".equals(coltype)) {
             coltypename = coltypename + "(" + collength + ")";
@@ -533,7 +786,7 @@ public class DDLRepository {
      */
     private static ArrayList<PrimaryKeyInfo> getPrimaryKey(Connection connection, ArrayList<ColumnsInfo> columns, String tablename) throws SQLException {
         String sql = """
-                SELECT con.constrname,con.constrtype,idx.indexkeys::lvarchar as idxcols
+                SELECT con.constrname,con.constrtype,cast(idx.indexkeys as lvarchar) as idxcols
                 FROM sysconstraints con, sysindices idx, systables t
                 WHERE con.idxname = idx.idxname
                 AND con.tabid = t.tabid
@@ -712,12 +965,15 @@ public class DDLRepository {
      */
     private static ArrayList<ForeignKeyInfo> getForeignKeyInfo(Connection connection, String tablename) throws SQLException {
         String sql = """
-                SELECT fk_c.constrname,fk_t.owner AS fkowner, fk_t.tabname AS fktabname, fk_i.indexkeys::lvarchar AS fk_keys,
-                fk_c.idxname as fkidxname, pk_t.owner AS pkowner, pk_t.tabname AS pktabname, pk_i.indexkeys::lvarchar AS pk_keys,
-                pk_i.idxname as pkidxname
+                SELECT fk_c.constrname,fk_t.owner AS fkowner, fk_t.tabid AS fktabid, fk_t.tabname AS fktabname, 
+                cast(fk_i.indexkeys as lvarchar) AS fk_keys, fk_c.idxname as fkidxname, pk_t.owner AS pkowner, 
+                pk_t.tabid AS pktabid, pk_t.tabname AS pktabname, cast(pk_i.indexkeys as lvarchar) AS pk_keys,
+                pk_i.idxname as pkidxname, obj.state, fk_t.flags
                 FROM sysconstraints fk_c, systables fk_t, sysindices fk_i,sysreferences fk_r,
-                     sysconstraints pk_c, systables pk_t, sysindices pk_i
+                     sysconstraints pk_c, systables pk_t, sysindices pk_i,sysobjstate obj
                 WHERE fk_c.tabid = fk_t.tabid
+                AND fk_c.constrname = obj.name
+                AND obj.objtype = 'C'
                 AND fk_t.tabname = ?
                 AND fk_c.constrtype = 'R'
                 AND fk_c.idxname = fk_i.idxname
@@ -731,13 +987,17 @@ public class DDLRepository {
             ForeignKeyInfo foreignKeyInfo = new ForeignKeyInfo();
             foreignKeyInfo.setFkName(resultSet.getString("constrname"));
             foreignKeyInfo.setFkOwner(resultSet.getString("fkowner"));
+            foreignKeyInfo.setFkTabid(resultSet.getInt("fktabid"));
             foreignKeyInfo.setFkTabname(resultSet.getString("fktabname"));
             foreignKeyInfo.setFkCols(resultSet.getString("fk_keys"));
             foreignKeyInfo.setFkIdxName(resultSet.getString("fkidxname"));
             foreignKeyInfo.setPkOwner(resultSet.getString("pkowner"));
+            foreignKeyInfo.setPkTabid(resultSet.getInt("pktabid"));
             foreignKeyInfo.setPkTabname(resultSet.getString("pktabname"));
             foreignKeyInfo.setPkCols(resultSet.getString("pk_keys"));
             foreignKeyInfo.setPkIdxName(resultSet.getString("pkidxname"));
+            foreignKeyInfo.setIsdisabled(("D".equals(resultSet.getString("state")))?true:false);
+            foreignKeyInfo.setFlags(resultSet.getInt("flags"));
             return foreignKeyInfo;
         }));
     }
@@ -753,9 +1013,11 @@ public class DDLRepository {
     public static String printTable(Connection connection,String tablename) throws SQLException, ClassNotFoundException {
         String patternConstraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
         Table tableInfo = getTableInfo(connection,tablename);
-        String sqlmode = getTableSqlMode(tableInfo);
+        String sqlmode = tableInfo.getTableSqlModeFunc();
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
         StringBuilder ddl = new StringBuilder();
-        ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        
         // 视图，序列、同义词暂时只打印自己的信息
         if ("V".equalsIgnoreCase(tableInfo.getTableTypeCode())){
             return printView(connection,tablename);
@@ -765,9 +1027,12 @@ public class DDLRepository {
             return printSynonym(connection, tablename);
         }
 
+        if(displaySqlMode){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
         ddl.append("CREATE ");
         // global temporary
-        ddl.append(getTableGlobalTemporary(tableInfo)).append(" ");
+        ddl.append(tableInfo.getTableGlobalTemporary()).append(" ");
         // external
         if("E".equals(tableInfo.getTableTypeCode())){
             ddl.append("EXTERNAL TABLE ");
@@ -778,8 +1043,6 @@ public class DDLRepository {
         if (tableInfo.getTableOwner()==null){
             return "";
         }
-        ddl.append("\"").append(tableInfo.getTableOwner()).append("\".");
-
         ddl.append(getName(tableInfo.getName())).append(" (\n");
 
         ArrayList<CheckInfo> checks = getCheck(connection,tablename);
@@ -817,15 +1080,18 @@ public class DDLRepository {
         return ddl.toString();
     }
 
+    /**
+     * 按顺序处理各个字段及属性
+     * @param ddl
+     * @param columns
+     */
     private static void appendColumnsDefinition(StringBuilder ddl, ArrayList<ColumnsInfo> columns) {
         for (int i = 0; i < columns.size(); i++) {
             ColumnsInfo column = columns.get(i);
             ddl.append("  ").append(getName(column.getColName()));
             ddl.append(" ").append(getColTypeName(
                     column.getColType(),
-                    column.getColLength(),
-                    column.getTypeP(),
-                    column.getTypeS()
+                    column.getColLength()
             ));
             if (!column.isIsNullable()) {
                 ddl.append(" NOT NULL");
@@ -843,6 +1109,13 @@ public class DDLRepository {
         }
     }
 
+    /**
+     * 检查约束
+     * @param ddl
+     * @param checks
+     * @param sqlmode
+     * @param patternConstraint
+     */
     private static void appendCheckConstraints(StringBuilder ddl, ArrayList<CheckInfo> checks, String sqlmode, String patternConstraint) {
         for (CheckInfo check : checks) {
             if ("Oracle".equalsIgnoreCase(sqlmode)) {
@@ -861,6 +1134,13 @@ public class DDLRepository {
         }
     }
 
+    /**
+     * 主键约束及唯一约束
+     * @param ddl
+     * @param primaryKeys
+     * @param sqlmode
+     * @param patternConstraint
+     */
     private static void appendPrimaryConstraints(StringBuilder ddl, ArrayList<PrimaryKeyInfo> primaryKeys, String sqlmode, String patternConstraint) {
         for (PrimaryKeyInfo primaryKey : primaryKeys) {
             if ("Oracle".equalsIgnoreCase(sqlmode)) {
@@ -894,6 +1174,13 @@ public class DDLRepository {
         }
     }
 
+    /**
+     * 外部表定义
+     * @param connection
+     * @param ddl
+     * @param tableInfo
+     * @throws SQLException
+     */
     private static void appendExternalTableDefinition(Connection connection, StringBuilder ddl, Table tableInfo) throws SQLException {
         ExtTableInfo extTableInfo = getExtTableInfo(connection, tableInfo.getName());
         ArrayList<ExtTableDfiles> extTableFiles = getExtTableDfiles(connection, tableInfo.getName());
@@ -954,6 +1241,21 @@ public class DDLRepository {
         }
     }
 
+    /**
+     * 普通表定义
+     * @param connection
+     * @param ddl
+     * @param tableInfo
+     * @param tablename
+     * @param sqlmode
+     * @param patternConstraint
+     * @param columns
+     * @param indexes
+     * @param tableFragments
+     * @param foreignKeys
+     * @param triggers
+     * @throws SQLException
+     */
     private static void appendNormalTableDefinition(
             Connection connection,
             StringBuilder ddl,
@@ -971,13 +1273,13 @@ public class DDLRepository {
             ddl.append(buildFragmentString(tableFragments));
         }
 
-        if ("".equals(getTableGlobalTemporary(tableInfo))) {
+        if ("".equals(tableInfo.getTableGlobalTemporary())) {
             ddl.append("\n");
         } else {
-            ddl.append("\n").append(getTableGlobalTemporaryLevel(tableInfo)).append(" ");
+            ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
         }
         ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
-        ddl.append(" LOCK MODE ").append(getTableLockType(tableInfo)).append(";\n");
+        ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
 
         for (Index index : indexes) {
             if (index.getName().startsWith(" ")) {
@@ -991,48 +1293,58 @@ public class DDLRepository {
             } else {
                 ddl.append(" INDEX");
             }
-            ddl.append(" \"").append(index.getIndexOwner()).append("\".").append(getName(index.getName())).append(" ON");
-            ddl.append(" \"").append(tableInfo.getTableOwner()).append("\".").append(getName(tableInfo.getName())).append("(").append(index.getIndexCols()).append(")");
+            // 不再打印表owner及索引owner
+            ddl.append(" ").append(getName(index.getName())).append(" ON ");
+            ddl.append(getName(tableInfo.getName())).append("(").append(index.getIndexCols()).append(")");
             ddl.append(buildFragmentString(getIndexFragmentInfo(connection, index.getName()))).append(";");
         }
-        ddl.append("\n");
+        ddl.append("\n\n");
 
         ArrayList<String> fkColumns = getColNameListByColumnsInfo(columns);
         for (ForeignKeyInfo foreignKey : foreignKeys) {
-            ddl.append("\nALTER TABLE \"").append(trim(foreignKey.getFkOwner())).append("\".").append(getName(foreignKey.getFkTabname()));
-            if ("Oracle".equalsIgnoreCase(sqlmode)) {
-                ddl.append(" ADD CONSTRAINT ");
+            if ("Oracle".equals(foreignKey.getForeignKeyModeFunc())){
+                ddl.append("SET ENVIRONMENT SQLMODE 'Oracle';\n");
+                ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname()));
+                ddl.append(" ADD ");
                 if (!Pattern.matches(patternConstraint, foreignKey.getFkName())) {
-                    ddl.append(getName(foreignKey.getFkName()));
+                    ddl.append("CONSTRAINT ").append(getName(foreignKey.getFkName()));
                 }
-                ddl.append("FOREIGN KEY(");
+                ddl.append(" FOREIGN KEY(");
             } else {
-                ddl.append(" ADD CONSTRAINT (FOREIGN KEY(");
+                if(displaySqlMode(getDataBaseProductVersionNumber(connection))){
+                    ddl.append("SET ENVIRONMENT SQLMODE 'GBase';\n");
+                }
+                ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname()));
+                ddl.append(" ADD CONSTRAINT FOREIGN KEY(");
             }
-
             ddl.append(getIdxCols(foreignKey.getFkCols(), fkColumns)).append(") ");
 
             ArrayList<String> pkColumns = getColNameListByTablename(connection, foreignKey.getPkTabname());
-            ddl.append("REFERENCES \"").append(trim(foreignKey.getPkOwner())).append("\".").append(getName(foreignKey.getPkTabname()));
-            ddl.append("(").append(getIdxCols(foreignKey.getPkCols(), pkColumns)).append("))");
+            ddl.append("REFERENCES ").append(getName(foreignKey.getPkTabname()));
+            ddl.append("(").append(getIdxCols(foreignKey.getPkCols(), pkColumns)).append(")");
 
-            if ("GBase".equalsIgnoreCase(sqlmode)) {
+            if ("GBase".equals(foreignKey.getForeignKeyModeFunc())) {
                 if (!Pattern.matches(patternConstraint, foreignKey.getFkName())) {
                     ddl.append(" CONSTRAINT ").append(getName(foreignKey.getFkName()));
                 }
             }
             ddl.append(";\n");
+
+            // Oracle模式也是这么写？？
+            if (foreignKey.isIsdisabled()){
+                ddl.append("SET CONSTRAINTS ").append(getName(foreignKey.getFkName())).append(" DISABLED;\n");
+            }
         }
 
         if (tableInfo.getTableComm() != null) {
-            ddl.append("\nCOMMENT ON TABLE \"").append(tableInfo.getTableOwner()).append("\".").append(getName(tablename)).append(" IS '")
-                    .append(tableInfo.getTableComm().replace("'", "''")).append("';");
+            ddl.append("\nCOMMENT ON TABLE ").append(getName(tablename)).append(" IS '")
+                    .append(tableInfo.getTableComm()).append("';");
         }
         for (ColumnsInfo column : columns) {
             if (column.getColComm() != null) {
-                ddl.append("\nCOMMENT ON COLUMN \"").append(tableInfo.getTableOwner()).append("\".").append(getName(tablename)).append(".")
+                ddl.append("\nCOMMENT ON COLUMN ").append(getName(tablename)).append(".")
                         .append(getName(column.getColName())).append(" IS '")
-                        .append(column.getColComm().replace("'", "''")).append("';");
+                        .append(column.getColComm()).append("';");
             }
         }
 
@@ -1219,7 +1531,8 @@ public class DDLRepository {
      */
     private static String getIdxCols(Connection connection,String idxColsString,ArrayList<String> colnameList) throws SQLException {
         // idxColsString: <-234>(1, '2') [1], -3 [1]
-        // 索引字段（函数索引字段）以，为分隔符，<-234>(1, '2', '4') [1]表示 函数号-234（内置函数），对应的字段是1，-表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
+        // 索引字段（函数索引字段）以，为分隔符
+        // 示例中：<-234>(1, '2', '4') [1] 表示 函数号-234（内置函数），对应的字段是1，-(负值，如有)表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
         String idxcols = "";
         String funcname = "";
         String funcparam = "";
@@ -1251,9 +1564,7 @@ public class DDLRepository {
                 } else {                            // 单值
                     colno = Integer.valueOf(tmpstr_func);
                 }
-                if (colno < 0){
-                    sortby = " DESC,";
-                }
+                sortby = (colno<0)?" DESC,":",";
                 idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1));
                 if ("".equals(funcparam)){
                     idxcols = idxcols + ")";
@@ -1263,9 +1574,7 @@ public class DDLRepository {
                 idxcols = idxcols + sortby;
             } else {                                // 普通字段 -3 [1]
                 int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
-                if (colno < 0){
-                    sortby = " DESC,";
-                }
+                sortby = (colno<0)?" DESC,":",";
                 idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1)) + sortby;
             }
         }
@@ -1288,15 +1597,82 @@ public class DDLRepository {
             String tmpstr = cols.trim();
             // 普通字段 -3 [1]
             int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
-            if (colno < 0){
-                sortby = " DESC,";
-            }
+            sortby = (colno<0)?" DESC,":",";
             idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1)) + sortby;
         }
-        if (idxcols.length() > 0){
+        if (idxcols.length() > 0){      // 去除最后的","
             idxcols = idxcols.substring(0,idxcols.length()-1);
         }
         return idxcols;
+    }
+
+    /**
+     * 通过表id，索引字段列表， 表及字段对应关系，获取键字段列表。
+     * @param connection
+     * @param tableId
+     * @param keyCols
+     * @param tableColumnArrayList
+     * @return
+     * @throws SQLException
+     */
+    private static String getKeyCols(Connection connection, int tableId, String keyCols, ArrayList<TableColumn> tableColumnArrayList) throws SQLException {
+        // keyCols: <-234>(1, '2') [1], -3 [1]
+        StringBuilder keyList = new StringBuilder();
+        for (String cols : keyCols.trim().split(",(?![^()]*+\\))")){      // 以逗号分割，但是不包含括号内的逗号的正则表达式            
+            String tmpstr = cols.trim();
+            if (tmpstr.startsWith("<")){     // function index, 以"<"开头表示函数索引
+                int funcid = Integer.valueOf(tmpstr.substring(1,tmpstr.indexOf(">")));
+                String funcname = "";
+                String funcparam = "";
+                if (funcid < 0) {      // 内部函数
+                    funcname = INNER_FUNC_NAME.get(funcid);
+                } else {                // 自定义函数
+                    String sql = """
+                            select procname from sysprocedures where procid = ?
+                            """;
+                    SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
+                    String procName = runner.queryOne(sql, List.of(funcid), resultSet -> resultSet.getString("procname"));
+                    if (procName != null) {
+                        funcname = procName;
+                    }
+                }
+                keyList.append(funcname).append("(");
+                // 获取字段 及 排序方式 及多参函数参数
+                String tmpstr_func = tmpstr.substring(tmpstr.indexOf("(")+1,tmpstr.indexOf(")"));
+                int colno = 0;
+                if (tmpstr_func.indexOf(",") > 0){  // 多值参数，有其它参数
+                    colno = Integer.valueOf(tmpstr_func.substring(0,tmpstr_func.indexOf(",")));
+                    funcparam = tmpstr_func.substring(tmpstr_func.indexOf(",")+1).trim();
+                } else {                                // 单值
+                    colno = Integer.valueOf(tmpstr_func);
+                }
+                for (TableColumn tableColumn : tableColumnArrayList){
+                    if (tableId == tableColumn.getTableId() && Math.abs(colno) == tableColumn.getColumnNo()){
+                        keyList.append(getName(tableColumn.getColumnName()));
+                        break;
+                    }
+                }
+                if ("".equals(funcparam)){
+                    keyList.append(")");
+                } else {
+                    keyList.append(",").append(funcparam).append(")");
+                }
+                keyList.append((colno<0)?" DESC,":",");
+            } else {                                // 普通字段 -3 [1]               
+                int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
+                for (TableColumn tableColumn : tableColumnArrayList){
+                    if (tableId == tableColumn.getTableId() && Math.abs(colno) == tableColumn.getColumnNo()){
+                        keyList.append(getName(tableColumn.getColumnName()));
+                        keyList.append((colno<0)?" DESC,":",");
+                        break;
+                    }
+                }
+            }
+        }
+        if (keyList.length() > 0) {
+            keyList.deleteCharAt(keyList.length() - 1);
+        }
+        return keyList.toString();
     }
 
     /**
@@ -1385,7 +1761,7 @@ public class DDLRepository {
             return "";
         }
         StringBuilder ddl = new StringBuilder();
-        ddl.append("CREATE");
+        ddl.append("\nCREATE");
         // 索引类型
         if("U".equals(indexInfo.getIndexType())) {
             ddl.append(" UNIQUE INDEX");
@@ -1395,9 +1771,9 @@ public class DDLRepository {
             ddl.append(" INDEX");
         }
         // 索引名称  属主.索引名
-        ddl.append(" \"").append(indexInfo.getIndexOwner().trim()).append("\".").append(getName(indexInfo.getName())).append(" ON");
+        ddl.append(" ").append(getName(indexInfo.getName())).append(" ON ");
         // 表名(索引字段（函数索引字段）列表)
-        ddl.append(" \"").append(indexInfo.getTableOwner().trim()).append("\".").append(getName(indexInfo.getTableName())).append("(").append(indexInfo.getIndexCols()).append(")");
+        ddl.append(getName(indexInfo.getTableName())).append("(").append(indexInfo.getIndexCols()).append(")");
         // 索引分片规则或者存储
         ddl.append(buildFragmentString(getIndexFragmentInfo(connection, indexname))).append(";");
         return ddl.toString();
@@ -1412,17 +1788,23 @@ public class DDLRepository {
      */
     private static Trigger getTriggerInfo(Connection connection, String triggername) throws SQLException {
         String sql = """
-                SELECT tri.trigname,bdy.data as trigbody
-                FROM systriggers tri, systrigbody bdy
+                SELECT tri.trigname,tri.mode, bdy.data as trigbody, obj.state
+                FROM systriggers tri, systrigbody bdy, sysobjstate obj
                 WHERE tri.trigid = bdy.trigid
+                AND tri.trigname = obj.name
+                AND obj.objtype = 'T'
                 AND tri.trigname = ?
-                AND bdy.datakey IN ('A','D')
+                AND (   bdy.datakey = CASE WHEN tri.mode = 'O' THEN 'P' ELSE 'A' END 
+                     OR bdy.datakey = CASE WHEN tri.mode = 'O' THEN 'P' ELSE 'D' END
+                )
                 ORDER BY bdy.datakey DESC,bdy.seqno ASC;
                 """;
         SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
         List<String[]> rows = runner.query(sql, List.of(triggername), rs -> new String[]{
                 rs.getString("trigname"),
-                rtrimascii0(rs.getString("trigbody"))
+                rs.getString("mode"),
+                rtrimascii0(rs.getString("trigbody")),
+                rs.getString("state")
         });
         Trigger triggerInfo = null;
         StringBuilder triggerBody = new StringBuilder();
@@ -1430,8 +1812,10 @@ public class DDLRepository {
             if (triggerInfo == null) {
                 triggerInfo = new Trigger(row[0]);
             }
-            if (row[1] != null) {
-                triggerBody.append(row[1]);
+            if (row[2] != null) {
+                triggerInfo.setTriggerMode(row[1]);
+                triggerInfo.setIsdisabled(("D".equals(row[3]))?true:false);
+                triggerBody.append(row[2]);
             }
         }
         if (triggerInfo != null) {
@@ -1452,7 +1836,19 @@ public class DDLRepository {
         if (triggerInfo == null || triggerInfo.getName() == null){
             return "";
         }
-        return triggerInfo.getTriggerBody();
+        String sqlmode = triggerInfo.getTriggerSqlMode();
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
+        StringBuilder ddl = new StringBuilder();
+        if(displaySqlMode){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
+        ddl.append(triggerInfo.getTriggerBody());
+        // Oracle模式也是这么写？？
+        if (triggerInfo.isIsdisabled()){
+            ddl.append("SET TRIGGERS ").append(triggerInfo.getName()).append(" DISABLED;\n");
+        }
+        return ddl.toString();
     }
 
     /**
@@ -1502,10 +1898,16 @@ public class DDLRepository {
         if (sequenceInfo == null || sequenceInfo.getName() == null){
             return "";
         }
+        String sqlmode = sequenceInfo.getSequenceSqlMode();
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
         StringBuilder ddl = new StringBuilder();
-        ddl.append("SET ENVIRONMENT SQLMODE '").append(sequenceInfo.getSequenceSqlMode()).append("';\nCREATE SEQUENCE ");
-        // owner
-        ddl.append("\"").append(sequenceInfo.getSeqOwner().trim()).append("\".");
+        if(displaySqlMode){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
+        ddl.append("CREATE SEQUENCE ");
+        // owner, 不再增加owner
+        // ddl.append("\"").append(sequenceInfo.getSeqOwner().trim()).append("\".");
         // seqname
         ddl.append(getName(sequenceInfo.getName()));
         // start with
@@ -1585,16 +1987,22 @@ public class DDLRepository {
         if (synonymInfo == null || synonymInfo.getName() == null){
             return "";
         }
+        String sqlmode = synonymInfo.getSynonymSqlMode();
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
         StringBuilder ddl = new StringBuilder();
-        ddl.append("SET ENVIRONMENT SQLMODE '").append(synonymInfo.getSynonymSqlMode()).append("';\nCREATE ");
+        if(displaySqlMode){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
+        ddl.append("CREATE ");
         // private or public
         if ("P".equals(synonymInfo.getSynType())){   // S = Public synonym, P = Private synonym
             ddl.append("PRIVATE ");
         }
-        // owner
-        ddl.append("SYNONYM \"").append(synonymInfo.getSynOwner().trim()).append("\".");
+        // owner 不再打印
+        // ddl.append("SYNONYM \"").append(synonymInfo.getSynOwner().trim()).append("\".");
         // name
-        ddl.append(getName(synonymInfo.getName())).append(" FOR ");
+        ddl.append("SYNONYM ").append(getName(synonymInfo.getName())).append(" FOR ");
         // 同义词指向remote
         if (synonymInfo.getRTabName() != null){      // 同义远程表
             // remote dbname
@@ -1604,13 +2012,18 @@ public class DDLRepository {
                 ddl.append("@").append(synonymInfo.getRServerName().trim());
             }
             // remote table owner
-            ddl.append(":\"").append(synonymInfo.getROwner().trim()).append("\".");
+            // ddl.append(":\"").append(synonymInfo.getROwner().trim()).append("\".");
+            if ("Oracle".equals(sqlmode)){
+                ddl.append(".");
+            } else {
+                ddl.append(":");
+            }
             // remote table name
             ddl.append(getName(synonymInfo.getRTabName()));
             // 同义词指向本库
         } else {
-            // owner
-            ddl.append("\"").append(synonymInfo.getLOwner().trim()).append("\".");
+            // owner 不再打印
+            // ddl.append("\"").append(synonymInfo.getLOwner().trim()).append("\".");
             // table name
             ddl.append(getName(synonymInfo.getLTabName()));
         }
@@ -1669,18 +2082,27 @@ public class DDLRepository {
         if (viewInfo == null || viewInfo.getName() == null){
             return "";
         }
-        return "SET ENVIRONMENT SQLMODE '" + viewInfo.getViewSqlMode() + "';\n" + viewInfo.getViewBoday();
+        String sqlmode = viewInfo.getViewSqlMode();
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
+        StringBuilder ddl = new StringBuilder();
+        if(displaySqlMode){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
+        ddl.append(viewInfo.getViewBoday());
+        return ddl.toString();
     }
 
     /**
-     * 获取存储过程、函数信息定义。
+     * 获取存储过程、函数信息定义，可能存在多个
      * @param connection
      * @param procname
      * @param delimident
      * @return
      * @throws SQLException
      */
-    private static Procedure getProcInfo(Connection connection, String procdefine) throws SQLException {
+    private static ArrayList<Procedure> getProcInfo(Connection connection, String procdefine) throws SQLException {
+        ArrayList<Procedure> procedureArrayList = new ArrayList<>();
         String sql;
         StringBuilder procBody = new StringBuilder();
         String[] tmpProc = null;
@@ -1689,6 +2111,7 @@ public class DDLRepository {
         String paramtypes = "";
         int exists = 0;
         int procFlags = 0;
+        int procId = 0;
         SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
 
         // procdefine: func1(integer,integer)
@@ -1705,64 +2128,88 @@ public class DDLRepository {
             }
             paramtypes = paramtypes.substring(1);
         }
-
         sql = """
-                select count(*) as isexists from sysprocedures where procname = ?
-                """;
+            select count(*) as isexists from sysprocedures where procname = ?
+            """;
         Integer existsValue = runner.queryOne(sql, List.of(procname), rs -> rs.getInt(1));
         exists = existsValue == null ? 0 : existsValue;
         if (exists == 0){                 // 不存在
             return null;
-        } else if (exists == 1){          //  单个
+        } else if (exists == 1 || (exists > 1 && numargs == 0)){  // 没有同名函数 或 同名函数但没输入参数时
             sql = """
-                    select p.procname,b.seqno,b.data procbody,p.procflags
-                    from sysprocedures p, sysprocbody b
-                    where p.procid = b.procid
-                    and p.procname = ?
-                    and p.mode in ('O','o')
-                    and b.datakey = 'T'
-                    order by b.seqno
-                    """;
+                select p.procname,b.seqno,b.data procbody,p.procflags,p.procid 
+                from sysprocedures p, sysprocbody b 
+                where p.procid = b.procid 
+                and p.procname = ? 
+                and p.mode in ('O','o') 
+                and b.datakey = 'T' 
+                order by p.procid ASC, b.seqno ASC;
+                """;
             List<String[]> rows = runner.query(sql, List.of(procname), rs -> new String[]{
                     rtrimascii0(rs.getString("procbody")),
-                    String.valueOf(rs.getInt("procflags"))
+                    String.valueOf(rs.getInt("procflags")),
+                    String.valueOf(rs.getInt("procid"))
             });
             for (String[] row : rows) {
-                if (row[0] != null) {
-                    procBody.append(row[0]);
-                }
-                procFlags = Integer.parseInt(row[1]);
+                if (procId > 0 && procId != Integer.parseInt(row[2])){
+                    Procedure procedureInfo = new Procedure(procname);
+                    procedureInfo.setProcBoday(procBody.toString().trim());
+                    procedureInfo.setProcFlags(procFlags);
+                    procedureInfo.setProcId(procId);
+                    procedureArrayList.add(procedureInfo);
+                    procBody.setLength(0);
+                    if (row[0] != null) {
+                        procBody.append(row[0]);
+                    }
+                    procFlags = Integer.parseInt(row[1]);
+                    procId = Integer.parseInt(row[2]);
+                } else {
+                    if (row[0] != null) {
+                        procBody.append(row[0]);
+                    }
+                    procFlags = Integer.parseInt(row[1]);
+                    procId = Integer.parseInt(row[2]);
+                }                
             }
-        } else if (exists > 1){           // 多个函数
+            if (procId > 0){
+                Procedure procedureInfo = new Procedure(procname);
+                procedureInfo.setProcBoday(procBody.toString().trim());
+                procedureInfo.setProcFlags(procFlags);
+                procedureInfo.setProcId(procId);
+                procedureArrayList.add(procedureInfo);
+            }
+
+        } else if (exists > 1 && numargs > 0){  // 指明了函数参数               
             sql = """
-                    select p.procname,b.seqno,b.data procbody,p.procflags
-                    from sysprocedures p, sysprocbody b
-                    where p.procid = b.procid
-                    and p.procname = ?
-                    and p.mode in ('O','o')
-                    and p.numargs =  ?
-                    and rtn_param_out(paramtypes) = ?
-                    and b.datakey = 'T'
-                    order by b.seqno
-                    """;
+                select p.procname,b.seqno,b.data procbody,p.procflags,p.procid
+                from sysprocedures p, sysprocbody b
+                where p.procid = b.procid
+                and p.procname = ?
+                and p.mode in ('O','o') 
+                and p.numargs =  ?
+                and rtn_param_out(paramtypes) = ?
+                and b.datakey = 'T'
+                order by b.seqno
+                """;
             List<String[]> rows = runner.query(sql, List.of(procname, numargs, paramtypes), rs -> new String[]{
-                    rtrimascii0(rs.getString("procbody")),
-                    String.valueOf(rs.getInt("procflags"))
+                rtrimascii0(rs.getString("procbody")),
+                String.valueOf(rs.getInt("procflags")),
+                String.valueOf(rs.getInt("procid"))
             });
             for (String[] row : rows) {
                 if (row[0] != null) {
                     procBody.append(row[0]);
                 }
                 procFlags = Integer.parseInt(row[1]);
-            }
+                procId = Integer.parseInt(row[2]);
+                Procedure procedureInfo = new Procedure(procname);
+                procedureInfo.setProcBoday(procBody.toString().trim());
+                procedureInfo.setProcFlags(procFlags);
+                procedureInfo.setProcId(procId);
+                procedureArrayList.add(procedureInfo);
+            }               
         }
-        if (procBody.length() == 0){
-            return null;
-        }
-        Procedure procedureInfo = new Procedure(procname);
-        procedureInfo.setProcBoday(procBody.toString().trim());
-        procedureInfo.setProcFlags(procFlags);
-        return procedureInfo;
+        return procedureArrayList;
     }
 
     /**
@@ -1774,11 +2221,905 @@ public class DDLRepository {
      * @throws SQLException
      */
     public static String printProcedure(Connection connection, String procdefine) throws SQLException {
-        Procedure procedureInfo = getProcInfo(connection, procdefine);
-        if (procedureInfo == null || procedureInfo.getName() == null){
-            return "";
+        ArrayList<Procedure> procedureArrayList = getProcInfo(connection, procdefine);
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaySqlMode = displaySqlMode(dbVersion);
+        StringBuilder ddl = new StringBuilder();
+        if (procedureArrayList == null || procedureArrayList.size() == 0){
+            return null;
         }
-        return "SET ENVIRONMENT SQLMODE '" + procedureInfo.getProcSqlMode() + "';\n" + procedureInfo.getProcBoday();
+        for(Procedure procedure : procedureArrayList){
+            String sqlmode = procedure.getProcSqlMode();
+            if (displaySqlMode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+            }
+            ddl.append(procedure.getProcBoday()).append("\n");
+        }
+        return ddl.toString();
+    }
+
+    /**
+     * 打印整个库的结构：顺序暂定：函数->存储过程->表（含主键、索引、约束）->同义词（等）-> 序列 -> 视图（可能有依赖关系，先后顺序）
+     * @param connection
+     * @param databasename
+     * @return
+     * @throws SQLException
+     */
+    public static String printDatabase(Connection connection,String databasename) throws SQLException {
+        // 顺序暂定：函数->存储过程->表（含主键、索引、约束）->同义词（等）-> 序列 -> 视图（可能有依赖关系，先后顺序）
+        StringBuilder ddl = new StringBuilder();
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String datestr = formatter.format(new Date(System.currentTimeMillis()));
+        String preDatabase = getActiveDbname(connection);
+        String productversion = getDataBaseProductVersion(connection);
+        int dbVersion = getDataBaseProductVersionNumber(connection);
+        boolean displaysqlmode = displaySqlMode(dbVersion);
+        String sqlstr = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        ddl.append("-- ### product version : ").append(productversion).append("\n");
+        ddl.append("-- ### export database : ").append(databasename).append("\n");
+        ddl.append("-- ### export datetime : ").append(datestr).append("\n");
+        // 变更激活库为当前
+        if (! databasename.equals(preDatabase)){
+            setActiveDbname(connection,databasename);
+        }
+
+        // 1, 导出自定义函数和存储过程。 procname, procbody, procflags  
+        sqlstr = """
+                select procname,procid,procflags,seqno,procbody from ( 
+                    select p.procname,p.procid,p.procflags,b.seqno,b.data as procbody 
+                    from sysprocedures p, sysprocbody b  
+                    where p.procid = b.procid 
+                    and p.mode in ('O','o') 
+                    and b.datakey = 'T' 
+                    and p.isproc = 'f' 
+                    order by p.procid asc,b.seqno asc
+                ) 
+                union all 
+                select procname,procid,procflags,seqno,procbody from ( 
+                    select p.procname,p.procid,p.procflags,b.seqno,b.data as procbody 
+                    from sysprocedures p, sysprocbody b  
+                    where p.procid = b.procid 
+                    and p.mode in ('O','o') 
+                    and b.datakey = 'T' 
+                    and p.isproc = 't' 
+                    order by p.procid asc,b.seqno asc
+                );
+                """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+
+        ArrayList<Procedure> procedureInfoArrayList = new ArrayList<>();
+        String procname = null;
+        int procflags = 0;
+        String procbody = null;
+        // 初始化参数
+        if (resultSet.next()){
+            procname = resultSet.getString("procname");
+            procflags = resultSet.getInt("procflags");
+            procbody = resultSet.getString("procbody");
+        }
+        while (resultSet.next()){
+            if (resultSet.getInt("seqno") == 1){
+                Procedure procedureInfo = new Procedure(procname);
+                procedureInfo.setProcFlags(procflags);
+                procedureInfo.setProcBoday(trim(procbody));
+                procedureInfoArrayList.add(procedureInfo);
+                procname = resultSet.getString("procname");
+                procflags = resultSet.getInt("procflags");
+                procbody = resultSet.getString("procbody");
+            } else {
+                procbody = procbody + resultSet.getString("procbody");
+            }
+        }
+        if (procname != null){
+            Procedure procedureInfo = new Procedure(procname);
+            procedureInfo.setProcFlags(procflags);
+            procedureInfo.setProcBoday(trim(procbody));
+            procedureInfoArrayList.add(procedureInfo);
+        }
+        // 打印 函数和存储过程
+        ddl = ddl.append("-- ### START: output function and procedure.\n");
+        for(int i=0;i<procedureInfoArrayList.size();i++){
+            ddl.append("-- function or procedure : ").append(procedureInfoArrayList.get(i).getName()).append("\n");
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(procedureInfoArrayList.get(i).getProcSqlMode()).append("';\n");
+            }
+            ddl.append(procedureInfoArrayList.get(i).getProcBoday()) ;
+            if (! procedureInfoArrayList.get(i).getProcBoday().endsWith(";")){
+                ddl.append(";");
+            }
+            if ("Oracle".equals(procedureInfoArrayList.get(i).getProcSqlMode())){
+                ddl.append("\n/");
+            }
+            ddl.append("\n\n");
+        }
+        ddl.append("-- ### FINISH: output function and procedure.\n\n");
+
+        // 2, 导出表结构, TODO: 表每次都查询一次syscolumns? 该成本太高！！
+        ddl.append("-- ### START: output tables.\n");
+        ArrayList<Table> tableInfoArrayList = new ArrayList<>();
+        ArrayList<Integer> tableInfoTabidArrayList = new ArrayList<>();
+        String jdbcVersion = connection.getMetaData().getDriverVersion();
+        int dbversion = Integer.parseInt(jdbcVersion.substring(0,1));
+        // 所有表信息，去除物化视图 "mtab$_"
+        sqlstr = """
+                select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype,
+                t.fextsize as firstextsize, t.nextsize as nextextsize, t.tabtype as tabletype,t.flags as tableflags, t.tabid 
+                from systables t 
+                where t.tabid > (select tabid from systables where tabname = ' VERSION') 
+                and t.tabtype = 'T' 
+                and t.tabname not like 'mtab$\\_%' 
+                order by t.tabid asc;
+                """;
+
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while(resultSet.next()){
+            Table tableInfo = new Table(resultSet.getString("tabname"));
+            tableInfo.setTableCatalog(resultSet.getString("tablecatalog"));
+            tableInfo.setTableOwner(trim(resultSet.getString("tableowner")));
+            tableInfo.setLockType(resultSet.getString("locktype"));
+            tableInfo.setFirstExtSize(resultSet.getInt("firstextsize"));
+            tableInfo.setNextExtSize(resultSet.getInt("nextextsize"));
+            tableInfo.setTableTypeCode(resultSet.getString("tabletype"));
+            tableInfo.setFlags(resultSet.getInt("tableflags"));
+            tableInfo.setDbVersion(dbversion);
+            tableInfoArrayList.add(tableInfo);
+            // 尝试：创建一个列表，将转换成数组，用于快速查找
+            tableInfoTabidArrayList.add(resultSet.getInt("tabid"));
+        }
+
+        // TODO: 每个表调用一次查询，效率上似乎并不会高。
+        for(int i=0;i<tableInfoArrayList.size();i++){
+            // 输出信息中含 表主体（含约束、主键），外部表定义信息（如有），区段信息。
+            ddl.append("-- table : ").append(tableInfoArrayList.get(i).getTableOwner()).append(".").append(tableInfoArrayList.get(i).getName()).append("\n");
+            ddl.append(buildTableSql(connection,tableInfoArrayList.get(i),displaysqlmode));
+            if ("E".equals(tableInfoArrayList.get(i).getTableTypeCode())) {
+                ddl.append(buildExtTableSql(connection, tableInfoArrayList.get(i)));
+            } else {
+                ddl.append(buildTableSqlExtent(connection, tableInfoArrayList.get(i)));
+            }
+            ddl.append("\n");
+        }
+        ddl.append("-- ### FINISH: output tables.\n\n");
+
+         // 3 同义词
+        ddl.append("-- ### START: output synonym.\n");
+        ArrayList<Synonym> synonymInfoArrayList = new ArrayList<>();
+        sqlstr = "select t1.tabtype AS syntype,t1.owner AS synowner,t1.tabname AS synname, " +
+                "    s.servername AS rservername,s.dbname AS rdbname,s.owner AS rowner,s.tabname AS rtabname, " +
+                "    syn.owner AS lowner,syn.tabname AS ltabname, t1.flags " +
+                "from syssyntable s " +
+                "LEFT JOIN systables syn ON s.btabid = syn.tabid, systables t1 " +
+                "WHERE s.tabid = t1.tabid;";
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()){
+            Synonym synonymInfo = new Synonym(resultSet.getString("synname"));
+            synonymInfo.setSynType(resultSet.getString("syntype"));
+            synonymInfo.setSynOwner(trim(resultSet.getString("synowner")));
+            synonymInfo.setRServerName(resultSet.getString("rservername"));
+            synonymInfo.setRDbName(resultSet.getString("rdbname"));
+            synonymInfo.setROwner(trim(resultSet.getString("rowner")));
+            synonymInfo.setRTabName(resultSet.getString("rtabname"));
+            synonymInfo.setLOwner(trim(resultSet.getString("lowner")));
+            synonymInfo.setLTabName(resultSet.getString("ltabname"));
+            synonymInfo.setFlags(resultSet.getInt("flags"));
+            synonymInfoArrayList.add(synonymInfo);
+        }
+        for(int i=0;i<synonymInfoArrayList.size();i++){
+            ddl.append("-- synonym : " + synonymInfoArrayList.get(i).getName()).append(".").append(synonymInfoArrayList.get(i).getName()).append("\n");
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(synonymInfoArrayList.get(i).getSynonymSqlMode()).append("';\n");
+            }
+            ddl.append("CREATE ");
+            // private or public
+            if ("P".equals(synonymInfoArrayList.get(i).getSynType())){   // S = Public synonym, P = Private synonym
+                ddl.append("PRIVATE ");
+            }
+            ddl.append("SYNONYM ").append(getName(synonymInfoArrayList.get(i).getName())).append(" FOR ");
+            // 同义词指向remote
+            if (synonymInfoArrayList.get(i).getRTabName() != null){      // 同义远程表
+                // remote dbname
+                ddl.append(trim(synonymInfoArrayList.get(i).getRDbName()));
+                // remote servername, can other db
+                if (synonymInfoArrayList.get(i).getRServerName() != null && ! "".equals(synonymInfoArrayList.get(i).getRServerName())){
+                    ddl.append("@").append(trim(synonymInfoArrayList.get(i).getRServerName()));
+                }
+                ddl.append(("Oracle".equals(synonymInfoArrayList.get(i).getSynonymSqlMode()))?".":":");
+                ddl.append(getName(synonymInfoArrayList.get(i).getRTabName()));
+                // 同义词指向本库
+            } else {
+                ddl.append(getName(synonymInfoArrayList.get(i).getLTabName()));
+            }
+            ddl.append("\n\n");
+        }
+        ddl.append("-- ### FINISH: output synonym.\n\n");
+
+        // 4 序列
+        ddl.append("-- ### START: output sequence.\n");
+        ArrayList<Sequence> sequenceInfoArrayList = new ArrayList<>();
+        sqlstr = "SELECT t.owner AS seqowner,t.tabname AS seqname,seq.start_val AS startval, " +
+                "  seq.inc_val AS incval,seq.max_val AS maxval,seq.min_val AS minval, " +
+                "  seq.cycle AS iscycle, seq.cache AS cache,seq.order AS isorder, t.flags  " +
+                "FROM systables t, syssequences seq " +
+                "WHERE t.tabid = seq.tabid;";
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()){
+            Sequence sequenceInfo = new Sequence(resultSet.getString("seqname"));
+            sequenceInfo.setSeqOwner(trim(resultSet.getString("seqowner")));
+            sequenceInfo.setStartVal(resultSet.getLong("startval"));
+            sequenceInfo.setIncVal(resultSet.getLong("incval"));
+            sequenceInfo.setMaxVal(resultSet.getLong("maxval"));
+            sequenceInfo.setMinVal(resultSet.getLong("minval"));
+            sequenceInfo.setIsCycle(resultSet.getString("iscycle"));
+            sequenceInfo.setCache(resultSet.getLong("cache"));;
+            sequenceInfo.setIsOrder(resultSet.getString("isorder"));
+            sequenceInfo.setFlags(resultSet.getInt("flags"));
+            sequenceInfoArrayList.add(sequenceInfo);
+        }
+        for (int i=0;i<sequenceInfoArrayList.size();i++){
+            ddl.append("-- sequence : " + sequenceInfoArrayList.get(i).getSeqOwner()).append(".").append(sequenceInfoArrayList.get(i).getName()).append("\n");
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(sequenceInfoArrayList.get(i).getSequenceSqlMode()).append("';\n");
+            }
+            ddl.append( "CREATE SEQUENCE ").append(getName(sequenceInfoArrayList.get(i).getName()));
+            // start with
+            if(sequenceInfoArrayList.get(i).getStartVal() > 0){
+                ddl.append(" START WITH ").append(sequenceInfoArrayList.get(i).getStartVal());
+            }
+            // increment by
+            ddl.append(" INCREMENT BY ").append(sequenceInfoArrayList.get(i).getIncVal());
+            // maxvalue
+            ddl.append(" MAXVALUE ").append(sequenceInfoArrayList.get(i).getMaxVal());
+            // minvalue
+            ddl.append(" MINVALUE ").append(sequenceInfoArrayList.get(i).getMinVal());
+            // cycle
+            if ("1".equals(sequenceInfoArrayList.get(i).getIsCycle())){
+                ddl.append(" CYCLE");
+            }
+            // cache
+            if (sequenceInfoArrayList.get(i).getCache() > 0){
+                ddl.append(" CACHE " ).append(sequenceInfoArrayList.get(i).getCache());
+            } else {
+                ddl.append(" NOCACHE");
+            }
+            // order
+            if ("1".equals(sequenceInfoArrayList.get(i).getIsOrder())){
+                ddl.append(" ORDER");
+            } else {
+                ddl.append(" NOORDER");
+            }
+            ddl.append(";\n\n");
+        }
+        ddl.append("-- ### FINISH: output sequence.\n\n");
+
+        // 5 视图
+        ddl.append("-- ### START: output view.\n");
+        ArrayList<View> viewInfoArrayList = new ArrayList<>();
+        sqlstr = """
+            select t.tabname as viewname,v.seqno,v.viewtext as viewtext, t.flags 
+            from systables t,sysviews v  
+            where t.tabid = v.tabid 
+            AND t.tabid > (SELECT tabid FROM systables WHERE tabname = ' VERSION') 
+            and t.tabtype = 'V' 
+            order by t.tabid ASC, v.seqno ASC;
+            """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        String viewname = null;
+        String viewtext = null;
+        int viewflags = 0;
+        if (resultSet.next()){
+            viewname = resultSet.getString("viewname");
+            viewtext = resultSet.getString("viewtext");
+            viewflags = resultSet.getInt("flags");
+        }
+        while (resultSet.next()){
+            if (resultSet.getInt("seqno") == 0){
+                View viewInfo = new View(viewname);
+                viewInfo.setViewBoday(trim(viewtext));
+                viewInfo.setFlags(viewflags);
+                viewInfoArrayList.add(viewInfo);
+                viewname = resultSet.getString("viewname");
+                viewtext = resultSet.getString("viewtext");
+                viewflags = resultSet.getInt("flags");
+            } else {
+                viewtext = viewtext + resultSet.getString("viewtext");
+            }
+        }
+        if (viewname != null){
+            View viewInfo = new View(viewname);
+            viewInfo.setViewBoday(trim(viewtext));
+            viewInfo.setFlags(viewflags);
+            viewInfoArrayList.add(viewInfo);
+        }
+        for (int i=0;i<viewInfoArrayList.size();i++){
+            ddl.append("-- view : ").append(viewInfoArrayList.get(i).getName()).append("\n");
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(viewInfoArrayList.get(i).getViewSqlMode()).append("';\n");
+            }
+            ddl.append(viewInfoArrayList.get(i).getViewBoday());
+            ddl.append("\n");
+        }
+        ddl.append("-- ### FINISH: output view.\n\n");
+
+        // 6 索引，需要字段列表 TODO：索引分片及存储规则
+        // 单独生成 tableid, tablename, columnno, columnname 列表。 索引和外键共用
+        ArrayList<TableColumn> tableColumnArrayList = new ArrayList<>();
+        sqlstr = """
+            SELECT c.tabid,t.tabname,c.colno,c.colname
+            FROM syscolumns c, systables t
+            WHERE c.tabid = t.tabid 
+            AND c.tabid > (SELECT tabid FROM systables WHERE tabname = ' VERSION')
+            ORDER BY c.tabid ASC,colno ASC;
+            """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()){
+            TableColumn tableColumn = new TableColumn();
+            tableColumn.setTableId(resultSet.getInt("tabid"));
+            tableColumn.setTableName(resultSet.getString("tabname"));
+            tableColumn.setColumnId(resultSet.getInt("colno"));
+            tableColumn.setColumnName(resultSet.getString("colname"));
+            tableColumnArrayList.add(tableColumn);
+        }
+
+        // 基于表字段
+        ddl.append("-- ### START: output index.\n");
+        ArrayList<Index> indexesArrayList = new ArrayList<>();
+        sqlstr = """
+            SELECT i.owner idxowner,i.idxname,t.owner as tabowner, t.tabid, t.tabname, t.tabtype,
+                i.idxtype,i.clustered as idxcluster,cast(i.indexkeys AS lvarchar) as indexkeys
+            FROM sysindices i,systables t
+            WHERE i.tabid = t.tabid
+            AND i.tabid > (SELECT tabid FROM systables WHERE tabname = ' VERSION')
+            AND substr(i.idxname,1,1) != ' '
+            ORDER BY i.tabid ASC;   
+            """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()){
+            Index index = new Index(resultSet.getString("idxname"));
+            index.setIndexOwner(resultSet.getString("idxowner"));
+            index.setTableOwner(resultSet.getString("tabowner"));
+            index.setTableName(resultSet.getString("tabname"));
+            index.setTableId(resultSet.getInt("tabid"));
+            index.setTableType(resultSet.getString("tabtype"));
+            index.setIndexType(resultSet.getString("idxtype"));
+            index.setIndexCluster(resultSet.getString("idxcluster"));
+            index.setIndexCols(resultSet.getString("indexkeys"));
+            indexesArrayList.add(index);
+        }
+
+        for (int i=0; i<indexesArrayList.size();i++){
+            if ("U".equals(indexesArrayList.get(i).getIdxtype())){
+                ddl.append("CREATE UNIQUE INDEX ");
+            } else if ("C".equals(indexesArrayList.get(i).getIdxtype())){
+                ddl.append("CREATE CLUSTER INDEX ");
+            } else {
+                ddl.append("CREATE INDEX ");
+            }
+            ddl.append(getName(indexesArrayList.get(i).getName())).append(" ON ");
+            ddl.append(getName(indexesArrayList.get(i).getTableName())).append("(");
+            // 索引字段列表
+            ddl.append(getKeyCols(connection, indexesArrayList.get(i).getTableId(), indexesArrayList.get(i).getCols(), tableColumnArrayList));
+
+            ddl.append(");\n");
+        }
+
+        ddl.append("-- ### FINISH: output index.\n\n");
+
+        // 7 外键，需要字段列表
+        ddl.append("-- ### START: output foreigen key.\n");
+        String patternConstraint = "^[cur]\\d+_\\d+";
+        ArrayList<ForeignKeyInfo> foreignKeyInfoArrayList = new ArrayList<>();
+        sqlstr = """
+            SELECT fk_c.constrname,fk_t.owner AS fkowner, fk_t.tabid AS fktabid, fk_t.tabname AS fktabname, 
+                cast(fk_i.indexkeys as lvarchar) AS fk_keys, fk_c.idxname as fkidxname, pk_t.owner AS pkowner, 
+                pk_t.tabid AS pktabid, pk_t.tabname AS pktabname, cast(pk_i.indexkeys as lvarchar) AS pk_keys,
+                pk_i.idxname as pkidxname, obj.state, fk_t.flags
+            FROM sysconstraints fk_c, systables fk_t, sysindices fk_i,sysreferences fk_r,
+                 sysconstraints pk_c, systables pk_t, sysindices pk_i,sysobjstate obj
+            WHERE fk_c.tabid = fk_t.tabid
+            AND fk_c.constrname = obj.name
+            AND obj.objtype = 'C'
+            AND fk_c.constrtype = 'R'
+            AND fk_c.idxname = fk_i.idxname
+            AND fk_c.constrid = fk_r.constrid
+            AND fk_r.PRIMARY = pk_c.constrid
+            AND pk_c.tabid = pk_t.tabid
+            AND pk_c.idxname = pk_i.idxname
+            ORDER BY fk_t.tabid ASC; 
+            """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        while (resultSet.next()) {
+            ForeignKeyInfo foreignKeyInfo = new ForeignKeyInfo();
+            foreignKeyInfo.setFkName(resultSet.getString("constrname"));
+            foreignKeyInfo.setFkOwner(resultSet.getString("fkowner"));
+            foreignKeyInfo.setFkTabid(resultSet.getInt("fktabid"));
+            foreignKeyInfo.setFkTabname(resultSet.getString("fktabname"));
+            foreignKeyInfo.setFkCols(resultSet.getString("fk_keys"));
+            foreignKeyInfo.setFkIdxName(resultSet.getString("fkidxname"));
+            foreignKeyInfo.setPkOwner(resultSet.getString("pkowner"));
+            foreignKeyInfo.setPkTabid(resultSet.getInt("pktabid"));
+            foreignKeyInfo.setPkTabname(resultSet.getString("pktabname"));
+            foreignKeyInfo.setPkCols(resultSet.getString("pk_keys"));
+            foreignKeyInfo.setPkIdxName(resultSet.getString("pkidxname"));
+            foreignKeyInfo.setIsdisabled(("D".equals(resultSet.getString("state")))?true:false);
+            foreignKeyInfo.setFlags(resultSet.getInt("flags"));
+            foreignKeyInfoArrayList.add(foreignKeyInfo);
+        }
+        for (int i=0;i<foreignKeyInfoArrayList.size();i++){
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '");
+                ddl.append(foreignKeyInfoArrayList.get(i).getForeignKeyModeFunc()).append("';\n");
+            }
+            ddl.append("ALTER TABLE ").append(getName(foreignKeyInfoArrayList.get(i).getFkTabname()));
+            ddl.append(" ADD ");
+            if ("Oracle".equals(foreignKeyInfoArrayList.get(i).getForeignKeyModeFunc())){
+                if (!Pattern.matches(patternConstraint,foreignKeyInfoArrayList.get(i).getFkName())){
+                    ddl.append("CONSTRAINT ").append(foreignKeyInfoArrayList.get(i).getFkName());
+                }
+                ddl.append(" FOREIGN KEY(");
+            } else {
+                ddl.append("CONSTRAINT FOREIGN KEY(");
+            }
+            // 外键的字段列表
+            ddl.append(getKeyCols(connection,
+                                    foreignKeyInfoArrayList.get(i).getFkTabid(),
+                                    foreignKeyInfoArrayList.get(i).getFkCols(),
+                                    tableColumnArrayList
+                                ));
+            
+            ddl.append(") REFERENCES ").append(getName(foreignKeyInfoArrayList.get(i).getPkTabname())).append("(");
+            // 参考的主键字段列表
+            ddl.append(getKeyCols(connection,
+                                    foreignKeyInfoArrayList.get(i).getPkTabid(),
+                                    foreignKeyInfoArrayList.get(i).getPkCols(),
+                                    tableColumnArrayList
+                                ));
+
+            ddl.append(")");
+            if ("GBase".equals(foreignKeyInfoArrayList.get(i).getForeignKeyModeFunc())){
+                if (!Pattern.matches(patternConstraint,foreignKeyInfoArrayList.get(i).getFkName())){
+                    ddl.append(" CONSTRAINT ").append(foreignKeyInfoArrayList.get(i).getFkName());
+                }
+            }
+            ddl.append(";\n");
+            // TODO: 禁用约束的语句是否需要区分模式
+            if (foreignKeyInfoArrayList.get(i).isIsdisabled()){
+                ddl.append("SET CONSTRAINTS ").append(getName(foreignKeyInfoArrayList.get(i).getPkTabname()));
+                ddl.append(" DISABLED;\n");
+            }
+        }
+        ddl.append("-- ### FINISH: output foreigen key.\n\n");
+
+        // 8 触发器
+        ddl.append("-- ### START: output trigger.\n");
+        ArrayList<Trigger> trigArrayList = new ArrayList<>();
+        sqlstr = """
+            SELECT tri.trigid,tri.trigname,tri.mode,bdy.seqno,bdy.data as trigbody, obj.state
+            FROM systriggers tri, systrigbody bdy, sysobjstate obj
+            WHERE tri.trigid = bdy.trigid
+            AND tri.trigname = obj.name
+            AND obj.objtype = 'T'
+            AND (   bdy.datakey = CASE WHEN tri.mode = 'O' THEN 'P' ELSE 'A' END 
+                 OR bdy.datakey = CASE WHEN tri.mode = 'O' THEN 'P' ELSE 'D' END
+            )
+            ORDER BY tri.trigid ASC, bdy.datakey DESC,bdy.seqno ASC;    
+            """;
+        preparedStatement = connection.prepareStatement(sqlstr);
+        resultSet = preparedStatement.executeQuery();
+        String trigName = null;
+        String trigBoday = null;
+        String trigMode = null;
+        boolean trigDisabled = false;
+        int trigId = 0;
+        //第一行
+        if (resultSet.next()){
+            trigId = resultSet.getInt("trigid");
+            trigName = resultSet.getString("trigname");
+            trigMode = resultSet.getString("trigmode");
+            trigBoday = resultSet.getString("trigbody");
+            trigDisabled = ("D".equals(resultSet.getString("state")))?true:false;
+        }
+        while (resultSet.next()){
+            if (resultSet.getInt("segno") == 0){
+                Trigger trigger = new Trigger(trigName);
+                trigger.setTriggerMode(trigMode);
+                trigger.setTriggerBody(trigBoday);
+                trigger.setIsdisabled(trigDisabled);
+                trigArrayList.add(trigger);
+                trigId = resultSet.getInt("trigid");
+                trigName = resultSet.getString("trigname");
+                trigMode = resultSet.getString("trigmode");
+                trigBoday = resultSet.getString("trigbody");
+                trigDisabled = ("D".equals(resultSet.getString("state")))?true:false;
+            } else {
+                trigBoday = trigBoday + resultSet.getString("trigbody");
+            }
+        }
+        if (trigId > 0){
+            Trigger trigger = new Trigger(trigName);
+            trigger.setTriggerMode(trigMode);
+            trigger.setTriggerBody(trigBoday);
+            trigArrayList.add(trigger);
+        }
+        for (int i=0;i<trigArrayList.size();i++){
+            ddl.append("-- trigger : ").append(trigArrayList.get(i).getName()).append("\n");
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(trigArrayList.get(i).getTriggerSqlMode()).append("';\n");
+            }
+            ddl.append(trigArrayList.get(i).getTriggerBody()).append("\n");
+            // Oracle模式也是这么写？？
+            if (trigArrayList.get(i).isIsdisabled()){
+                ddl.append("SET TRIGGERS ").append(trigArrayList.get(i).getName()).append(" DISABLED;\n");
+            }
+        }
+        ddl.append("-- ### FINISH: output trigger.\n\n");
+
+        // 9 注释，得考虑注释功能对应的数据库版本，commflags。
+        ddl.append("-- ### START: output comment.\n");
+        int commflags = getCommentFlags(connection);
+        if (commflags == 11){   // 含segno
+            // 表
+            sqlstr = """
+                SELECT t.tabname, c.segno, c.comments 
+                FROM syscomms c, systables t 
+                WHERE c.tabid = t.tabid 
+                ORDER BY t.tabid ASC, c.segno ASC;  
+                """;
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            String tabname = null;
+            String tabcomm = null;
+            // 第一行
+            if (resultSet.next()){
+                tabname = resultSet.getString("tabname");
+                tabcomm = resultSet.getString("comments");
+            }
+            while (resultSet.next()){
+                if (resultSet.getInt("segno") == 0){
+                    ddl.append("COMMENT ON TABLE ").append(tabname).append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
+                    tabname = resultSet.getString("tabname");
+                    tabcomm = resultSet.getString("comments");
+                } else {
+                    tabcomm = tabcomm + resultSet.getString("comments");
+                }
+            }
+            if (tabname != null){
+                ddl.append("COMMENT ON TABLE ").append(tabname).append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
+            }
+            // 字段
+            sqlstr = """
+                SELECT t.tabname,c.colname,cc.segno,cc.comments 
+                FROM syscolcomms cc, systables t, syscolumns c 
+                WHERE cc.tabid = t.tabid 
+                AND cc.tabid = c.tabid 
+                AND cc.colno = c.colno 
+                ORDER BY t.tabid ASC, c.colno ASC, cc.segno ASC;     
+                """;
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            tabname = null;
+            String colname = null;
+            String colcomm = null;
+            // 第一行
+            if (resultSet.next()){
+                tabname = resultSet.getString("tabname");
+                colname = resultSet.getString("colname");
+                colcomm = resultSet.getString("comments");
+            }
+            while (resultSet.next()){
+                if (resultSet.getInt("segno") == 0){
+                    ddl.append("COMMENT ON COLUMN ").append(tabname).append(".").append(colname);
+                    ddl.append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
+                    tabname = resultSet.getString("tabname");
+                    colname = resultSet.getString("colname");
+                    colcomm = resultSet.getString("comments");
+                } else {
+                    colcomm = colcomm + resultSet.getString("comments");
+                }
+            }
+            if (tabname != null){
+                ddl.append("COMMENT ON COLUMN ").append(tabname).append(".").append(colname);
+                ddl.append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
+            }
+        } else if (commflags == 1){ // 不含segno
+            // 表
+            sqlstr = """
+                SELECT t.tabname, c.comments 
+                FROM syscomms c, systables t 
+                WHERE c.tabid = t.tabid 
+                ORDER BY t.tabid ASC;     
+                """;
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            while(resultSet.next()){
+                ddl.append("COMMENT ON TABLE ").append(resultSet.getString("tabname")).append(" IS '");
+                ddl.append(trim(resultSet.getString("comments")).replace("'","''")).append("';\n");
+            }
+            // 字段
+            sqlstr = """
+                SELECT t.tabname,c.colname,cc.comments 
+                FROM syscolcomms cc, systables t, syscolumns c 
+                WHERE cc.tabid = t.tabid 
+                AND cc.tabid = c.tabid 
+                AND cc.colno = c.colno 
+                ORDER BY t.tabid ASC, c.colno ASC; 
+                """;
+            preparedStatement = connection.prepareStatement(sqlstr);
+            resultSet = preparedStatement.executeQuery();
+            while(resultSet.next()){
+                ddl.append("COMMENT ON COLUMN ").append(resultSet.getString("tabname")).append(".").append(resultSet.getString("colname"));
+                ddl.append(" IS '").append(trim(resultSet.getString("comments")).replace("'","''")).append("';\n");
+            }
+        }
+        ddl.append("-- ### FINISH: output comment.\n\n");
+
+        // 最后变更回原来的激活库
+        if (! databasename.equals(preDatabase)){
+            setActiveDbname(connection,preDatabase);
+        }
+        return ddl.toString();
+    }
+
+    /**
+     * 生成建表语句的extent块信息
+     * @param connection
+     * @param tableInfo
+     * @return
+     * @throws SQLException
+     */
+    private static String buildTableSqlExtent(Connection connection,Table tableInfo) throws SQLException {
+        String ddl = "";
+        ArrayList<FragmentInfo> tableFragmentInfoArrayList = getTableFragmentInfo(connection,tableInfo.getName());
+        // 分片规则，Exprtext 的结果可能不对。
+        if (tableFragmentInfoArrayList.size() > 0) {
+            ddl = ddl + buildFragmentString(tableFragmentInfoArrayList);
+        }
+
+        // 全局临时表级别
+        if ("".equals(tableInfo.getTableGlobalTemporary())){
+            ddl = ddl + "\n";
+        } else {
+            ddl = ddl + "\n" + tableInfo.getTableGlobalTemporaryLevel() + " ";
+        }
+        // 区段大小及锁模式
+        ddl = ddl + "EXTENT SIZE " + tableInfo.getFirstExtSize() + " NEXT SIZE " + tableInfo.getNextExtSize();
+        ddl = ddl + " LOCK MODE " + tableInfo.getLockType() + ";\n";
+
+        return ddl;
+    }
+
+    /**
+     * 生成外部表的存储定义部分
+     * @param connection
+     * @param tableInfo
+     * @return
+     * @throws SQLException
+     */
+    private static String buildExtTableSql(Connection connection, Table tableInfo) throws SQLException {
+        ExtTableInfo extTableInfo = getExtTableInfo(connection,tableInfo.getName());
+        ArrayList<ExtTableDfiles> extTableDfilesArrayList = getExtTableDfiles(connection,tableInfo.getName());
+        if (extTableInfo==null){
+            return ";";
+        }
+        String ddl = "\nUSING ( \n  DATAFILES(\n";
+        // DATAFILE
+        for(int i=0;i<extTableInfo.getNumDfiles();i++){
+            ddl = ddl + "    '" + trim(extTableDfilesArrayList.get(i).getDataFile());
+            if (extTableDfilesArrayList.get(i).getBlobDir() != null && ! "".equals(trim(extTableDfilesArrayList.get(i).getBlobDir()))){
+                ddl = ddl + ";BLOBDIR:" + trim(extTableDfilesArrayList.get(i).getBlobDir());
+            }
+            if (extTableDfilesArrayList.get(i).getClobDir() != null && ! "".equals(trim(extTableDfilesArrayList.get(i).getClobDir()))){
+                ddl = ddl + ";CLOBDIR:" + trim(extTableDfilesArrayList.get(i).getClobDir());
+            }
+            // 是否最后一行
+            if(i==(extTableInfo.getNumDfiles()-1)){
+                ddl = ddl + "'\n  ),\n";
+            } else {
+                ddl = ddl + "',\n";
+            }
+        }
+
+        // FORMAT
+        if ("D".equals(extTableInfo.getFormatType())){
+            ddl = ddl + "  FORMAT 'DELIMITED',\n";
+        } else if ("F".equals(extTableInfo.getFormatType())){
+            ddl = ddl + "  FORMAT 'FIXED',\n";
+        } else if ("I".equals(extTableInfo.getFormatType())){
+            ddl = ddl + "  FORMAT 'GBASEDBT',\n";           // gbasedbt or informix
+        }
+        // DELIMITER
+        if (extTableInfo.getFieldDelimiter() != null){
+            ddl = ddl + "  DELIMITER '" + extTableInfo.getFieldDelimiter() + "',\n";
+        }
+        // RECORDEND
+        if (extTableInfo.getRecordDelimiter() != null){
+            ddl = ddl + "  RECORDEND '" + extTableInfo.getRecordDelimiter() + "',\n";
+        }
+        // DBDATE
+        if (extTableInfo.getDateFormat() != null){
+            ddl = ddl + "  DBDATE '" + trim(extTableInfo.getDateFormat()) + "',\n";
+        }
+        // DBMONEY
+        if (extTableInfo.getMoneyFormat() != null){
+            ddl = ddl + "  DBMONEY '" + trim(extTableInfo.getMoneyFormat()) + "',\n";
+        }
+        // MAXERRORS
+        if (extTableInfo.getMaxErrors() != -1 ){
+            ddl = ddl + "  MAXERRORS " + extTableInfo.getMaxErrors() + ",\n";
+        }
+        // REJECTFILE
+        if (extTableInfo.getRejectFile() != null){
+            ddl = ddl + "  REJECTFILE '" + trim(extTableInfo.getRejectFile()) + "',\n";
+        }
+        // flags
+        if ((extTableInfo.getFlags() & 4) == 4){
+            ddl = ddl + "  DELUXE,\n";
+        } else if((extTableInfo.getFlags() & 8) == 8){
+            ddl = ddl + "  EXPRESS,\n";
+        }
+        if ((extTableInfo.getFlags() & 2) == 2){
+            ddl = ddl + "  ESCAPE ON\n);";
+        } else {
+            ddl = ddl + "  ESCAPE OFF\n);";
+        }
+
+        return ddl;
+    }
+
+    /**
+     * 生成建表语句的 create table 字段部分
+     * @param connection
+     * @param tableInfo
+     * @return
+     * @throws SQLException
+     */
+    private static String buildTableSql(Connection connection, Table tableInfo, boolean displaysqlmode) throws SQLException {
+        String parttern_constraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
+        String sqlmode = tableInfo.getTableSqlModeFunc();
+        String ddl = "";
+        if (displaysqlmode){
+            ddl = "SET ENVIRONMENT SQLMODE '" + sqlmode + "';\n";
+        }
+        ddl = ddl + "CREATE ";
+        // global temporary
+        if (! "".equals(tableInfo.getTableGlobalTemporary())){
+            ddl = ddl + tableInfo.getTableGlobalTemporary() + " ";
+        }
+        // external
+        if("E".equals(tableInfo.getTableTypeCode())){
+            ddl = ddl + "EXTERNAL TABLE ";
+        } else {
+            ddl = ddl + "TABLE ";
+        }
+
+        ddl = ddl + getName(tableInfo.getName()) + " (\n";
+
+        ArrayList<CheckInfo> checkInfoArrayList = getCheck(connection,tableInfo.getName());
+        ArrayList<ColumnsInfo> columnsInfoArrayList = getColInfo(connection,tableInfo);
+        ArrayList<PrimaryKeyInfo> primaryKeyInfoArrayList = getPrimarykey(connection,columnsInfoArrayList,tableInfo.getName());
+
+        // 按顺序处理各个类型
+        for (int i=0;i<columnsInfoArrayList.size();i++){
+            // 字段名
+            ddl = ddl + "  " + getName(columnsInfoArrayList.get(i).getColName());
+            // 字段类型
+            ddl = ddl + " " + getColTypeName(columnsInfoArrayList.get(i).getColType(),
+                columnsInfoArrayList.get(i).getColLength());
+            // 是否为 NOT NULL
+            if (! columnsInfoArrayList.get(i).isIsNullable()){
+                ddl = ddl + " NOT NULL";
+            }
+            // 默认值，依据ColDefType处理
+            if (columnsInfoArrayList.get(i).getColDefType() != null){
+                ddl = ddl + " DEFAULT " + getDefaults(columnsInfoArrayList.get(i).getColType(),
+                    columnsInfoArrayList.get(i).getColDefType(),
+                    columnsInfoArrayList.get(i).getColDef());
+            }
+            // 非最后一个字段，后面加上 ,\n
+            if (i<columnsInfoArrayList.size()-1){
+                ddl = ddl + ",\n";
+            }
+        }
+        // 检查约束
+        if (checkInfoArrayList.size() > 0){
+            for(int i=0;i<checkInfoArrayList.size();i++){
+                // Oracle模式下，constraint在前
+                if ("Oracle".equalsIgnoreCase(sqlmode)){
+                    if (!Pattern.matches(parttern_constraint, checkInfoArrayList.get(i).getConstrName())) {
+                        ddl = ddl + ",\n  CONSTRAINT " + getName(checkInfoArrayList.get(i).getConstrName());
+                        ddl = ddl + "  CHECK " + checkInfoArrayList.get(i).getCheckText();
+                    } else {
+                        ddl = ddl + ",\n  CHECK " + checkInfoArrayList.get(i).getCheckText();
+                    }
+                    // default GBase模式
+                } else {
+                    ddl = ddl + ",\n  CHECK " + checkInfoArrayList.get(i).getCheckText();
+                    if (!Pattern.matches(parttern_constraint, checkInfoArrayList.get(i).getConstrName())) {
+                        ddl = ddl + " CONSTRAINT " + getName(checkInfoArrayList.get(i).getConstrName());
+                    }
+                }
+            }
+        }
+        // 主键约束及唯一约束
+        if (primaryKeyInfoArrayList.size() > 0){
+            for(int i=0;i<primaryKeyInfoArrayList.size();i++){
+                // Oracle模式
+                if ("Oracle".equalsIgnoreCase(sqlmode)){
+                    if (!Pattern.matches(parttern_constraint, primaryKeyInfoArrayList.get(i).getConstrName())) {
+                        ddl = ddl + ",\n  CONSTRAINT " + getName(primaryKeyInfoArrayList.get(i).getConstrName());
+                        if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl = ddl + "  PRIMARY KEY(";
+                        } else if ("U".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl = ddl + "  UNIQUE(";
+                        }
+                        ddl = ddl + primaryKeyInfoArrayList.get(i).getIdxCols() + ")";
+                    } else {
+                        if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl = ddl + ",\n  PRIMARY KEY(";
+                        } else if ("U".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl = ddl + ",\n  UNIQUE(";
+                        }
+                        ddl = ddl + primaryKeyInfoArrayList.get(i).getIdxCols() + ")";
+                    }
+                    // default GBase模式
+                } else {
+                    if ("P".equals(primaryKeyInfoArrayList.get(i).getIdxCols())) {
+                        ddl = ddl + ",\n  PRIMARY KEY(";
+                    } else if ("U".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                        ddl = ddl + ",\n  UNIQUE(";
+                    }
+                    ddl = ddl + primaryKeyInfoArrayList.get(i).getIdxCols() + ")";
+                    if (!Pattern.matches(parttern_constraint, primaryKeyInfoArrayList.get(i).getConstrName())) {
+                        ddl = ddl + "  CONSTRAINT " + getName(primaryKeyInfoArrayList.get(i).getConstrName());
+                    }
+                }
+            }
+        }
+        ddl = ddl + "\n) ";
+        return ddl;
+    }
+
+    /**
+     * 获取主键索引信息
+     * @param connection
+     * @param arrayList
+     * @param tablename
+     * @param delimident
+     * @return
+     * @throws SQLException
+     */
+    private static ArrayList<PrimaryKeyInfo> getPrimarykey(Connection connection,ArrayList<ColumnsInfo> arrayList,String tablename) throws SQLException {
+        ArrayList<PrimaryKeyInfo> primaryKeyArrayList = new ArrayList<>();
+        String sqlstr = "SELECT con.constrname,con.constrtype,idx.indexkeys::lvarchar as idxcols " +
+                "FROM sysconstraints con, sysindices idx, systables t " +
+                "WHERE con.idxname = idx.idxname " +
+                "AND con.tabid = t.tabid " +
+                "AND t.tabname = ? " +
+                "AND con.constrtype in ('P','U')";
+        PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+        preparedStatement.setString(1,tablename);
+        ResultSet resultSet = preparedStatement.executeQuery();
+
+        while (resultSet.next()){
+            PrimaryKeyInfo primaryKeyInfo = new PrimaryKeyInfo();
+            primaryKeyInfo.setIdxCols(getIdxCols(connection, resultSet.getString("idxcols"),getColNameListByColumnsInfo(arrayList)));
+            primaryKeyInfo.setConstrName(resultSet.getString("constrname"));
+            primaryKeyInfo.setConstrType(resultSet.getString("constrtype"));
+            primaryKeyArrayList.add(primaryKeyInfo);
+        }
+
+        if(resultSet != null) resultSet.close();
+        if(preparedStatement != null) preparedStatement.close();
+        return primaryKeyArrayList;
     }
 
     //added by L3 20260124
@@ -1821,7 +3162,3 @@ public class DDLRepository {
     }
 
 }
-
-
-
-

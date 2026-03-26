@@ -26,6 +26,9 @@ public class Table extends TreeData{
     private IntegerProperty flags = new SimpleIntegerProperty();
     private IntegerProperty dbVersion = new SimpleIntegerProperty();
 
+    // 用于导出全库表结构时区分，-- liaosnet 2026-03-02
+    private IntegerProperty tableId = new SimpleIntegerProperty();
+
     //created by L3
     private StringProperty createTime = new SimpleStringProperty();
     private IntegerProperty isfragment = new SimpleIntegerProperty();
@@ -166,6 +169,18 @@ public class Table extends TreeData{
         this.dbVersion.set(dbVersion);
     }
 
+    public int getTableId() {
+        return tableId.get();
+    }
+
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+
+    public void setTableId(int tableId) {
+        this.tableId.set(tableId);
+    }
+
     public String getCreateTime() {
         return createTime.get();
     }
@@ -272,5 +287,95 @@ public class Table extends TreeData{
 
     public void setUsedsize(String usedsize) {
         this.usedsize.set(usedsize);
+    }
+
+    /**
+     * 返回 SQLMODE
+     * @return
+     */
+    public String getTableSqlModeFunc(){
+        if ((this.flags.get() & 16384) == 16384) {
+            return "Oracle";
+        }
+        return "GBase";
+    }
+
+    /**
+     * 返回 全局临时表 标识
+     * @return
+     */
+    public String getTableGlobalTemporary(){
+        if ((this.flags.get() & 4096) == 4096) {
+            return "GLOBAL TEMPORARY";
+        }
+        return "";
+    }
+
+    /**
+     * 返回 全局临时表 级别
+     * @return
+     */
+    public String getTableGlobalTemporaryLevel(){
+        if ((this.flags.get() & 8192) == 8192) {
+            return "ON COMMIT DELETE ROWS";
+        }
+        return "ON COMMIT PRESERVE ROWS";
+    }
+
+    /**
+     * 返回表锁类型
+     * @return
+     */
+    public String getLockTypeFunc(){
+        if("P".equals(this.lockType.get())){
+            return "PAGE";
+        } else if("B".equals(this.lockType.get())){
+            return "PAGE,ROW";
+        }
+        return "ROW";
+    }
+
+    @Override
+    public String toString(){
+        return "Tablename: " + this.getName() + "\n" +
+                "TableCatalog: " + this.tableCatalog.get() + "\n" +
+                "TableOwner: " + this.tableOwner.get() + "\n" +
+                "TableSqlMode: " + this.getTableSqlModeFunc();
+    }
+
+    /**
+     * 设置表信息
+     * @param TableName
+     * @param TableCatalog
+     * @param TableOwner
+     * @param lockType
+     * @param firstExtSize
+     * @param nextExtSize
+     * @param TableType
+     * @param Flags
+     * @param dbVersion
+     * @param TableId
+     */
+    public void setTableInfo(String TableName,
+                             String TableCatalog,
+                             String TableOwner,
+                             String lockType,
+                             int firstExtSize,
+                             int nextExtSize,
+                             String TableType,
+                             int Flags,
+                             int dbVersion,
+                             int TableId
+    ){
+        super.setName(TableName);
+        this.tableCatalog.set(TableCatalog);
+        this.tableOwner.set(TableOwner);
+        this.lockType.set(lockType);
+        this.firstExtSize.set(firstExtSize);
+        this.nextExtSize.set(nextExtSize);
+        this.tableTypeCode.set(TableType);
+        this.flags.set(Flags);
+        this.dbVersion.set(dbVersion);
+        this.tableId.set(TableId);
     }
 }

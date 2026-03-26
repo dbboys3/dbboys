@@ -56,5 +56,11 @@ public class ExtTableDfiles {
     public void setClobDir(String clobDir) {
         this.clobDir.set(clobDir);
     }
+
+    @Override
+    public String toString(){
+        return "TableName: " + this.tableName.get() + "\n" +
+                "DataFile: " + this.dataFile.get();
+    }
 }
 

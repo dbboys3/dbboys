@@ -1,15 +1,19 @@
 package com.dbboys.vo;
 
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class Index extends TreeData {
 
-    //created by liaosnet
+    // 用于单个索引     created by liaosnet
     private StringProperty indexOwner=new SimpleStringProperty();
     private StringProperty tableName=new SimpleStringProperty();
+    private IntegerProperty tableId=new SimpleIntegerProperty();
+    private StringProperty tableType=new SimpleStringProperty();
     private StringProperty tableOwner=new SimpleStringProperty();
     private StringProperty indexType=new SimpleStringProperty();           // 索引类型
     private StringProperty indexCluster=new SimpleStringProperty();        // 是否cluster类型
@@ -38,6 +42,30 @@ public class Index extends TreeData {
 
     public void setTabname(String tabname) {
         this.tableName.set(tabname);
+    }
+
+    public String getTableType() {
+        return tableType.get();
+    }
+
+    public StringProperty tableTypeProperty() {
+        return tableType;
+    }
+
+    public void setTableType(String tableType) {
+        this.tableType.set(tableType);
+    }
+
+    public int getTableId(){
+        return tableId.get();
+    }
+    
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+
+    public void setTableId(int tableId){
+        this.tableId.set(tableId);
     }
 
     public String getCols() {

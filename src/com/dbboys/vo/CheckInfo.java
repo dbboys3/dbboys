@@ -4,8 +4,8 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class CheckInfo {
-    private StringProperty constrName = new SimpleStringProperty();
-    private StringProperty checkText = new SimpleStringProperty();
+    private StringProperty constrName = new SimpleStringProperty();     // check约束名
+    private StringProperty checkText = new SimpleStringProperty();      // check约束内容
 
     public String getConstrName() {
         return constrName.get();
@@ -29,6 +29,12 @@ public class CheckInfo {
 
     public void setCheckText(String checkText) {
         this.checkText.set(checkText);
+    }
+
+    @Override
+    public String toString(){
+        return "CheckName: " + this.constrName + "\n" +
+                "CheckText: " + this.checkText;
     }
 }
 
