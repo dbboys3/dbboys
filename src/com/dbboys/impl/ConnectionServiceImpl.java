@@ -24,6 +24,7 @@ import org.json.JSONObject;
 
 public class ConnectionServiceImpl implements ConnectionService {
     private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
+    private static final String PROP_DB_LOCALE = "DB_LOCALE";
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
     private final DialectServices dialectServices;
@@ -126,7 +127,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             dialectServices.metadata(connect).changeDatabase(connect.getConn(), database.getName());
             connect.setDatabase(database.getName());
             if (!dialect.isSystemDatabase(database.getName())) {
-                connect.setProps(modifyProps(connect, database.getDbLocale()));
+                connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
             }
             LocalDbRepository.updateConnect(connect);
             result.setSuccess(true);
@@ -138,7 +139,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                 try {
                     connect.getConn().close();
                     connect.setDatabase(database.getName());
-                    connect.setProps(modifyProps(connect, database.getDbLocale()));
+                    connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
                     connect.setConn(getConnectionWithSessionInit(connect));
                     LocalDbRepository.updateConnect(connect);
                     result.setSuccess(true);
@@ -154,11 +155,11 @@ public class ConnectionServiceImpl implements ConnectionService {
         return result;
     }
 
-    public String modifyProps(Connect connect, String DBlocale) {
+    public String modifyProps(Connect connect, String propName, String propValue) {
         if (connect == null) {
             return null;
         }
-        return dialectServices.requireDialect(connect).modifyProps(connect, DBlocale);
+        return dialectServices.requireDialect(connect).modifyProps(connect, propName, propValue);
     }
 
     public String setConnectInfo(Connect connect) throws Exception {
@@ -218,7 +219,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                 repo.setDatabase(connect.getConn(), fallback);
                 Connect connect1 = new Connect(connect);
                 connect1.setDatabase(database.getName());
-                connect1.setProps(modifyProps(connect1, database.getDbLocale()));
+                connect1.setProps(modifyProps(connect1, PROP_DB_LOCALE, database.getDbLocale()));
                 Connection newConn = getConnectionWithSessionInit(connect1);
                 repo.setDatabase(newConn, database.getName());
                 return new ConnectionLease(newConn, true);

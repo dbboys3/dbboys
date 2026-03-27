@@ -448,7 +448,7 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect(TreeNavigator.getMetaConnect(selectedItem));
             Database database=TreeNavigator.getCurrentDatabase(selectedItem);
-            connect.setProps(TreeViewUtil.metadataService.modifyProps(connect,database.getDbLocale()));
+            connect.setProps(TreeViewUtil.metadataService.modifyProps(connect, "DB_LOCALE", database.getDbLocale()));
             connect.setDatabase(database.getName());
             TabpaneUtil.addCustomSqlTab(connect);
         });
@@ -1008,7 +1008,7 @@ public class TreeContextMenuHandler {
                 Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
                 String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
                 connect.setDatabase("sysmaster");
-                connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, dbLocale));
+                connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, "DB_LOCALE", dbLocale));
                 String sql = "create database " + textField.getText() + " in "
                         + ((String) comboBox1.getValue()).replaceAll("\\([^()]*\\)", "")
                         + " with log";

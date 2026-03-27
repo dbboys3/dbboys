@@ -12,9 +12,6 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 /**
  * GBase 8S 方言：建连 URL/驱动、会话 sqlmode 初始化。
  */
@@ -128,16 +125,7 @@ public final class GbaseDialect implements DatabaseDialect {
         while (rs.next()) {
             info += String.format("%-30s", rs.getString(1)) + rs.getString(2) + "\n";
             if (rs.getString(1).equals("DB_LOCALE")) {
-                connect.setProps(connect.getProps().replace("{\"propValue\":\"\",\"propName\":\"DB_LOCALE\"}",
-                        "{\"propValue\":\"" + rs.getString(2).toUpperCase().trim()
-                                .replace("ZH_CN.GB18030-2000", "zh_CN.5488")
-                                .replace("ZH_CN.UTF8", "zh_CN.57372")
-                                + "\",\"propName\":\"DB_LOCALE\"}"));
-                connect.setProps(connect.getProps().replace("{\"propName\":\"DB_LOCALE\",\"propValue\":\"\"}",
-                        "{\"propName\":\"DB_LOCALE\",\"propValue\":\"" + rs.getString(2).toUpperCase().trim()
-                                .replace("ZH_CN.GB18030-2000", "zh_CN.5488")
-                                .replace("ZH_CN.UTF8", "zh_CN.57372")
-                                + "\"}"));
+                connect.setProps(modifyProps(connect, "DB_LOCALE", rs.getString(2).toUpperCase().trim()));
             }
         }
         rs.close();
@@ -167,34 +155,24 @@ public final class GbaseDialect implements DatabaseDialect {
     }
 
     /**
-     * GBase：按库 locale 调整连接属性 JSON（如 DB_LOCALE 编码映射）。仅在此处实现；
-     * {@link com.dbboys.api.ConnectionService#modifyProps} 对非 GBase 直接返回原 props。
+     * GBase：对 DB_LOCALE 做编码映射，其它属性走通用键值更新。
      */
     @Override
-    public String modifyProps(Connect connect, String dbLocale) {
+    public String modifyProps(Connect connect, String propName, String propValue) {
         if (connect == null) {
             return null;
         }
-        if (dbLocale == null || dbLocale.trim().isEmpty()) {
+        if (!"DB_LOCALE".equals(propName)) {
+            return DatabaseDialect.super.modifyProps(connect, propName, propValue);
+        }
+        if (propValue == null || propValue.trim().isEmpty()) {
             return connect.getProps();
         }
-        String normalized = dbLocale
+        String normalized = propValue
                 .replaceAll("(?i)" + "UTF8", "57372")
                 .replaceAll("(?i)" + "GB18030-2000", "5488")
                 .trim();
-        JSONArray jsonArray = new JSONArray(connect.getProps());
-        JSONArray jsonArrayNew = new JSONArray();
-        for (int i = 0; i < jsonArray.length(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            if (!"DB_LOCALE".equals(jsonObject.getString("propName"))) {
-                jsonArrayNew.put(jsonObject);
-            }
-        }
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("propName", "DB_LOCALE");
-        jsonObject.put("propValue", normalized);
-        jsonArrayNew.put(jsonObject);
-        return jsonArrayNew.toString();
+        return DatabaseDialect.super.modifyProps(connect, propName, normalized);
     }
 
     @Override

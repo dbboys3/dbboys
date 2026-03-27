@@ -23,9 +23,9 @@ public interface ConnectionService {
     ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Database database);
 
     /**
-     * 按当前库 locale 调整连接属性 JSON；仅 GBase 会改写（如 DB_LOCALE），其它类型原样返回 {@link Connect#getProps()}。
+     * 按属性名和值调整连接属性 JSON；方言可在写入前对特定属性做归一化处理（如 GBase 的 DB_LOCALE）。
      */
-    String modifyProps(Connect connect, String DBlocale);
+    String modifyProps(Connect connect, String propName, String propValue);
 
     String setConnectInfo(Connect connect) throws Exception;
 

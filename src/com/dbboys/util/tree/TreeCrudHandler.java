@@ -297,7 +297,7 @@ public class TreeCrudHandler {
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
         Database currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
         connect.setDatabase(useSysmaster ? "sysmaster" : currentDatabase.getName());
-        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, currentDatabase.getDbLocale()));
+        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, "DB_LOCALE", currentDatabase.getDbLocale()));
         return connect;
     }
 

@@ -1,6 +1,8 @@
 package com.dbboys.api;
 
 import com.dbboys.vo.Connect;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -98,10 +100,32 @@ public interface DatabaseDialect {
     }
 
     /**
-     * 按当前库 locale 调整连接属性（如 GBase 的 DB_LOCALE）；默认保持原样。
+     * 按属性名和值调整连接属性；默认实现会更新现有属性，若不存在则追加。
      */
-    default String modifyProps(Connect connect, String dbLocale) {
-        return connect == null ? null : connect.getProps();
+    default String modifyProps(Connect connect, String propName, String propValue) {
+        if (connect == null) {
+            return null;
+        }
+        if (propName == null || propName.isBlank() || propValue == null) {
+            return connect.getProps();
+        }
+
+        JSONArray jsonArray = new JSONArray(connect.getProps());
+        boolean updated = false;
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
+            if (propName.equals(jsonObject.optString("propName"))) {
+                jsonObject.put("propValue", propValue);
+                updated = true;
+            }
+        }
+        if (!updated) {
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("propName", propName);
+            jsonObject.put("propValue", propValue);
+            jsonArray.put(jsonObject);
+        }
+        return jsonArray.toString();
     }
 
     /**
