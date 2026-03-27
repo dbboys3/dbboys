@@ -14,32 +14,31 @@ public final class AppContext {
         synchronized (AppContext.class) {
             if (initialized) return;
 
-            var dialectRegistry = com.dbboys.impl.dialect.DatabaseDialectRegistry.createDefault();
-            var metaProvider = new com.dbboys.impl.DefaultMetadataRepositoryProvider(dialectRegistry);
-            var sqlexeProvider = new com.dbboys.impl.DefaultSqlexeRepositoryProvider(dialectRegistry);
+            var dialectServices = com.dbboys.impl.DialectServices.createDefault();
             var adminRepo = new com.dbboys.db.AdminRepository();
 
-            register(com.dbboys.api.MetadataRepositoryProvider.class, metaProvider);
-            register(com.dbboys.api.SqlexeRepositoryProvider.class, sqlexeProvider);
+            register(com.dbboys.impl.DialectServices.class, dialectServices);
+            register(com.dbboys.api.MetadataRepositoryProvider.class, dialectServices);
+            register(com.dbboys.api.SqlexeRepositoryProvider.class, dialectServices);
             register(com.dbboys.db.AdminRepository.class, adminRepo);
 
-            var connService = new com.dbboys.impl.ConnectionServiceImpl(metaProvider, dialectRegistry);
+            var connService = new com.dbboys.impl.ConnectionServiceImpl(dialectServices);
             register(com.dbboys.api.ConnectionService.class, connService);
 
-            register(com.dbboys.service.DatabaseService.class, new com.dbboys.service.DatabaseService(metaProvider));
-            register(com.dbboys.service.TableService.class, new com.dbboys.service.TableService(metaProvider));
-            register(com.dbboys.service.IndexService.class, new com.dbboys.service.IndexService(metaProvider));
-            register(com.dbboys.service.ViewService.class, new com.dbboys.service.ViewService(metaProvider));
-            register(com.dbboys.service.SequenceService.class, new com.dbboys.service.SequenceService(metaProvider));
-            register(com.dbboys.service.SynonymService.class, new com.dbboys.service.SynonymService(metaProvider));
-            register(com.dbboys.service.FunctionService.class, new com.dbboys.service.FunctionService(metaProvider));
-            register(com.dbboys.service.ProcedureService.class, new com.dbboys.service.ProcedureService(metaProvider));
-            register(com.dbboys.service.TriggerService.class, new com.dbboys.service.TriggerService(metaProvider));
-            register(com.dbboys.service.PackageService.class, new com.dbboys.service.PackageService(metaProvider));
-            register(com.dbboys.service.UserService.class, new com.dbboys.service.UserService(metaProvider));
+            register(com.dbboys.service.DatabaseService.class, new com.dbboys.service.DatabaseService(dialectServices));
+            register(com.dbboys.service.TableService.class, new com.dbboys.service.TableService(dialectServices));
+            register(com.dbboys.service.IndexService.class, new com.dbboys.service.IndexService(dialectServices));
+            register(com.dbboys.service.ViewService.class, new com.dbboys.service.ViewService(dialectServices));
+            register(com.dbboys.service.SequenceService.class, new com.dbboys.service.SequenceService(dialectServices));
+            register(com.dbboys.service.SynonymService.class, new com.dbboys.service.SynonymService(dialectServices));
+            register(com.dbboys.service.FunctionService.class, new com.dbboys.service.FunctionService(dialectServices));
+            register(com.dbboys.service.ProcedureService.class, new com.dbboys.service.ProcedureService(dialectServices));
+            register(com.dbboys.service.TriggerService.class, new com.dbboys.service.TriggerService(dialectServices));
+            register(com.dbboys.service.PackageService.class, new com.dbboys.service.PackageService(dialectServices));
+            register(com.dbboys.service.UserService.class, new com.dbboys.service.UserService(dialectServices));
 
             var dbService = get(com.dbboys.service.DatabaseService.class);
-            register(com.dbboys.service.SqlexeService.class, new com.dbboys.service.SqlexeService(connService, dbService, sqlexeProvider));
+            register(com.dbboys.service.SqlexeService.class, new com.dbboys.service.SqlexeService(connService, dbService, dialectServices));
             register(com.dbboys.service.AdminService.class, new com.dbboys.service.AdminService(connService, adminRepo));
 
             initialized = true;

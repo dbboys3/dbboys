@@ -2,10 +2,7 @@ package com.dbboys.impl;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
 import com.dbboys.api.ConnectionService;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.api.DatabaseDialect;
-import com.dbboys.impl.dialect.DatabaseDialectRegistry;
-import com.dbboys.impl.dialect.gbase.GbaseDialect;
 import com.dbboys.util.MD5Util;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.*;
@@ -29,25 +26,18 @@ public class ConnectionServiceImpl implements ConnectionService {
     private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DatabaseDialectRegistry dialectRegistry;
+    private final DialectServices dialectServices;
 
     public ConnectionServiceImpl() {
-        DatabaseDialectRegistry reg = DatabaseDialectRegistry.createDefault();
-        this(new DefaultMetadataRepositoryProvider(reg), reg);
+        this(DialectServices.createDefault());
     }
 
-    public ConnectionServiceImpl(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, DatabaseDialectRegistry.createDefault());
-    }
-
-    public ConnectionServiceImpl(MetadataRepositoryProvider metadataRepositoryProvider, DatabaseDialectRegistry dialectRegistry) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.dialectRegistry = dialectRegistry != null ? dialectRegistry : DatabaseDialectRegistry.createDefault();
+    public ConnectionServiceImpl(DialectServices dialectServices) {
+        this.dialectServices = dialectServices != null ? dialectServices : DialectServices.createDefault();
     }
 
     public Connection createConnection(Connect connect) throws Exception {
-        DatabaseDialect dialect = dialectRegistry.requireDialect(connect);
+        DatabaseDialect dialect = dialectServices.requireDialect(connect);
         DatabaseDialect.ConnectionParams params = dialect.getConnectionParams(connect);
         Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
         Properties info = buildConnectionProperties(connect);
@@ -111,7 +101,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null || conn == null) {
             return;
         }
-        DatabaseDialect dialect = dialectRegistry.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
         if (dialect != null && dialect.supportsSessionInit()) {
             try {
                 dialect.sessionInit(conn, connect);
@@ -127,13 +117,13 @@ public class ConnectionServiceImpl implements ConnectionService {
             result.setSuccess(false);
             return result;
         }
-        DatabaseDialect dialect = dialectRegistry.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
         if (dialect == null) {
             result.setSuccess(false);
             return result;
         }
         try {
-            metadataRepositoryProvider.get(connect).changeDatabase(connect.getConn(), database.getName());
+            dialectServices.metadata(connect).changeDatabase(connect.getConn(), database.getName());
             connect.setDatabase(database.getName());
             if (!dialect.isSystemDatabase(database.getName())) {
                 connect.setProps(modifyProps(connect, database.getDbLocale()));
@@ -152,6 +142,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                     connect.setConn(getConnectionWithSessionInit(connect));
                     LocalDbRepository.updateConnect(connect);
                     result.setSuccess(true);
+                    result.setReconnected(true);
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
@@ -167,15 +158,11 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null) {
             return null;
         }
-        DatabaseDialect dialect = dialectRegistry.requireDialect(connect);
-        if (dialect instanceof GbaseDialect) {
-            return ((GbaseDialect) dialect).modifyProps(connect, DBlocale);
-        }
-        return connect.getProps();
+        return dialectServices.requireDialect(connect).modifyProps(connect, DBlocale);
     }
 
     public String setConnectInfo(Connect connect) throws Exception {
-        DatabaseDialect dialect = dialectRegistry.requireDialect(connect);
+        DatabaseDialect dialect = dialectServices.requireDialect(connect);
         try (Connection connection = getConnectionWithSessionInit(connect)) {
             String primaryInstance = dialect.populateConnectInfo(connection, connect);
             if (connect.getDriver() != null && !connect.getDriver().isEmpty()) {
@@ -194,7 +181,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect.getConn() == null) {
             return false;
         }
-        DatabaseDialect dialect = dialectRegistry.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
         if (dialect == null) {
             return false;
         }
@@ -218,12 +205,12 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     private ConnectionLease acquireConnection(Connect connect, Database database) throws Exception {
         Connection conn = connect.getConn();
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = dialectServices.metadata(connect);
         try {
             repo.setDatabase(conn, database.getName());
             return new ConnectionLease(conn, false);
         } catch (SQLException e) {
-            DatabaseDialect dialect = dialectRegistry.getDialect(connect.getDbtype());
+            DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
             String fallback = dialect != null ? dialect.changeDatabaseFallbackCatalogName() : null;
             if (dialect != null && dialect.supportsSessionInit()
                     && dialect.classifyChangeDatabaseFailure(e) == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION

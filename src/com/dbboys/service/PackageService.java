@@ -27,7 +27,7 @@ public class PackageService implements MetaObjectService {
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<DBPackage> result = new ArrayList<>();
         objectList.setItems(result);
@@ -46,6 +46,5 @@ public class PackageService implements MetaObjectService {
     }
 
 }
-
 
 

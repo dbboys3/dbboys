@@ -11,7 +11,6 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.SQLException;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -171,6 +170,7 @@ public final class GbaseDialect implements DatabaseDialect {
      * GBase：按库 locale 调整连接属性 JSON（如 DB_LOCALE 编码映射）。仅在此处实现；
      * {@link com.dbboys.api.ConnectionService#modifyProps} 对非 GBase 直接返回原 props。
      */
+    @Override
     public String modifyProps(Connect connect, String dbLocale) {
         if (connect == null) {
             return null;

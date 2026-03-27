@@ -27,7 +27,7 @@ public class TableService implements MetaObjectService {
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Table> result = new ArrayList<>();
         objectList.setItems(result);
@@ -55,7 +55,7 @@ public class TableService implements MetaObjectService {
     }
 
     private ObjectList buildSystemTables(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<SysTable> result = new ArrayList<>();
         objectList.setItems(result);
@@ -70,11 +70,11 @@ public class TableService implements MetaObjectService {
     }
 
     public Table getTable(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.get(connect).getTable(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTable(conn, database.getName(), objectName));
     }
 
     public String getTableComment(Connect connect, Database database, String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.get(connect).getTableComment(conn, objectName));
+        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTableComment(conn, objectName));
     }
 
     public void updateStatistics(Connect connect, String sql, Runnable onSucceededUi) {
@@ -98,7 +98,7 @@ public class TableService implements MetaObjectService {
             @Override
             protected List<String> call() throws Exception {
                 try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
-                    return metadataRepositoryProvider.get(connect).getIndexColumnsForTable(conn, tableName);
+                    return metadataRepositoryProvider.metadata(connect).getIndexColumnsForTable(conn, tableName);
                 }
             }
         };
@@ -155,6 +155,5 @@ public class TableService implements MetaObjectService {
 
 
 }
-
 
 

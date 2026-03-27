@@ -41,6 +41,7 @@ public interface ConnectionService {
     class ChangeDefaultDatabaseResult {
         private boolean success;
         private boolean disconnected;
+        private boolean reconnected;
         private Integer errorCode;
         private String errorMessage;
 
@@ -58,6 +59,14 @@ public interface ConnectionService {
 
         public void setDisconnected(boolean disconnected) {
             this.disconnected = disconnected;
+        }
+
+        public boolean isReconnected() {
+            return reconnected;
+        }
+
+        public void setReconnected(boolean reconnected) {
+            this.reconnected = reconnected;
         }
 
         public Integer getErrorCode() {

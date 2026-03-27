@@ -26,7 +26,7 @@ public class SynonymService implements MetaObjectService {
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Synonym> result = new ArrayList<>();
         objectList.setItems(result);
@@ -40,6 +40,5 @@ public class SynonymService implements MetaObjectService {
         return DDLRepository::printSynonym;
     }
 }
-
 
 

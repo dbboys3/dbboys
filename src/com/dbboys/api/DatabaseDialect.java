@@ -98,6 +98,13 @@ public interface DatabaseDialect {
     }
 
     /**
+     * 按当前库 locale 调整连接属性（如 GBase 的 DB_LOCALE）；默认保持原样。
+     */
+    default String modifyProps(Connect connect, String dbLocale) {
+        return connect == null ? null : connect.getProps();
+    }
+
+    /**
      * 该库的元数据访问实现。阶段 2 按 Connect 的 dbtype 通过 Provider 获取。
      */
     com.dbboys.api.MetadataRepository getMetadataRepository();

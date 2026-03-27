@@ -27,7 +27,7 @@ public class SequenceService implements MetaObjectService {
 
     @Override
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Sequence> result = new ArrayList<>();
         objectList.setItems(result);
@@ -41,6 +41,5 @@ public class SequenceService implements MetaObjectService {
         return DDLRepository::printSequence;
     }
 }
-
 
 

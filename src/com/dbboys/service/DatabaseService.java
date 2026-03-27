@@ -22,11 +22,11 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public List<String> getDBspaceForCreateDatabase(Connect connect) throws SQLException {
-        return metadataRepositoryProvider.get(connect).getDBspaceForCreateDatabase(connect.getConn());
+        return metadataRepositoryProvider.metadata(connect).getDBspaceForCreateDatabase(connect.getConn());
     }
 
     public List<Database> getDatabases(Connect connect, boolean useOracleSyntax) throws SQLException {
-        return metadataRepositoryProvider.get(connect).getDatabases(connect.getConn(), useOracleSyntax);
+        return metadataRepositoryProvider.metadata(connect).getDatabases(connect.getConn(), useOracleSyntax);
     }
     @Override
     public DdlFetcher ddlFetcher() {
@@ -34,7 +34,7 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<String> result = new ArrayList<>();
         objectList.setItems(result);
@@ -86,4 +86,3 @@ public class DatabaseService implements MetaObjectService {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 }
-

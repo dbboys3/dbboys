@@ -7,5 +7,5 @@ import com.dbboys.vo.Connect;
  */
 public interface SqlexeRepositoryProvider {
 
-    SqlexeRepository get(Connect connect);
+    SqlexeRepository sqlexe(Connect connect);
 }

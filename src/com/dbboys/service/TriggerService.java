@@ -29,11 +29,11 @@ public class TriggerService implements MetaObjectService {
     }
 
     public Trigger getTrigger(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.get(connect).getTrigger(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTrigger(conn, database.getName(), objectName));
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Trigger> result = new ArrayList<>();
         objectList.setItems(result);
@@ -84,6 +84,5 @@ public class TriggerService implements MetaObjectService {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 }
-
 
 

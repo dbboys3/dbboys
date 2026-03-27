@@ -29,14 +29,14 @@ public class IndexService implements MetaObjectService {
     }
 
     public Index getIndex(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.get(connect).getIndex(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getIndex(conn, database.getName(), objectName));
     }
     @Override
     public DdlFetcher ddlFetcher() {
         return DDLRepository::printIndex;
     }
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.get(connect);
+        var repo = metadataRepositoryProvider.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Index> result = new ArrayList<>();
         objectList.setItems(result);
@@ -87,6 +87,5 @@ public class IndexService implements MetaObjectService {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 }
-
 
 

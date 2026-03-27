@@ -7,5 +7,5 @@ import com.dbboys.vo.Connect;
  */
 public interface MetadataRepositoryProvider {
 
-    MetadataRepository get(Connect connect);
+    MetadataRepository metadata(Connect connect);
 }
