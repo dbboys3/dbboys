@@ -153,17 +153,30 @@ public class SqlParserUtil {
         }
     }
 
+    @FunctionalInterface
+    private interface SegmentHandler {
+        boolean handle(Segment segment);
+    }
+
     public static boolean isSingleStatement(String sql) {
         if (sql == null || sql.isBlank()) {
             return true;
         }
-        return collectExecutableStatements(sql).size() <= 1;
+        return countExecutableStatements(sql, 2) <= 1;
     }
 
     public static List<Segment> split(String sql) {
         List<Segment> segments = new ArrayList<>();
+        processSegments(sql, segment -> {
+            segments.add(segment);
+            return true;
+        });
+        return segments;
+    }
+
+    private static boolean processSegments(String sql, SegmentHandler handler) {
         if (sql == null || sql.isEmpty()) {
-            return segments;
+            return true;
         }
         boolean inSingleQuote = false;
         boolean inDoubleQuote = false;
@@ -221,11 +234,13 @@ public class SqlParserUtil {
             if (i == sql.length() - 1
                     || (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment && !inBrackets && current == ';'
                     && !shouldKeepRoutineTerminatorWithPreviousSegment(sql, i + 1))) {
-                segments.add(new Segment(buffer.toString(), i));
+                if (!handler.handle(new Segment(buffer.toString(), i))) {
+                    return false;
+                }
                 buffer.setLength(0);
             }
         }
-        return segments;
+        return true;
     }
 
     private static boolean shouldKeepRoutineTerminatorWithPreviousSegment(String sql, int nextIndex) {
@@ -453,31 +468,43 @@ public class SqlParserUtil {
         return result;
     }
 
-    private static List<String> collectExecutableStatements(String sqlText) {
-        List<String> statements = new ArrayList<>();
-        Sql sql = new Sql();
-        for (Segment segment : split(sqlText)) {
+    private static int countExecutableStatements(String sqlText, int stopAfterCount) {
+        Sql[] currentSql = {new Sql()};
+        int[] statementCount = {0};
+        boolean[] stoppedEarly = {false};
+
+        processSegments(sqlText, segment -> {
             String sqlChunk = segment.getText();
             boolean sqlContainsCommit;
             do {
-                sql = modifySql(sql, sqlChunk);
-                if (sql.getSqlEnd() && !stripProtectedContent(sql.getSqlstr()).trim().isEmpty()) {
-                    statements.add(sql.getSqlstr());
-                    sql.setSqlStr("");
-                    sql.setSqlEnd(false);
-                    sql.setSqlType("");
-                    sql.setBlockDepth(0);
-                    sql.setBlockName("");
-                    sql.setPlainBlockMode(false);
+                currentSql[0] = modifySql(currentSql[0], sqlChunk);
+                if (currentSql[0].getSqlEnd() && !stripProtectedContent(currentSql[0].getSqlstr()).trim().isEmpty()) {
+                    statementCount[0]++;
+                    if (statementCount[0] >= stopAfterCount) {
+                        stoppedEarly[0] = true;
+                        return false;
+                    }
+                    resetSqlStatementState(currentSql[0]);
                 }
                 sqlChunk = "";
-                sqlContainsCommit = sqlContrainCommit(sql.getSqlRemainder());
+                sqlContainsCommit = sqlContrainCommit(currentSql[0].getSqlRemainder());
             } while (sqlContainsCommit);
+            return true;
+        });
+
+        if (!stoppedEarly[0] && !stripProtectedContent(currentSql[0].getSqlstr()).trim().isEmpty()) {
+            statementCount[0]++;
         }
-        if (!stripProtectedContent(sql.getSqlstr()).trim().isEmpty()) {
-            statements.add(sql.getSqlstr());
-        }
-        return statements;
+        return statementCount[0];
+    }
+
+    private static void resetSqlStatementState(Sql sql) {
+        sql.setSqlStr("");
+        sql.setSqlEnd(false);
+        sql.setSqlType("");
+        sql.setBlockDepth(0);
+        sql.setBlockName("");
+        sql.setPlainBlockMode(false);
     }
 
     private static String stripProtectedContent(String sql) {
