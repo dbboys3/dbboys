@@ -547,7 +547,7 @@ public class CustomTableInfoTab extends CustomTab {
                 "执行",
                 "tableinfo.save_changes.dialog.cancel",
                 "取消",
-                sqlContent.toString()
+                SqlParserUtil.formatSql(sqlContent.toString())
         );
     }
 
@@ -643,7 +643,7 @@ public class CustomTableInfoTab extends CustomTab {
             Platform.runLater(() -> {
                 CustomInfoStackPane ddlCodeareaStackPane = new CustomInfoStackPane(new CustomInfoCodeArea());
                 String previewDdl = String.join(System.lineSeparator(), generateCreateTableSQL());
-                ddlCodeareaStackPane.codeArea.replaceText((previewDdl));
+                ddlCodeareaStackPane.codeArea.replaceText((SqlParserUtil.formatSql(previewDdl)));
                 Platform.runLater(() -> {
                     ddlCodeareaStackPane.codeArea.setStyleSpans(0,KeywordsHighlightUtil.applyHighlighting(ddlCodeareaStackPane.codeArea.getText()));
                 });
