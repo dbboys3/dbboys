@@ -652,10 +652,10 @@ Text {
   -fx-scale-shape: false;
 }
 .check-box:disabled {
-  -fx-opacity: 0.4;
+  -fx-opacity: 0.75;
 }
 .check-box:disabled > .box {
-  -fx-opacity: 0.4;
+  -fx-opacity: 0.85;
 }
 .check-box:selected > .box {
   -fx-background-color: -color-accent-emphasis, -color-accent-emphasis;
@@ -5630,4 +5630,3 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .tree-cell-drag-over {
   -fx-background-color: -color-base-7;
 }
-

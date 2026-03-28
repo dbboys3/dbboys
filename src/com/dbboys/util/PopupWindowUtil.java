@@ -349,7 +349,7 @@ public class PopupWindowUtil {
         sqlPreviewPane.showNoticeInMain = false;
         sqlPreviewPane.setPrefWidth(600);
         sqlPreviewPane.setPrefHeight(600);
-        sqlContent = SqlParserUtil.formatSql(sqlContent);
+        //sqlContent = SqlParserUtil.formatSql(sqlContent);
         sqlPreviewPane.codeArea.replaceText(sqlContent == null ? "" : sqlContent);
         sqlPreviewPane.codeArea.moveTo(0);
         sqlPreviewPane.codeArea.requestFollowCaret();

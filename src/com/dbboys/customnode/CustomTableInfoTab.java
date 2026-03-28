@@ -643,7 +643,7 @@ public class CustomTableInfoTab extends CustomTab {
             Platform.runLater(() -> {
                 CustomInfoStackPane ddlCodeareaStackPane = new CustomInfoStackPane(new CustomInfoCodeArea());
                 String previewDdl = String.join(System.lineSeparator(), generateCreateTableSQL());
-                ddlCodeareaStackPane.codeArea.replaceText(SqlParserUtil.formatSql(previewDdl));
+                ddlCodeareaStackPane.codeArea.replaceText((previewDdl));
                 Platform.runLater(() -> {
                     ddlCodeareaStackPane.codeArea.setStyleSpans(0,KeywordsHighlightUtil.applyHighlighting(ddlCodeareaStackPane.codeArea.getText()));
                 });

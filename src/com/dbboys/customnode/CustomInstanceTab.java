@@ -31,6 +31,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -885,7 +886,7 @@ public class CustomInstanceTab extends CustomTab {
         startStackPane=new StackPane();
         startButton=new Button();
         startButton.getStyleClass().add("custom-button");
-        startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.7));
+        startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.7, Color.valueOf("#51dd66")));
         startButton.setFocusTraversable(false);
         Tooltip startTooltip = new Tooltip();
         startTooltip.textProperty().bind(I18n.bind("instance.button.start.tooltip", "点击启动数据库"));
@@ -1353,7 +1354,7 @@ public class CustomInstanceTab extends CustomTab {
                 currentValue = onstat_.split("Your evaluation license will expire on ")[1];
                 status = "1";
             } else {
-                currentValue = "永久";
+                currentValue = "Permanent";
                 status = "0";
             }
         }

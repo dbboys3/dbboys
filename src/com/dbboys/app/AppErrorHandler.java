@@ -1,13 +1,18 @@
 package com.dbboys.app;
 
 import com.dbboys.i18n.I18n;
+import com.dbboys.util.AlertUtil;
 import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.util.tree.TreeViewUtil;
+import com.dbboys.vo.Connect;
+import com.dbboys.vo.TreeData;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javafx.application.Platform;
 import javafx.concurrent.Task;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -73,6 +78,32 @@ public final class AppErrorHandler {
         return sw.toString();
     }
 
+    private static void showSqlErrorAlert(SQLException e) {
+        if (e == null) {
+            return;
+        }
+        Platform.runLater(() -> AlertUtil.CustomAlert(
+                I18n.bind("common.error", "错误").get(),
+                "[" + e.getErrorCode() + "]" + e.getMessage()
+        ));
+    }
+
+    private static boolean hasActiveSelectedMetadataConnection() {
+        TreeView<TreeData> treeView = AppState.getDatabaseMetaTreeView();
+        if (treeView == null || treeView.getSelectionModel() == null) {
+            return false;
+        }
+        TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+        if (selectedItem == null || selectedItem.getValue() == null) {
+            return false;
+        }
+        TreeItem<TreeData> connTreeItem = TreeViewUtil.getMetaConnTreeItem(selectedItem);
+        if (connTreeItem == null || !(connTreeItem.getValue() instanceof Connect connect)) {
+            return false;
+        }
+        return connect.getConn() != null;
+    }
+
     static class SqlDisconnectedStrategy implements ErrorStrategy {
         @Override
         public boolean supports(Throwable e) {
@@ -81,11 +112,17 @@ public final class AppErrorHandler {
 
         @Override
         public void handle(Throwable e) {
+            SQLException se = (SQLException) e;
             try {
                 log.error("Operation failed", e);
+                if (!hasActiveSelectedMetadataConnection()) {
+                    showSqlErrorAlert(se);
+                    return;
+                }
                 TreeViewUtil.connectionDisconnected();
             } catch (Exception ex) {
                 log.error("Connection disconnected. {}", formatExceptionDetails(ex));
+                showSqlErrorAlert(se);
             }
         }
     }
@@ -112,9 +149,7 @@ public final class AppErrorHandler {
         @Override
         public void handle(Throwable e) {
             SQLException se = (SQLException) e;
-            Platform.runLater(()->{
-            com.dbboys.util.AlertUtil.CustomAlert(I18n.bind("common.error", "错误").get(), "[" + se.getErrorCode() + "]" + e.getMessage());
-            });
+            showSqlErrorAlert(se);
             log.error("SQL error. code={}, message={}\n{}", se.getErrorCode(), se.getMessage(), formatExceptionDetails(e));
         }
     }

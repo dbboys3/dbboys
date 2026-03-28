@@ -401,7 +401,7 @@ public class GbaseMetadataRepository implements com.dbboys.api.MetadataRepositor
             """;
 
     public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
-        return GbaseDdlSupport.getColInfo(conn, tableName);
+        return GbaseDdlRepository.getColInfo(conn, tableName);
     }
 
     @Override

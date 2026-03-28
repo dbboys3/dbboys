@@ -27,12 +27,26 @@ public class TreeNavigator {
     private static final Logger log = LogManager.getLogger(TreeNavigator.class);
 
     public static void connectionDisconnected(){
-        TreeItem<TreeData> treeItem=getMetaConnTreeItem(AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem());
+        TreeView<TreeData> treeView = AppState.getDatabaseMetaTreeView();
+        if (treeView == null || treeView.getSelectionModel() == null) {
+            return;
+        }
+        TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+        if (selectedItem == null) {
+            return;
+        }
+        TreeItem<TreeData> treeItem=getMetaConnTreeItem(selectedItem);
+        if (treeItem == null || !(treeItem.getValue() instanceof Connect connect)) {
+            return;
+        }
         try {
-            ((Connect)treeItem.getValue()).getConn().close();
+            if (connect.getConn() != null) {
+                connect.getConn().close();
+            }
         } catch (SQLException e) {
-            AppErrorHandler.handle(e);
-            ((Connect)treeItem.getValue()).setConn(null);
+            log.warn("Close disconnected metadata connection failed.", e);
+        } finally {
+            connect.setConn(null);
         }
 
         Platform.runLater(() -> {

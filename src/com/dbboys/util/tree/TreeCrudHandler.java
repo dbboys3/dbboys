@@ -495,7 +495,8 @@ public class TreeCrudHandler {
 
                     if (!multi) {
                         data.setRunning(false);
-                        return SqlParserUtil.formatSql(ddlText);
+                       // return SqlParserUtil.formatSql(ddlText);
+                        return ddlText;
                     }
                     if (ddlText != null && !ddlText.isEmpty()) {
                         sb.append("-- ").append(data.getName()).append(System.lineSeparator());
@@ -503,7 +504,8 @@ public class TreeCrudHandler {
                     }
                      data.setRunning(false);
                 }
-                return SqlParserUtil.formatSql(sb.toString());
+                //return SqlParserUtil.formatSql(sb.toString());
+                return sb.toString();
             }
         };
 
