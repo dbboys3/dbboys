@@ -2183,7 +2183,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (displaySqlMode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
             }
-            ddl.append(procedure.getProcBoday()).append("\n");
+            ddl.append(procedure.getProcBoday());
         }
         return ddl.toString();
     }
@@ -2301,26 +2301,26 @@ public final class GbaseDdlRepository implements DdlRepository {
                 if (resultSet.next()){
                     procname = resultSet.getString("procname");
                     procflags = resultSet.getInt("procflags");
-                    procbody = resultSet.getString("procbody");
+                    procbody = rtrimascii0(resultSet.getString("procbody"));
                 }
                 while (resultSet.next()){
                     if (resultSet.getInt("seqno") == 1){
                         Procedure procedureInfo = new Procedure(procname);
                         procedureInfo.setProcFlags(procflags);
-                        procedureInfo.setProcBoday(trim(procbody));
+                        procedureInfo.setProcBoday(procbody);
                         procedureInfoArrayList.add(procedureInfo);
                         procname = resultSet.getString("procname");
                         procflags = resultSet.getInt("procflags");
-                        procbody = resultSet.getString("procbody");
+                        procbody = rtrimascii0(resultSet.getString("procbody"));
                     } else {
-                        procbody = procbody + resultSet.getString("procbody");
+                        procbody = procbody + rtrimascii0(resultSet.getString("procbody"));
                     }
                 }
             }
             if (procname != null){
                 Procedure procedureInfo = new Procedure(procname);
                 procedureInfo.setProcFlags(procflags);
-                procedureInfo.setProcBoday(trim(procbody));
+                procedureInfo.setProcBoday(procbody);
                 procedureInfoArrayList.add(procedureInfo);
             }
         // 打印 函数和存储过程
@@ -2331,9 +2331,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(procedureInfoArrayList.get(i).getProcSqlMode()).append("';\n");
             }
             ddl.append(procedureInfoArrayList.get(i).getProcBoday()) ;
-            if (! procedureInfoArrayList.get(i).getProcBoday().endsWith(";")){
-                ddl.append(";");
-            }
+            
             if ("Oracle".equals(procedureInfoArrayList.get(i).getProcSqlMode())){
                 ddl.append("\n/");
             }
@@ -2979,7 +2977,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         }
         // 区段大小及锁模式
         ddl = ddl + "EXTENT SIZE " + tableInfo.getFirstExtSize() + " NEXT SIZE " + tableInfo.getNextExtSize();
-        ddl = ddl + " LOCK MODE " + tableInfo.getLockType() + ";\n";
+        ddl = ddl + " LOCK MODE " + tableInfo.getLockTypeFunc() + ";\n";
 
         return ddl;
     }
