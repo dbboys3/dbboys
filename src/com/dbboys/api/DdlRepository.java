@@ -7,6 +7,10 @@ import java.sql.Connection;
  */
 public interface DdlRepository {
 
+    default String printDatabase(Connection conn, String databaseName) throws Exception {
+        throw new UnsupportedOperationException("Database DDL export not supported");
+    }
+
     String printTable(Connection conn, String objectName) throws Exception;
 
     String printView(Connection conn, String objectName) throws Exception;

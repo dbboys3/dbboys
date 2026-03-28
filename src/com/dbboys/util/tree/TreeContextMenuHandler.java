@@ -152,24 +152,49 @@ public class TreeContextMenuHandler {
                 MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_popup_window", null);
         ddlMenu.getItems().addAll(ddlToClipboard,ddlToPopuWindow,ddlToFile,ddlToCurrentSqlEditarea,ddlToNewSqlEditarea);
 
+        Menu exportDdlMenu = new Menu();
+        exportDdlMenu.textProperty().bind(I18n.bind("metadata.menu.export_ddl.title", "导出DDL"));
+        exportDdlMenu.getStyleClass().add("ddlMenu");
+        exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
+
+        CustomShortcutMenuItem exportDdlToFile =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_file", null);
+        CustomShortcutMenuItem exportDdlToClipboard =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_clipboard", null);
+        CustomShortcutMenuItem exportDdlToCurrentSqlEditarea =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_current_sql", null);
+        CustomShortcutMenuItem exportDdlToNewSqlEditarea =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_new_sql", null);
+        CustomShortcutMenuItem exportDdlToPopupWindow =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_popup_window", null);
+        exportDdlMenu.getItems().addAll(exportDdlToClipboard, exportDdlToPopupWindow, exportDdlToFile,
+                exportDdlToCurrentSqlEditarea, exportDdlToNewSqlEditarea);
+
         ddlMenu.showingProperty().addListener((obs, was, now) -> {
             if (now && exportMenu.isShowing()) exportMenu.hide();
+            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
         });
         exportMenu.showingProperty().addListener((obs, was, now) -> {
             if (now && ddlMenu.isShowing()) ddlMenu.hide();
+            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
+        });
+        exportDdlMenu.showingProperty().addListener((obs, was, now) -> {
+            if (now && ddlMenu.isShowing()) ddlMenu.hide();
+            if (now && exportMenu.isShowing()) exportMenu.hide();
         });
 
         treeview_menu.skinProperty().addListener((obs, oldSkin, newSkin) -> {
             if (newSkin == null) return;
             Node skinRoot = newSkin.getNode();
             skinRoot.addEventFilter(MouseEvent.MOUSE_ENTERED_TARGET, event -> {
-                if (!ddlMenu.isShowing() && !exportMenu.isShowing()) return;
+                if (!ddlMenu.isShowing() && !exportMenu.isShowing() && !exportDdlMenu.isShowing()) return;
                 Node target = (Node) event.getTarget();
                 while (target != null && target != skinRoot) {
                     if (target.getStyleClass().contains("menu-item")) {
                         if (!target.getStyleClass().contains("menu")) {
                             if (ddlMenu.isShowing()) ddlMenu.hide();
                             if (exportMenu.isShowing()) exportMenu.hide();
+                            if (exportDdlMenu.isShowing()) exportDdlMenu.hide();
                         }
                         return;
                     }
@@ -780,6 +805,53 @@ public class TreeContextMenuHandler {
             }
         }));
 
+        exportDdlToFile.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle(I18n.t("metadata.menu.ddl.to_file", "保存DDL为SQL"));
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
+            fileChooser.setInitialFileName(treeData.getName() + ".sql");
+            File file = fileChooser.showSaveDialog(AppState.getWindow());
+            if (file != null) {
+                try (FileWriter writer = new FileWriter(file)) {
+                    writer.write(ddlText);
+                    NotificationUtil.showMainNotification(I18n.t("metadata.notice.ddl_saved", "DDL已保存到文件"));
+                } catch (IOException e) {
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+                }
+            }
+        }));
+
+        exportDdlToClipboard.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
+            Clipboard clipboard = Clipboard.getSystemClipboard();
+            ClipboardContent content = new ClipboardContent();
+            content.putString(ddlText);
+            clipboard.setContent(content);
+            NotificationUtil.showMainNotification("DDL已复制到剪切板");
+        }));
+
+        exportDdlToPopupWindow.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
+            PopupWindowUtil.openDDLWindow(ddlText);
+        }));
+
+        exportDdlToNewSqlEditarea.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
+            AppState.getNewSqlFileMenuItem().fire();
+            if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+                currentSqlTab.sqlTabController.sqlEditCodeArea.replaceText(ddlText);
+            }
+        }));
+
+        exportDdlToCurrentSqlEditarea.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
+            if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+                int currentPos=currentSqlTab.sqlTabController.sqlEditCodeArea.getCaretPosition();
+                currentSqlTab.sqlTabController.sqlEditCodeArea.insertText(currentPos, ddlText);
+            }else{
+                AppState.getNewSqlFileMenuItem().fire();
+                if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
+                    currentSqlTab.sqlTabController.sqlEditCodeArea.replaceText(ddlText);
+                }
+            }
+        }));
+
         //右键删除连接点击响应
         deleteItem.setOnAction(event -> {
             List<TreeItem<TreeData>> selectedItems = new ArrayList<>(treeView.getSelectionModel().getSelectedItems());
@@ -1130,6 +1202,9 @@ public class TreeContextMenuHandler {
                 if (ddlMenu.isShowing()) {
                     ddlMenu.hide();
                 }
+                if (exportDdlMenu.isShowing()) {
+                    exportDdlMenu.hide();
+                }
                 if (exportMenu.isShowing()) {
                     exportMenu.hide();
                 }
@@ -1340,6 +1415,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
                     treeview_menu.getItems().add(setDefaultDatabaseItem);
                     treeview_menu.getItems().add(updateStatisticsItem);
+                    treeview_menu.getItems().add(exportDdlMenu);
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);

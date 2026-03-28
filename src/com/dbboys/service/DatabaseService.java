@@ -1,5 +1,6 @@
 package com.dbboys.service;
 
+import com.dbboys.api.DdlRepositoryProvider;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.vo.Connect;
@@ -12,13 +13,21 @@ import java.util.List;
 
 public class DatabaseService implements MetaObjectService {
     private final MetadataRepositoryProvider metadataRepositoryProvider;
+    private final DdlRepositoryProvider ddlRepositoryProvider;
 
     public DatabaseService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
+                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
     }
 
     public DatabaseService(MetadataRepositoryProvider metadataRepositoryProvider) {
+        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+    }
+
+    public DatabaseService(MetadataRepositoryProvider metadataRepositoryProvider,
+                           DdlRepositoryProvider ddlRepositoryProvider) {
         this.metadataRepositoryProvider = metadataRepositoryProvider;
+        this.ddlRepositoryProvider = ddlRepositoryProvider;
     }
 
     public List<String> getDBspaceForCreateDatabase(Connect connect) throws SQLException {
@@ -34,7 +43,12 @@ public class DatabaseService implements MetaObjectService {
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return null;
+        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printDatabase(conn, objectName);
+    }
+
+    public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
+        return withMetaSession(connect, database,
+                conn -> ddlRepositoryProvider.ddl(connect).printDatabase(conn, database.getName()));
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {

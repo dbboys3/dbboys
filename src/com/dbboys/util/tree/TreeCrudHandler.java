@@ -554,6 +554,33 @@ public class TreeCrudHandler {
         TreeNavigator.getMetaConnect(firstItem).executeSqlTask(ddlTask);
     }
 
+    public static void handleDatabaseDdlAction(TreeView<TreeData> treeView, BiConsumer<TreeData, String> onSuccess) {
+        TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+            return;
+        }
+
+        Task<String> ddlTask = new Task<>() {
+            @Override
+            protected String call() throws Exception {
+                updateProgress(-1, 1);
+                updateMessage(I18n.t("metadata.menu.ddl.loading.message", "正在导出DDL..."));
+                Connect connect = TreeNavigator.getMetaConnect(selectedItem);
+                return TreeViewUtil.databaseService.exportDatabaseDdl(connect, database);
+            }
+        };
+
+        AlertUtil.ContentDialog loadingDialog = createDdlLoadingDialog(ddlTask);
+        ddlTask.setOnSucceeded(event1 -> {
+            closeDdlLoadingDialog(loadingDialog);
+            onSuccess.accept(database, ddlTask.getValue() == null ? "" : ddlTask.getValue());
+        });
+        AppErrorHandler.bindTask(ddlTask, () -> closeDdlLoadingDialog(loadingDialog));
+
+        loadingDialog.getStage().show();
+        TreeNavigator.getMetaConnect(selectedItem).executeSqlTask(ddlTask);
+    }
+
     private static AlertUtil.ContentDialog createDdlLoadingDialog(Task<?> ddlTask) {
         ButtonType cancelButtonType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
 

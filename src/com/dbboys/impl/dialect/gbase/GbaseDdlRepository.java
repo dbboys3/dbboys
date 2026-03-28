@@ -2258,7 +2258,8 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
-    public static String printDatabase(Connection connection,String databasename) throws SQLException {
+    @Override
+    public String printDatabase(Connection connection,String databasename) throws SQLException {
         // 顺序暂定：函数->存储过程->表（含主键、索引、约束）->同义词（等）-> 序列 -> 视图（可能有依赖关系，先后顺序）
         StringBuilder ddl = new StringBuilder();
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
