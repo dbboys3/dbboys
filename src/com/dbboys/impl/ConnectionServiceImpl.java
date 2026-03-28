@@ -151,16 +151,25 @@ public class ConnectionServiceImpl implements ConnectionService {
             if (kind == ChangeDatabaseFailureKind.DISCONNECTED) {
                 result.setDisconnected(true);
             } else if (kind == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION) {
+                Connection oldConn = connect.getConn();
+                String previousDatabase = connect.getDatabase();
+                String previousProps = connect.getProps();
                 try {
-                    connect.getConn().close();
                     connect.setDatabase(database.getName());
-                    connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
-                    connect.setConn(getConnectionWithSessionInit(connect));
+                    if (!dialect.isSystemDatabase(database.getName())) {
+                        connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
+                    }
+                    Connection newConn = getConnectionWithSessionInit(connect);
+                    connect.setConn(newConn);
+                    closeConnectionQuietly(oldConn);
                     LocalDbRepository.updateConnect(connect);
                     result.setSuccess(true);
                     result.setReconnected(true);
                 } catch (Exception ex) {
-                    throw new RuntimeException(ex);
+                    connect.setConn(oldConn);
+                    connect.setDatabase(previousDatabase);
+                    connect.setProps(previousProps);
+                    applyReconnectFailure(result, ex);
                 }
             } else {
                 result.setErrorCode(e.getErrorCode());
@@ -258,5 +267,31 @@ public class ConnectionServiceImpl implements ConnectionService {
                 lease.conn.close();
             }
         }
+    }
+
+    private void closeConnectionQuietly(Connection connection) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (SQLException e) {
+            log.warn("Close old connection failed during reconnect", e);
+        }
+    }
+
+    private void applyReconnectFailure(ChangeDefaultDatabaseResult result, Exception ex) {
+        if (ex instanceof SQLException sqlException) {
+            result.setErrorCode(sqlException.getErrorCode());
+            result.setErrorMessage(sqlException.getMessage());
+            return;
+        }
+        Throwable cause = ex.getCause();
+        if (cause instanceof SQLException sqlException) {
+            result.setErrorCode(sqlException.getErrorCode());
+            result.setErrorMessage(sqlException.getMessage());
+            return;
+        }
+        result.setErrorMessage(ex.getMessage());
     }
 }

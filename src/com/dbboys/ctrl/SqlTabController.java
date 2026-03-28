@@ -430,26 +430,35 @@ public class SqlTabController {
 
     public void closeResultSet() {
         try {
-            if (currentResultSetTabController.sqlResultSet != null) {
-
-                //如果连接已断开，mysql r28 r61驱动在这里会卡死，结果集关闭有问题,重现方式未双击打开sql面板，执行一次select后killsession再次执行会卡死
-                currentResultSetTabController.sqlResultSet.close();
-
+            if (currentResultSetTabController != null) {
+                currentResultSetTabController.closeResultSet();
             }
-            if (currentResultSetTabController.priSqlResult != null) {
-                currentResultSetTabController.priSqlResult.close();
-
-            }
-            for (Tab tab : resultsetTabPane.getTabs()) {
-                if (tab instanceof CustomResultsetTab) {
-                    currentResultSetTabController.closeResultSet();
-                    ((CustomResultsetTab) tab).resultSetTabController.closeResultSet();
+            if (resultsetTabPane != null) {
+                for (Tab tab : resultsetTabPane.getTabs()) {
+                    if (tab instanceof CustomResultsetTab) {
+                        ((CustomResultsetTab) tab).resultSetTabController.closeResultSet();
+                    }
                 }
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             //AlertUtil.CustomAlert("错误", "["+e.getErrorCode()+"]"+e.getMessage());
         }
+    }
+
+    public void prepareForDatabaseSwitch() {
+        closeResultSet();
+        if (currentResultSetTabController != null) {
+            currentResultSetTabController.init();
+        }
+        if (resultsetTabPane != null && resultsetTabPane.getTabs().size() > 1) {
+            resultsetTabPane.getTabs().subList(1, resultsetTabPane.getTabs().size()).clear();
+        }
+        resultSetVBox.setVisible(false);
+        if (explain_result_stackpane != null) {
+            explain_result_stackpane.setVisible(false);
+        }
+        activeResultSetController = null;
     }
 
 

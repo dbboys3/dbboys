@@ -201,6 +201,7 @@ public class SqlConnectionHandler {
             if (!newValue.equals(oldValue) && !newValue.equals(ctrl.defaultDatabase)) {
                 String result = "success";
                 if (oldValue != null && !oldValue.equals(ctrl.defaultDatabase)) {
+                    ctrl.prepareForDatabaseSwitch();
                     result = sqlexeService.activeDatabase(ctrl.sqlConnect, newValue, ctrl);
                 }
                 if (result == null) {

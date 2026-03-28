@@ -521,18 +521,19 @@ public class ResultSetTabController {
     }
 
     public void closeResultSet() {
-        try {
-            if (sqlResultSet != null) {
-                sqlResultSet.close();
-            }
-            if (priSqlResult != null) {
-                priSqlResult.close();
-            }
-        } catch (SQLException e) {
-            sqlResultSet = null;
-            priSqlResult = null;
-            log.error(e.getMessage(), e);
-        }
+        closeQuietly(sqlResultSet, "result set");
+        sqlResultSet = null;
+
+        closeQuietly(priSqlResult, "primary-key result set");
+        priSqlResult = null;
+
+        closeQuietly(sqlStatement, "statement");
+        sqlStatement = null;
+        parameterMetaData = null;
+
+        closeQuietly(sqlCstmt, "callable statement");
+        sqlCstmt = null;
+        callHasResultSet = false;
     }
 
     public void cancel() {
@@ -544,21 +545,29 @@ public class ResultSetTabController {
             try {
                 sqlStatement.cancel();
             } catch (SQLException e) {
-                log.error(e.getErrorCode(), e);
-            } finally {
-                sqlStatement = null; // Avoid prepareStatement error 213 on next run
+                log.debug("Cancel statement failed", e);
             }
         }
         if (sqlCstmt != null) {
             try {
                 sqlCstmt.cancel();
             } catch (SQLException e) {
-                log.error(e.getMessage(), e);
-            } finally {
-                sqlCstmt = null;
+                log.debug("Cancel callable statement failed", e);
             }
         }
+        closeResultSet();
 
+    }
+
+    private void closeQuietly(AutoCloseable resource, String resourceName) {
+        if (resource == null) {
+            return;
+        }
+        try {
+            resource.close();
+        } catch (Exception e) {
+            log.debug("Close {} failed", resourceName, e);
+        }
     }
 
 

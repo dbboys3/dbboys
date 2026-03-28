@@ -8,7 +8,6 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.io.IOException;
-import java.sql.SQLException;
 
 public class CustomResultsetTab extends Tab {
     public ResultSetTabController resultSetTabController;
@@ -37,17 +36,7 @@ public class CustomResultsetTab extends Tab {
         setStyle("-fx-pref-height: 18;");
         setClosable(true);
         //关闭窗口事件响应
-        setOnCloseRequest(event -> {
-
-            //似乎只有隐式的结果集需要关闭后才能断开连接，显示声明的结果集可不关闭，连接关闭时自动关闭
-            if(resultSetTabController.sqlResultSet!=null) {
-                try {
-                    resultSetTabController.sqlResultSet.close();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        });
+        setOnCloseRequest(event -> resultSetTabController.closeResultSet());
     }
 
 
