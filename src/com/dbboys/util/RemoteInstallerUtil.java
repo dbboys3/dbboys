@@ -2411,6 +2411,116 @@ GBASEEOF
         rebuildInstallConfigMap();
     }
 
+    private static void applyDiskSizeDefaults(ObservableList<InstallConfigItem> source, double availableDiskSize) {
+        int PHYSFILE = 1024000;
+        int LOGFILES = 10;
+        String TEMPDBS = "1*1024000";
+        int SBDBSSIZE = 1024000;
+        int DATADBSSIZE = 1024000;
+
+        if (availableDiskSize > 100 && availableDiskSize <= 200) {
+            PHYSFILE = 5120000;
+            LOGFILES = 50;
+            TEMPDBS = "2*5120000";
+            SBDBSSIZE = 5120000;
+            DATADBSSIZE = 5120000;
+        } else if (availableDiskSize > 200) {
+            PHYSFILE = 10240000;
+            LOGFILES = 100;
+            TEMPDBS = "2*10240000";
+            SBDBSSIZE = 10240000;
+            DATADBSSIZE = 10240000;
+        }
+
+        updateConfigValue(source, ConfigKey.PHYSFILE, String.valueOf(PHYSFILE));
+        updateConfigValue(source, ConfigKey.LOGFILES, String.valueOf(LOGFILES));
+        updateConfigValue(source, ConfigKey.TEMPDBS, TEMPDBS);
+        updateConfigValue(source, ConfigKey.SBSPACE_SIZE, String.valueOf(SBDBSSIZE));
+        updateConfigValue(source, ConfigKey.DATA_SPACE_SIZE, String.valueOf(DATADBSSIZE));
+    }
+
+    private static ObservableList<InstallConfigItem> buildDefaultInstallConfigItems() {
+        Double totalMem;
+        int NUMCPU = 1;
+        try {
+            freeDiskSize = Double.parseDouble(executeCommand("df -m /opt |tail -1 |awk '{print $4/1000}'"));
+            totalMem = Double.parseDouble(executeCommand("free -m |sed -n 2p |awk '{print $2/1024}'"));
+            NUMCPU = Integer.parseInt(executeCommand("cat /proc/cpuinfo |grep -c processor"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        int LOCKS = 1000000;
+        int SHMVIRTSIZE = 102400;
+        int DS_TOTAL_MEMORY = 102400;
+        int K2BUFFERS = 51200;
+        int K16BUFFERS = 51200;
+        if (totalMem > 4 && totalMem <= 8) {
+            SHMVIRTSIZE = 512000;
+            DS_TOTAL_MEMORY = 512000;
+            K2BUFFERS = 102400;
+            K16BUFFERS = 102400;
+        } else if (totalMem > 8 && totalMem <= 16) {
+            SHMVIRTSIZE = 1024000;
+            DS_TOTAL_MEMORY = 1024000;
+            K2BUFFERS = 512000;
+            K16BUFFERS = 204800;
+        } else if (totalMem > 16 && totalMem <= 32) {
+            LOCKS = 10000000;
+            SHMVIRTSIZE = 2048000;
+            DS_TOTAL_MEMORY = 2048000;
+            K2BUFFERS = 512000;
+            K16BUFFERS = 409600;
+        } else if (totalMem > 32 && totalMem <= 64) {
+            LOCKS = 10000000;
+            SHMVIRTSIZE = 4096000;
+            DS_TOTAL_MEMORY = 4096000;
+            K2BUFFERS = 512000;
+            K16BUFFERS = 819200;
+        } else if (totalMem > 64 && totalMem <= 128) {
+            LOCKS = 10000000;
+            SHMVIRTSIZE = 4096000;
+            DS_TOTAL_MEMORY = 4096000;
+            K2BUFFERS = 512000;
+            K16BUFFERS = 2000000;
+        } else if (totalMem > 128) {
+            LOCKS = 10000000;
+            SHMVIRTSIZE = 10240000;
+            DS_TOTAL_MEMORY = 4096000;
+            K2BUFFERS = 512000;
+            K16BUFFERS = 4000000;
+        }
+
+        ObservableList<InstallConfigItem> defaults = FXCollections.observableArrayList();
+        defaults.add(new InstallConfigItem("gbasedbt_password", I18n.t("remote.install.cfg.gbasedbt_password.name", "gbasedbt用户密码"), "8S*P)0Od@.&", I18n.t("remote.install.cfg.gbasedbt_password.desc", "保持密码强度，部分系统如强度不够可能导致设置密码失败")));
+        defaults.add(new InstallConfigItem("gbasedbtdir", "GBASEDBTDIR", "/opt/gbase", I18n.t("remote.install.cfg.gbasedbtdir.desc", "数据库软件安装路径，无特殊要求不修改")));
+        defaults.add(new InstallConfigItem("gbasedbtserver", "GBASEDBTSERVER", "gbase01", I18n.t("remote.install.cfg.gbasedbtserver.desc", "数据库实例名，无特殊要求不修改")));
+        defaults.add(new InstallConfigItem("db_locale", "DB_LOCALE", "zh_CN.utf8", I18n.t("remote.install.cfg.db_locale.desc", "默认字符集推荐utf8，如要兼容GBK使用zh_CN.gb18030-2000")));
+        defaults.add(new InstallConfigItem("gl_useglu", "GL_USEGLU", "1", I18n.t("remote.install.cfg.gl_useglu.desc", "是否开启GLU，建议开启，0关闭")));
+        defaults.add(new InstallConfigItem("data_file_path", I18n.t("remote.install.cfg.data_file_path.name", "数据文件路径"), "$GBASEDBTDIR/dbs", I18n.t("remote.install.cfg.data_file_path.desc", "如/data，路径必须存在，修改后相关空间大小根据空间可用量自动重新计算")));
+        defaults.add(new InstallConfigItem("rootsize", "ROOTSIZE", "1024000", I18n.t("remote.install.cfg.rootsize.desc", "根空间大小，建议不小于1G，固定值。")));
+        defaults.add(new InstallConfigItem("listen_ip", I18n.t("remote.install.cfg.listen_ip.name", "监听IP"), "0.0.0.0", I18n.t("remote.install.cfg.listen_ip.desc", "默认监听所有IP，如无特殊要求不修改")));
+        defaults.add(new InstallConfigItem("listen_port", I18n.t("remote.install.cfg.listen_port.name", "监听端口"), "9088", I18n.t("remote.install.cfg.listen_port.desc", "默认端口9088，如无特殊要求不修改")));
+        defaults.add(new InstallConfigItem("physfile", "PHYSFILE", "1024000", I18n.t("remote.install.cfg.physfile.desc", "物理日志大小，建议不小于10G，默认根据数据文件路径可用空间自动计算")));
+        defaults.add(new InstallConfigItem("logsize", "LOGSIZE", "102400", I18n.t("remote.install.cfg.logsize.desc", "单个逻辑日志大小，建议100MB固定值")));
+        defaults.add(new InstallConfigItem("logfiles", "LOGFILES", "10", I18n.t("remote.install.cfg.logfiles.desc", "逻辑日志个数，建议不小于100个，默认根据数据文件路径可用空间自动计算")));
+        defaults.add(new InstallConfigItem("tempdbs", I18n.t("remote.install.cfg.tempdbs.name", "临时空间配置"), "1*1024000", I18n.t("remote.install.cfg.tempdbs.desc", "数量*大小，如1*10240000，建议不小于10G，默认根据数据文件路径可用空间自动计算")));
+        defaults.add(new InstallConfigItem("sbspace_size", I18n.t("remote.install.cfg.sbspace_size.name", "智能大对象空间大小"), "1024000", I18n.t("remote.install.cfg.sbspace_size.desc", "建议不小于10G，默认根据数据文件路径可用空间自动计算")));
+        defaults.add(new InstallConfigItem("data_space_size", I18n.t("remote.install.cfg.data_space_size.name", "用户数据空间大小"), "1024000", I18n.t("remote.install.cfg.data_space_size.desc", "建议不小于10G，默认根据数据文件路径可用空间自动计算")));
+        defaults.add(new InstallConfigItem("default_db_name", I18n.t("remote.install.cfg.default_db_name.name", "用户默认数据库名"), "gbasedb", I18n.t("remote.install.cfg.default_db_name.desc", "默认gbasedb，可自定义修改")));
+        defaults.add(new InstallConfigItem("locks", "LOCKS", String.valueOf(LOCKS), I18n.t("remote.install.cfg.locks.desc", "建议不小于10000000，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("ds_total_memory", "DS_TOTAL_MEMORY", String.valueOf(DS_TOTAL_MEMORY), I18n.t("remote.install.cfg.ds_total_memory.desc", "建议不小于4096000，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("ds_nonpdq", "DS_NONPDQ_QUERY_MEM", String.valueOf(DS_TOTAL_MEMORY / 4), I18n.t("remote.install.cfg.ds_nonpdq.desc", "建议不小于1024000，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("shmvirtsize", "SHMVIRTSIZE", String.valueOf(SHMVIRTSIZE), I18n.t("remote.install.cfg.shmvirtsize.desc", "建议不小于4096000，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("shmadd", "SHMADD", String.valueOf(SHMVIRTSIZE / 4), I18n.t("remote.install.cfg.shmadd.desc", "建议不小于1024000，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("vpclass", "VPCLASS", "cpu,num=" + NUMCPU + ",noage", I18n.t("remote.install.cfg.vpclass.desc", "如是numa架构多路服务器，可绑定CPU，默认等于CPU内核数量")));
+        defaults.add(new InstallConfigItem("bufferpool_2k", "BUFFERPOOL", "size=2k,buffers=" + K2BUFFERS + ",lrus=32,lru_min_dirty=50,lru_max_dirty=60", I18n.t("remote.install.cfg.bufferpool_2k.desc", "建议不小于1G，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("bufferpool_16k", "BUFFERPOOL", "size=16k,buffers=" + K16BUFFERS + ",lrus=128,lru_min_dirty=50,lru_max_dirty=60", I18n.t("remote.install.cfg.bufferpool_16k.desc", "建议不超过内存的50%，默认根据内存自动计算")));
+        defaults.add(new InstallConfigItem("backup_path", I18n.t("remote.install.cfg.backup_path.name", "备份路径"), "$GBASEDBTDIR/backup", I18n.t("remote.install.cfg.backup_path.desc", "填写路径后每天0点执行全量备份到填写的指定路径，逻辑日志自动归档，保留7天。")));
+        applyDiskSizeDefaults(defaults, freeDiskSize);
+        return defaults;
+    }
+
     public static void modifyEnv(){
 
         ObservableList<InstallConfigItem> datalist = installConfigItems.stream()
@@ -2477,29 +2587,7 @@ GBASEEOF
                         throw new RuntimeException(e);
                     }
                     //diskSize=1024000000.0;
-                    int PHYSFILE=1024000;
-                    int LOGFILES=10;
-                    String TEMPDBS="1*1024000";
-                    int SBDBSSIZE=1024000;
-                    int DATADBSSIZE=1024000;
-                    if(freeDiskSize>100&&freeDiskSize<=200){
-                        PHYSFILE=5120000;
-                        LOGFILES=50;
-                        TEMPDBS="2*5120000";
-                        SBDBSSIZE=5120000;
-                        DATADBSSIZE=5120000;
-                    }else if(freeDiskSize>200){
-                        PHYSFILE=10240000;
-                        LOGFILES=100;
-                        TEMPDBS="2*10240000";
-                        SBDBSSIZE=10240000;
-                        DATADBSSIZE=10240000;
-                    }
-                    updateConfigValue(datalist, ConfigKey.PHYSFILE, String.valueOf(PHYSFILE));
-                    updateConfigValue(datalist, ConfigKey.LOGFILES, String.valueOf(LOGFILES));
-                    updateConfigValue(datalist, ConfigKey.TEMPDBS, TEMPDBS);
-                    updateConfigValue(datalist, ConfigKey.SBSPACE_SIZE, String.valueOf(SBDBSSIZE));
-                    updateConfigValue(datalist, ConfigKey.DATA_SPACE_SIZE, String.valueOf(DATADBSSIZE));
+                    applyDiskSizeDefaults(datalist, freeDiskSize);
                 }
                 tableView.refresh();
             }
@@ -2515,8 +2603,7 @@ GBASEEOF
         labelColumn.setPrefWidth(420);
 
         tableView.getColumns().addAll(nameColumn, valueColumn,labelColumn);
-        tableView.getItems().clear();
-        tableView.getItems().addAll(datalist);
+        tableView.setItems(datalist);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         VBox contentBox = new VBox();
@@ -2525,20 +2612,39 @@ GBASEEOF
         VBox.setVgrow(tableView, Priority.ALWAYS);
         tableView.setMaxHeight(Double.MAX_VALUE);
 
+        ButtonType buttonTypeReset = new ButtonType(I18n.t("remote.install.modifyenv.button.reset", "重置"), ButtonBar.ButtonData.LEFT);
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
                 I18n.t("remote.install.modifyenv.title", "自定义配置"),
                 contentBox,
                 760,
-                360,
+                600,
+                buttonTypeReset,
                 buttonTypeOk,
                 buttonTypeCancel
         );
+        Button resetButton = dialog.getButton(buttonTypeReset);
         Button button = dialog.getButton(buttonTypeOk);
         Button cancelButton = dialog.getButton(buttonTypeCancel);
+        resetButton.textProperty().bind(I18n.bind("remote.install.modifyenv.button.reset", "重置"));
         button.textProperty().bind(I18n.bind("common.confirm", "确认"));
         cancelButton.textProperty().bind(I18n.bind("common.cancel", "取消"));
+        resetButton.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            tableView.edit(-1, null);
+            try {
+                datalist.setAll(buildDefaultInstallConfigItems());
+                tableView.getSelectionModel().clearSelection();
+                tableView.refresh();
+            } catch (RuntimeException e) {
+                log.error("Reset install config failed", e);
+                AlertUtil.showAlert(
+                        I18n.t("remote.install.modifyenv.title", "自定义配置"),
+                        I18n.t("remote.install.modifyenv.reset.failed", "恢复默认值失败，请检查远程环境后重试")
+                );
+            }
+        });
         ButtonType result = dialog.showAndWait();
         if (result == buttonTypeOk) {
             installConfigItems.setAll(datalist.stream().map(InstallConfigItem::new).toList());
@@ -2548,111 +2654,7 @@ GBASEEOF
     }
 
     public static void initConfigList(){
-        //自定义安装配置
-        Double totalMem;
-        int NUMCPU=1;
-        try {
-            freeDiskSize=Double.parseDouble(executeCommand("df -m /opt |tail -1 |awk '{print $4/1000}'"));
-            totalMem=Double.parseDouble(executeCommand("free -m |sed -n 2p |awk '{print $2/1024}'"));
-            NUMCPU=Integer.parseInt(executeCommand("cat /proc/cpuinfo |grep -c processor"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        int LOCKS=1000000;
-        int SHMVIRTSIZE=102400;
-        int DS_TOTAL_MEMORY=102400;
-        int K2BUFFERS=51200;
-        int K16BUFFERS=51200;
-        if(totalMem>4&&totalMem<=8){
-            SHMVIRTSIZE=512000;
-            DS_TOTAL_MEMORY=512000;
-            K2BUFFERS=102400;
-            K16BUFFERS=102400;
-        }else if(totalMem>8&&totalMem<=16){
-            SHMVIRTSIZE=1024000;
-            DS_TOTAL_MEMORY=1024000;
-            K2BUFFERS=512000;
-            K16BUFFERS=204800;
-        }else if(totalMem>16&&totalMem<=32){
-            LOCKS=10000000;
-            SHMVIRTSIZE=2048000;
-            DS_TOTAL_MEMORY=2048000;
-            K2BUFFERS=512000;
-            K16BUFFERS=409600;
-        }else if(totalMem>32&&totalMem<=64){
-            LOCKS=10000000;
-            SHMVIRTSIZE=4096000;
-            DS_TOTAL_MEMORY=4096000;
-            K2BUFFERS=512000;
-            K16BUFFERS=819200;
-        }else if(totalMem>64&&totalMem<=128){
-            LOCKS=10000000;
-            SHMVIRTSIZE=4096000;
-            DS_TOTAL_MEMORY=4096000;
-            K2BUFFERS=512000;
-            K16BUFFERS=2000000;
-        }else if(totalMem>128){
-            LOCKS=10000000;
-            SHMVIRTSIZE=10240000;
-            DS_TOTAL_MEMORY=4096000;
-            K2BUFFERS=512000;
-            K16BUFFERS=4000000;
-        }
-
-        /*
-        int PHYSFILE=102400;
-        int LOGFILES=3;
-        String TEMPDBS="1*102400";
-        int SBDBSSIZE=102400;
-        int DATADBSSIZE=102400;
-
-        */
-        int PHYSFILE=1024000;
-        int LOGFILES=10;
-        String TEMPDBS="1*1024000";
-        int SBDBSSIZE=1024000;
-        int DATADBSSIZE=1024000;
-
-
-        if(freeDiskSize>100&&freeDiskSize<=200){
-            PHYSFILE=5120000;
-            LOGFILES=50;
-            TEMPDBS="2*5120000";
-            SBDBSSIZE=5120000;
-            DATADBSSIZE=5120000;
-        }else if(freeDiskSize>200){
-            PHYSFILE=10240000;
-            LOGFILES=100;
-            TEMPDBS="2*10240000";
-            SBDBSSIZE=10240000;
-            DATADBSSIZE=10240000;
-        }
-        installConfigItems.clear();
-        installConfigItems.add(new InstallConfigItem("gbasedbt_password", I18n.t("remote.install.cfg.gbasedbt_password.name", "gbasedbt用户密码"), "8S*P)0Od@.&", I18n.t("remote.install.cfg.gbasedbt_password.desc", "保持密码强度，部分系统如强度不够可能导致设置密码失败")));
-        installConfigItems.add(new InstallConfigItem("gbasedbtdir", "GBASEDBTDIR", "/opt/gbase", I18n.t("remote.install.cfg.gbasedbtdir.desc", "数据库软件安装路径，无特殊要求不修改")));
-        installConfigItems.add(new InstallConfigItem("gbasedbtserver", "GBASEDBTSERVER", "gbase01", I18n.t("remote.install.cfg.gbasedbtserver.desc", "数据库实例名，无特殊要求不修改")));
-        installConfigItems.add(new InstallConfigItem("db_locale", "DB_LOCALE", "zh_CN.utf8", I18n.t("remote.install.cfg.db_locale.desc", "默认字符集推荐utf8，如要兼容GBK使用zh_CN.gb18030-2000")));
-        installConfigItems.add(new InstallConfigItem("gl_useglu", "GL_USEGLU", "1", I18n.t("remote.install.cfg.gl_useglu.desc", "是否开启GLU，建议开启，0关闭")));
-        installConfigItems.add(new InstallConfigItem("data_file_path", I18n.t("remote.install.cfg.data_file_path.name", "数据文件路径"), "$GBASEDBTDIR/dbs", I18n.t("remote.install.cfg.data_file_path.desc", "如/data，路径必须存在，修改后相关空间大小根据空间可用量自动重新计算")));
-        installConfigItems.add(new InstallConfigItem("rootsize", "ROOTSIZE", "1024000", I18n.t("remote.install.cfg.rootsize.desc", "根空间大小，建议不小于1G，固定值。")));
-        installConfigItems.add(new InstallConfigItem("listen_ip", I18n.t("remote.install.cfg.listen_ip.name", "监听IP"), "0.0.0.0", I18n.t("remote.install.cfg.listen_ip.desc", "默认监听所有IP，如无特殊要求不修改")));
-        installConfigItems.add(new InstallConfigItem("listen_port", I18n.t("remote.install.cfg.listen_port.name", "监听端口"), "9088", I18n.t("remote.install.cfg.listen_port.desc", "默认端口9088，如无特殊要求不修改")));
-        installConfigItems.add(new InstallConfigItem("physfile", "PHYSFILE", String.valueOf(PHYSFILE), I18n.t("remote.install.cfg.physfile.desc", "物理日志大小，建议不小于10G，默认根据数据文件路径可用空间自动计算")));
-        installConfigItems.add(new InstallConfigItem("logsize", "LOGSIZE", "102400", I18n.t("remote.install.cfg.logsize.desc", "单个逻辑日志大小，建议100MB固定值")));
-        installConfigItems.add(new InstallConfigItem("logfiles", "LOGFILES", String.valueOf(LOGFILES), I18n.t("remote.install.cfg.logfiles.desc", "逻辑日志个数，建议不小于100个，默认根据数据文件路径可用空间自动计算")));
-        installConfigItems.add(new InstallConfigItem("tempdbs", I18n.t("remote.install.cfg.tempdbs.name", "临时空间配置"), TEMPDBS, I18n.t("remote.install.cfg.tempdbs.desc", "数量*大小，如1*10240000，建议不小于10G，默认根据数据文件路径可用空间自动计算")));
-        installConfigItems.add(new InstallConfigItem("sbspace_size", I18n.t("remote.install.cfg.sbspace_size.name", "智能大对象空间大小"), String.valueOf(SBDBSSIZE), I18n.t("remote.install.cfg.sbspace_size.desc", "建议不小于10G，默认根据数据文件路径可用空间自动计算")));
-        installConfigItems.add(new InstallConfigItem("data_space_size", I18n.t("remote.install.cfg.data_space_size.name", "用户数据空间大小"), String.valueOf(DATADBSSIZE), I18n.t("remote.install.cfg.data_space_size.desc", "建议不小于10G，默认根据数据文件路径可用空间自动计算")));
-        installConfigItems.add(new InstallConfigItem("default_db_name", I18n.t("remote.install.cfg.default_db_name.name", "用户默认数据库名"), "gbasedb", I18n.t("remote.install.cfg.default_db_name.desc", "默认gbasedb，可自定义修改")));
-        installConfigItems.add(new InstallConfigItem("locks", "LOCKS", String.valueOf(LOCKS), I18n.t("remote.install.cfg.locks.desc", "建议不小于10000000，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("ds_total_memory", "DS_TOTAL_MEMORY", String.valueOf(DS_TOTAL_MEMORY), I18n.t("remote.install.cfg.ds_total_memory.desc", "建议不小于4096000，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("ds_nonpdq", "DS_NONPDQ_QUERY_MEM", String.valueOf(DS_TOTAL_MEMORY/4), I18n.t("remote.install.cfg.ds_nonpdq.desc", "建议不小于1024000，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("shmvirtsize", "SHMVIRTSIZE", String.valueOf(SHMVIRTSIZE), I18n.t("remote.install.cfg.shmvirtsize.desc", "建议不小于4096000，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("shmadd", "SHMADD", String.valueOf(SHMVIRTSIZE/4), I18n.t("remote.install.cfg.shmadd.desc", "建议不小于1024000，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("vpclass", "VPCLASS", "cpu,num="+NUMCPU+",noage", I18n.t("remote.install.cfg.vpclass.desc", "如是numa架构多路服务器，可绑定CPU，默认等于CPU内核数量")));
-        installConfigItems.add(new InstallConfigItem("bufferpool_2k", "BUFFERPOOL", "size=2k,buffers="+K2BUFFERS+",lrus=32,lru_min_dirty=50,lru_max_dirty=60", I18n.t("remote.install.cfg.bufferpool_2k.desc", "建议不小于1G，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("bufferpool_16k", "BUFFERPOOL", "size=16k,buffers="+K16BUFFERS+",lrus=128,lru_min_dirty=50,lru_max_dirty=60", I18n.t("remote.install.cfg.bufferpool_16k.desc", "建议不超过内存的50%，默认根据内存自动计算")));
-        installConfigItems.add(new InstallConfigItem("backup_path", I18n.t("remote.install.cfg.backup_path.name", "备份路径"), "$GBASEDBTDIR/backup", I18n.t("remote.install.cfg.backup_path.desc", "填写路径后每天0点执行全量备份到填写的指定路径，逻辑日志自动归档，保留7天。")));
+        installConfigItems.setAll(buildDefaultInstallConfigItems());
         refreshLegacyConfigListFromItems();
     }
 

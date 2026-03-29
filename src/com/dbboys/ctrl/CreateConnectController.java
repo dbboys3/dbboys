@@ -62,7 +62,7 @@ import java.util.List;
 
 public class CreateConnectController {
     private static final Logger log = LogManager.getLogger(CreateConnectController.class);
-    private static final String DEFAULT_PROPS = "[{\"propName\":\"APPENDISAM\",\"propValue\":\"\"},{\"propName\":\"CLIENT_LOCALE\",\"propValue\":\"\"},{\"propName\":\"CSM\",\"propValue\":\"\"},{\"propName\":\"DBANSIWARN\",\"propValue\":\"\"},{\"propName\":\"DBDATE\",\"propValue\":\"Y4MD-\"},{\"propName\":\"DBSPACETEMP\",\"propValue\":\"\"},{\"propName\":\"DBTEMP\",\"propValue\":\"\"},{\"propName\":\"DBUPSPACE\",\"propValue\":\"\"},{\"propName\":\"DB_LOCALE\",\"propValue\":\"\"},{\"propName\":\"DELIMIDENT\",\"propValue\":\"\"},{\"propName\":\"ENABLE_TYPE_CACHE\",\"propValue\":\"\"},{\"propName\":\"ENABLE_HDRSWITCH\",\"propValue\":\"\"},{\"propName\":\"FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTCONRETRY\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTCONTIME\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTOPCACHE\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTSERVER\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTSERVER_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"GBASEDBTSTACKSIZE\",\"propValue\":\"\"},{\"propName\":\"IFX_AUTOFREE\",\"propValue\":\"\"},{\"propName\":\"IFX_BATCHUPDATE_PER_SPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_CODESETLOB\",\"propValue\":\"\"},{\"propName\":\"IFX_DIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_EXTDIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_GET_SMFLOAT_AS_FLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_ISOLATION_LEVEL\",\"propValue\":\"5\"},{\"propName\":\"IFX_FLAT_UCSQ\",\"propValue\":\"\"},{\"propName\":\"IFX_LOCK_MODE_WAIT\",\"propValue\":\"10\"},{\"propName\":\"IFX_PAD_VARCHAR\",\"propValue\":\"\"},{\"propName\":\"IFX_SET_FLOAT_AS_SMFLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_SOC_TIMEOUT\",\"propValue\":\"\"},{\"propName\":\"IFX_TRIMTRAILINGSPACES\",\"propValue\":\"1\"},{\"propName\":\"IFX_USEPUT\",\"propValue\":\"\"},{\"propName\":\"IFX_USE_STRENC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASTDCOMPLIANCE_XAEND\",\"propValue\":\"\"},{\"propName\":\"IFXHOST\",\"propValue\":\"\"},{\"propName\":\"IFXHOST_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"JDBCTEMP\",\"propValue\":\"\"},{\"propName\":\"LOBCACHE\",\"propValue\":\"\"},{\"propName\":\"LOGINTIMEOUT\",\"propValue\":\"1000\"},{\"propName\":\"NEWCODESET\",\"propValue\":\"\"},{\"propName\":\"NEWNLSMAP\",\"propValue\":\"\"},{\"propName\":\"NODEFDAC\",\"propValue\":\"\"},{\"propName\":\"OPT_GOAL\",\"propValue\":\"\"},{\"propName\":\"OPTCOMPIND\",\"propValue\":\"\"},{\"propName\":\"OPTOFC\",\"propValue\":\"\"},{\"propName\":\"PATH\",\"propValue\":\"\"},{\"propName\":\"PDQPRIORITY\",\"propValue\":\"\"},{\"propName\":\"PORTNO_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"PROXY\",\"propValue\":\"\"},{\"propName\":\"PSORT_DBTEMP\",\"propValue\":\"\"},{\"propName\":\"PSORT_NPROCS\",\"propValue\":\"\"},{\"propName\":\"SECURITY\",\"propValue\":\"\"},{\"propName\":\"SQLIDEBUG\",\"propValue\":\"\"},{\"propName\":\"SQLMODE\",\"propValue\":\"\"},{\"propName\":\"SRV_FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"STMT_CACHE\",\"propValue\":\"\"},{\"propName\":\"TRUSTED_CONTEXT\",\"propValue\":\"\"},{\"propName\":\"METADATA_UPPERCASE\",\"propValue\":\"\"}]";
+    private static final String EMPTY_PROPS = "[]";
     private final ConnectionService connectionService = com.dbboys.app.AppContext.get(ConnectionService.class);
 
     @FXML
@@ -138,6 +138,7 @@ public class CreateConnectController {
     public  Button cancelButton;
     public  Dialog<?> dialog;
     private Stage dialogStage;
+    private boolean initializingDbTypeSelection = true;
 
     public CreateConnectController(){
 
@@ -163,8 +164,7 @@ public class CreateConnectController {
     }
 
     private void initCommon(TreeData treeDataParam, Boolean isCopy){
-        //默认属性
-        this.props = DEFAULT_PROPS;
+        this.props = EMPTY_PROPS;
         this.treeDataParam = treeDataParam;
         if(treeDataParam!=null&&treeDataParam instanceof Connect){
             this.props=((Connect)treeDataParam).getProps();
@@ -224,6 +224,8 @@ public class CreateConnectController {
             driverChoiceBox.setItems(driverItems); //触发内容变化监听
             driverChoiceBox.getSelectionModel().select(driverItems.size()-1);
             applyDialectDefaults(connect, oldValue, newValue);
+            refreshConnectionPropertiesForDbType(newValue, initializingDbTypeSelection && treeDataParam instanceof Connect);
+            refreshDriverPropertyButton(newValue);
         });
         dbTypeChoiceBox.getSelectionModel().select(0);
 
@@ -289,6 +291,8 @@ public class CreateConnectController {
 
         }
 
+        initializingDbTypeSelection = false;
+        refreshDriverPropertyButton(dbTypeChoiceBox.getValue());
         applyTextFormatters();
 
 
@@ -427,6 +431,28 @@ public class CreateConnectController {
                 || (oldDialect != null && connect.getDatabase().equalsIgnoreCase(oldDialect.defaultDatabase()))) {
             connect.setDatabase(newDialect.defaultDatabase());
         }
+    }
+
+    private void refreshConnectionPropertiesForDbType(String newDbType, boolean preserveExistingProps) {
+        if (preserveExistingProps) {
+            return;
+        }
+        props = defaultConnectionPropsFor(newDbType);
+    }
+
+    private void refreshDriverPropertyButton(String dbType) {
+        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        boolean supported = dialect != null && dialect.supportsConnectionProperties();
+        modifyDriverButton.setDisable(!supported);
+    }
+
+    private String defaultConnectionPropsFor(String dbType) {
+        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        if (dialect == null) {
+            return EMPTY_PROPS;
+        }
+        String propsJson = dialect.defaultConnectionProps();
+        return propsJson == null || propsJson.isBlank() ? EMPTY_PROPS : propsJson;
     }
 
     private boolean shouldReplaceField(String currentValue, String oldDefault) {
@@ -611,6 +637,9 @@ public class CreateConnectController {
 
     //编辑当前驱动属性
     public void modifyDriverProps(){
+        if (modifyDriverButton.isDisabled()) {
+            return;
+        }
         JSONArray jsonArray =new JSONArray(props);
         List<ObservableList<String>> lastdata=null;//根据确认或取消选择，赋值给lastdata
         ObservableList<ObservableList<String>> initdata = buildDriverPropRows(props);//如果取消，返回最初list
@@ -677,7 +706,7 @@ public class CreateConnectController {
             resetButton.addEventFilter(ActionEvent.ACTION, event -> {
                 event.consume();
                 tableView.edit(-1, null);
-                datalist.setAll(buildDriverPropRows(DEFAULT_PROPS));
+                datalist.setAll(buildDriverPropRows(defaultConnectionPropsFor(dbTypeChoiceBox.getValue())));
                 tableView.getSelectionModel().clearSelection();
                 tableView.refresh();
             });
@@ -700,7 +729,7 @@ public class CreateConnectController {
 
     private ObservableList<ObservableList<String>> buildDriverPropRows(String propsJson) {
         JSONArray jsonArray = new JSONArray(
-                propsJson == null || propsJson.isBlank() ? DEFAULT_PROPS : propsJson
+                propsJson == null || propsJson.isBlank() ? defaultConnectionPropsFor(dbTypeChoiceBox.getValue()) : propsJson
         );
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
         for (int i = 0; i < jsonArray.length(); i++) {

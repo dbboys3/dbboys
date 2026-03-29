@@ -51,6 +51,15 @@ public interface DatabaseDialect {
         return "";
     }
 
+    default String defaultConnectionProps() {
+        return "[]";
+    }
+
+    default boolean supportsConnectionProperties() {
+        String props = defaultConnectionProps();
+        return props != null && !props.isBlank() && new JSONArray(props).length() > 0;
+    }
+
     default boolean supportsNamedServerConnection() {
         return false;
     }
