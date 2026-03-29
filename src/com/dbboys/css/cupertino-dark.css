@@ -1976,6 +1976,34 @@ Text {
   -fx-background-color: -color-fg-emphasis;
 }
 
+/* TabPane 标题溢出下拉列表：当前选中标签用主题强调色标识 */
+.context-menu .radio-menu-item:checked {
+  -fx-background-color: -color-accent-subtle;
+}
+.context-menu .radio-menu-item:checked > .label {
+  -fx-text-fill: -color-fg-emphasis;
+}
+.context-menu .radio-menu-item:checked > .left-container > .radio {
+  -fx-background-color: -color-accent-emphasis;
+}
+.context-menu .radio-menu-item:checked .font-icon,
+.context-menu .radio-menu-item:checked .ikonli-font-icon {
+  -fx-icon-color: -color-fg-emphasis;
+  -fx-fill: -color-fg-emphasis;
+}
+.context-menu .radio-menu-item:hover:checked,
+.context-menu .radio-menu-item:focused:checked {
+  -fx-background-color: -color-accent-subtle;
+}
+.context-menu .radio-menu-item:hover:checked > .label,
+.context-menu .radio-menu-item:focused:checked > .label {
+  -fx-text-fill: -color-fg-emphasis;
+}
+.context-menu .radio-menu-item:hover:checked > .left-container > .radio,
+.context-menu .radio-menu-item:focused:checked > .left-container > .radio {
+  -fx-background-color: -color-accent-emphasis;
+}
+
 .caption-menu-item {
   -fx-padding: 6px 12px 6px 12px;
 }
@@ -2801,8 +2829,23 @@ Text {
 .tab-pane > .tab-header-area > .headers-region > .tab:left:disabled, .tab-pane > .tab-header-area > .headers-region > .tab:right:disabled {
   -fx-background-color: transparent;
 }
+.tab-pane > .tab-header-area > .control-buttons-tab {
+  -fx-background-color: transparent;
+}
+.tab-pane > .tab-header-area > .control-buttons-tab > .container {
+  -fx-padding: 0 0.2em 0 0.35em;
+}
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button {
-  -fx-padding: 1em;
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 6px;
+  -fx-padding: 0.45em 0.6em 0.45em 0.6em;
+}
+.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover {
+  -fx-background-color: -color-bg-subtle;
+}
+.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed {
+  -fx-background-color: -color-accent-subtle;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:disabled {
   -fx-opacity: 0.4;
@@ -2810,7 +2853,14 @@ Text {
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button > .arrow {
   -fx-shape: "M7 10l5 5 5-5z";
   -fx-scale-shape: false;
-  -fx-background-color: -color-fg-default;
+  -fx-padding: 0.22em 0.36em 0.22em 0.36em;
+  -fx-background-color: -color-fg-muted;
+}
+.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover > .arrow {
+  -fx-background-color: -color-fg-emphasis;
+}
+.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed > .arrow {
+  -fx-background-color: -color-accent-emphasis;
 }
 .tab-pane.dense > .tab-header-area > .headers-region > .tab {
   -fx-padding: 0.2em 0.3em 0.2em 0.3em;
