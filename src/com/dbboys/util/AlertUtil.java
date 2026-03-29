@@ -97,7 +97,11 @@ public final class AlertUtil {
         ButtonType cancelButtonType = findCancelButton(buttonTypes);
 
         HBox buttonBar = new HBox(10);
-        buttonBar.setStyle("-fx-alignment: center-right;");
+        HBox leftButtons = new HBox(10);
+        HBox rightButtons = new HBox(10);
+        Region buttonSpacer = new Region();
+        HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
+        buttonBar.getChildren().addAll(leftButtons, buttonSpacer, rightButtons);
         Map<ButtonType, Button> buttonMap = new LinkedHashMap<>();
         for (ButtonType buttonType : buttonTypes) {
             Button button = new Button(buttonType.getText());
@@ -109,7 +113,11 @@ public final class AlertUtil {
                 stage.close();
             });
             buttonMap.put(buttonType, button);
-            buttonBar.getChildren().add(button);
+            if (isLeftAlignedButton(buttonType)) {
+                leftButtons.getChildren().add(button);
+            } else {
+                rightButtons.getChildren().add(button);
+            }
         }
 
         VBox body = new VBox(content, buttonBar);
@@ -173,6 +181,10 @@ public final class AlertUtil {
         });
 
         return new ContentDialog(stage, frame, resultRef, buttonMap, defaultButtonType, cancelButtonType);
+    }
+
+    private static boolean isLeftAlignedButton(ButtonType buttonType) {
+        return buttonType != null && buttonType.getButtonData() == ButtonBar.ButtonData.LEFT;
     }
 
     private static ButtonType findDefaultButton(ButtonType[] buttonTypes) {

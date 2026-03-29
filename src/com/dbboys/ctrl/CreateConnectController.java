@@ -612,21 +612,9 @@ public class CreateConnectController {
     //编辑当前驱动属性
     public void modifyDriverProps(){
         JSONArray jsonArray =new JSONArray(props);
-        // 将JSONArray转换为ObservableList
         List<ObservableList<String>> lastdata=null;//根据确认或取消选择，赋值给lastdata
-        List<ObservableList<String>> initdata = FXCollections.observableArrayList();//如果取消，返回最初list
-        List<ObservableList<String>> datalist = FXCollections.observableArrayList();//如果确认，返回更新后的list
-
-        for (int i = 0; i < jsonArray.length(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            ObservableList<String> row = FXCollections.observableArrayList();
-            row.add(null);
-            row.add(jsonObject.getString("propName"));
-            row.add(jsonObject.getString("propValue"));
-            initdata.add(row);
-            ObservableList<String> rowCopy = FXCollections.observableArrayList(row);
-            datalist.add(rowCopy);
-        }
+        ObservableList<ObservableList<String>> initdata = buildDriverPropRows(props);//如果取消，返回最初list
+        ObservableList<ObservableList<String>> datalist = copyDriverPropRows(initdata);//如果确认，返回更新后的list
         CustomTableView<ObservableList<String>> tableView = new CustomTableView<>();
         tableView.setEditable(true);
         tableView.setSortPolicy((param) -> false);//禁用排序
@@ -660,8 +648,7 @@ public class CreateConnectController {
             }
         });
         tableView.getColumns().addAll(nameColumn, valueColumn);
-        tableView.getItems().clear();
-        tableView.getItems().addAll(datalist);
+        tableView.setItems(datalist);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         VBox contentBox = new VBox();
         contentBox.setId("modifyProps");
@@ -670,18 +657,34 @@ public class CreateConnectController {
         VBox.setVgrow(tableView, Priority.ALWAYS);
         tableView.setMaxHeight(Double.MAX_VALUE);
 
+        ButtonType buttonTypeReset = new ButtonType(
+                I18n.t("createconnect.button.reset", "重置"),
+                ButtonBar.ButtonData.LEFT
+        );
         ButtonType buttonTypeOk = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
-        ButtonType result = AlertUtil.createContentDialog(
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
                 I18n.t("createconnect.dialog.edit_props.title"),
                 contentBox,
                 420,
                 600,
+                buttonTypeReset,
                 buttonTypeOk,
                 buttonTypeCancel
-        ).showAndWait();
+        );
+        Button resetButton = dialog.getButton(buttonTypeReset);
+        if (resetButton != null) {
+            resetButton.addEventFilter(ActionEvent.ACTION, event -> {
+                event.consume();
+                tableView.edit(-1, null);
+                datalist.setAll(buildDriverPropRows(DEFAULT_PROPS));
+                tableView.getSelectionModel().clearSelection();
+                tableView.refresh();
+            });
+        }
+        ButtonType result = dialog.showAndWait();
         if (result == buttonTypeOk) {
-            lastdata = datalist;
+            lastdata = copyDriverPropRows(datalist);
         }else {
             lastdata=initdata;
         }
@@ -693,6 +696,30 @@ public class CreateConnectController {
             jsonArray.put(jsonObject);
         }
         props=jsonArray.toString();
+    }
+
+    private ObservableList<ObservableList<String>> buildDriverPropRows(String propsJson) {
+        JSONArray jsonArray = new JSONArray(
+                propsJson == null || propsJson.isBlank() ? DEFAULT_PROPS : propsJson
+        );
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
+            ObservableList<String> row = FXCollections.observableArrayList();
+            row.add(null);
+            row.add(jsonObject.getString("propName"));
+            row.add(jsonObject.getString("propValue"));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private ObservableList<ObservableList<String>> copyDriverPropRows(List<ObservableList<String>> sourceRows) {
+        ObservableList<ObservableList<String>> copiedRows = FXCollections.observableArrayList();
+        for (ObservableList<String> row : sourceRows) {
+            copiedRows.add(FXCollections.observableArrayList(row));
+        }
+        return copiedRows;
     }
 
 
