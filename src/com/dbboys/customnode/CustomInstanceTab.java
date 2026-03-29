@@ -1425,7 +1425,7 @@ public class CustomInstanceTab extends CustomTab {
             currentValue = onstat_g_seg_greped;
             int segments = parseIntOrDefault(currentValue, 0);
             if (segments > 3) {
-                status = "2";
+                status = "1";
             }else{
                 status="0";
             }

@@ -58,7 +58,7 @@ public final class GbaseInstanceAdminRepository implements InstanceAdminReposito
                   round(sum(decode(mdsize,-1,0,mdsize))*2/1024/1024-sum(decode(mdsize,-1,0,nfree))*2/1024/1024,2) as metaused_size,
                   max(max_size)/1024
                   FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
-                  left join (select chunk,count(*)-1 as extents from sysmaster:sysextents group by chunk) e on E.chunk=A.chknum
+                  left join (select chunk,count(*) as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                   group by 1,2,3
                   order by 1
                 """;
@@ -98,7 +98,7 @@ public final class GbaseInstanceAdminRepository implements InstanceAdminReposito
                 round((decode(mdsize,-1,0,mdsize))*2/1024/1024,2)  as Meta_SIZE ,
                 round((decode(mdsize,-1,0,mdsize))*2/1024/1024-(decode(mdsize,-1,0,nfree))*2/1024/1024,2) as metaused_size
                 FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
-                left join (select chunk,count(*)-1 as extents from sysmaster:sysextents group by chunk) e on E.chunk=A.chknum
+                left join (select chunk,count(*)-1 as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                 order by 1,2
                 """;
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -212,10 +212,10 @@ public final class GbaseInstanceAdminRepository implements InstanceAdminReposito
                   as percent
                   ,sum(e.extents)
                   FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
-                  left join (select chunk,count(*)-1 as extents from sysmaster:sysextents group by chunk) e on E.chunk=A.chknum
+                  left join (select chunk,count(*) as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                   group by 1
                   having sum(is_extendable) =0
-                  and sum(e.extents)!=0
+                  and sum(e.extents)>0
                   order by percent desc;
                 """;
         try (PreparedStatement pstmt = conn.prepareStatement(sql);

@@ -29,13 +29,15 @@ import java.util.Locale;
 
 public class ResultSetColumnBuilder {
     private static final Logger log = LogManager.getLogger(ResultSetColumnBuilder.class);
+    private static final double HEADER_BADGE_HORIZONTAL_INSET = 3.2;
     private static final String HEADER_KEY_BADGE = "resultset.header.keyBadge";
     private static final String HEADER_TOOLTIP = "resultset.header.tooltip";
     private static final String HEADER_NAME = "resultset.header.name";
     private static final String HEADER_TYPE = "resultset.header.type";
     private static final String HEADER_NAME_STYLE =
             "-fx-font-size: 11px;" +
-            "-fx-font-weight: bold;";
+            "-fx-font-weight: bold;" +
+            "-fx-padding: 0 0 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
     private static final String HEADER_TYPE_BADGE_STYLE =
             "-fx-font-size: 7.2px;" +
             "-fx-text-fill: #6f8498;" +
@@ -43,7 +45,7 @@ public class ResultSetColumnBuilder {
             "-fx-border-width: 0.8;" +
             "-fx-border-radius: 2.4;" +
             "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 3.2 0 3.2;";
+            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
     private static final String HEADER_PRI_BADGE_STYLE =
             "-fx-font-size: 7.2px;" +
             "-fx-font-weight: bold;" +
@@ -52,7 +54,7 @@ public class ResultSetColumnBuilder {
             "-fx-border-width: 0.8;" +
             "-fx-border-radius: 2.4;" +
             "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 3.2 0 3.2;";
+            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
     private static final String HEADER_ROWID_BADGE_STYLE =
             "-fx-font-size: 7.2px;" +
             "-fx-font-weight: bold;" +
@@ -61,7 +63,7 @@ public class ResultSetColumnBuilder {
             "-fx-border-width: 0.8;" +
             "-fx-border-radius: 2.4;" +
             "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 3.2 0 3.2;";
+            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
 
     private final ResultSetTabController ctrl;
 
