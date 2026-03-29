@@ -33,6 +33,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PopupWindowUtil {
+    private static final double DDL_POPUP_WIDTH = 400;
+    private static final double DDL_POPUP_HEIGHT = 300;
+
     public static StackPane noticePane = new StackPane();
     @Deprecated
     public static StackPane notice_pane = noticePane;
@@ -79,7 +82,7 @@ public class PopupWindowUtil {
     //显示DDL
     private static Stage ddlPopupStage = new Stage();
     private static CustomInfoStackPane ddlPopupStageStackPane = new CustomInfoStackPane(new CustomInfoCodeArea());
-    private static Scene ddlPopupStageScene = new Scene(ddlPopupStageStackPane, 400, 300);
+    private static Scene ddlPopupStageScene = new Scene(ddlPopupStageStackPane, DDL_POPUP_WIDTH, DDL_POPUP_HEIGHT);
     private static Image ddlPopupStageIcon = new Image(IconPaths.MAIN_LOGO);
     private static Label ddlPopupStageLoadingLabel = new Label();
 
@@ -277,15 +280,15 @@ public class PopupWindowUtil {
                 ddlPopupStage,
                 ddlTitleBinding,
                 ddlPopupStageStackPane,
-                400,
-                300,
+                DDL_POPUP_WIDTH,
+                DDL_POPUP_HEIGHT,
                 true
         );
         ddlPopupStageScene = ddlFrame.scene;
         ddlPopupStage.titleProperty().bind(ddlTitleBinding);
         ddlPopupStage.setResizable(true);
-        ddlPopupStage.setMinWidth(400);
-        ddlPopupStage.setMinHeight(300);
+        ddlPopupStage.setMinWidth(DDL_POPUP_WIDTH);
+        ddlPopupStage.setMinHeight(DDL_POPUP_HEIGHT);
         ddlPopupStageStackPane.showNoticeInMain=false;
         ImageView loadingImage = new ImageView(new Image(IconPaths.LOADING_GIF));
         loadingImage.setFitWidth(13);
@@ -343,12 +346,12 @@ public class PopupWindowUtil {
             String executeFallback,
             String cancelKey,
             String cancelFallback,
-            String sqlContent
+        String sqlContent
     ) {
         CustomInfoStackPane sqlPreviewPane = new CustomInfoStackPane(new CustomInfoCodeArea());
         sqlPreviewPane.showNoticeInMain = false;
-        sqlPreviewPane.setPrefWidth(600);
-        sqlPreviewPane.setPrefHeight(600);
+        sqlPreviewPane.setPrefWidth(DDL_POPUP_WIDTH);
+        sqlPreviewPane.setPrefHeight(DDL_POPUP_HEIGHT);
         //sqlContent = SqlParserUtil.formatSql(sqlContent);
         sqlPreviewPane.codeArea.replaceText(sqlContent == null ? "" : sqlContent);
         sqlPreviewPane.codeArea.moveTo(0);
@@ -395,8 +398,8 @@ public class PopupWindowUtil {
                 stage,
                 stage.titleProperty(),
                 contentBox,
-                600,
-                600,
+                DDL_POPUP_WIDTH,
+                DDL_POPUP_HEIGHT,
                 true
         );
         frame.closeButton.setOnAction(event -> {
