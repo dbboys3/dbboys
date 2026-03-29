@@ -14,6 +14,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -24,9 +25,43 @@ import org.apache.logging.log4j.Logger;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.Locale;
 
 public class ResultSetColumnBuilder {
     private static final Logger log = LogManager.getLogger(ResultSetColumnBuilder.class);
+    private static final String HEADER_KEY_BADGE = "resultset.header.keyBadge";
+    private static final String HEADER_TOOLTIP = "resultset.header.tooltip";
+    private static final String HEADER_NAME = "resultset.header.name";
+    private static final String HEADER_TYPE = "resultset.header.type";
+    private static final String HEADER_NAME_STYLE =
+            "-fx-font-size: 11px;" +
+            "-fx-font-weight: bold;";
+    private static final String HEADER_TYPE_BADGE_STYLE =
+            "-fx-font-size: 7.2px;" +
+            "-fx-text-fill: #6f8498;" +
+            "-fx-border-color: #6f8498;" +
+            "-fx-border-width: 0.8;" +
+            "-fx-border-radius: 2.4;" +
+            "-fx-background-radius: 2.4;" +
+            "-fx-padding: 0 3.2 0 3.2;";
+    private static final String HEADER_PRI_BADGE_STYLE =
+            "-fx-font-size: 7.2px;" +
+            "-fx-font-weight: bold;" +
+            "-fx-text-fill: #9f453c;" +
+            "-fx-border-color: #9f453c;" +
+            "-fx-border-width: 0.8;" +
+            "-fx-border-radius: 2.4;" +
+            "-fx-background-radius: 2.4;" +
+            "-fx-padding: 0 3.2 0 3.2;";
+    private static final String HEADER_ROWID_BADGE_STYLE =
+            "-fx-font-size: 7.2px;" +
+            "-fx-font-weight: bold;" +
+            "-fx-text-fill: #8f6d1d;" +
+            "-fx-border-color: #8f6d1d;" +
+            "-fx-border-width: 0.8;" +
+            "-fx-border-radius: 2.4;" +
+            "-fx-background-radius: 2.4;" +
+            "-fx-padding: 0 3.2 0 3.2;";
 
     private final ResultSetTabController ctrl;
 
@@ -43,34 +78,28 @@ public class ResultSetColumnBuilder {
         double avgColWidth = (ctrl.resultSetTableView.getWidth() - 30) / columnCount;
         for (int j = 1; j <= columnCount; j++) {
             final int columnIndex = j;
-            String colTypeName = metaData.getColumnTypeName(j);
-            final String colTypeNameFinal = colTypeName;
-            Integer length = metaData.getColumnDisplaySize(j);
-            final boolean isLob = colTypeName != null && colTypeName.toLowerCase().matches("(blob|clob|text|bytea|image|longvarbinary|longvarchar)");
+            String rawTypeName = metaData.getColumnTypeName(j);
+            String normalizedTypeName = rawTypeName == null ? "" : rawTypeName.trim();
+            final String colTypeNameFinal = normalizedTypeName;
+            final String headerTypeFinal = buildDisplayType(metaData, j, normalizedTypeName);
+            final boolean isLob = isLobType(normalizedTypeName);
 
             TableColumn<ObservableList<String>, Object> column = new TableColumn<>();
-            if (colTypeName.equals("int") || colTypeName.equals("serial") || colTypeName.equals("smallint")) {
+            if (isIntegralType(normalizedTypeName)) {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() ->
                         data.getValue().get(columnIndex) == null ? null : Integer.parseInt(data.getValue().get(columnIndex))));
-            } else if (colTypeName.equals("float") || colTypeName.equals("decimal")) {
+            } else if (isDecimalType(normalizedTypeName)) {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() ->
                         data.getValue().get(columnIndex) == null ? null : Float.parseFloat(data.getValue().get(columnIndex))));
             } else {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() -> data.getValue().get(columnIndex)));
-                String displayType = colTypeName;
-                if (!displayType.startsWith("date")) {
-                    displayType = displayType + "(" + length + ")";
-                }
                 column.setComparator((str1, str2) -> {
                     if (str1 == null && str2 == null) return 0;
                     if (str1 == null) return -1;
                     if (str2 == null) return 1;
                     return str1.toString().compareToIgnoreCase(str2.toString());
                 });
-                colTypeName = displayType;
             }
-
-            final String headerTypeFinal = colTypeName;
 
             column.setCellFactory(col -> new CustomTableCell<ObservableList<String>, Object>() {
                 {
@@ -90,7 +119,7 @@ public class ResultSetColumnBuilder {
                         setText(ctrl.getNullLabel());
                         setTooltip(null);
                     } else if (isLob) {
-                        setText(colTypeNameFinal.toUpperCase());
+                        setText(colTypeNameFinal.toUpperCase(Locale.ROOT));
                     } else {
                         setText(item.toString().replace("\n", "\u21B5"));
                         setTooltip(null);
@@ -100,7 +129,7 @@ public class ResultSetColumnBuilder {
                 private void buildLobPopup(int colIdx, String typeName,
                                            SimpleStringProperty txText, ChoiceBox<?> cm) {
                     Stage lobDataPopupStage = new Stage();
-                    lobDataPopupStage.setTitle(typeName.toUpperCase());
+                    lobDataPopupStage.setTitle(typeName.toUpperCase(Locale.ROOT));
                     CustomInfoCodeArea customInfoCodeArea = new CustomInfoCodeArea();
                     CustomInfoStackPane customInfoStackPane = new CustomInfoStackPane(customInfoCodeArea);
                     customInfoCodeArea.setWrapText(false);
@@ -149,20 +178,21 @@ public class ResultSetColumnBuilder {
             }
             ctrl.colList.add(column);
 
-            StackPane colheader = new StackPane();
             String colName = metaData.getColumnLabel(j);
-            Label colLabel = new Label(colName);
-            Label colType = new Label(headerTypeFinal);
-            colheader.getChildren().addAll(colLabel);
-            colType.setStyle("-fx-font-size: 5");
-            StackPane.setAlignment(colType, Pos.BOTTOM_LEFT);
-            Tooltip tp = new Tooltip(headerTypeFinal);
-            tp.setShowDelay(Duration.millis(100));
-            colLabel.setTooltip(tp);
-            column.setPrefWidth(Math.max(colLabel.getText().length() * 15, avgColWidth));
-            colLabel.setMaxWidth(Double.MAX_VALUE);
+            if (colName == null || colName.isBlank()) {
+                colName = metaData.getColumnName(j);
+            }
+            if (colName == null || colName.isBlank()) {
+                colName = "COLUMN_" + j;
+            }
+            VBox headerBox = buildColumnHeader(column, colName, headerTypeFinal);
+            double preferredWidth = Math.max(
+                    Math.max(colName.length() * 15.0, headerTypeFinal.length() * 7.0 + 28),
+                    avgColWidth
+            );
+            column.setPrefWidth(preferredWidth);
             column.setReorderable(false);
-            column.setGraphic(colheader);
+            column.setGraphic(headerBox);
             column.getGraphic().addEventHandler(MouseEvent.MOUSE_CLICKED, event -> {
                 ctrl.resultSetTableView.getSelectionModel().clearSelection();
                 for (int rowIndex = 0; rowIndex < ctrl.resultSetTableView.getItems().size(); rowIndex++) {
@@ -171,6 +201,148 @@ public class ResultSetColumnBuilder {
                 event.consume();
             });
         }
+    }
+
+    public void markColumnKey(int columnIndex, String keyText) {
+        if (columnIndex < 0 || columnIndex + 1 >= ctrl.resultSetTableView.getColumns().size()) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        TableColumn<ObservableList<String>, Object> column =
+                (TableColumn<ObservableList<String>, Object>) ctrl.resultSetTableView.getColumns().get(columnIndex + 1);
+        Object badgeValue = column.getProperties().get(HEADER_KEY_BADGE);
+        if (badgeValue instanceof Label keyBadge) {
+            keyBadge.setText(keyText);
+            keyBadge.setStyle(resolveKeyBadgeStyle(keyText));
+            keyBadge.setManaged(true);
+            keyBadge.setVisible(true);
+        }
+        updateHeaderTooltip(column, keyText);
+    }
+
+    private VBox buildColumnHeader(TableColumn<ObservableList<String>, Object> column,
+                                   String colName,
+                                   String headerType) {
+        Label nameLabel = new Label(colName);
+        nameLabel.setStyle(HEADER_NAME_STYLE);
+        nameLabel.setMaxWidth(Double.MAX_VALUE);
+        nameLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
+
+        Label keyBadge = createBadge("", HEADER_PRI_BADGE_STYLE, false);
+        Label typeBadge = createBadge(headerType, HEADER_TYPE_BADGE_STYLE, true);
+        HBox metaRow = new HBox(4, keyBadge, typeBadge);
+        metaRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox headerBox = new VBox(2, nameLabel, metaRow);
+        headerBox.setAlignment(Pos.CENTER_LEFT);
+        headerBox.setFillWidth(true);
+        headerBox.setMaxWidth(Double.MAX_VALUE);
+
+        Tooltip tooltip = new Tooltip(buildHeaderTooltip(colName, headerType, null));
+        tooltip.setShowDelay(Duration.millis(100));
+        nameLabel.setTooltip(tooltip);
+        keyBadge.setTooltip(tooltip);
+        typeBadge.setTooltip(tooltip);
+        Tooltip.install(headerBox, tooltip);
+
+        column.getProperties().put(HEADER_KEY_BADGE, keyBadge);
+        column.getProperties().put(HEADER_TOOLTIP, tooltip);
+        column.getProperties().put(HEADER_NAME, colName);
+        column.getProperties().put(HEADER_TYPE, headerType);
+        return headerBox;
+    }
+
+    private Label createBadge(String text, String style, boolean visible) {
+        Label badge = new Label(text);
+        badge.setStyle(style);
+        badge.setVisible(visible);
+        badge.setManaged(visible);
+        return badge;
+    }
+
+    private void updateHeaderTooltip(TableColumn<?, ?> column, String keyText) {
+        Object tooltipValue = column.getProperties().get(HEADER_TOOLTIP);
+        if (!(tooltipValue instanceof Tooltip tooltip)) {
+            return;
+        }
+        String name = String.valueOf(column.getProperties().getOrDefault(HEADER_NAME, column.getText()));
+        String type = String.valueOf(column.getProperties().getOrDefault(HEADER_TYPE, ""));
+        tooltip.setText(buildHeaderTooltip(name, type, keyText));
+    }
+
+    private String buildHeaderTooltip(String colName, String headerType, String keyText) {
+        if (keyText == null || keyText.isBlank()) {
+            return colName + "\n" + headerType;
+        }
+        return colName + "\n" + keyText + "\n" + headerType;
+    }
+
+    private String resolveKeyBadgeStyle(String keyText) {
+        return "ROWID".equalsIgnoreCase(keyText) ? HEADER_ROWID_BADGE_STYLE : HEADER_PRI_BADGE_STYLE;
+    }
+
+    private boolean isIntegralType(String typeName) {
+        String normalized = normalizeTypeName(typeName);
+        return normalized.equals("int")
+                || normalized.equals("integer")
+                || normalized.equals("serial")
+                || normalized.equals("smallint")
+                || normalized.equals("bigint");
+    }
+
+    private boolean isDecimalType(String typeName) {
+        String normalized = normalizeTypeName(typeName);
+        return normalized.equals("float")
+                || normalized.equals("decimal")
+                || normalized.equals("numeric")
+                || normalized.equals("double")
+                || normalized.equals("real");
+    }
+
+    private boolean isLobType(String typeName) {
+        String normalized = normalizeTypeName(typeName);
+        return normalized.matches("(blob|clob|text|bytea|image|longvarbinary|longvarchar)");
+    }
+
+    private String buildDisplayType(ResultSetMetaData metaData, int columnIndex, String typeName) throws SQLException {
+        String normalized = normalizeTypeName(typeName);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+
+        int precision = metaData.getPrecision(columnIndex);
+        int scale = metaData.getScale(columnIndex);
+        int displaySize = metaData.getColumnDisplaySize(columnIndex);
+
+        if (normalized.equals("decimal") || normalized.equals("numeric") || normalized.equals("number")) {
+            if (precision > 0 && scale > 0) {
+                return typeName + "(" + precision + "," + scale + ")";
+            }
+            if (precision > 0) {
+                return typeName + "(" + precision + ")";
+            }
+            return typeName;
+        }
+
+        if (normalized.matches(".*(char|varchar|nvarchar|nchar|binary|varbinary|raw).*")) {
+            int size = precision > 0 ? precision : displaySize;
+            if (size > 0) {
+                return typeName + "(" + size + ")";
+            }
+        }
+
+        if (normalized.startsWith("datetime")
+                || normalized.startsWith("timestamp")
+                || normalized.startsWith("date")
+                || normalized.startsWith("time")) {
+            return typeName;
+        }
+
+        return typeName;
+    }
+
+    private String normalizeTypeName(String typeName) {
+        return typeName == null ? "" : typeName.trim().toLowerCase(Locale.ROOT);
     }
 
     private void bindEditableColumn(TableColumn<ObservableList<String>, Object> column,

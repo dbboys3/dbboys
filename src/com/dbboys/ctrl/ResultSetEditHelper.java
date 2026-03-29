@@ -10,9 +10,7 @@ import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.UpdateResult;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
-import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.layout.StackPane;
 import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -146,34 +144,31 @@ public class ResultSetEditHelper {
         List<String> primaryKeys = info.primaryKeys;
         List<String> selectedCols = info.selectedColumns;
         ctrl.resultTableCols = selectedCols;
+        boolean hasEditableKey = false;
         if (primaryKeys != null && !primaryKeys.isEmpty() && selectedCols.containsAll(primaryKeys)) {
             for (String key : primaryKeys) {
                 int columnIndex = selectedCols.indexOf(key);
                 ctrl.resultTablePriNum.add(columnIndex);
-                markPrimaryKeyColumn(columnIndex, "PRI", "-fx-font-size: 8;-fx-text-fill: #9f453c");
+                markPrimaryKeyColumn(columnIndex, "PRI");
             }
-            return;
+            hasEditableKey = true;
         }
         if (selectedCols.contains("rowid")) {
             int columnIndex = selectedCols.indexOf("rowid");
-            ctrl.resultTablePriNum.add(columnIndex);
-            markPrimaryKeyColumn(columnIndex, "ROWID", "-fx-font-size: 5;-fx-text-fill: #9f453c");
-            return;
+            if (!hasEditableKey) {
+                ctrl.resultTablePriNum.add(columnIndex);
+                hasEditableKey = true;
+            }
+            markPrimaryKeyColumn(columnIndex, "ROWID");
         }
-        ctrl.resultSetTableView.setEditable(false);
+        if (!hasEditableKey) {
+            ctrl.resultSetTableView.setEditable(false);
+        }
     }
 
-    private void markPrimaryKeyColumn(int columnIndex, String labelText, String labelStyle) {
-        ctrl.resultSetEditableEnabledLabel.setVisible(true);
-        TableColumn<String, Object> column = (TableColumn<String, Object>) ctrl.resultSetTableView.getColumns().get(columnIndex + 1);
-        StackPane sp = new StackPane();
-        Label priLabel = new Label(labelText);
-        priLabel.setStyle(labelStyle);
-        sp.getChildren().add(priLabel);
-        StackPane.setAlignment(priLabel, Pos.BOTTOM_LEFT);
-        column.getGraphic().setStyle("-fx-text-fill:#9f453c ");
-        sp.getChildren().add(column.getGraphic());
-        column.setGraphic(sp);
+    private void markPrimaryKeyColumn(int columnIndex, String labelText) {
+        ctrl.resultSetEditableEnabledLabel.setVisible(!ctrl.sqlConnect.getReadonly());
+        ctrl.columnBuilder.markColumnKey(columnIndex, labelText);
         if (!ctrl.sqlConnect.getReadonly()) {
             ctrl.resultSetTableView.setEditable(true);
         }
