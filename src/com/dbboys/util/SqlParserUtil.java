@@ -153,6 +153,24 @@ public class SqlParserUtil {
         }
     }
 
+    public static final class StatementRange {
+        private final int start;
+        private final int end;
+
+        public StatementRange(int start, int end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        public int getStart() {
+            return start;
+        }
+
+        public int getEnd() {
+            return end;
+        }
+    }
+
     @FunctionalInterface
     private interface SegmentHandler {
         boolean handle(Segment segment);
@@ -172,6 +190,107 @@ public class SqlParserUtil {
             return true;
         });
         return segments;
+    }
+
+    public static StatementRange findStatementRangeAtCaret(String sqlText, int caretPosition) {
+        if (sqlText == null || sqlText.isBlank()) {
+            return null;
+        }
+        List<StatementRange> ranges = collectExecutableStatementRanges(sqlText);
+        if (ranges.isEmpty()) {
+            return null;
+        }
+
+        int clampedCaret = Math.max(0, Math.min(caretPosition, sqlText.length()));
+        StatementRange range = findContainingRange(ranges, clampedCaret);
+        if (range != null) {
+            return range;
+        }
+        if (clampedCaret > 0) {
+            range = findContainingRange(ranges, clampedCaret - 1);
+            if (range != null) {
+                return range;
+            }
+        }
+        return null;
+    }
+
+    private static StatementRange findContainingRange(List<StatementRange> ranges, int position) {
+        for (StatementRange range : ranges) {
+            if (position >= range.start && position < range.end) {
+                return range;
+            }
+        }
+        return null;
+    }
+
+    private static List<StatementRange> collectExecutableStatementRanges(String sqlText) {
+        List<StatementRange> ranges = new ArrayList<>();
+        Sql currentSql = new Sql();
+        int currentStatementStart = 0;
+        int previousSegmentEnd = -1;
+
+        for (Segment segment : split(sqlText)) {
+            String sqlChunk = segment.getText();
+            int segmentStart = previousSegmentEnd + 1;
+            if (currentSql.getSqlstr().isEmpty() && currentSql.getSqlRemainder().isEmpty()) {
+                currentStatementStart = segmentStart + leadingDelimiterOffset(sqlChunk);
+            }
+
+            boolean sqlContainsCommit;
+            do {
+                currentSql = modifySql(currentSql, sqlChunk);
+                if (currentSql.getSqlEnd()) {
+                    appendExecutableRange(sqlText, ranges, currentStatementStart, currentSql.getSqlstr());
+                    String remainder = currentSql.getSqlRemainder();
+                    resetSqlStatementState(currentSql);
+                    if (remainder != null && !remainder.isEmpty()) {
+                        int remainderStart = segment.getEndIndex() + 1 - remainder.length();
+                        currentStatementStart = remainderStart + leadingDelimiterOffset(remainder);
+                    }
+                }
+                sqlChunk = "";
+                sqlContainsCommit = sqlContrainCommit(currentSql.getSqlRemainder());
+            } while (sqlContainsCommit);
+
+            previousSegmentEnd = segment.getEndIndex();
+        }
+
+        appendExecutableRange(sqlText, ranges, currentStatementStart, currentSql.getSqlstr());
+        return ranges;
+    }
+
+    private static void appendExecutableRange(String sqlText,
+                                              List<StatementRange> ranges,
+                                              int statementStart,
+                                              String statementText) {
+        if (statementText == null || stripProtectedContent(statementText).trim().isEmpty()) {
+            return;
+        }
+        int statementEnd = Math.min(sqlText.length(), statementStart + statementText.length());
+        StatementRange trimmedRange = trimWhitespaceRange(sqlText, statementStart, statementEnd);
+        if (trimmedRange != null) {
+            ranges.add(trimmedRange);
+        }
+    }
+
+    private static int leadingDelimiterOffset(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return 0;
+        }
+        return sql.length() - stripLeadingSqlDelimiter(sql).length();
+    }
+
+    private static StatementRange trimWhitespaceRange(String sqlText, int start, int end) {
+        int trimmedStart = Math.max(0, start);
+        int trimmedEnd = Math.max(trimmedStart, Math.min(end, sqlText.length()));
+        while (trimmedStart < trimmedEnd && Character.isWhitespace(sqlText.charAt(trimmedStart))) {
+            trimmedStart++;
+        }
+        while (trimmedEnd > trimmedStart && Character.isWhitespace(sqlText.charAt(trimmedEnd - 1))) {
+            trimmedEnd--;
+        }
+        return trimmedStart < trimmedEnd ? new StatementRange(trimmedStart, trimmedEnd) : null;
     }
 
     private static boolean processSegments(String sql, SegmentHandler handler) {

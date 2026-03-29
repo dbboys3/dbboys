@@ -301,9 +301,22 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     private void fireExecute() {
-        if (!executeDisabledSupplier.getAsBoolean()) {
-            onExecuteRequest.run();
+        if (executeDisabledSupplier.getAsBoolean()) {
+            return;
         }
+        if (getSelectedText().isEmpty() && !selectCurrentStatementAtCaret()) {
+            return;
+        }
+        onExecuteRequest.run();
+    }
+
+    private boolean selectCurrentStatementAtCaret() {
+        SqlParserUtil.StatementRange range = SqlParserUtil.findStatementRangeAtCaret(getText(), getCaretPosition());
+        if (range == null) {
+            return false;
+        }
+        selectRange(range.getStart(), range.getEnd());
+        return true;
     }
 
     private void applyTransform(java.util.function.Function<String, String> transform) {
