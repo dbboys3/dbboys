@@ -220,7 +220,12 @@ public class ResultSetTabController {
     }
 
     private void initExecuteProcessLabel() {
-        sqlExecuteProcessLabel = (Label) ((HBox) sqlExecuteProcessStackPane.getChildren().get(0)).getChildren().get(1);
+        Object labelRef = sqlExecuteProcessStackPane.getProperties().get(SqlTabController.SQL_EXECUTE_PROCESS_TASK_LABEL_KEY);
+        if (labelRef instanceof Label label) {
+            sqlExecuteProcessLabel = label;
+            return;
+        }
+        throw new IllegalStateException("Missing sql execute process task label reference.");
     }
 
     private void setupLastSql() {

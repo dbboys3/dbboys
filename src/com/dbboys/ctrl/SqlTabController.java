@@ -23,6 +23,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.SVGPath;
@@ -39,6 +40,7 @@ import java.util.List;
 
 public class SqlTabController {
     private static final Logger log = LogManager.getLogger(SqlTabController.class);
+    static final String SQL_EXECUTE_PROCESS_TASK_LABEL_KEY = "sqlExecuteProcessTaskLabel";
 
     @FXML
     public Button sqlRunButton;
@@ -133,6 +135,8 @@ public class SqlTabController {
     //执行过程中提示面板
     @FXML
     StackPane sqlExecuteProcessStackPane;
+    @FXML
+    HBox sqlExecuteProcessBox;
     @FXML
     Label sqlExecuteLoadingLabel;
     @FXML
@@ -243,6 +247,35 @@ public class SqlTabController {
         });
     }
 
+    private void configureSqlExecuteProcessLabel(Label label) {
+        label.setStyle("-fx-text-fill: -color-fg-default; -fx-font-size: 10px;");
+        label.setMinHeight(Region.USE_PREF_SIZE);
+        label.setPrefHeight(Region.USE_COMPUTED_SIZE);
+        label.setMaxHeight(Region.USE_PREF_SIZE);
+    }
+
+    private void setupSqlExecuteProcessPane() {
+        sqlExecuteProcessStackPane.setStyle(
+                "-fx-background-color: -color-bg-subtle;" +
+                        "-fx-border-color: -color-border-default;" +
+                        "-fx-border-width: 0.5;" +
+                        "-fx-background-radius: 7;" +
+                        "-fx-border-radius: 7;" +
+                        "-fx-padding: 3 8 3 8;"
+        );
+        sqlExecuteProcessStackPane.setMinWidth(Region.USE_PREF_SIZE);
+        sqlExecuteProcessStackPane.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        sqlExecuteProcessStackPane.setMaxWidth(Region.USE_PREF_SIZE);
+        sqlExecuteProcessStackPane.setMinHeight(Region.USE_PREF_SIZE);
+        sqlExecuteProcessStackPane.setPrefHeight(Region.USE_COMPUTED_SIZE);
+        sqlExecuteProcessStackPane.setMaxHeight(Region.USE_PREF_SIZE);
+        sqlExecuteProcessBox.setSpacing(2);
+        configureSqlExecuteProcessLabel(sqlExecuteLoadingLabel);
+        configureSqlExecuteProcessLabel(sqlExecuteTaskInfo);
+        configureSqlExecuteProcessLabel(sqlExecuteTimeInfo);
+        sqlExecuteProcessStackPane.getProperties().put(SQL_EXECUTE_PROCESS_TASK_LABEL_KEY, sqlExecuteTaskInfo);
+    }
+
 
     public void initialize() throws IOException {
         executionHelper = new SqlExecutionHelper(this);
@@ -254,6 +287,7 @@ public class SqlTabController {
         uiHelper.setupTransactionTooltips();
         i18nHelper.initI18nBindings();
         uiHelper.setupSqlTabIcons();
+        setupSqlExecuteProcessPane();
         uiHelper.setupSearchReplacePanel();
         uiHelper.setupResultSetView();
         uiHelper.setupSplitPaneBehavior();
