@@ -303,7 +303,7 @@ public class ResultSetColumnBuilder {
 
     private boolean isLobType(String typeName) {
         String normalized = normalizeTypeName(typeName);
-        return normalized.matches("(blob|clob|text|bytea|image|longvarbinary|longvarchar)");
+        return normalized.matches("(byte|blob|clob|text|bytea|image|longvarbinary|longvarchar)");
     }
 
     private String buildDisplayType(ResultSetMetaData metaData, int columnIndex, String typeName) throws SQLException {
