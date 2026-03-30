@@ -108,6 +108,15 @@ public class BackgroundSqlUtil {
         });
     }
 
+    public static void updateTaskProgress(BackgroundSqlTask backSqlTask, String progress) {
+        if (backSqlTask == null) {
+            return;
+        }
+        Platform.runLater(() -> {
+            backSqlTask.setProgress(progress);
+        });
+    }
+
     private static void bindBackSqlCountLabel(String key, String fallback) {
         if (AppState.getMainController() == null || AppState.getStatusBackSqlCountLabel() == null) {
             return;

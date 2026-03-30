@@ -220,7 +220,9 @@ public class TableService implements MetaObjectService {
 
                 try {
                     ImportPlan importPlan = buildImportPlan(connect, database, tableName, file, backSqlTask);
+                    BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(0, importPlan.rows.size()));
                     int affectedRows = executeImport(connect, database, tableName, importPlan, backSqlTask);
+                    BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(affectedRows, importPlan.rows.size()));
                     long endTime = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endTime - beginTime) / 1000.0) + " sec");
@@ -255,6 +257,7 @@ public class TableService implements MetaObjectService {
                 onSucceededUi.accept(bgTask.getValue());
             }
         });
+        backSqlTask.setCancelAction(() -> bgTask.cancel(true));
         backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
     }
 
@@ -324,6 +327,7 @@ public class TableService implements MetaObjectService {
                         I18n.t("metadata.import.error.unknown", "导入失败，请检查文件内容或数据库连接")
                 );
             }
+            backSqlTask.setConnection(conn);
 
             boolean noLogDatabase = isNoLogDatabase(database);
             boolean originalAutoCommit = conn.getAutoCommit();
@@ -348,8 +352,14 @@ public class TableService implements MetaObjectService {
                     preparedStatement.addBatch();
                     importedRowCount++;
                     batchCount++;
+                    if (importedRowCount == importPlan.rows.size() || importedRowCount % 50 == 0) {
+                        BackgroundSqlUtil.updateTaskProgress(
+                                backSqlTask,
+                                formatImportProgress(importedRowCount, importPlan.rows.size())
+                        );
+                    }
                     if (batchCount >= IMPORT_BATCH_SIZE) {
-                        executeImportBatch(preparedStatement, tableName, batchStartRowNumber);
+                        executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
                         if (!noLogDatabase) {
                             conn.commit();
                         }
@@ -358,7 +368,7 @@ public class TableService implements MetaObjectService {
                     }
                 }
                 if (batchCount > 0) {
-                    executeImportBatch(preparedStatement, tableName, batchStartRowNumber);
+                    executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
                     if (!noLogDatabase) {
                         conn.commit();
                     }
@@ -370,12 +380,24 @@ public class TableService implements MetaObjectService {
                     rollbackQuietly(conn);
                 }
                 throw e;
+            } catch (SQLException e) {
+                if (backSqlTask != null && backSqlTask.isCancelled()) {
+                    throw new CancellationException("import cancelled");
+                }
+                if (!noLogDatabase) {
+                    rollbackQuietly(conn);
+                }
+                throw e;
             } catch (Exception e) {
+                if (backSqlTask != null && backSqlTask.isCancelled()) {
+                    throw new CancellationException("import cancelled");
+                }
                 if (!noLogDatabase) {
                     rollbackQuietly(conn);
                 }
                 throw e;
             } finally {
+                backSqlTask.setConnection(null);
                 backSqlTask.setStmt(null);
                 if (autoCommitChanged) {
                     restoreAutoCommitQuietly(conn, originalAutoCommit);
@@ -458,10 +480,15 @@ public class TableService implements MetaObjectService {
 
     private void executeImportBatch(PreparedStatement preparedStatement,
                                     String tableName,
-                                    int batchStartRowNumber) throws SQLException, TableImportException {
+                                    int batchStartRowNumber,
+                                    BackgroundSqlTask backSqlTask) throws SQLException, TableImportException {
         try {
             preparedStatement.executeBatch();
+            checkImportCancelled(backSqlTask);
         } catch (BatchUpdateException e) {
+            if (backSqlTask != null && backSqlTask.isCancelled()) {
+                throw new CancellationException("import cancelled");
+            }
             int failedRowNumber = batchStartRowNumber + countBatchRowsBeforeFailure(e.getUpdateCounts());
             throw new TableImportException(
                     I18n.t(
@@ -471,6 +498,9 @@ public class TableService implements MetaObjectService {
                     e
             );
         } catch (SQLException e) {
+            if (backSqlTask != null && backSqlTask.isCancelled()) {
+                throw new CancellationException("import cancelled");
+            }
             throw new TableImportException(
                     I18n.t(
                             "metadata.import.error.batch_failed",
@@ -780,6 +810,14 @@ public class TableService implements MetaObjectService {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());
+    }
+
+    private String formatImportProgress(int completedRows, int totalRows) {
+        if (totalRows <= 0) {
+            return "";
+        }
+        int safeCompletedRows = Math.max(0, Math.min(completedRows, totalRows));
+        return safeCompletedRows + "/" + totalRows;
     }
 
     private byte[] decodeBinaryImportValue(String value) throws SQLException {

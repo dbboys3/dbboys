@@ -451,10 +451,17 @@ class DownloadTaskWrapper {
             byte[] bytes = rs.getBytes(columnIndex);
             return bytes == null ? null : CSV_BINARY_PREFIX + Base64.getEncoder().encodeToString(bytes);
         }
+        if (isRawExportColumnType(columnType)) {
+            return rs.getString(columnIndex);
+        }
         if (isTextLobExportColumnType(columnType)) {
             return rs.getString(columnIndex);
         }
-        return rs.getObject(columnIndex);
+        Object value = rs.getObject(columnIndex);
+        if (value instanceof byte[]) {
+            return rs.getString(columnIndex);
+        }
+        return value;
     }
 
     private boolean isBinaryExportColumnType(String columnType) {
@@ -463,6 +470,10 @@ class DownloadTaskWrapper {
 
     private boolean isTextLobExportColumnType(String columnType) {
         return columnType.startsWith("TEXT") || columnType.startsWith("CLOB");
+    }
+
+    private boolean isRawExportColumnType(String columnType) {
+        return columnType.startsWith("RAW");
     }
 
     private String normalizeColumnType(String columnType) {
@@ -751,6 +762,7 @@ public class DownloadManagerUtil {
                 null,
                 I18n.t("download.error.file_exists", "文件\"%s\"已存在，无需重复下载！"),
                 I18n.t("download.error.file_downloading", "该文件正在下载，无需重复下载！"),
+                false,
                 false
         );
     }
@@ -768,7 +780,8 @@ public class DownloadManagerUtil {
                 null,
                 I18n.t("download.error.file_exists", "文件\"%s\"已存在，无需重复下载！"),
                 I18n.t("download.error.file_downloading", "该文件正在下载，无需重复下载！"),
-                false
+                false,
+                true
         );
     }
 
@@ -788,11 +801,12 @@ public class DownloadManagerUtil {
                 metaData,
                 hostStackPane,
                 true,
-                remotePathField,
-                installFilePathField,
-                I18n.t("install.download.error.file_exists", "该文件在目录中已存在，无需重复下载！"),
-                I18n.t("install.download.error.file_downloading", "该文件正在下载，路径已自动填充，无需重复下载！"),
-                true
+            remotePathField,
+            installFilePathField,
+            I18n.t("install.download.error.file_exists", "该文件在目录中已存在，无需重复下载！"),
+            I18n.t("install.download.error.file_downloading", "该文件正在下载，路径已自动填充，无需重复下载！"),
+            true,
+            false
         );
     }
 
@@ -807,13 +821,14 @@ public class DownloadManagerUtil {
             CustomUserTextField installFilePathField,
             String fileExistsMessage,
             String downloadingMessage,
-            boolean fillInstallerPathWhenDuplicate
+            boolean fillInstallerPathWhenDuplicate,
+            boolean overwriteExistingFile
     ) {
         if (hostStackPane == null) {
             AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), I18n.t("download.error.host_missing", "下载容器未初始化"));
             return;
         }
-        if(file.exists()){
+        if(file.exists() && !overwriteExistingFile){
             if (fillInstallerPathWhenDuplicate && installFilePathField != null && remotePathField != null) {
                 installFilePathField.setText(file.getAbsolutePath());
                 remotePathField.setText("/tmp/" + file.getName());

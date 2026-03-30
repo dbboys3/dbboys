@@ -77,6 +77,7 @@ public class PopupWindowUtil {
     private static TableColumn<BackgroundSqlTask, Object> sqlTaskConnNameTableColumn;
     private static TableColumn<BackgroundSqlTask, Object> sqlTaskDatabaseTableColumn;
     private static TableColumn<BackgroundSqlTask, Object> sqlTaskSqlTableColumn;
+    private static TableColumn<BackgroundSqlTask, Object> sqlTaskProgressTableColumn;
     private static TableColumn<BackgroundSqlTask, Object> sqlTaskOperateTableColumn;
 
     //显示DDL
@@ -196,7 +197,7 @@ public class PopupWindowUtil {
         sqlTaskBeginTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.start_time", "开始时间"));
         sqlTaskBeginTableColumn.setCellFactory(col -> new CustomTableCell<>());
         sqlTaskBeginTableColumn.setCellValueFactory(new PropertyValueFactory<>("beginTime"));
-        sqlTaskBeginTableColumn.setPrefWidth(200);
+        sqlTaskBeginTableColumn.setPrefWidth(170);
         sqlTaskBeginTableColumn.setReorderable(false);
         sqlTaskBeginTableColumn.setSortable(false);
 
@@ -204,7 +205,7 @@ public class PopupWindowUtil {
         sqlTaskConnNameTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.connection_name", "连接名称"));
         sqlTaskConnNameTableColumn.setCellFactory(col -> new CustomTableCell<>());
         sqlTaskConnNameTableColumn.setCellValueFactory(new PropertyValueFactory<>("connectName"));
-        sqlTaskConnNameTableColumn.setPrefWidth(300);
+        sqlTaskConnNameTableColumn.setPrefWidth(210);
         sqlTaskConnNameTableColumn.setReorderable(false);
         sqlTaskConnNameTableColumn.setSortable(false);
 
@@ -212,7 +213,7 @@ public class PopupWindowUtil {
         sqlTaskDatabaseTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.database_name", "库名"));
         sqlTaskDatabaseTableColumn.setCellFactory(col -> new CustomTableCell<>());
         sqlTaskDatabaseTableColumn.setCellValueFactory(new PropertyValueFactory<>("databaseName"));
-        sqlTaskDatabaseTableColumn.setPrefWidth(100);
+        sqlTaskDatabaseTableColumn.setPrefWidth(90);
         sqlTaskDatabaseTableColumn.setReorderable(false);
         sqlTaskDatabaseTableColumn.setSortable(false);
 
@@ -224,11 +225,47 @@ public class PopupWindowUtil {
         sqlTaskSqlTableColumn.setReorderable(false);
         sqlTaskSqlTableColumn.setSortable(false);
 
+        sqlTaskProgressTableColumn = new TableColumn<>();
+        sqlTaskProgressTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.progress", "执行进度"));
+        sqlTaskProgressTableColumn.setCellFactory(col -> new TableCell<>() {
+            private final ProgressBar progressBar = new ProgressBar(0);
+            private final Label progressLabel = new Label();
+            private final HBox progressBox = new HBox(8, progressBar, progressLabel);
+
+            {
+                progressBar.setPrefWidth(90);
+                progressBar.setMinWidth(90);
+                progressBar.setMaxWidth(90);
+                progressLabel.setMinWidth(55);
+                progressBox.setAlignment(Pos.CENTER_LEFT);
+            }
+
+            @Override
+            protected void updateItem(Object item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(null);
+                setGraphic(null);
+                if (empty) {
+                    return;
+                }
+                String progressText = item == null ? "" : item.toString().trim();
+                if (progressText.isEmpty()) {
+                    return;
+                }
+                progressLabel.setText(progressText);
+                progressBar.setProgress(resolveTaskProgress(progressText));
+                setGraphic(progressBox);
+            }
+        });
+        sqlTaskProgressTableColumn.setCellValueFactory(new PropertyValueFactory<>("progress"));
+        sqlTaskProgressTableColumn.setPrefWidth(170);
+        sqlTaskProgressTableColumn.setReorderable(false);
+        sqlTaskProgressTableColumn.setSortable(false);
+
         sqlTaskOperateTableColumn = new TableColumn<>();
         sqlTaskOperateTableColumn.textProperty().bind(I18n.bind("popup.back_sql.column.operation", "操作"));
-        sqlTaskOperateTableColumn.setCellFactory(col -> new CustomTableCell<>());
         sqlTaskOperateTableColumn.setCellValueFactory(new PropertyValueFactory<>("operate"));
-        sqlTaskOperateTableColumn.setPrefWidth(100);
+        sqlTaskOperateTableColumn.setPrefWidth(76);
         sqlTaskOperateTableColumn.setReorderable(false);
         sqlTaskOperateTableColumn.setSortable(false);
 
@@ -236,26 +273,34 @@ public class PopupWindowUtil {
             @Override
             public TableCell<BackgroundSqlTask, Object> call(TableColumn<BackgroundSqlTask, Object> param) {
                 return new TableCell<>() {
+                    private final Button statusSqlStopButton = new Button();
+
+                    {
+                        statusSqlStopButton.getStyleClass().add("small");
+                        statusSqlStopButton.setFocusTraversable(false);
+                        Tooltip stopTooltip = new Tooltip();
+                        stopTooltip.textProperty().bind(stopTaskTooltipBinding);
+                        statusSqlStopButton.setTooltip(stopTooltip);
+                        statusSqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
+                        statusSqlStopButton.setOnAction(event -> {
+                            BackgroundSqlTask task = getTableRow() == null ? null : getTableRow().getItem();
+                            if (task != null) {
+                                task.cancel();
+                                NotificationUtil.showNotification(noticePane, taskCanceledBinding.get());
+                            }
+                            event.consume();
+                        });
+                        setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                        setAlignment(Pos.CENTER);
+                    }
+
                     @Override
                     protected void updateItem(Object item, boolean empty) {
                         super.updateItem(item, empty);
+                        setText(null);
                         setGraphic(null);
-                        if(!empty) {
-                            Button status_sqlStopButton = new Button("");
-                            status_sqlStopButton.getStyleClass().add("small");
-                            Tooltip stopTooltip = new Tooltip();
-                            stopTooltip.textProperty().bind(stopTaskTooltipBinding);
-                            status_sqlStopButton.setTooltip(stopTooltip);
-                            status_sqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
-                            status_sqlStopButton.setFocusTraversable(false);
-                            setGraphic(status_sqlStopButton);
-                            status_sqlStopButton.setOnAction(event -> {
-                                BackgroundSqlTask task = (BackgroundSqlTask) getTableRow().getItem();
-                                if (task != null) {
-                                    task.cancel();
-                                    NotificationUtil.showNotification(noticePane, taskCanceledBinding.get());
-                                }
-                            });
+                        if(!empty && getTableRow() != null && getTableRow().getItem() != null) {
+                            setGraphic(statusSqlStopButton);
                         }
                     }
                 };
@@ -268,6 +313,7 @@ public class PopupWindowUtil {
                 sqlTaskConnNameTableColumn,
                 sqlTaskDatabaseTableColumn,
                 sqlTaskSqlTableColumn,
+                sqlTaskProgressTableColumn,
                 sqlTaskOperateTableColumn
         );
         sqlTaskTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -316,6 +362,26 @@ public class PopupWindowUtil {
 
     public static void openSqlTaskPopupWindow() {
         backSqlPopupStage.show();
+    }
+
+    private static double resolveTaskProgress(String progressText) {
+        if (progressText == null || progressText.isBlank()) {
+            return 0;
+        }
+        int slashIndex = progressText.indexOf('/');
+        if (slashIndex <= 0 || slashIndex >= progressText.length() - 1) {
+            return 0;
+        }
+        try {
+            double completed = Double.parseDouble(progressText.substring(0, slashIndex).trim());
+            double total = Double.parseDouble(progressText.substring(slashIndex + 1).trim());
+            if (total <= 0) {
+                return 0;
+            }
+            return Math.max(0, Math.min(1, completed / total));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     public static void openDDLWindow(String ddlSql) {
