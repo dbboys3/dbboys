@@ -325,8 +325,10 @@ public class TableService implements MetaObjectService {
             }
 
             boolean originalAutoCommit = conn.getAutoCommit();
+            boolean autoCommitChanged = false;
             if (originalAutoCommit) {
                 conn.setAutoCommit(false);
+                autoCommitChanged = true;
             }
             try (PreparedStatement preparedStatement = conn.prepareStatement(insertSql)) {
                 backSqlTask.setStmt(preparedStatement);
@@ -360,7 +362,9 @@ public class TableService implements MetaObjectService {
                 throw e;
             } finally {
                 backSqlTask.setStmt(null);
-                restoreAutoCommitQuietly(conn, originalAutoCommit);
+                if (autoCommitChanged) {
+                    restoreAutoCommitQuietly(conn, originalAutoCommit);
+                }
             }
         }
     }

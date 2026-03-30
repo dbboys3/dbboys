@@ -26,6 +26,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
     private static final String DB_TYPE_GBASE = "GBASE 8S";
     private static final String PROP_DB_LOCALE = "DB_LOCALE";
+    private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
     private static final String PROP_IFX_TRIMTRAILINGSPACES = "IFX_TRIMTRAILINGSPACES";
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
@@ -261,6 +262,9 @@ public class ConnectionServiceImpl implements ConnectionService {
                 Connect connect1 = new Connect(connect);
                 connect1.setDatabase(database.getName());
                 connect1.setProps(modifyProps(connect1, PROP_DB_LOCALE, database.getDbLocale()));
+                if (shouldIgnoreIsolationLevel(database)) {  // 如果数据库日志为nolog，则不设置隔离级别，否则连接报错-256
+                    connect1.setProps(modifyProps(connect1, PROP_IFX_ISOLATION_LEVEL, ""));
+                }
                 Connection newConn = getConnectionWithSessionInit(connect1);
                 repo.setDatabase(newConn, database.getName());
                 return new ConnectionLease(newConn, true);
@@ -295,6 +299,12 @@ public class ConnectionServiceImpl implements ConnectionService {
         } catch (SQLException e) {
             log.warn("Close old connection failed during reconnect", e);
         }
+    }
+
+    private boolean shouldIgnoreIsolationLevel(Database database) {
+        return database != null
+                && database.getDbLog() != null
+                && "nolog".equalsIgnoreCase(database.getDbLog().trim());
     }
 
     private void applyReconnectFailure(ChangeDefaultDatabaseResult result, Exception ex) {
