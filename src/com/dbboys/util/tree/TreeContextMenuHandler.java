@@ -116,13 +116,14 @@ public class TreeContextMenuHandler {
         SeparatorMenuItem separator1 = new SeparatorMenuItem(); // 第一个分隔线
         SeparatorMenuItem separator2 = new SeparatorMenuItem();
         Menu exportMenu = new Menu();
-        exportMenu.textProperty().bind(I18n.bind("metadata.menu.export", "导出"));
-        exportMenu.setGraphic(IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.55, 0.55));
+        exportMenu.textProperty().bind(I18n.bind("metadata.menu.export", "导出数据"));
+        exportMenu.setGraphic(IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.6, 0.6));
+        CustomShortcutMenuItem importDataItem = MenuItemUtil.createMenuItemI18n("metadata.menu.import_data",
+                IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
         CustomShortcutMenuItem exportCsvItem = MenuItemUtil.createMenuItemI18n("metadata.menu.export.csv",null);
         CustomShortcutMenuItem exportJsonItem = MenuItemUtil.createMenuItemI18n("metadata.menu.export.json",null);
         CustomShortcutMenuItem exportSqlItem = MenuItemUtil.createMenuItemI18n("metadata.menu.export.sql",null);
         exportMenu.getItems().setAll(exportCsvItem, exportJsonItem, exportSqlItem);
-        exportMenu.getStyleClass().add("ddlMenu");
  // 第一个分隔线
         CustomShortcutMenuItem healthCheckItem = MenuItemUtil.createMenuItemI18n("metadata.menu.health_check",
                 IconFactory.group(IconPaths.METADATA_HEALTH_CHECK_ITEM, 0.65, 0.65));
@@ -137,7 +138,6 @@ public class TreeContextMenuHandler {
 
         Menu ddlMenu = new Menu();
         ddlMenu.textProperty().bind(I18n.bind("metadata.menu.ddl.title", "查看DDL"));
-        ddlMenu.getStyleClass().add("ddlMenu");
         ddlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
         CustomShortcutMenuItem ddlToFile =
@@ -154,7 +154,6 @@ public class TreeContextMenuHandler {
 
         Menu exportDdlMenu = new Menu();
         exportDdlMenu.textProperty().bind(I18n.bind("metadata.menu.export_ddl.title", "导出DDL"));
-        exportDdlMenu.getStyleClass().add("ddlMenu");
         exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
         CustomShortcutMenuItem exportDdlToFile =
@@ -207,6 +206,7 @@ public class TreeContextMenuHandler {
         exportCsvItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.CSV));
         exportJsonItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.JSON));
         exportSqlItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.SQL));
+        importDataItem.setOnAction(ev -> TreeCrudHandler.importTableData(treeView.getSelectionModel().getSelectedItem()));
         
         //右键连接信息点击响应
         TreeViewUtil.connectInfoItem.setOnAction(event->{
@@ -1230,6 +1230,7 @@ public class TreeContextMenuHandler {
                 modifyToRawItem.setDisable(false);
                 modifyToStandardItem.setDisable(false);
                 createTableItem.setDisable(false);
+                importDataItem.setDisable(false);
 
                 if (TreeNavigator.isMultiTableSelection(selectedItems)) {
                     boolean disableByReadOnlyOrSystem = TreeNavigator.isReadOnlyConnectionSelection(selectedItems);
@@ -1282,6 +1283,7 @@ public class TreeContextMenuHandler {
                         modifyToStandardItem.setDisable(true);
                         createDatabaseItem.setDisable(true);
                         createTableItem.setDisable(true);
+                        importDataItem.setDisable(true);
                     }
                 }
                 if(selectedItem.getValue() instanceof Connect&&((Connect) selectedItem.getValue()).getReadonly()){
@@ -1310,6 +1312,7 @@ public class TreeContextMenuHandler {
                         disableItem.setDisable(true);
                         modifyToRawItem.setDisable(true);
                         modifyToStandardItem.setDisable(true);
+                        importDataItem.setDisable(true);
                     }
                 }
 
@@ -1455,10 +1458,14 @@ public class TreeContextMenuHandler {
                     }else{
                         modifyToStandardItem.setDisable(true);
                     }
+                    if(((Table)selectedItem.getValue()).getTableTypeCode().equals("external")){
+                        importDataItem.setDisable(true);
+                    }
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
+                    treeview_menu.getItems().add(importDataItem);
                     treeview_menu.getItems().add(exportMenu);
                     treeview_menu.getItems().add(ddlMenu);
 

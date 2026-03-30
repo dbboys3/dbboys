@@ -515,8 +515,7 @@ class DownloadTaskWrapper {
     }
 
     private String escapeCsv(String value) {
-        String escaped = value.replace("\"", "\"\"");
-        return "\"" + escaped + "\"";
+        return value;
     }
 
     private String escapeJson(String value) {

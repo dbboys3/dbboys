@@ -1879,7 +1879,12 @@ Text {
   -fx-padding: 0 0 0 0.5em;
 }
 .context-menu .menu > .label {
-  -fx-pref-width: 158px;
+  -fx-padding: 0 0 0 6;
+  -fx-pref-width: 163px;
+}
+
+.context-menu .menu > .graphic-container {
+  -fx-padding: 0 0 0 2;
 }
 
 .context-menu .menu > .right-container > .arrow {

@@ -749,4 +749,53 @@ public class TreeCrudHandler {
             DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true);
         }
     }
+
+    public static void importTableData(TreeItem<TreeData> selectedItem) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Table table)) {
+            return;
+        }
+
+        Database database = TreeNavigator.getCurrentDatabase(selectedItem);
+        if (database == null) {
+            AlertUtil.CustomAlert(
+                    I18n.t("common.error", "错误"),
+                    I18n.t("metadata.notice.database_not_found", "未找到当前数据库，数据库已被删除！")
+            );
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(I18n.t("metadata.import.title", "导入表数据"));
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter(
+                        I18n.t("metadata.import.filter.supported", "CSV / JSON 文件"),
+                        "*.csv",
+                        "*.json"
+                ),
+                new FileChooser.ExtensionFilter(
+                        I18n.t("metadata.import.filter.csv", "CSV 文件"),
+                        "*.csv"
+                ),
+                new FileChooser.ExtensionFilter(
+                        I18n.t("metadata.import.filter.json", "JSON 文件"),
+                        "*.json"
+                )
+        );
+        File file = chooser.showOpenDialog(AppState.getWindow());
+        if (file == null) {
+            return;
+        }
+
+        Connect connect = buildObjectConnect(selectedItem, false);
+        TreeViewUtil.tableService.importTableData(connect, database, table.getName(), file, insertedRows ->
+                NotificationUtil.showMainNotification(
+                        I18n.t("metadata.import.notice.completed", "表\"%s\"导入完成，已写入 %d 行")
+                                .formatted(table.getName(), insertedRows)
+                )
+        );
+        NotificationUtil.showMainNotification(
+                I18n.t("metadata.import.notice.queued", "表\"%s\"导入任务已提交：%s")
+                        .formatted(table.getName(), file.getName())
+        );
+    }
 }
