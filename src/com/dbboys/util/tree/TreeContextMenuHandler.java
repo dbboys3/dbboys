@@ -476,8 +476,7 @@ public class TreeContextMenuHandler {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect(TreeNavigator.getMetaConnect(selectedItem));
             Database database=TreeNavigator.getCurrentDatabase(selectedItem);
-            connect.setProps(TreeViewUtil.metadataService.modifyProps(connect, "DB_LOCALE", database.getDbLocale()));
-            connect.setDatabase(database.getName());
+            TreeCrudHandler.applyDatabaseConnectionProps(connect, database, database.getName());
             TabpaneUtil.addCustomSqlTab(connect);
         });
 

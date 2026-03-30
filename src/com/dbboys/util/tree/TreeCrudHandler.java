@@ -30,6 +30,8 @@ import java.util.function.BiConsumer;
 
 
 public class TreeCrudHandler {
+    private static final String PROP_DB_LOCALE = "DB_LOCALE";
+    private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
 
     public enum ExportFormat {CSV, JSON, SQL}
 
@@ -314,9 +316,25 @@ public class TreeCrudHandler {
             } catch (Exception ignored) {
             }
         }
-        connect.setDatabase(databaseName);
-        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, "DB_LOCALE", currentDatabase.getDbLocale()));
+        applyDatabaseConnectionProps(connect, currentDatabase, databaseName);
         return connect;
+    }
+
+    public static void applyDatabaseConnectionProps(Connect connect, Database database, String databaseName) {
+        if (connect == null || database == null) {
+            return;
+        }
+        connect.setDatabase(databaseName);
+        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
+        if (isNoLogDatabase(database)) {
+            connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, PROP_IFX_ISOLATION_LEVEL, ""));
+        }
+    }
+
+    private static boolean isNoLogDatabase(Database database) {
+        return database != null
+                && database.getDbLog() != null
+                && "nolog".equalsIgnoreCase(database.getDbLog().trim());
     }
 
     private static DialectServices resolveDialectServices() {

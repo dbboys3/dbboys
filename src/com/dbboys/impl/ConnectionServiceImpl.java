@@ -174,7 +174,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                         connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
                     }
                     Connect reconnectConnect = new Connect(connect);
-                    if (!persistDefaultDatabase && shouldIgnoreIsolationLevel(database)) {
+                    if (shouldIgnoreIsolationLevel(database)) {
                         reconnectConnect.setProps(modifyProps(reconnectConnect, PROP_IFX_ISOLATION_LEVEL, ""));
                     }
                     Connection newConn = sessionInitOnReconnect

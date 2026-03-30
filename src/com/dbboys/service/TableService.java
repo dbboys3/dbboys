@@ -220,7 +220,7 @@ public class TableService implements MetaObjectService {
 
                 try {
                     ImportPlan importPlan = buildImportPlan(connect, database, tableName, file, backSqlTask);
-                    int affectedRows = executeImport(connect, tableName, importPlan, backSqlTask);
+                    int affectedRows = executeImport(connect, database, tableName, importPlan, backSqlTask);
                     long endTime = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endTime - beginTime) / 1000.0) + " sec");
@@ -313,6 +313,7 @@ public class TableService implements MetaObjectService {
     }
 
     private int executeImport(Connect connect,
+                              Database database,
                               String tableName,
                               ImportPlan importPlan,
                               BackgroundSqlTask backSqlTask) throws Exception {
@@ -324,9 +325,15 @@ public class TableService implements MetaObjectService {
                 );
             }
 
+            boolean noLogDatabase = isNoLogDatabase(database);
             boolean originalAutoCommit = conn.getAutoCommit();
             boolean autoCommitChanged = false;
-            if (originalAutoCommit) {
+            if (noLogDatabase) {
+                if (!originalAutoCommit) {
+                    conn.setAutoCommit(true);
+                    autoCommitChanged = true;
+                }
+            } else if (originalAutoCommit) {
                 conn.setAutoCommit(false);
                 autoCommitChanged = true;
             }
@@ -343,22 +350,30 @@ public class TableService implements MetaObjectService {
                     batchCount++;
                     if (batchCount >= IMPORT_BATCH_SIZE) {
                         executeImportBatch(preparedStatement, tableName, batchStartRowNumber);
-                        conn.commit();
+                        if (!noLogDatabase) {
+                            conn.commit();
+                        }
                         batchStartRowNumber = importedRowCount + 1;
                         batchCount = 0;
                     }
                 }
                 if (batchCount > 0) {
                     executeImportBatch(preparedStatement, tableName, batchStartRowNumber);
-                    conn.commit();
+                    if (!noLogDatabase) {
+                        conn.commit();
+                    }
                 }
                 checkImportCancelled(backSqlTask);
                 return importedRowCount;
             } catch (CancellationException e) {
-                rollbackQuietly(conn);
+                if (!noLogDatabase) {
+                    rollbackQuietly(conn);
+                }
                 throw e;
             } catch (Exception e) {
-                rollbackQuietly(conn);
+                if (!noLogDatabase) {
+                    rollbackQuietly(conn);
+                }
                 throw e;
             } finally {
                 backSqlTask.setStmt(null);
@@ -759,6 +774,12 @@ public class TableService implements MetaObjectService {
 
     private boolean shouldTrimImportValue(String columnType) {
         return !isTextImportColumnType(columnType) && !isBinaryImportColumnType(columnType);
+    }
+
+    private boolean isNoLogDatabase(Database database) {
+        return database != null
+                && database.getDbLog() != null
+                && "nolog".equalsIgnoreCase(database.getDbLog().trim());
     }
 
     private byte[] decodeBinaryImportValue(String value) throws SQLException {

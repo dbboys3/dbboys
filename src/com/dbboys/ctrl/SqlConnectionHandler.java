@@ -234,13 +234,13 @@ public class SqlConnectionHandler {
     }
 
     private void applyCommitModeAfterDatabaseSwitch(Database database, boolean reconnected) {
-        boolean showCommitMode = !isNoLogDatabase(database) && !ctrl.sqlConnect.getReadonly();
-        Platform.runLater(() -> ctrl.sqlCommitModeChoiceBox.setVisible(showCommitMode));
         if (isNoLogDatabase(database)) {
             tryApplyAutoCommitModeAndSelectAuto();
             return;
         }
-        tryApplyManualCommitMode();
+        if (reconnected) {
+            tryApplySelectedCommitMode();
+        }
     }
 
     private void tryApplyAutoCommitModeAndSelectAuto() {
@@ -265,6 +265,17 @@ public class SqlConnectionHandler {
         }
         try {
             ctrl.sqlConnect.getConn().setAutoCommit(false);
+        } catch (SQLException e) {
+            handleCommitModeApplyFailure(e);
+        }
+    }
+
+    private void tryApplySelectedCommitMode() {
+        if (ctrl.sqlConnect.getConn() == null) {
+            return;
+        }
+        try {
+            ctrl.sqlConnect.getConn().setAutoCommit(ctrl.sqlCommitModeChoiceBox.getSelectionModel().getSelectedIndex() == 0);
         } catch (SQLException e) {
             handleCommitModeApplyFailure(e);
         }
