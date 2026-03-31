@@ -119,6 +119,9 @@ public final class GbaseDialect implements DatabaseDialect {
             case "syscdcv1":
             case "sys":
             case "gbasedbt":
+            case "sysuser":
+            case "syscdr":
+            case "sysha":
                 return true;
             default:
                 return false;

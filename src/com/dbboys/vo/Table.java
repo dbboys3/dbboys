@@ -306,7 +306,7 @@ public class Table extends TreeData{
      */
     public String getTableGlobalTemporary(){
         if ((this.flags.get() & 4096) == 4096) {
-            return "GLOBAL TEMPORARY";
+            return "GLOBAL TEMPORARY ";
         }
         return "";
     }
@@ -320,6 +320,19 @@ public class Table extends TreeData{
             return "ON COMMIT DELETE ROWS";
         }
         return "ON COMMIT PRESERVE ROWS";
+    }
+
+    /**
+     * 返回 裸表/外部表 标识
+     * @return
+     */
+    public String getTableFlag(){
+        if ((this.flags.get() & 16) == 16) {
+            return "RAW ";
+        } else if ((this.flags.get() & 32) == 32) {
+            return "EXTERNAL ";
+        }
+        return "";
     }
 
     /**
