@@ -32,8 +32,8 @@ public final class SqlErrorUtil {
         if (e == null) {
             return false;
         }
-        String sqlState = e.getSQLState();
-        if (sqlState != null && sqlState.startsWith("08")) {
+        int errorCode = e.getErrorCode();
+        if (errorCode == -79716 || errorCode == -79730) {
             return true;
         }
         return matchesFailureKind(e, ChangeDatabaseFailureKind.DISCONNECTED);

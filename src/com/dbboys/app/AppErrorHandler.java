@@ -84,8 +84,15 @@ public final class AppErrorHandler {
         }
         Platform.runLater(() -> AlertUtil.CustomAlert(
                 I18n.bind("common.error", "错误").get(),
-                "[" + e.getErrorCode() + "]" + e.getMessage()
+                buildSqlErrorMessage(e)
         ));
+    }
+
+    private static String buildSqlErrorMessage(SQLException e) {
+        if (e == null) {
+            return "";
+        }
+        return "[" + e.getErrorCode() + "]" + e.getMessage();
     }
 
     private static boolean hasActiveSelectedMetadataConnection() {
@@ -114,7 +121,8 @@ public final class AppErrorHandler {
         public void handle(Throwable e) {
             SQLException se = (SQLException) e;
             try {
-                log.error("Operation failed", e);
+                log.error("Operation failed. code={}, sqlState={}, message={}",
+                        se.getErrorCode(), se.getSQLState(), se.getMessage(), e);
                 if (!hasActiveSelectedMetadataConnection()) {
                     showSqlErrorAlert(se);
                     return;
@@ -150,7 +158,8 @@ public final class AppErrorHandler {
         public void handle(Throwable e) {
             SQLException se = (SQLException) e;
             showSqlErrorAlert(se);
-            log.error("SQL error. code={}, message={}\n{}", se.getErrorCode(), se.getMessage(), formatExceptionDetails(e));
+            log.error("SQL error. code={}, sqlState={}, message={}\n{}",
+                    se.getErrorCode(), se.getSQLState(), se.getMessage(), formatExceptionDetails(e));
         }
     }
 

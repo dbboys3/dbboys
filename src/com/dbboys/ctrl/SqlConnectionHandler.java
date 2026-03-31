@@ -91,11 +91,14 @@ public class SqlConnectionHandler {
                 AppErrorHandler.handle(e);
             }
             if (conn != null) {
+                log.error("conn != null");
+
                 if (ctrl.sqlConnect.getConn() != null)
                     try {
                         ctrl.closeResultSet();
                         ctrl.sqlConnect.getConn().close();
                     } catch (SQLException e) {
+                        log.error("Error closing connection: {}", e.getMessage());
                         AppErrorHandler.handle(e);
                     }
                 ctrl.sqlConnect = newVal;
