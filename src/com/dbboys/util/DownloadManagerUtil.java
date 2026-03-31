@@ -529,17 +529,12 @@ class DownloadTaskWrapper {
         int columnCount = meta.getColumnCount();
         String tableName = meta.getTableName(1);
         if (tableName == null || tableName.isBlank()) tableName = "table";
-        StringBuilder prefix = new StringBuilder("INSERT INTO ").append(tableName).append(" (");
-        for (int i = 1; i <= columnCount; i++) {
-            if (i > 1) prefix.append(", ");
-            prefix.append(meta.getColumnLabel(i));
-        }
-        prefix.append(") VALUES ");
+        String prefix = "INSERT INTO " + tableName + " VALUES ";
 
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             long row = 0;
             while (!cancelled && rs.next()) {
-                writer.write(prefix.toString());
+                writer.write(prefix);
                 writer.write("(");
                 for (int i = 1; i <= columnCount; i++) {
                     if (i > 1) writer.write(", ");
