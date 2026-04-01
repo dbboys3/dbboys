@@ -641,7 +641,7 @@ public class TableService implements MetaObjectService {
             }
             if (inQuotes) {
                 throw new TableImportException(
-                        I18n.t("metadata.import.error.csv_quote_unclosed", "CSV 文件格式错误：存在未闭合的引号")
+                    I18n.t("metadata.import.error.csv_quote_unclosed", "CSV 文件格式错误：存在未闭合的引号")
                 );
             }
             if (currentField.length() > 0 || !currentRow.isEmpty()) {
