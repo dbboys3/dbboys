@@ -252,8 +252,13 @@ public class PopupWindowUtil {
                 if (progressText.isEmpty()) {
                     return;
                 }
+                double progress = resolveTaskProgress(progressText);
+                if (progress < 0) {
+                    setText(progressText);
+                    return;
+                }
                 progressLabel.setText(progressText);
-                progressBar.setProgress(resolveTaskProgress(progressText));
+                progressBar.setProgress(progress);
                 setGraphic(progressBox);
             }
         });
@@ -366,11 +371,11 @@ public class PopupWindowUtil {
 
     private static double resolveTaskProgress(String progressText) {
         if (progressText == null || progressText.isBlank()) {
-            return 0;
+            return -1;
         }
         int slashIndex = progressText.indexOf('/');
         if (slashIndex <= 0 || slashIndex >= progressText.length() - 1) {
-            return 0;
+            return -1;
         }
         try {
             double completed = Double.parseDouble(progressText.substring(0, slashIndex).trim());

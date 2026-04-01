@@ -168,6 +168,7 @@ public class DatabaseService implements MetaObjectService {
                 backSqlTask.setConnectName(connect.getName());
                 backSqlTask.setDatabaseName(connect.getDatabase());
                 backSqlTask.setSql(importSummary);
+                backSqlTask.setProgress(I18n.t("metadata.import_sql.task.counting", "正在统计SQL数量"));
                 BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
                 BackgroundSqlUtil.updateBackSqlUIOnStart();
 
@@ -184,9 +185,7 @@ public class DatabaseService implements MetaObjectService {
                                 .formatted(file.getName()));
                     }
 
-                    BackgroundSqlUtil.updateTaskProgress(backSqlTask,
-                            I18n.t("metadata.import_sql.task.progress", "执行中 (%d/%d)")
-                                    .formatted(0, statements.size()));
+                    BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportSqlProgress(0, statements.size()));
 
                     int affectedRows = executeStatements(connect, statements, backSqlTask);
                     long endTime = System.currentTimeMillis();
@@ -241,9 +240,7 @@ public class DatabaseService implements MetaObjectService {
                 }
 
                 String sql = statements.get(i);
-                BackgroundSqlUtil.updateTaskProgress(backSqlTask,
-                        I18n.t("metadata.import_sql.task.progress", "执行中 (%d/%d)")
-                                .formatted(i + 1, total));
+                BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportSqlProgress(i + 1, total));
 
                 try (Statement stmt = conn.createStatement()) {
                     backSqlTask.setStmt(stmt);
@@ -297,6 +294,14 @@ public class DatabaseService implements MetaObjectService {
             return "";
         }
         return text.charAt(0) == '\uFEFF' ? text.substring(1) : text;
+    }
+
+    private String formatImportSqlProgress(int completed, int total) {
+        if (total <= 0) {
+            return "";
+        }
+        int safeCompleted = Math.max(0, Math.min(completed, total));
+        return safeCompleted + "/" + total;
     }
 
     private void showImportError(String message) {
