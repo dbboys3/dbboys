@@ -495,13 +495,15 @@ public final class GbaseDdlRepository implements DdlRepository {
         // 对于虚拟表，sysdefaultsexpr可能多行定义
         // 是否存在comments多行的问题，将colcomm移出主表查询。
         // 去除隐藏列
+        /*  SQL语句中不要以下两行，可以直接依据程序中计算得到（同时解决p,s允许空的问题（不赋值））
+         *        ,CASE WHEN mod(sc.coltype,256) in (1,2,52,17,6,18,53,5,8) THEN 10 WHEN mod(sc.coltype,256) in (3,4) THEN 2 ELSE 0 END as typep
+         *        ,CASE WHEN mod(sc.coltype,256) in (5,8) THEN MOD(sc.collength,256) ELSE 0 END as types
+         */
         String sql = """
                 SELECT
                    sc.colno colno
                   ,sc.colname colname
                   ,sc.coltype,sc.collength
-                  ,CASE WHEN mod(sc.coltype,256) in (1,2,52,17,6,18,53,5,8) THEN 10 WHEN mod(sc.coltype,256) in (3,4) THEN 2 ELSE 0 END as typep
-                  ,CASE WHEN mod(sc.coltype,256) in (5,8) THEN MOD(sc.collength,256) ELSE 0 END as types
                   ,CASE WHEN bitand(sc.coltype,256) = 256 THEN 0 ELSE 1 END as isnullable
                   ,CASE WHEN sc.colattr = 128 THEN 1 ELSE 0 END as ispk
                   ,df.type as coldeftype
@@ -520,7 +522,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 LEFT JOIN syscolumns sc ON t.tabid = sc.tabid and bitand(sc.colattr,1) = 0
                 LEFT JOIN sysdefaults df ON (t.tabid = df.tabid AND sc.colno = df.colno)
                 LEFT JOIN sysdefaultsexpr de ON (t.tabid = de.tabid AND sc.colno = de.colno and de.type='T')
-                LEFT JOIN sysxtdtypes sx ON (sx.type = mod(sc.coltype,256) AND sx.extended_id = sc.extended_id)
+                LEFT JOIN sysxtdtypes sx ON (sx.type in (sc.coltype,mod(sc.coltype,256)) AND sx.extended_id = sc.extended_id)
                 WHERE t.tabname = ?
                 ORDER BY sc.colno;
                 """;
@@ -669,7 +671,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             } else {
                 coltypename = coltypename + "(" + collength/256 + "," + collength%256 + ")";
             }
-        } else if ("LVARCHAR".equals(coltype) || "CHAR".equals(coltype) || "NCHAR".equals(coltype)) {
+        } else if ("LVARCHAR".equals(coltype) || "CHAR".equals(coltype) || "NCHAR".equals(coltype) || "RAW".equals(coltype)) {
             coltypename = coltypename + "(" + collength + ")";
         }
         return coltypename;
