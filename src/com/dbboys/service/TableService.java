@@ -219,10 +219,7 @@ public class TableService implements MetaObjectService {
                 BackgroundSqlUtil.updateBackSqlUIOnStart();
 
                 try {
-                    ImportPlan importPlan = buildImportPlan(connect, database, tableName, file, backSqlTask);
-                    BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(0, importPlan.rows.size()));
-                    int affectedRows = executeImport(connect, database, tableName, importPlan, backSqlTask);
-                    BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(affectedRows, importPlan.rows.size()));
+                    int affectedRows = executeStreamImport(connect, database, tableName, file, backSqlTask);
                     long endTime = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endTime - beginTime) / 1000.0) + " sec");
@@ -271,77 +268,253 @@ public class TableService implements MetaObjectService {
         }
 
         BackgroundSqlTask effectiveTask = backSqlTask == null ? new BackgroundSqlTask() : backSqlTask;
-        ImportPlan importPlan = buildImportPlan(connect, database, tableName, file, effectiveTask);
-        BackgroundSqlUtil.updateTaskProgress(effectiveTask, formatImportProgress(0, importPlan.rows.size()));
-        int affectedRows = executeImport(connect, database, tableName, importPlan, effectiveTask);
-        BackgroundSqlUtil.updateTaskProgress(effectiveTask, formatImportProgress(affectedRows, importPlan.rows.size()));
-        return affectedRows;
+        return executeStreamImport(connect, database, tableName, file, effectiveTask);
     }
 
-    private ImportPlan buildImportPlan(Connect connect,
-                                       Database database,
-                                       String tableName,
-                                       File file,
-                                       BackgroundSqlTask backSqlTask) throws Exception {
+    private int executeStreamImport(Connect connect,
+                                    Database database,
+                                    String tableName,
+                                    File file,
+                                    BackgroundSqlTask backSqlTask) throws Exception {
         checkImportCancelled(backSqlTask);
         if (!file.exists() || !file.isFile()) {
             throw new TableImportException(
                     I18n.t("metadata.import.error.file_missing", "导入文件不存在：%s").formatted(file.getAbsolutePath())
             );
         }
-
-        ParsedImportData parsedData = switch (resolveImportFormat(file)) {
-            case CSV -> parseCsvFile(file, backSqlTask);
-            case JSON -> parseJsonFile(file, backSqlTask);
-        };
-        if (parsedData.rows.isEmpty()) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
-            );
-        }
-
         ArrayList<ColumnsInfo> tableColumns = loadImportColumns(connect, tableName);
         if (tableColumns == null || tableColumns.isEmpty()) {
             throw new TableImportException(
                     I18n.t("metadata.import.error.no_table_columns", "未获取到表\"%s\"的列信息").formatted(tableName)
             );
         }
-
-        List<ColumnsInfo> matchedColumns = new ArrayList<>();
-        List<String> missingRequiredColumns = new ArrayList<>();
-        for (ColumnsInfo column : tableColumns) {
-            String normalizedColumnName = normalizeFieldName(column.getColName());
-            if (parsedData.sourceColumns.containsKey(normalizedColumnName)) {
-                matchedColumns.add(column);
-            } else if (isRequiredImportColumn(column)) {
-                missingRequiredColumns.add(column.getColName());
-            }
-        }
-
-        if (matchedColumns.isEmpty()) {
+        ImportFileFormat importFormat = resolveImportFormat(file);
+        BackgroundSqlUtil.updateTaskProgress(
+                backSqlTask,
+                I18n.t("metadata.import.progress.counting", "统计行数")
+        );
+        int totalRows = countImportRows(file, importFormat, backSqlTask);
+        if (totalRows <= 0) {
             throw new TableImportException(
-                    I18n.t("metadata.import.error.no_matched_columns", "文件列与表\"%s\"的列没有匹配项").formatted(tableName)
+                    I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
             );
         }
-        if (!missingRequiredColumns.isEmpty()) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.missing_required_columns", "表\"%s\"存在文件中未提供的必填列：%s")
-                            .formatted(tableName, String.join(", ", missingRequiredColumns))
-            );
-        }
-        return new ImportPlan(matchedColumns, parsedData.rows);
+        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(0, totalRows));
+        int affectedRows = switch (importFormat) {
+            case CSV -> executeCsvStreamImport(connect, database, tableName, file, tableColumns, totalRows, backSqlTask);
+            case JSON -> executeJsonStreamImport(connect, database, tableName, file, tableColumns, totalRows, backSqlTask);
+        };
+        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(affectedRows, totalRows));
+        return affectedRows;
     }
 
-    private int executeImport(Connect connect,
-                              Database database,
-                              String tableName,
-                              ImportPlan importPlan,
-                              BackgroundSqlTask backSqlTask) throws Exception {
-        String insertSql = buildInsertSql(tableName, importPlan.targetColumns);
+    private int executeCsvStreamImport(Connect connect,
+                                       Database database,
+                                       String tableName,
+                                       File file,
+                                       List<ColumnsInfo> tableColumns,
+                                       int totalRows,
+                                       BackgroundSqlTask backSqlTask) throws Exception {
+        try (CsvRowStream rowStream = new CsvRowStream(file)) {
+            List<String> headerRow = rowStream.nextRow(backSqlTask);
+            if (headerRow == null || isAllBlankRow(headerRow)) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.empty_file", "导入文件为空：%s").formatted(file.getName())
+                );
+            }
+            CsvImportSchema schema = buildCsvImportSchema(tableName, tableColumns, headerRow);
+            return executeStreamingImport(connect, database, backSqlTask, (conn, noLogDatabase) -> {
+                try (PreparedStatement preparedStatement = conn.prepareStatement(buildInsertSql(tableName, schema.targetColumns))) {
+                    backSqlTask.setStmt(preparedStatement);
+                    int importedRowCount = 0;
+                    int batchCount = 0;
+                    int batchStartRowNumber = 1;
+                    List<String> rawRow;
+                    while ((rawRow = rowStream.nextRow(backSqlTask)) != null) {
+                        checkImportCancelled(backSqlTask);
+                        if (isAllBlankRow(rawRow)) {
+                            continue;
+                        }
+                        if (rawRow.size() > headerRow.size()) {
+                            throw new TableImportException(
+                                    I18n.t("metadata.import.error.csv_column_overflow", "CSV 第 %d 行的列数超过表头列数")
+                                            .formatted(rowStream.getCurrentRowNumber())
+                            );
+                        }
+                        bindCsvImportRow(preparedStatement, schema, rawRow, importedRowCount + 1, tableName);
+                        preparedStatement.addBatch();
+                        importedRowCount++;
+                        batchCount++;
+                        if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
+                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                        }
+                        if (batchCount >= IMPORT_BATCH_SIZE) {
+                            executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
+                            if (!noLogDatabase) {
+                                conn.commit();
+                            }
+                            batchStartRowNumber = importedRowCount + 1;
+                            batchCount = 0;
+                        }
+                    }
+                    if (importedRowCount <= 0) {
+                        throw new TableImportException(
+                                I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
+                        );
+                    }
+                    if (batchCount > 0) {
+                        executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
+                        if (!noLogDatabase) {
+                            conn.commit();
+                        }
+                    }
+                    checkImportCancelled(backSqlTask);
+                    return importedRowCount;
+                } finally {
+                    backSqlTask.setStmt(null);
+                }
+            });
+        }
+    }
+
+    private int executeJsonStreamImport(Connect connect,
+                                        Database database,
+                                        String tableName,
+                                        File file,
+                                        List<ColumnsInfo> tableColumns,
+                                        int totalRows,
+                                        BackgroundSqlTask backSqlTask) throws Exception {
+        try (JsonRowStream rowStream = new JsonRowStream(file)) {
+            Map<String, String> sourceColumns = new LinkedHashMap<>();
+            List<Map<String, Object>> bufferedRows = new ArrayList<>();
+            List<ColumnsInfo> currentColumns = List.of();
+            while (true) {
+                JSONObject jsonObject = rowStream.nextObject(backSqlTask);
+                if (jsonObject == null) {
+                    break;
+                }
+                bufferedRows.add(parseJsonImportRow(jsonObject, sourceColumns));
+                currentColumns = resolveMatchedImportColumns(tableColumns, sourceColumns);
+                if (!currentColumns.isEmpty()) {
+                    break;
+                }
+            }
+            if (bufferedRows.isEmpty()) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
+                );
+            }
+            validateMatchedImportColumns(tableName, currentColumns);
+            final List<ColumnsInfo> initialColumns = new ArrayList<>(currentColumns);
+            return executeStreamingImport(connect, database, backSqlTask, (conn, noLogDatabase) -> {
+                PreparedStatement preparedStatement = null;
+                try {
+                    List<ColumnsInfo> activeColumns = initialColumns;
+                    preparedStatement = conn.prepareStatement(buildInsertSql(tableName, activeColumns));
+                    backSqlTask.setStmt(preparedStatement);
+                    int importedRowCount = 0;
+                    int batchCount = 0;
+                    int batchStartRowNumber = 1;
+
+                    for (Map<String, Object> row : bufferedRows) {
+                        PreparedStatement activeStatement = preparedStatement;
+                        if (hasJsonImportColumnsChanged(tableColumns, sourceColumns, activeColumns)) {
+                            if (batchCount > 0) {
+                                executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
+                                if (!noLogDatabase) {
+                                    conn.commit();
+                                }
+                                batchStartRowNumber = importedRowCount + 1;
+                                batchCount = 0;
+                            }
+                            activeColumns = new ArrayList<>(resolveMatchedImportColumns(tableColumns, sourceColumns));
+                            closeStatementQuietly(activeStatement);
+                            preparedStatement = conn.prepareStatement(buildInsertSql(tableName, activeColumns));
+                            backSqlTask.setStmt(preparedStatement);
+                            activeStatement = preparedStatement;
+                        }
+                        bindImportRow(activeStatement, activeColumns, row, importedRowCount + 1, tableName);
+                        activeStatement.addBatch();
+                        importedRowCount++;
+                        batchCount++;
+                        if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
+                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                        }
+                        if (batchCount >= IMPORT_BATCH_SIZE) {
+                            executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
+                            if (!noLogDatabase) {
+                                conn.commit();
+                            }
+                            batchStartRowNumber = importedRowCount + 1;
+                            batchCount = 0;
+                        }
+                    }
+
+                    JSONObject jsonObject;
+                    while ((jsonObject = rowStream.nextObject(backSqlTask)) != null) {
+                        Map<String, Object> row = parseJsonImportRow(jsonObject, sourceColumns);
+                        PreparedStatement activeStatement = preparedStatement;
+                        if (hasJsonImportColumnsChanged(tableColumns, sourceColumns, activeColumns)) {
+                            if (batchCount > 0) {
+                                executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
+                                if (!noLogDatabase) {
+                                    conn.commit();
+                                }
+                                batchStartRowNumber = importedRowCount + 1;
+                                batchCount = 0;
+                            }
+                            activeColumns = new ArrayList<>(resolveMatchedImportColumns(tableColumns, sourceColumns));
+                            closeStatementQuietly(activeStatement);
+                            preparedStatement = conn.prepareStatement(buildInsertSql(tableName, activeColumns));
+                            backSqlTask.setStmt(preparedStatement);
+                            activeStatement = preparedStatement;
+                        }
+                        bindImportRow(activeStatement, activeColumns, row, importedRowCount + 1, tableName);
+                        activeStatement.addBatch();
+                        importedRowCount++;
+                        batchCount++;
+                        if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
+                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                        }
+                        if (batchCount >= IMPORT_BATCH_SIZE) {
+                            executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
+                            if (!noLogDatabase) {
+                                conn.commit();
+                            }
+                            batchStartRowNumber = importedRowCount + 1;
+                            batchCount = 0;
+                        }
+                    }
+
+                    if (batchCount > 0) {
+                        executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
+                        if (!noLogDatabase) {
+                            conn.commit();
+                        }
+                    }
+                    checkImportCancelled(backSqlTask);
+                    return importedRowCount;
+                } finally {
+                    closeStatementQuietly(preparedStatement);
+                    backSqlTask.setStmt(null);
+                }
+            });
+        }
+    }
+
+    @FunctionalInterface
+    private interface StreamingImportExecutor {
+        int execute(Connection conn, boolean noLogDatabase) throws Exception;
+    }
+
+    private int executeStreamingImport(Connect connect,
+                                       Database database,
+                                       BackgroundSqlTask backSqlTask,
+                                       StreamingImportExecutor executor) throws Exception {
         try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
             if (conn == null) {
                 throw new TableImportException(
-                        I18n.t("metadata.import.error.unknown", "导入失败，请检查文件内容或数据库连接")
+                    I18n.t("metadata.import.error.unknown", "导入失败，请检查文件内容或数据库连接")
                 );
             }
             backSqlTask.setConnection(conn);
@@ -358,40 +531,10 @@ public class TableService implements MetaObjectService {
                 conn.setAutoCommit(false);
                 autoCommitChanged = true;
             }
-            try (PreparedStatement preparedStatement = conn.prepareStatement(insertSql)) {
-                backSqlTask.setStmt(preparedStatement);
-                int importedRowCount = 0;
-                int batchCount = 0;
-                int batchStartRowNumber = 1;
-                for (Map<String, Object> row : importPlan.rows) {
-                    checkImportCancelled(backSqlTask);
-                    bindImportRow(preparedStatement, importPlan.targetColumns, row, importedRowCount + 1, tableName);
-                    preparedStatement.addBatch();
-                    importedRowCount++;
-                    batchCount++;
-                    if (importedRowCount == importPlan.rows.size() || importedRowCount % 50 == 0) {
-                        BackgroundSqlUtil.updateTaskProgress(
-                                backSqlTask,
-                                formatImportProgress(importedRowCount, importPlan.rows.size())
-                        );
-                    }
-                    if (batchCount >= IMPORT_BATCH_SIZE) {
-                        executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
-                        if (!noLogDatabase) {
-                            conn.commit();
-                        }
-                        batchStartRowNumber = importedRowCount + 1;
-                        batchCount = 0;
-                    }
-                }
-                if (batchCount > 0) {
-                    executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
-                    if (!noLogDatabase) {
-                        conn.commit();
-                    }
-                }
+            try {
+                int importedRows = executor.execute(conn, noLogDatabase);
                 checkImportCancelled(backSqlTask);
-                return importedRowCount;
+                return importedRows;
             } catch (CancellationException e) {
                 if (!noLogDatabase) {
                     rollbackQuietly(conn);
@@ -419,6 +562,165 @@ public class TableService implements MetaObjectService {
                 if (autoCommitChanged) {
                     restoreAutoCommitQuietly(conn, originalAutoCommit);
                 }
+            }
+        }
+    }
+
+    private CsvImportSchema buildCsvImportSchema(String tableName,
+                                                 List<ColumnsInfo> tableColumns,
+                                                 List<String> headerRow) throws Exception {
+        Map<String, String> sourceColumns = new LinkedHashMap<>();
+        Map<String, Integer> sourceIndexes = new LinkedHashMap<>();
+        for (int i = 0; i < headerRow.size(); i++) {
+            String displayName = stripLeadingBom(headerRow.get(i)).trim();
+            if (displayName.isBlank()) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.blank_header", "CSV 表头第 %d 列为空").formatted(i + 1)
+                );
+            }
+            String normalizedName = normalizeFieldName(displayName);
+            if (sourceColumns.containsKey(normalizedName)) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.duplicate_header", "文件中存在重复列名：%s").formatted(displayName)
+                );
+            }
+            sourceColumns.put(normalizedName, displayName);
+            sourceIndexes.put(normalizedName, i);
+        }
+        List<ColumnsInfo> matchedColumns = resolveMatchedImportColumns(tableColumns, sourceColumns);
+        validateMatchedImportColumns(tableName, matchedColumns);
+        validateRequiredImportColumns(tableName, tableColumns, sourceColumns);
+        List<Integer> matchedSourceIndexes = new ArrayList<>();
+        for (ColumnsInfo column : matchedColumns) {
+            matchedSourceIndexes.add(sourceIndexes.get(normalizeFieldName(column.getColName())));
+        }
+        return new CsvImportSchema(matchedColumns, matchedSourceIndexes);
+    }
+
+    private int countImportRows(File file,
+                                ImportFileFormat importFormat,
+                                BackgroundSqlTask backSqlTask) throws Exception {
+        return switch (importFormat) {
+            case CSV -> countCsvRows(file, backSqlTask);
+            case JSON -> countJsonRows(file, backSqlTask);
+        };
+    }
+
+    private int countCsvRows(File file, BackgroundSqlTask backSqlTask) throws Exception {
+        try (CsvRowStream rowStream = new CsvRowStream(file)) {
+            List<String> headerRow = rowStream.nextRow(backSqlTask);
+            if (headerRow == null || isAllBlankRow(headerRow)) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.empty_file", "导入文件为空：%s").formatted(file.getName())
+                );
+            }
+            int totalRows = 0;
+            List<String> row;
+            while ((row = rowStream.nextRow(backSqlTask)) != null) {
+                if (!isAllBlankRow(row)) {
+                    totalRows++;
+                }
+            }
+            return totalRows;
+        }
+    }
+
+    private int countJsonRows(File file, BackgroundSqlTask backSqlTask) throws Exception {
+        try (JsonRowStream rowStream = new JsonRowStream(file)) {
+            int totalRows = 0;
+            while (rowStream.nextObject(backSqlTask) != null) {
+                totalRows++;
+            }
+            return totalRows;
+        }
+    }
+
+    private List<ColumnsInfo> resolveMatchedImportColumns(List<ColumnsInfo> tableColumns,
+                                                          Map<String, String> sourceColumns) {
+        List<ColumnsInfo> matchedColumns = new ArrayList<>();
+        for (ColumnsInfo column : tableColumns) {
+            String normalizedColumnName = normalizeFieldName(column.getColName());
+            if (sourceColumns.containsKey(normalizedColumnName)) {
+                matchedColumns.add(column);
+            }
+        }
+        return matchedColumns;
+    }
+
+    private void validateMatchedImportColumns(String tableName,
+                                              List<ColumnsInfo> matchedColumns) throws TableImportException {
+        if (matchedColumns == null || matchedColumns.isEmpty()) {
+            throw new TableImportException(
+                    I18n.t("metadata.import.error.no_matched_columns", "文件列与表\"%s\"的列没有匹配项").formatted(tableName)
+            );
+        }
+    }
+
+    private void validateRequiredImportColumns(String tableName,
+                                               List<ColumnsInfo> tableColumns,
+                                               Map<String, String> sourceColumns) throws TableImportException {
+        List<String> missingRequiredColumns = new ArrayList<>();
+        for (ColumnsInfo column : tableColumns) {
+            String normalizedColumnName = normalizeFieldName(column.getColName());
+            if (!sourceColumns.containsKey(normalizedColumnName) && isRequiredImportColumn(column)) {
+                missingRequiredColumns.add(column.getColName());
+            }
+        }
+        if (!missingRequiredColumns.isEmpty()) {
+            throw new TableImportException(
+                    I18n.t("metadata.import.error.missing_required_columns", "表\"%s\"存在文件中未提供的必填列：%s")
+                            .formatted(tableName, String.join(", ", missingRequiredColumns))
+            );
+        }
+    }
+
+    private boolean hasJsonImportColumnsChanged(List<ColumnsInfo> tableColumns,
+                                                Map<String, String> sourceColumns,
+                                                List<ColumnsInfo> currentColumns) {
+        List<ColumnsInfo> resolvedColumns = resolveMatchedImportColumns(tableColumns, sourceColumns);
+        return !sameImportColumns(currentColumns, resolvedColumns);
+    }
+
+    private boolean sameImportColumns(List<ColumnsInfo> left, List<ColumnsInfo> right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null || left.size() != right.size()) {
+            return false;
+        }
+        for (int i = 0; i < left.size(); i++) {
+            if (!normalizeFieldName(left.get(i).getColName()).equals(normalizeFieldName(right.get(i).getColName()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void bindCsvImportRow(PreparedStatement preparedStatement,
+                                  CsvImportSchema schema,
+                                  List<String> rawRow,
+                                  int rowNumber,
+                                  String tableName) throws SQLException, TableImportException {
+        for (int i = 0; i < schema.targetColumns.size(); i++) {
+            ColumnsInfo column = schema.targetColumns.get(i);
+            int sourceIndex = schema.sourceIndexes.get(i);
+            Object value = sourceIndex < rawRow.size() ? rawRow.get(sourceIndex) : null;
+            try {
+                bindImportValue(preparedStatement, i + 1, column, value);
+            } catch (SQLException e) {
+                throw new TableImportException(
+                        I18n.t(
+                                "metadata.import.error.bind_column",
+                                "表\"%s\"第 %d 行列\"%s\"(%s) 导入失败：%s"
+                        ).formatted(
+                                tableName,
+                                rowNumber,
+                                column == null ? "" : column.getColName(),
+                                column == null ? "" : normalizeColumnType(column.getColType()),
+                                buildImportErrorMessage(e)
+                        ),
+                        e
+                );
             }
         }
     }
@@ -528,197 +830,31 @@ public class TableService implements MetaObjectService {
         }
     }
 
-    private ParsedImportData parseCsvFile(File file, BackgroundSqlTask backSqlTask) throws Exception {
-        List<List<String>> csvRows = readCsvRows(file, backSqlTask);
-        if (csvRows.isEmpty()) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.empty_file", "导入文件为空：%s").formatted(file.getName())
-            );
-        }
-
-        List<String> headerRow = csvRows.get(0);
-        if (isAllBlankRow(headerRow)) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.empty_file", "导入文件为空：%s").formatted(file.getName())
-            );
-        }
-
-        ParsedImportData parsedData = new ParsedImportData();
-        List<String> normalizedHeaders = new ArrayList<>();
-        for (int i = 0; i < headerRow.size(); i++) {
-            String displayName = stripLeadingBom(headerRow.get(i)).trim();
+    private Map<String, Object> parseJsonImportRow(JSONObject jsonObject,
+                                                   Map<String, String> sourceColumns) throws TableImportException {
+        Map<String, Object> row = new LinkedHashMap<>();
+        for (String key : jsonObject.keySet()) {
+            String displayName = stripLeadingBom(key).trim();
             if (displayName.isBlank()) {
                 throw new TableImportException(
-                        I18n.t("metadata.import.error.blank_header", "CSV 表头第 %d 列为空").formatted(i + 1)
+                        I18n.t("metadata.import.error.blank_field_name", "存在空字段名，无法导入")
                 );
             }
             String normalizedName = normalizeFieldName(displayName);
-            if (parsedData.sourceColumns.containsKey(normalizedName)) {
-                throw new TableImportException(
-                        I18n.t("metadata.import.error.duplicate_header", "文件中存在重复列名：%s").formatted(displayName)
-                );
-            }
-            parsedData.sourceColumns.put(normalizedName, displayName);
-            normalizedHeaders.add(normalizedName);
+            sourceColumns.putIfAbsent(normalizedName, displayName);
+            row.put(normalizedName, normalizeImportedValue(jsonObject.opt(key)));
         }
-
-        for (int rowIndex = 1; rowIndex < csvRows.size(); rowIndex++) {
-            checkImportCancelled(backSqlTask);
-            List<String> rawRow = csvRows.get(rowIndex);
-            if (isAllBlankRow(rawRow)) {
-                continue;
-            }
-            if (rawRow.size() > normalizedHeaders.size()) {
-                throw new TableImportException(
-                        I18n.t("metadata.import.error.csv_column_overflow", "CSV 第 %d 行的列数超过表头列数")
-                                .formatted(rowIndex + 1)
-                );
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (int columnIndex = 0; columnIndex < normalizedHeaders.size(); columnIndex++) {
-                String normalizedHeader = normalizedHeaders.get(columnIndex);
-                String value = columnIndex < rawRow.size() ? rawRow.get(columnIndex) : null;
-                row.put(normalizedHeader, value);
-            }
-            parsedData.rows.add(row);
-        }
-        return parsedData;
+        return row;
     }
 
-    private List<List<String>> readCsvRows(File file, BackgroundSqlTask backSqlTask) throws Exception {
-        List<List<String>> rows = new ArrayList<>();
-        try (PushbackReader reader = new PushbackReader(
-                new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)),
-                1
-        )) {
-            List<String> currentRow = new ArrayList<>();
-            StringBuilder currentField = new StringBuilder();
-            boolean inQuotes = false;
-            boolean atFileStart = true;
-            int nextChar;
-            while ((nextChar = reader.read()) != -1) {
-                checkImportCancelled(backSqlTask);
-                char currentChar = (char) nextChar;
-                if (atFileStart) {
-                    atFileStart = false;
-                    if (currentChar == '\uFEFF') {
-                        continue;
-                    }
-                }
-                if (inQuotes) {
-                    if (currentChar == '"') {
-                        int escapedChar = reader.read();
-                        if (escapedChar == '"') {
-                            currentField.append('"');
-                        } else {
-                            inQuotes = false;
-                            if (escapedChar != -1) {
-                                reader.unread(escapedChar);
-                            }
-                        }
-                    } else {
-                        currentField.append(currentChar);
-                    }
-                    continue;
-                }
-                if (currentChar == '"') {
-                    if (currentField.length() == 0) {
-                        inQuotes = true;
-                    } else {
-                        currentField.append(currentChar);
-                    }
-                    continue;
-                }
-                if (currentChar == ',') {
-                    currentRow.add(currentField.toString());
-                    currentField.setLength(0);
-                    continue;
-                }
-                if (currentChar == '\r') {
-                    int lineFeed = reader.read();
-                    if (lineFeed != '\n' && lineFeed != -1) {
-                        reader.unread(lineFeed);
-                    }
-                    currentRow.add(currentField.toString());
-                    rows.add(currentRow);
-                    currentRow = new ArrayList<>();
-                    currentField.setLength(0);
-                    checkImportCancelled(backSqlTask);
-                    continue;
-                }
-                if (currentChar == '\n') {
-                    currentRow.add(currentField.toString());
-                    rows.add(currentRow);
-                    currentRow = new ArrayList<>();
-                    currentField.setLength(0);
-                    checkImportCancelled(backSqlTask);
-                    continue;
-                }
-                currentField.append(currentChar);
-            }
-            if (inQuotes) {
-                throw new TableImportException(
-                    I18n.t("metadata.import.error.csv_quote_unclosed", "CSV 文件格式错误：存在未闭合的引号")
-                );
-            }
-            if (currentField.length() > 0 || !currentRow.isEmpty()) {
-                currentRow.add(currentField.toString());
-                rows.add(currentRow);
-            }
+    private void closeStatementQuietly(PreparedStatement statement) {
+        if (statement == null) {
+            return;
         }
-        return rows;
-    }
-
-    private ParsedImportData parseJsonFile(File file, BackgroundSqlTask backSqlTask) throws Exception {
-        String jsonText = stripLeadingBom(java.nio.file.Files.readString(file.toPath(), StandardCharsets.UTF_8));
-        if (jsonText.isBlank()) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.empty_file", "导入文件为空：%s").formatted(file.getName())
-            );
+        try {
+            statement.close();
+        } catch (Exception ignored) {
         }
-
-        Object root = new JSONTokener(jsonText).nextValue();
-        JSONArray jsonArray;
-        if (root instanceof JSONObject jsonObject) {
-            jsonArray = new JSONArray();
-            jsonArray.put(jsonObject);
-        } else if (root instanceof JSONArray array) {
-            jsonArray = array;
-        } else {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.json_root", "JSON 文件必须是对象数组或单个对象")
-            );
-        }
-        if (jsonArray.isEmpty()) {
-            throw new TableImportException(
-                    I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
-            );
-        }
-
-        ParsedImportData parsedData = new ParsedImportData();
-        for (int i = 0; i < jsonArray.length(); i++) {
-            checkImportCancelled(backSqlTask);
-            Object rowObject = jsonArray.get(i);
-            if (!(rowObject instanceof JSONObject jsonObject)) {
-                throw new TableImportException(
-                        I18n.t("metadata.import.error.json_row_object", "JSON 第 %d 项必须是对象").formatted(i + 1)
-                );
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (String key : jsonObject.keySet()) {
-                String displayName = stripLeadingBom(key).trim();
-                if (displayName.isBlank()) {
-                    throw new TableImportException(
-                            I18n.t("metadata.import.error.blank_field_name", "存在空字段名，无法导入")
-                    );
-                }
-                String normalizedName = normalizeFieldName(displayName);
-                parsedData.sourceColumns.putIfAbsent(normalizedName, displayName);
-                row.put(normalizedName, normalizeImportedValue(jsonObject.opt(key)));
-            }
-            parsedData.rows.add(row);
-        }
-        return parsedData;
     }
 
     private ArrayList<ColumnsInfo> loadImportColumns(Connect connect, String tableName) throws Exception {
@@ -831,7 +967,7 @@ public class TableService implements MetaObjectService {
 
     private String formatImportProgress(int completedRows, int totalRows) {
         if (totalRows <= 0) {
-            return "";
+            return Math.max(0, completedRows) + "/?";
         }
         int safeCompletedRows = Math.max(0, Math.min(completedRows, totalRows));
         return safeCompletedRows + "/" + totalRows;
@@ -926,7 +1062,7 @@ public class TableService implements MetaObjectService {
         return root.getClass().getSimpleName();
     }
 
-    private void checkImportCancelled(BackgroundSqlTask backSqlTask) {
+    private static void checkImportCancelled(BackgroundSqlTask backSqlTask) {
         if ((backSqlTask != null && backSqlTask.isCancelled()) || Thread.currentThread().isInterrupted()) {
             throw new CancellationException("import cancelled");
         }
@@ -983,18 +1119,203 @@ public class TableService implements MetaObjectService {
         JSON
     }
 
-    private static class ParsedImportData {
-        private final Map<String, String> sourceColumns = new LinkedHashMap<>();
-        private final List<Map<String, Object>> rows = new ArrayList<>();
+    private static class CsvImportSchema {
+        private final List<ColumnsInfo> targetColumns;
+        private final List<Integer> sourceIndexes;
+
+        private CsvImportSchema(List<ColumnsInfo> targetColumns, List<Integer> sourceIndexes) {
+            this.targetColumns = targetColumns;
+            this.sourceIndexes = sourceIndexes;
+        }
     }
 
-    private static class ImportPlan {
-        private final List<ColumnsInfo> targetColumns;
-        private final List<Map<String, Object>> rows;
+    private static class CsvRowStream implements AutoCloseable {
+        private final PushbackReader reader;
+        private boolean atFileStart = true;
+        private int currentRowNumber = 0;
 
-        private ImportPlan(List<ColumnsInfo> targetColumns, List<Map<String, Object>> rows) {
-            this.targetColumns = targetColumns;
-            this.rows = rows;
+        private CsvRowStream(File file) throws Exception {
+            this.reader = new PushbackReader(
+                    new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)),
+                    1
+            );
+        }
+
+        private List<String> nextRow(BackgroundSqlTask backSqlTask) throws Exception {
+            List<String> currentRow = new ArrayList<>();
+            StringBuilder currentField = new StringBuilder();
+            boolean inQuotes = false;
+            int nextChar;
+            while ((nextChar = reader.read()) != -1) {
+                if ((currentField.length() & 63) == 0) {
+                    checkImportCancelled(backSqlTask);
+                }
+                char currentChar = (char) nextChar;
+                if (atFileStart) {
+                    atFileStart = false;
+                    if (currentChar == '\uFEFF') {
+                        continue;
+                    }
+                }
+                if (inQuotes) {
+                    if (currentChar == '"') {
+                        int escapedChar = reader.read();
+                        if (escapedChar == '"') {
+                            currentField.append('"');
+                        } else {
+                            inQuotes = false;
+                            if (escapedChar != -1) {
+                                reader.unread(escapedChar);
+                            }
+                        }
+                    } else {
+                        currentField.append(currentChar);
+                    }
+                    continue;
+                }
+                if (currentChar == '"') {
+                    if (currentField.length() == 0) {
+                        inQuotes = true;
+                    } else {
+                        currentField.append(currentChar);
+                    }
+                    continue;
+                }
+                if (currentChar == ',') {
+                    currentRow.add(currentField.toString());
+                    currentField.setLength(0);
+                    continue;
+                }
+                if (currentChar == '\r') {
+                    int lineFeed = reader.read();
+                    if (lineFeed != '\n' && lineFeed != -1) {
+                        reader.unread(lineFeed);
+                    }
+                    currentRow.add(currentField.toString());
+                    currentRowNumber++;
+                    return currentRow;
+                }
+                if (currentChar == '\n') {
+                    currentRow.add(currentField.toString());
+                    currentRowNumber++;
+                    return currentRow;
+                }
+                currentField.append(currentChar);
+            }
+            if (inQuotes) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.csv_quote_unclosed", "CSV 文件格式错误：存在未闭合的引号")
+                );
+            }
+            if (currentField.length() > 0 || !currentRow.isEmpty()) {
+                currentRow.add(currentField.toString());
+                currentRowNumber++;
+                return currentRow;
+            }
+            return null;
+        }
+
+        private int getCurrentRowNumber() {
+            return currentRowNumber;
+        }
+
+        @Override
+        public void close() throws Exception {
+            reader.close();
+        }
+    }
+
+    private static class JsonRowStream implements AutoCloseable {
+        private final PushbackReader reader;
+        private final JSONTokener tokener;
+        private boolean initialized;
+        private boolean arrayMode;
+        private boolean finished;
+        private int currentItemIndex;
+
+        private JsonRowStream(File file) throws Exception {
+            this.reader = new PushbackReader(
+                    new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)),
+                    1
+            );
+            int firstChar = reader.read();
+            if (firstChar != -1 && firstChar != '\uFEFF') {
+                reader.unread(firstChar);
+            }
+            this.tokener = new JSONTokener(reader);
+        }
+
+        private JSONObject nextObject(BackgroundSqlTask backSqlTask) throws Exception {
+            checkImportCancelled(backSqlTask);
+            Object rowObject;
+            if (!initialized) {
+                char first = tokener.nextClean();
+                initialized = true;
+                if (first == 0) {
+                    finished = true;
+                    return null;
+                }
+                if (first == '{') {
+                    tokener.back();
+                    rowObject = tokener.nextValue();
+                    finished = true;
+                } else if (first == '[') {
+                    arrayMode = true;
+                    char next = tokener.nextClean();
+                    if (next == ']') {
+                        finished = true;
+                        return null;
+                    }
+                    tokener.back();
+                    rowObject = tokener.nextValue();
+                    consumeArraySeparator();
+                } else {
+                    throw new TableImportException(
+                            I18n.t("metadata.import.error.json_root", "JSON 文件必须是对象数组或单个对象")
+                    );
+                }
+            } else {
+                if (finished) {
+                    return null;
+                }
+                rowObject = tokener.nextValue();
+                consumeArraySeparator();
+            }
+            currentItemIndex++;
+            if (!(rowObject instanceof JSONObject jsonObject)) {
+                throw new TableImportException(
+                        I18n.t("metadata.import.error.json_row_object", "JSON 第 %d 项必须是对象").formatted(currentItemIndex)
+                );
+            }
+            return jsonObject;
+        }
+
+        private void consumeArraySeparator() throws Exception {
+            if (!arrayMode || finished) {
+                return;
+            }
+            char separator = tokener.nextClean();
+            if (separator == ',') {
+                char next = tokener.nextClean();
+                if (next == ']') {
+                    finished = true;
+                } else {
+                    tokener.back();
+                }
+                return;
+            }
+            if (separator == ']') {
+                finished = true;
+                return;
+            }
+            throw new TableImportException(
+                    I18n.t("metadata.import.error.json_root", "JSON 文件必须是对象数组或单个对象")
+            );
+        }
+
+        @Override
+        public void close() throws Exception {
+            tokener.close();
         }
     }
 

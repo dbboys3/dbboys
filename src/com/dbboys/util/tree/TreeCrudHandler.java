@@ -2083,9 +2083,5 @@ public class TreeCrudHandler {
                                 .formatted(table.getName(), insertedRows)
                 )
         );
-        NotificationUtil.showMainNotification(
-                I18n.t("metadata.import.notice.queued", "表\"%s\"导入任务已提交：%s")
-                        .formatted(table.getName(), file.getName())
-        );
     }
 }
