@@ -859,7 +859,7 @@ public class TreeCrudHandler {
                     Platform.runLater(() -> NotificationUtil.showMainNotification(
                             I18n.t(
                                     "metadata.export.ddl_data.notice.completed",
-                                    "数据库\"%s\"DDL脚本和表数据已导出到：%s"
+                                    "数据库已导出到：%s"
                             ).formatted(database.getName(), exportDir.getAbsolutePath())
                     ));
                     updateProgress(1, 1);
@@ -1490,7 +1490,7 @@ public class TreeCrudHandler {
         }
 
         DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle(I18n.t("metadata.import_ddl_data.dir.title", "选择DDL及数据目录"));
+        chooser.setTitle(I18n.t("metadata.import_ddl_data.dir.title", "选择数据库导出目录"));
         File dir = chooser.showDialog(AppState.getWindow());
         if (dir == null) {
             return;
