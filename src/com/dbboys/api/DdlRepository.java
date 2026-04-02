@@ -8,6 +8,24 @@ import java.util.function.LongConsumer;
  */
 public interface DdlRepository {
 
+    class DatabaseDdlParts {
+        private final String preDataSql;
+        private final String postDataSql;
+
+        public DatabaseDdlParts(String preDataSql, String postDataSql) {
+            this.preDataSql = preDataSql == null ? "" : preDataSql;
+            this.postDataSql = postDataSql == null ? "" : postDataSql;
+        }
+
+        public String getPreDataSql() {
+            return preDataSql;
+        }
+
+        public String getPostDataSql() {
+            return postDataSql;
+        }
+    }
+
     default long countDatabaseExportItems(Connection conn, String databaseName) throws Exception {
         return -1;
     }
@@ -18,6 +36,12 @@ public interface DdlRepository {
 
     default String printDatabase(Connection conn, String databaseName, LongConsumer progressCallback) throws Exception {
         return printDatabase(conn, databaseName);
+    }
+
+    default DatabaseDdlParts exportDatabaseDdlParts(Connection conn,
+                                                    String databaseName,
+                                                    LongConsumer progressCallback) throws Exception {
+        return new DatabaseDdlParts(printDatabase(conn, databaseName, progressCallback), "");
     }
 
     String printTable(Connection conn, String objectName) throws Exception;

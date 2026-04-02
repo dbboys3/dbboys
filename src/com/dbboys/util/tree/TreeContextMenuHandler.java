@@ -164,6 +164,10 @@ public class TreeContextMenuHandler {
         exportDdlMenu.textProperty().bind(I18n.bind("metadata.menu.export_ddl.title", "导出DDL"));
         exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
+        CustomShortcutMenuItem exportDdlAndDataItem =
+                MenuItemUtil.createMenuItemI18n("metadata.menu.export_ddl_data",
+                        IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
+
         CustomShortcutMenuItem exportDdlToFile =
                 MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_file", null);
         CustomShortcutMenuItem exportDdlToClipboard =
@@ -874,6 +878,8 @@ public class TreeContextMenuHandler {
             PopupWindowUtil.openDDLWindow(ddlText);
         }));
 
+        exportDdlAndDataItem.setOnAction(event -> TreeCrudHandler.exportDatabaseDdlAndData(treeView));
+
         exportDdlToNewSqlEditarea.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
             AppState.getNewSqlFileMenuItem().fire();
             if (AppState.getSqlTabPane().getSelectionModel().getSelectedItem() instanceof CustomSqlTab currentSqlTab) {
@@ -1470,6 +1476,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(importMenu);
+                    treeview_menu.getItems().add(exportDdlAndDataItem);
                     treeview_menu.getItems().add(exportDdlMenu);
                 }
                 //对象文件夹

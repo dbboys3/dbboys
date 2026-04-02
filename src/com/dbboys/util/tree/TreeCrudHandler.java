@@ -11,6 +11,7 @@ import com.dbboys.api.MetaObjectService;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.util.*;
 import com.dbboys.vo.*;
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Pos;
@@ -20,19 +21,49 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.io.File;
+import java.sql.Connection;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 
 public class TreeCrudHandler {
+    private static final Logger log = LogManager.getLogger(TreeCrudHandler.class);
     private static final String PROP_DB_LOCALE = "DB_LOCALE";
     private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
+
+    private static final class DatabaseExportRuntime {
+        private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
+        private final AtomicReference<ExecutorService> executorRef = new AtomicReference<>();
+        private final Set<Connection> activeConnections = ConcurrentHashMap.newKeySet();
+
+        private void cancel() {
+            cancelRequested.set(true);
+            ExecutorService executor = executorRef.getAndSet(null);
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+            for (Connection connection : activeConnections) {
+                closeConnectionQuietly(connection);
+            }
+        }
+    }
 
     public enum ExportFormat {CSV, JSON, SQL}
 
@@ -639,6 +670,121 @@ public class TreeCrudHandler {
         ddlFuture.set(connect.executeSqlTask(ddlTask));
     }
 
+    public static void exportDatabaseDdlAndData(TreeView<TreeData> treeView) {
+        TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+            return;
+        }
+
+        DirectoryChooser dirChooser = new DirectoryChooser();
+        dirChooser.setTitle(I18n.t("metadata.export.dir.title", "选择导出目录"));
+        File dir = dirChooser.showDialog(AppState.getWindow());
+        if (dir == null) {
+            return;
+        }
+
+        Connect exportBaseConnect = buildObjectConnect(selectedItem, false);
+        File exportDir = new File(dir, database.getName() + ".dbb");
+        if (!ensureDatabaseExportDirectory(exportDir)) {
+            return;
+        }
+        File preDdlFile = new File(exportDir, database.getName() + "_01_pre_data.sql");
+        File postDdlFile = new File(exportDir, database.getName() + "_02_post_data.sql");
+        DatabaseExportRuntime runtime = new DatabaseExportRuntime();
+        if (preDdlFile.exists()) {
+            preDdlFile.delete();
+        }
+        if (postDdlFile.exists()) {
+            postDdlFile.delete();
+        }
+
+        Task<Void> exportTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                String countingMessage = I18n.t("metadata.export.ddl_data.progress.counting", "对象统计");
+                String loadingMessage = I18n.t("metadata.export.ddl_data.progress.ddl_indeterminate", "DDL");
+                String loadingProgressPattern = I18n.t("metadata.export.ddl_data.progress.ddl", "DDL %d/%d");
+                String loadingTablesMessage = I18n.t("metadata.export.ddl_data.loading.tables", "表列表");
+                String exportingTablesPattern = I18n.t("metadata.export.ddl_data.progress.tables", "表 %d/%d");
+                if (isDatabaseExportCancelled(this, runtime)) {
+                    return null;
+                }
+                updateProgress(-1, 1);
+                updateMessage(countingMessage);
+                try {
+                    var ddlParts = TreeViewUtil.databaseService.exportDatabaseDdlPartsWithNewConnection(exportBaseConnect, database, (completed, total) -> {
+                        if (isDatabaseExportCancelled(this, runtime)) {
+                            throw new CancellationException("Database DDL export cancelled");
+                        }
+                        if (total > 0) {
+                            long safeCompleted = Math.min(completed, total);
+                            updateProgress(safeCompleted, total);
+                            updateMessage(loadingProgressPattern.formatted(safeCompleted, total));
+                        } else {
+                            updateProgress(-1, 1);
+                            updateMessage(loadingMessage);
+                        }
+                    });
+                    if (isDatabaseExportCancelled(this, runtime)) {
+                        throw new CancellationException("Database DDL export cancelled");
+                    }
+                    String bootstrapSql = buildDatabaseBootstrapSql(exportBaseConnect, database);
+                    Files.writeString(preDdlFile.toPath(), bootstrapSql + ddlParts.getPreDataSql(), StandardCharsets.UTF_8);
+                    Files.writeString(postDdlFile.toPath(), ddlParts.getPostDataSql(), StandardCharsets.UTF_8);
+                    if (isDatabaseExportCancelled(this, runtime)) {
+                        throw new CancellationException("Database DDL export cancelled");
+                    }
+                    updateProgress(-1, 1);
+                    updateMessage(loadingTablesMessage);
+                    List<Table> tables = new ArrayList<>(TreeViewUtil.databaseService.getUserTablesWithNewConnection(exportBaseConnect, database));
+                    if (isDatabaseExportCancelled(this, runtime)) {
+                        throw new CancellationException("Database DDL export cancelled");
+                    }
+                    int totalTables = tables.size();
+                    updateProgress(0, Math.max(1, totalTables));
+                    updateMessage(exportingTablesPattern.formatted(0, totalTables));
+                    List<String> failures = exportDatabaseCsvFiles(
+                            exportBaseConnect,
+                            exportDir,
+                            tables,
+                            completed -> {
+                                updateProgress(completed, Math.max(1, totalTables));
+                                updateMessage(exportingTablesPattern.formatted(completed, totalTables));
+                            },
+                            () -> isDatabaseExportCancelled(this, runtime),
+                            runtime
+                    );
+                    if (!failures.isEmpty()) {
+                        throw new Exception(buildDatabaseExportFailureMessage(failures));
+                    }
+                    Platform.runLater(() -> NotificationUtil.showMainNotification(
+                            I18n.t(
+                                    "metadata.export.ddl_data.notice.completed",
+                                    "数据库\"%s\"DDL脚本和表数据已导出到：%s"
+                            ).formatted(database.getName(), exportDir.getAbsolutePath())
+                    ));
+                    updateProgress(1, 1);
+                    return null;
+                } catch (CancellationException e) {
+                    runtime.cancel();
+                    deleteFileQuietly(preDdlFile);
+                    deleteFileQuietly(postDdlFile);
+                    deleteDirectoryIfEmpty(exportDir);
+                    throw e;
+                } catch (Exception e) {
+                    runtime.cancel();
+                    deleteFileQuietly(preDdlFile);
+                    deleteFileQuietly(postDdlFile);
+                    deleteDirectoryIfEmpty(exportDir);
+                    throw e;
+                }
+            }
+        };
+        String taskDisplayName = I18n.t("metadata.export.ddl_data.task_name", "%s DDL及数据")
+                .formatted(database.getName());
+        DownloadManagerUtil.addCustomExportTask(taskDisplayName, preDdlFile, true, exportTask, runtime::cancel);
+    }
+
     private static AlertUtil.ContentDialog createDdlLoadingDialog(Task<?> ddlTask, Runnable cancelAction) {
         ButtonType cancelButtonType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
 
@@ -693,6 +839,243 @@ public class TreeCrudHandler {
         }
         if (dialog.getStage().isShowing()) {
             dialog.getStage().close();
+        }
+    }
+
+    private static List<String> exportDatabaseCsvFiles(Connect baseConnect,
+                                                       File dir,
+                                                       List<Table> tables,
+                                                       java.util.function.IntConsumer progressUpdater,
+                                                       java.util.function.BooleanSupplier cancelChecker,
+                                                       DatabaseExportRuntime runtime) throws Exception {
+        List<Table> validTables = new ArrayList<>();
+        if (tables != null) {
+            for (Table table : tables) {
+                if (table != null && table.getName() != null && !table.getName().isBlank()) {
+                    validTables.add(table);
+                }
+            }
+        }
+        if (validTables.isEmpty()) {
+            if (progressUpdater != null) {
+                progressUpdater.accept(0);
+            }
+            return List.of();
+        }
+
+        int maxConcurrency = Math.min(8, validTables.size());
+        ExecutorService executor = Executors.newFixedThreadPool(maxConcurrency, r -> {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            thread.setName("dbboys-db-export-" + thread.getId());
+            return thread;
+        });
+        runtime.executorRef.set(executor);
+        ConcurrentLinkedQueue<Table> tableQueue = new ConcurrentLinkedQueue<>(validTables);
+        AtomicInteger activeExports = new AtomicInteger(0);
+        AtomicInteger activeConnections = new AtomicInteger(0);
+        AtomicInteger completedTables = new AtomicInteger(0);
+        try {
+            List<Future<List<String>>> futures = new ArrayList<>();
+            for (int workerIndex = 0; workerIndex < maxConcurrency; workerIndex++) {
+                final int workerNo = workerIndex + 1;
+                futures.add(executor.submit(() -> {
+                    List<String> workerFailures = new ArrayList<>();
+                    if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+                        throw new CancellationException("Database data export cancelled");
+                    }
+                    Connect workerConnect = new Connect(baseConnect);
+                    int openedConnections = activeConnections.incrementAndGet();
+                    Connection conn = null;
+                    try {
+                        conn = AppContext.get(com.dbboys.api.ConnectionService.class).createConnection(workerConnect);
+                        runtime.activeConnections.add(conn);
+                        while (true) {
+                            if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+                                throw new CancellationException("Database data export cancelled");
+                            }
+                            Table table = tableQueue.poll();
+                            if (table == null) {
+                                break;
+                            }
+                            File file = new File(dir, table.getName() + ".csv");
+                            deleteFileQuietly(file);
+                            int active = activeExports.incrementAndGet();
+                            try {
+                                boolean exported = DownloadManagerUtil.exportSqlToCsvFile(
+                                        conn,
+                                        "select * from " + table.getName(),
+                                        file,
+                                        cancelChecker
+                                );
+                                if (!exported) {
+                                    deleteFileQuietly(file);
+                                }
+                            } catch (CancellationException e) {
+                                deleteFileQuietly(file);
+                                throw e;
+                            } catch (Exception e) {
+                                if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+                                    deleteFileQuietly(file);
+                                    throw new CancellationException("Database data export cancelled");
+                                }
+                                String message = e.getMessage();
+                                log.error("Database CSV export failed. database={}, table={}, worker={}, thread={}, activeExports={}, activeConnections={}",
+                                        baseConnect.getDatabase(), table.getName(), workerNo, Thread.currentThread().getName(), active, activeConnections.get(), e);
+                                workerFailures.add(table.getName() + ": " + (message == null || message.isBlank() ? e.toString() : message));
+                            } finally {
+                                activeExports.decrementAndGet();
+                                int completed = completedTables.incrementAndGet();
+                                if (progressUpdater != null) {
+                                    progressUpdater.accept(completed);
+                                }
+                            }
+                        }
+                    } finally {
+                        runtime.activeConnections.remove(conn);
+                        closeConnectionQuietly(conn);
+                        int remainingConnections = activeConnections.decrementAndGet();
+                    }
+                    return workerFailures;
+                }));
+            }
+
+            List<String> failures = new ArrayList<>();
+            for (Future<List<String>> future : futures) {
+                try {
+                    List<String> workerFailures = future.get();
+                    if (workerFailures != null && !workerFailures.isEmpty()) {
+                        failures.addAll(workerFailures);
+                    }
+                } catch (Exception e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    if (e instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    String message = cause == null ? e.getMessage() : cause.getMessage();
+                    failures.add(message == null || message.isBlank() ? e.toString() : message);
+                }
+            }
+            return failures;
+        } finally {
+            runtime.executorRef.compareAndSet(executor, null);
+            executor.shutdownNow();
+        }
+    }
+
+    private static boolean ensureDatabaseExportDirectory(File exportDir) {
+        if (exportDir == null) {
+            return false;
+        }
+        if (exportDir.exists()) {
+            if (exportDir.isDirectory()) {
+                return true;
+            }
+            AlertUtil.CustomAlert(
+                    I18n.t("common.error", "错误"),
+                    I18n.t("metadata.export.ddl_data.error.dir_conflict", "导出目录已存在同名文件：%s")
+                            .formatted(exportDir.getAbsolutePath())
+            );
+            return false;
+        }
+        if (exportDir.mkdirs()) {
+            return true;
+        }
+        AlertUtil.CustomAlert(
+                I18n.t("common.error", "错误"),
+                I18n.t("metadata.export.ddl_data.error.dir_create_failed", "创建导出目录失败：%s")
+                        .formatted(exportDir.getAbsolutePath())
+        );
+        return false;
+    }
+
+    private static String buildDatabaseBootstrapSql(Connect connect, Database database) {
+        if (connect == null || database == null || !"GBASE 8S".equals(connect.getDbtype())) {
+            return "";
+        }
+        String databaseName = normalizeSqlToken(database.getName());
+        if (databaseName.isEmpty()) {
+            return "";
+        }
+        String dbspace = normalizeSqlToken(database.getDbSpace());
+        String dbLog = normalizeSqlToken(database.getDbLog()).toLowerCase(Locale.ROOT);
+        String dbLocale = normalizeSqlToken(database.getDbLocale());
+        String lineSeparator = System.lineSeparator();
+
+        StringBuilder builder = new StringBuilder();
+        if (!dbLocale.isEmpty()) {
+            builder.append("-- DB_LOCALE=").append(dbLocale).append(lineSeparator);
+        }
+        builder.append("create database ").append(databaseName);
+        if (!dbspace.isEmpty()) {
+            builder.append(" in ").append(dbspace);
+        }
+        if ("buffered".equals(dbLog)) {
+            builder.append(" with buffered log");
+        } else if ("unbuffered".equals(dbLog)) {
+            builder.append(" with log");
+        }
+        builder.append(";").append(lineSeparator);
+        builder.append("database ").append(databaseName).append(";").append(lineSeparator).append(lineSeparator);
+        return builder.toString();
+    }
+
+    private static String normalizeSqlToken(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String buildDatabaseExportFailureMessage(List<String> failures) {
+        if (failures == null || failures.isEmpty()) {
+            return "表数据导出失败";
+        }
+        int limit = Math.min(failures.size(), 10);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                builder.append("; ");
+            }
+            builder.append(failures.get(i));
+        }
+        if (failures.size() > limit) {
+            builder.append(" ...");
+        }
+        return I18n.t(
+                "metadata.export.ddl_data.failure.summary",
+                "共有 %d 张表导出失败：%s"
+        ).formatted(failures.size(), builder);
+    }
+
+    private static void deleteFileQuietly(File file) {
+        if (file != null && file.exists()) {
+            file.delete();
+        }
+    }
+
+    private static void deleteDirectoryIfEmpty(File dir) {
+        if (dir != null && dir.isDirectory()) {
+            String[] children = dir.list();
+            if (children != null && children.length == 0) {
+                dir.delete();
+            }
+        }
+    }
+
+    private static boolean isDatabaseExportCancelled(Task<?> task, DatabaseExportRuntime runtime) {
+        return (task != null && task.isCancelled())
+                || Thread.currentThread().isInterrupted()
+                || (runtime != null && runtime.cancelRequested.get());
+    }
+
+    private static void closeConnectionQuietly(Connection connection) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (Exception ignored) {
         }
     }
 
@@ -800,7 +1183,7 @@ public class TreeCrudHandler {
             }
 
             String exportSql = "select * from " + table.getName();
-            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true);
+            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true, table.getNrows());
             return;
         }
 
@@ -826,7 +1209,7 @@ public class TreeCrudHandler {
                 file.delete();
             }
             String exportSql = "select * from " + table.getName();
-            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true);
+            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true, table.getNrows());
         }
     }
 

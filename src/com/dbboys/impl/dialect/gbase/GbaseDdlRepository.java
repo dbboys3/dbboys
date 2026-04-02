@@ -3034,9 +3034,12 @@ public final class GbaseDdlRepository implements DdlRepository {
     }
 
     @Override
-    public String printDatabase(Connection connection,String databasename, LongConsumer progressCallback) throws SQLException {
+    public DatabaseDdlParts exportDatabaseDdlParts(Connection connection,
+                                                   String databasename,
+                                                   LongConsumer progressCallback) throws SQLException {
         // 顺序暂定：函数->存储过程->表（含主键、索引、约束）->同义词（等）-> 序列 -> 视图（可能有依赖关系，先后顺序）
-        StringBuilder ddl = new StringBuilder();
+        StringBuilder preDataDdl = new StringBuilder();
+        StringBuilder postDataDdl = new StringBuilder();
         String preDatabase = getActiveDbname(connection);
         String productversion = getDataBaseProductVersion(connection);
         int dbVersion = getDataBaseProductVersionNumber(connection);
@@ -3046,7 +3049,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         long[] completed = new long[1];
 
         // 00，输出头部信息
-        ddl.append(printDBAll_00_Header(databasename,productversion));
+        preDataDdl.append(printDBAll_00_Header(databasename,productversion));
         
         try {
             // 变更激活库为当前
@@ -3054,28 +3057,28 @@ public final class GbaseDdlRepository implements DdlRepository {
                 setActiveDbname(connection,databasename);
             }
             // 10, 导出自定义函数和存储过程。 procname, procbody, procflags
-            ddl.append(printDBAll_10_Procedure(connection,displaysqlmode,completed,progressCallback));            
+            preDataDdl.append(printDBAll_10_Procedure(connection,displaysqlmode,completed,progressCallback));            
             // 20, 导出表结构
-            ddl.append(printDBAll_20_Table(connection,displaysqlmode,completed,progressCallback));
+            preDataDdl.append(printDBAll_20_Table(connection,displaysqlmode,completed,progressCallback));
             // 30, 同义词
-            ddl.append(printDBAll_30_Synonym(connection,displaysqlmode,completed,progressCallback));
+            preDataDdl.append(printDBAll_30_Synonym(connection,displaysqlmode,completed,progressCallback));
             // 40，序列
-            ddl.append(printDBAll_40_Sequence(connection,displaysqlmode,completed,progressCallback));
+            preDataDdl.append(printDBAll_40_Sequence(connection,displaysqlmode,completed,progressCallback));
             // 50，视图
-            ddl.append(printDBAll_50_View(connection,displaysqlmode,completed,progressCallback));
+            preDataDdl.append(printDBAll_50_View(connection,displaysqlmode,completed,progressCallback));
 
             // 60（索引）和70（外键）共用，字段列表。数据导入可在此之前。
             ArrayList<TableWithColumn> tableColumnArrayList = getTableWithColumns(connection);
             // 60，索引，需要字段列表
-            ddl.append(printDBAll_60_Index(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
+            postDataDdl.append(printDBAll_60_Index(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
             // 70，外键，需要字段列表
-            ddl.append(printDBAll_70_ForeigenKey(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
+            postDataDdl.append(printDBAll_70_ForeigenKey(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
             // 80，触发器
-            ddl.append(printDBAll_80_Trigger(connection,displaysqlmode,completed,progressCallback));
+            postDataDdl.append(printDBAll_80_Trigger(connection,displaysqlmode,completed,progressCallback));
             // 90，注释
-            ddl.append(printDBAll_90_Comment(connection,displaysqlmode,completed,progressCallback));        
-        
-            return ddl.toString();
+            postDataDdl.append(printDBAll_90_Comment(connection,displaysqlmode,completed,progressCallback));        
+
+            return new DatabaseDdlParts(preDataDdl.toString(), postDataDdl.toString());
         } catch (SQLException e) {
             pending = e;
             throw e;
@@ -3098,6 +3101,12 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
             }
         }
+    }
+
+    @Override
+    public String printDatabase(Connection connection,String databasename, LongConsumer progressCallback) throws SQLException {
+        DatabaseDdlParts ddlParts = exportDatabaseDdlParts(connection, databasename, progressCallback);
+        return ddlParts.getPreDataSql() + ddlParts.getPostDataSql();
     }
 
     private static long queryCount(SqlRunner runner, String sql) throws SQLException {

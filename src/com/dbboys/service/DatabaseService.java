@@ -3,6 +3,7 @@ package com.dbboys.service;
 import com.dbboys.api.DdlRepositoryProvider;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetadataRepositoryProvider;
+import com.dbboys.api.DdlRepository;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.BackgroundSqlUtil;
@@ -12,6 +13,7 @@ import com.dbboys.vo.BackgroundSqlTask;
 import com.dbboys.vo.Database;
 import com.dbboys.vo.ObjectList;
 import com.dbboys.vo.Sql;
+import com.dbboys.vo.Table;
 import com.dbboys.vo.UpdateResult;
 import javafx.concurrent.Task;
 import javafx.scene.control.Alert;
@@ -91,6 +93,64 @@ public class DatabaseService implements MetaObjectService {
                     : null;
             return ddlRepository.printDatabase(conn, database.getName(), progressCallback);
         });
+    }
+
+    public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connect connect,
+                                                                 Database database,
+                                                                 BiConsumer<Long, Long> progressListener) throws Exception {
+        return withMetaSession(connect, database, conn -> {
+            var ddlRepository = ddlRepositoryProvider.ddl(connect);
+            long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
+            if (progressListener != null) {
+                progressListener.accept(0L, total);
+            }
+            LongConsumer progressCallback = (progressListener != null && total > 0)
+                    ? completed -> progressListener.accept(completed, total)
+                    : null;
+            return ddlRepository.exportDatabaseDdlParts(conn, database.getName(), progressCallback);
+        });
+    }
+
+    public List<Table> getUserTables(Connect connect, Database database) throws Exception {
+        return withMetaSession(connect, database,
+                conn -> metadataRepositoryProvider.metadata(connect).getUserTables(conn, database.getName()));
+    }
+
+    public DdlRepository.DatabaseDdlParts exportDatabaseDdlPartsWithNewConnection(Connect connect,
+                                                                                  Database database,
+                                                                                  BiConsumer<Long, Long> progressListener) throws Exception {
+        Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
+        try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
+            var ddlRepository = ddlRepositoryProvider.ddl(sessionConnect);
+            long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
+            if (progressListener != null) {
+                progressListener.accept(0L, total);
+            }
+            LongConsumer progressCallback = (progressListener != null && total > 0)
+                    ? completed -> progressListener.accept(completed, total)
+                    : null;
+            return ddlRepository.exportDatabaseDdlParts(conn, database.getName(), progressCallback);
+        }
+    }
+
+    public List<Table> getUserTablesWithNewConnection(Connect connect, Database database) throws Exception {
+        Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
+        try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
+            return metadataRepositoryProvider.metadata(sessionConnect).getUserTables(conn, database.getName());
+        }
+    }
+
+    private Connect buildDatabaseSessionConnect(Connect connect, Database database) {
+        Connect sessionConnect = new Connect(connect);
+        if (database == null) {
+            return sessionConnect;
+        }
+        sessionConnect.setDatabase(database.getName());
+        sessionConnect.setProps(connectionService().modifyProps(sessionConnect, "DB_LOCALE", database.getDbLocale()));
+        if (database.getDbLog() != null && "nolog".equalsIgnoreCase(database.getDbLog().trim())) {
+            sessionConnect.setProps(connectionService().modifyProps(sessionConnect, "IFX_ISOLATION_LEVEL", ""));
+        }
+        return sessionConnect;
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {

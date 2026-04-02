@@ -44,6 +44,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +65,9 @@ class DownloadTaskWrapper {
     private ResultSet streamingResultSet;
     private String streamingFormat;
     private long totalRows = -1;
+    private DownloadManagerUtil.SqlExportSource sqlExportSource;
+    private ExecutorService taskExecutor;
+    private DownloadManagerUtil.CustomExportSource customExportSource;
 
 
     private final Node rootPane; // StackPane 鐨勫瓙鑺傜偣
@@ -108,6 +115,13 @@ class DownloadTaskWrapper {
             this.streamingFormat = s.format;
             this.metaData = s.metaData;
             this.totalRows = s.totalRows;
+            this.taskExecutor = s.executor;
+        } else if (source instanceof DownloadManagerUtil.SqlExportSource s) {
+            this.sqlExportSource = s;
+            this.streamingFormat = s.format;
+            this.taskExecutor = s.executor;
+        } else if (source instanceof DownloadManagerUtil.CustomExportSource s) {
+            this.customExportSource = s;
         }
 
         progressBar = new ProgressBar(0);
@@ -192,6 +206,22 @@ class DownloadTaskWrapper {
             rootPane = line;
             nameLabel.textProperty().bind(Bindings.createStringBinding(
                     () -> I18n.t("download.label.exporting_prefix", "正在导出：") + file.getName(),
+                    I18n.localeProperty()
+            ));
+        } else if (source instanceof DownloadManagerUtil.SqlExportSource) {
+            HBox line = new HBox(6, nameLabel, speedLabel, progressBar, progressLabel, stopButton);
+            line.setAlignment(Pos.CENTER_RIGHT);
+            rootPane = line;
+            nameLabel.textProperty().bind(Bindings.createStringBinding(
+                    () -> I18n.t("download.label.exporting_prefix", "正在导出：") + file.getName(),
+                    I18n.localeProperty()
+            ));
+        } else if (source instanceof DownloadManagerUtil.CustomExportSource) {
+            HBox line = new HBox(6, nameLabel, speedLabel, progressBar, progressLabel, stopButton);
+            line.setAlignment(Pos.CENTER_RIGHT);
+            rootPane = line;
+            nameLabel.textProperty().bind(Bindings.createStringBinding(
+                    () -> I18n.t("download.label.exporting_prefix", "正在导出：") + customExportSource.displayName,
                     I18n.localeProperty()
             ));
         } else {
@@ -338,7 +368,11 @@ class DownloadTaskWrapper {
 
             task.setOnFailed(e -> {
                 stackPaneRemoveSelf();
-                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
+                Throwable ex = task.getException();
+                if (ex instanceof CancellationException) {
+                    return;
+                }
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), ex == null ? "" : ex.getMessage()));
             });
 
             progressBar.progressProperty().bind(task.progressProperty());
@@ -349,16 +383,60 @@ class DownloadTaskWrapper {
             task = createResultSetExportTask(streamingFormat, streamingResultSet, metaData, file, totalRows);
             task.setOnFailed(e -> {
                 stackPaneRemoveSelf();
-                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), task.getException().getMessage()));
+                Throwable ex = task.getException();
+                if (ex instanceof CancellationException) {
+                    return;
+                }
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), ex == null ? "" : ex.getMessage()));
             });
             progressBar.progressProperty().bind(task.progressProperty());
             // 百分比显示在 progressLabel，行数/总行数显示在 speedLabel
             progressLabel.textProperty().bind(task.progressProperty().multiply(100).asString("%.0f%%"));
             speedLabel.textProperty().unbind();
             speedLabel.textProperty().bind(task.messageProperty());
+        } else if (source instanceof DownloadManagerUtil.SqlExportSource) {
+            task = createSqlExportTask(sqlExportSource, file);
+            task.setOnFailed(e -> {
+                stackPaneRemoveSelf();
+                Throwable ex = task.getException();
+                if (ex instanceof CancellationException) {
+                    return;
+                }
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), ex == null ? "" : ex.getMessage()));
+            });
+            progressBar.progressProperty().bind(task.progressProperty());
+            progressLabel.textProperty().bind(task.progressProperty().multiply(100).asString("%.0f%%"));
+            speedLabel.textProperty().unbind();
+            speedLabel.textProperty().bind(task.messageProperty());
+        } else if (source instanceof DownloadManagerUtil.CustomExportSource) {
+            task = customExportSource.task;
+            task.setOnSucceeded(e -> {
+                if (autoCloseOnComplete) {
+                    stackPaneRemoveSelf();
+                }
+            });
+            task.setOnFailed(e -> {
+                stackPaneRemoveSelf();
+                Throwable ex = task.getException();
+                if (ex instanceof CancellationException) {
+                    return;
+                }
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("download.error.title", "下载失败"), ex == null ? "" : ex.getMessage()));
+            });
+            progressBar.progressProperty().bind(task.progressProperty());
+            progressLabel.textProperty().bind(Bindings.createStringBinding(() -> {
+                double progress = task.getProgress();
+                return progress < 0 ? "" : String.format("%.0f%%", progress * 100);
+            }, task.progressProperty()));
+            speedLabel.textProperty().unbind();
+            speedLabel.textProperty().bind(task.messageProperty());
         } 
 
-        AppExecutor.runTask(task);
+        if (taskExecutor != null) {
+            taskExecutor.submit(task);
+        } else {
+            AppExecutor.runTask(task);
+        }
     }
 
     
@@ -408,10 +486,100 @@ class DownloadTaskWrapper {
         };
     }
 
-    private void writeCsvStreaming(ResultSet rs, ResultSetMetaData meta, File file,
-                                   java.util.function.BiConsumer<Long, Long> progressUpdater,
-                                   java.util.function.Consumer<String> messageUpdater,
-                                   long totalRows) throws Exception {
+    private Task<Void> createSqlExportTask(DownloadManagerUtil.SqlExportSource source, File file) {
+        return new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                long queryTotalRows = source.totalRowsHint > 0 ? source.totalRowsHint : -1;
+                try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).createConnection(source.connect)) {
+                    if (cancelled || isCancelled() || Thread.currentThread().isInterrupted()) {
+                        return null;
+                    }
+
+                    if (queryTotalRows <= 0) {
+                        try (PreparedStatement cps = conn.prepareStatement("select count(*) from (" + source.sql + ") t")) {
+                            try (ResultSet crs = cps.executeQuery()) {
+                                if (crs.next()) {
+                                    queryTotalRows = crs.getLong(1);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.debug("Count query failed, proceeding without total", e);
+                        }
+                    }
+
+                    try (PreparedStatement ps = conn.prepareStatement(source.sql,
+                            ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                        try {
+                            ps.setFetchSize(500);
+                        } catch (Exception e) {
+                            log.trace("setFetchSize not supported", e);
+                        }
+
+                        try (ResultSet rs = ps.executeQuery()) {
+                            ResultSetMetaData meta = rs.getMetaData();
+                            if (queryTotalRows > 0) {
+                                updateProgress(0, queryTotalRows);
+                                updateMessage("0/" + queryTotalRows);
+                            } else {
+                                updateProgress(-1, 1);
+                                updateMessage("0/?");
+                            }
+
+                            java.util.function.Consumer<String> msg = this::updateMessage;
+                            java.util.function.BiConsumer<Long, Long> progressCb = (done, total) -> {
+                                if (total > 0) {
+                                    updateProgress(done, total);
+                                    updateMessage(done + "/" + total);
+                                } else {
+                                    updateMessage(done + "/?");
+                                }
+                            };
+
+                            switch (source.format.toLowerCase()) {
+                                case "csv" -> {
+                                    if (!writeCsvStreaming(rs, meta, file, progressCb, msg, queryTotalRows,
+                                            () -> cancelled || isCancelled() || Thread.currentThread().isInterrupted())) {
+                                        updateProgress(1, 1);
+                                        updateMessage("0/0");
+                                    }
+                                }
+                                case "json" -> writeJsonStreaming(rs, meta, file, progressCb, msg, queryTotalRows);
+                                case "sql" -> writeSqlStreaming(rs, meta, file, progressCb, msg, queryTotalRows);
+                                default -> throw new IllegalArgumentException("Unknown format: " + source.format);
+                            }
+                        }
+                    }
+                }
+
+                if (!cancelled) {
+                    updateProgress(1, 1);
+                    Platform.runLater(() -> NotificationUtil.showMainNotification(I18n.t("download.notice.export_completed", "瀵煎嚭宸插畬鎴愶紒")));
+                    if (autoCloseOnComplete) {
+                        stackPaneRemoveSelf();
+                    }
+                }
+                return null;
+            }
+        };
+    }
+
+    private boolean writeCsvStreaming(ResultSet rs, ResultSetMetaData meta, File file,
+                                      java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                      java.util.function.Consumer<String> messageUpdater,
+                                      long totalRows) throws Exception {
+        return writeCsvStreaming(rs, meta, file, progressUpdater, messageUpdater, totalRows, null);
+    }
+
+    private boolean writeCsvStreaming(ResultSet rs, ResultSetMetaData meta, File file,
+                                      java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                      java.util.function.Consumer<String> messageUpdater,
+                                      long totalRows,
+                                      BooleanSupplier cancelChecker) throws Exception {
+        DownloadManagerUtil.throwIfExportCancelled(cancelChecker);
+        if (!rs.next()) {
+            return false;
+        }
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             int columnCount = meta.getColumnCount();
             for (int i = 1; i <= columnCount; i++) {
@@ -419,21 +587,26 @@ class DownloadTaskWrapper {
                 writer.write(escapeCsv(meta.getColumnLabel(i)));
             }
             writer.newLine();
-            long row = 0;
-            while (!cancelled && rs.next()) {
-                for (int i = 1; i <= columnCount; i++) {
-                    if (i > 1) writer.write(",");
-                    String val = readCsvCellValue(rs, meta, i);
-                    writer.write(val == null ? "" : escapeCsv(val));
+            long row = 1;
+            DownloadManagerUtil.throwIfExportCancelled(cancelChecker);
+            writeCsvStreamingRow(writer, rs, meta, columnCount);
+            writer.newLine();
+            if (progressUpdater != null) progressUpdater.accept(row, totalRows);
+            while (!cancelled) {
+                DownloadManagerUtil.throwIfExportCancelled(cancelChecker);
+                if (!rs.next()) {
+                    break;
                 }
+                writeCsvStreamingRow(writer, rs, meta, columnCount);
                 writer.newLine();
                 row++;
-                if (totalRows > 0 && progressUpdater != null) progressUpdater.accept(row, totalRows);
+                if (progressUpdater != null) progressUpdater.accept(row, totalRows);
                 if (row % 200 == 0 && messageUpdater != null) {
                     messageUpdater.accept(totalRows > 0 ? (row + "/" + totalRows) : (row + "/?"));
                 }
             }
         }
+        return true;
     }
 
     private String readCsvCellValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
@@ -443,6 +616,14 @@ class DownloadTaskWrapper {
             return bytes == null ? null : CSV_BINARY_PREFIX + Base64.getEncoder().encodeToString(bytes);
         }
         return rs.getString(columnIndex);
+    }
+
+    private void writeCsvStreamingRow(BufferedWriter writer, ResultSet rs, ResultSetMetaData meta, int columnCount) throws Exception {
+        for (int i = 1; i <= columnCount; i++) {
+            if (i > 1) writer.write(",");
+            String val = readCsvCellValue(rs, meta, i);
+            writer.write(val == null ? "" : escapeCsv(val));
+        }
     }
 
     private Object readJsonCellValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
@@ -513,7 +694,7 @@ class DownloadTaskWrapper {
                 }
                 writer.write("}");
                 row++;
-                if (totalRows > 0 && progressUpdater != null) progressUpdater.accept(row, totalRows);
+                if (progressUpdater != null) progressUpdater.accept(row, totalRows);
                 if (row % 200 == 0 && messageUpdater != null) {
                     messageUpdater.accept(totalRows > 0 ? (row + "/" + totalRows) : (row + "/?"));
                 }
@@ -542,7 +723,7 @@ class DownloadTaskWrapper {
                 }
                 writer.write(");\n");
                 row++;
-                if (totalRows > 0 && progressUpdater != null) progressUpdater.accept(row, totalRows);
+                if (progressUpdater != null) progressUpdater.accept(row, totalRows);
                 if (row % 200 == 0 && messageUpdater != null) {
                     messageUpdater.accept(totalRows > 0 ? (row + "/" + totalRows) : (row + "/?"));
                 }
@@ -697,6 +878,14 @@ class DownloadTaskWrapper {
         cancelled = true;
         paused = false;
 
+        if (customExportSource != null && customExportSource.cancelAction != null) {
+            try {
+                customExportSource.cancelAction.run();
+            } catch (Exception e) {
+                log.debug("Custom export cancel action failed", e);
+            }
+        }
+
         if (task != null) task.cancel();
 
         AppExecutor.runAsync(() -> {
@@ -739,6 +928,13 @@ class DownloadTaskWrapper {
 
 public class DownloadManagerUtil {
     private static final Logger log = LogManager.getLogger(DownloadManagerUtil.class);
+    private static final int SQL_EXPORT_MAX_CONCURRENCY = 8;
+    private static final ExecutorService SQL_EXPORT_POOL = Executors.newFixedThreadPool(SQL_EXPORT_MAX_CONCURRENCY, r -> {
+        Thread t = new Thread(r);
+        t.setDaemon(true);
+        t.setName("dbboys-sql-export-" + t.getId());
+        return t;
+    });
 
     public static StackPane downloadStackPane; // 默认下载容器
     private static final Map<StackPane, DownloadQueue> queueByStackPane = new HashMap<>();
@@ -755,11 +951,60 @@ public class DownloadManagerUtil {
         /** csv | json | sql */
         public final String format;
         public final long totalRows;
+        public final ExecutorService executor;
         public ResultSetExportSource(ResultSet resultSet, ResultSetMetaData metaData, String format, long totalRows) {
+            this(resultSet, metaData, format, totalRows, null);
+        }
+        public ResultSetExportSource(ResultSet resultSet,
+                                     ResultSetMetaData metaData,
+                                     String format,
+                                     long totalRows,
+                                     ExecutorService executor) {
             this.resultSet = resultSet;
             this.metaData = metaData;
             this.format = format;
             this.totalRows = totalRows;
+            this.executor = executor;
+        }
+    }
+
+    public static class SqlExportSource {
+        public final Connect connect;
+        public final String sql;
+        public final String format;
+        public final ExecutorService executor;
+        public final long totalRowsHint;
+
+        public SqlExportSource(Connect connect, String sql, String format, ExecutorService executor) {
+            this(connect, sql, format, executor, -1);
+        }
+
+        public SqlExportSource(Connect connect,
+                               String sql,
+                               String format,
+                               ExecutorService executor,
+                               long totalRowsHint) {
+            this.connect = connect;
+            this.sql = sql;
+            this.format = format;
+            this.executor = executor;
+            this.totalRowsHint = totalRowsHint;
+        }
+    }
+
+    public static class CustomExportSource {
+        public final String displayName;
+        public final Task<Void> task;
+        public final Runnable cancelAction;
+
+        public CustomExportSource(String displayName, Task<Void> task) {
+            this(displayName, task, null);
+        }
+
+        public CustomExportSource(String displayName, Task<Void> task, Runnable cancelAction) {
+            this.displayName = displayName == null ? "" : displayName;
+            this.task = task;
+            this.cancelAction = cancelAction;
         }
     }
 
@@ -776,6 +1021,128 @@ public class DownloadManagerUtil {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    public static boolean exportSqlToCsvFile(Connect sqlConnect, String sql, File file) throws Exception {
+        return exportSqlToCsvFile(sqlConnect, sql, file, null);
+    }
+
+    public static boolean exportSqlToCsvFile(Connect sqlConnect,
+                                             String sql,
+                                             File file,
+                                             BooleanSupplier cancelChecker) throws Exception {
+        try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).createConnection(sqlConnect);
+             PreparedStatement ps = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+            throwIfExportCancelled(cancelChecker);
+            try {
+                ps.setFetchSize(500);
+            } catch (Exception e) {
+                log.trace("setFetchSize not supported", e);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                ResultSetMetaData meta = rs.getMetaData();
+                return writeCsvFile(rs, meta, file, cancelChecker);
+            }
+        }
+    }
+
+    public static boolean exportSqlToCsvFile(Connection conn, String sql, File file) throws Exception {
+        return exportSqlToCsvFile(conn, sql, file, null);
+    }
+
+    public static boolean exportSqlToCsvFile(Connection conn,
+                                             String sql,
+                                             File file,
+                                             BooleanSupplier cancelChecker) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+            throwIfExportCancelled(cancelChecker);
+            try {
+                ps.setFetchSize(500);
+            } catch (Exception e) {
+                log.trace("setFetchSize not supported", e);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                ResultSetMetaData meta = rs.getMetaData();
+                return writeCsvFile(rs, meta, file, cancelChecker);
+            }
+        }
+    }
+
+    static boolean writeCsvFile(ResultSet rs,
+                                ResultSetMetaData meta,
+                                File file,
+                                BooleanSupplier cancelChecker) throws Exception {
+        throwIfExportCancelled(cancelChecker);
+        if (!rs.next()) {
+            return false;
+        }
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            int columnCount = meta.getColumnCount();
+            for (int i = 1; i <= columnCount; i++) {
+                if (i > 1) {
+                    writer.write(",");
+                }
+                writer.write(escapeCsvValue(meta.getColumnLabel(i)));
+            }
+            writer.newLine();
+            throwIfExportCancelled(cancelChecker);
+            writeCsvDataRow(writer, rs, meta, columnCount);
+            while (rs.next()) {
+                throwIfExportCancelled(cancelChecker);
+                writeCsvDataRow(writer, rs, meta, columnCount);
+            }
+        }
+        return true;
+    }
+
+    private static void writeCsvDataRow(BufferedWriter writer, ResultSet rs, ResultSetMetaData meta, int columnCount) throws Exception {
+        for (int i = 1; i <= columnCount; i++) {
+            if (i > 1) {
+                writer.write(",");
+            }
+            String val = readCsvExportValue(rs, meta, i);
+            writer.write(val == null ? "" : escapeCsvValue(val));
+        }
+        writer.newLine();
+    }
+
+    private static String readCsvExportValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
+        String columnType = normalizeExportColumnType(meta.getColumnTypeName(columnIndex));
+        if (columnType.startsWith("BYTE") || columnType.startsWith("BLOB")) {
+            byte[] bytes = rs.getBytes(columnIndex);
+            return bytes == null ? null : "base64:" + Base64.getEncoder().encodeToString(bytes);
+        }
+        return rs.getString(columnIndex);
+    }
+
+    private static String normalizeExportColumnType(String columnType) {
+        if (columnType == null) {
+            return "";
+        }
+        return columnType.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static String escapeCsvValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean needsQuoting = value.indexOf(',') >= 0
+                || value.indexOf('"') >= 0
+                || value.indexOf('\n') >= 0
+                || value.indexOf('\r') >= 0;
+        if (!needsQuoting) {
+            return value;
+        }
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    static void throwIfExportCancelled(BooleanSupplier cancelChecker) {
+        if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+            throw new CancellationException("export cancelled");
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("export cancelled");
+        }
     }
 
 
@@ -804,6 +1171,34 @@ public class DownloadManagerUtil {
                 file,
                 autoCloseOnComplete,
                 source.metaData,
+                downloadStackPane,
+                false,
+                null,
+                null,
+                I18n.t("download.error.file_exists", "文件\"%s\"已存在，无需重复下载！"),
+                I18n.t("download.error.file_downloading", "该文件正在下载，无需重复下载！"),
+                false,
+                true
+        );
+    }
+
+    public static void addCustomExportTask(String displayName,
+                                           File file,
+                                           boolean autoCloseOnComplete,
+                                           Task<Void> task) {
+        addCustomExportTask(displayName, file, autoCloseOnComplete, task, null);
+    }
+
+    public static void addCustomExportTask(String displayName,
+                                           File file,
+                                           boolean autoCloseOnComplete,
+                                           Task<Void> task,
+                                           Runnable cancelAction) {
+        addDownloadInternal(
+                new CustomExportSource(displayName, task, cancelAction),
+                file,
+                autoCloseOnComplete,
+                null,
                 downloadStackPane,
                 false,
                 null,
@@ -944,37 +1339,29 @@ public class DownloadManagerUtil {
                                         File file,
                                         String format,
                                         boolean autoCloseOnComplete) {
-        Task<Void> prepTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                long totalRows = -1;
-                Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).createConnection(sqlConnect);
-                // 统计总行数
-                try (PreparedStatement cps = conn.prepareStatement("select count(*) from (" + sql + ") t")) {
-                    try (ResultSet crs = cps.executeQuery()) {
-                        if (crs.next()) totalRows = crs.getLong(1);
-                    }
-                } catch (Exception e) {
-                    log.debug("Count query failed, proceeding without total", e);
-                }
+        addSqlExportTask(sqlConnect, sql, file, format, autoCloseOnComplete, -1);
+    }
 
-                PreparedStatement ps = conn.prepareStatement(sql,
-                        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-                try { ps.setFetchSize(500); } catch (Exception e) { log.trace("setFetchSize not supported", e); }
-                ResultSet rs = ps.executeQuery();
-                ResultSetMetaData meta = rs.getMetaData();
-                long finalTotalRows = totalRows;
-
-                Platform.runLater(() -> addResultSetExport(
-                        new ResultSetExportSource(rs, meta, format, finalTotalRows),
-                        file,
-                        autoCloseOnComplete
-                ));
-                return null;
-            }
-        };
-        prepTask.setOnFailed(ev -> AppErrorHandler.handle(prepTask.getException()));
-        AppExecutor.runTask(prepTask);
+    public static void addSqlExportTask(Connect sqlConnect,
+                                        String sql,
+                                        File file,
+                                        String format,
+                                        boolean autoCloseOnComplete,
+                                        long totalRowsHint) {
+        addDownloadInternal(
+                new SqlExportSource(new Connect(sqlConnect), sql, format, SQL_EXPORT_POOL, totalRowsHint),
+                file,
+                autoCloseOnComplete,
+                null,
+                downloadStackPane,
+                false,
+                null,
+                null,
+                I18n.t("download.error.file_exists", "文件\"%s\"已存在，无需重复下载！"),
+                I18n.t("download.error.file_downloading", "该文件正在下载，无需重复下载！"),
+                false,
+                true
+        );
     }
 
     /** 娓呴櫎鎵€鏈変换鍔?*/
