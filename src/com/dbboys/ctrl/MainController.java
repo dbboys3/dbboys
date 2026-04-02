@@ -5,6 +5,8 @@ import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.*;
+import com.dbboys.util.remote.RemoteCheckEnvUtil;
+import com.dbboys.util.remote.RemoteDatabaseProviders;
 import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.application.Platform;
@@ -138,7 +140,15 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuConfigCheckEnv;
     @FXML
-    private MenuItem menuConfigInstallGbase;
+    private Menu menuConfigInformix;
+    @FXML
+    private CustomShortcutMenuItem menuConfigInstallInformix;
+    @FXML
+    private CustomShortcutMenuItem menuConfigUninstallInformix;
+    @FXML
+    private Menu menuConfigGbase;
+    @FXML
+    private CustomShortcutMenuItem menuConfigInstallGbase;
     @FXML
     private CustomShortcutMenuItem menuConfigUninstallGbase;
     @FXML
@@ -262,6 +272,10 @@ public class MainController {
         newSqlFileMenuItem.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_NEW_SQL, 0.55));
         menuFileOpenSql.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_OPEN_SQL, 0.62));
         menuConfigCheckEnv.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_CHECK_ENV, 0.5));
+        menuConfigInformix.setGraphic(IconFactory.group(IconPaths.DATABASE_CONNECT, 0.48));
+        menuConfigInstallInformix.setGraphic(IconFactory.group(IconPaths.DATABASE_CONNECT, 0.48));
+        menuConfigUninstallInformix.setGraphic(IconFactory.group(IconPaths.DATABASE_CONNECT, 0.48, Color.valueOf("#9f453c")));
+        menuConfigGbase.setGraphic(IconFactory.group(IconPaths.GBASE_LOGO, 0.22));
         menuConfigInstallGbase.setGraphic(IconFactory.group(IconPaths.GBASE_LOGO, 0.22));
         menuConfigUninstallGbase.setGraphic(IconFactory.group(IconPaths.GBASE_LOGO, 0.22, Color.valueOf("#9f453c")));
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
@@ -586,6 +600,10 @@ public class MainController {
 
         bindText(menuConfig, "main.menu.config");
         bindText(menuConfigCheckEnv, "main.menu.config.check_env");
+        bindText(menuConfigInformix, "main.menu.config.informix");
+        bindText(menuConfigInstallInformix, "main.menu.config.install_informix");
+        bindText(menuConfigUninstallInformix, "main.menu.config.uninstall_informix");
+        bindText(menuConfigGbase, "main.menu.config.gbase");
         bindText(menuConfigInstallGbase, "main.menu.config.install_gbase");
         bindText(menuConfigUninstallGbase, "main.menu.config.uninstall_gbase");
 
@@ -1296,11 +1314,19 @@ public class MainController {
         RemoteCheckEnvUtil.startWizard((Stage) AppState.getWindow());
     }
     public void installGBase8S(){
-        RemoteInstallerUtil.startWizard((Stage) AppState.getWindow());
+        RemoteDatabaseProviders.gbase8s().startInstallWizard((Stage) AppState.getWindow());
     }
 
     public void unInstallGBase8S(){
-        RemoteUninstallerUtil.startWizard((Stage) AppState.getWindow());
+        RemoteDatabaseProviders.gbase8s().startUninstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void installInformix(){
+        RemoteDatabaseProviders.informix().startInstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void unInstallInformix(){
+        RemoteDatabaseProviders.informix().startUninstallWizard((Stage) AppState.getWindow());
     }
 
     public void setLanguageZh() {
@@ -1322,4 +1348,3 @@ public class MainController {
     }
 
 }
-

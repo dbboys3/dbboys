@@ -1,10 +1,12 @@
-package com.dbboys.util;
+package com.dbboys.util.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
+import com.dbboys.util.AlertUtil;
+import com.dbboys.util.CustomWindowFrameUtil;
 import com.jcraft.jsch.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -27,6 +29,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
 import java.util.Properties;
 
 public class RemoteUninstallerUtil {
@@ -39,18 +42,13 @@ public class RemoteUninstallerUtil {
     private static final int TOTAL_STEPS = 3;
     private static final double DIALOG_WIDTH = 600;
     private static final double DIALOG_HEIGHT = 400;
-    private static final JSch JSCH = new JSch();
     private static final DoubleProperty progress = new SimpleDoubleProperty(0);
     private static final IntegerProperty currentStep = new SimpleIntegerProperty(1);
 
-    private static Session session;
+    private static final RemoteSessionClient remoteClient = new RemoteSessionClient();
 
     //安装面板
-    private static CustomInstallStepHbox customInstallStepHbox1;
-    private static CustomInstallStepHbox customInstallStepHbox2;
-    private static CustomInstallStepHbox customInstallStepHbox3;
-    private static CustomInstallStepHbox customInstallStepHbox4;
-    private static CustomInstallStepHbox customInstallStepHbox5;
+    private static final java.util.List<CustomInstallStepHbox> uninstallStepBoxes = new ArrayList<>();
 
 
 
@@ -69,9 +67,15 @@ public class RemoteUninstallerUtil {
     private static HBox backgroundHBox;
     private static Button stopButton;
     private static Label runningLabel;
+    private static RemoteDatabaseProvider activeProvider = RemoteDatabaseProviders.gbase8s();
 
     // 入口方法：启动向导
     public static void startWizard(Stage parent) {
+        startWizard(parent, RemoteDatabaseProviders.gbase8s());
+    }
+
+    public static void startWizard(Stage parent, RemoteDatabaseProvider provider) {
+        activeProvider = provider == null ? RemoteDatabaseProviders.gbase8s() : provider;
         initMainDialog(parent);
         currentStep.set(1);
         updateWizardState();
@@ -82,8 +86,8 @@ public class RemoteUninstallerUtil {
     private static void initMainDialog(Stage parent) {
         mainDialog = new Stage();
         mainDialog.titleProperty().bind(Bindings.createStringBinding(
-                () -> I18n.t("remote.uninstall.title.format", "远程卸载向导 - 步骤 %d/%d")
-                        .formatted(currentStep.get(), TOTAL_STEPS),
+                () -> I18n.t("remote.uninstall.title.product.format", "%s 远程卸载向导 - 步骤 %d/%d")
+                        .formatted(activeProviderName(), currentStep.get(), TOTAL_STEPS),
                 I18n.localeProperty(),
                 currentStep
         ));
@@ -207,15 +211,7 @@ public class RemoteUninstallerUtil {
                             @Override
                             protected Void call() throws Exception {
                                 try {
-                                    if (session != null && session.isConnected()) {
-                                        session.disconnect();
-                                    }
-                                    session = JSCH.getSession(username, hostname, port);
-                                    session.setPassword(password);
-                                    Properties config = new Properties();
-                                    config.put("StrictHostKeyChecking", "no");
-                                    session.setConfig(config);
-                                    session.connect(5000); // 5秒超时
+                                    remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
                                 } catch (JSchException e) {
                                     throw new Exception(I18n.t("remote.uninstall.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
@@ -247,15 +243,11 @@ public class RemoteUninstallerUtil {
 
                         mainDialog.setOnCloseRequest(event1 -> {
                             runningTask.cancel();
-                            if (session != null && session.isConnected()) {
-                                session.disconnect();
-                            }
+                            remoteClient.disconnect();
                         });
                         cancelBtn.setOnAction(event1->{
                             runningTask.cancel();
-                            if (session != null && session.isConnected()) {
-                                session.disconnect();
-                            }
+                            remoteClient.disconnect();
                         });
                     }
                     runningLabel.setText(" " + I18n.t("remote.uninstall.status.connecting", "正在连接..."));
@@ -265,82 +257,35 @@ public class RemoteUninstallerUtil {
                     Task installTask = new Task<>() {
                         @Override
                         protected Void call() throws Exception {
-                            Platform.runLater(() -> {
-                                customInstallStepHbox1.iconLabel.setVisible(true);
-                                runningLabel.setText(" " + I18n.t("remote.uninstall.status.uninstalling", "正在卸载..."));
-                            });
-                            if(executeCommandWithExitStatus("ps -ef |grep gbasedbt |grep -v grep |awk '{print \"kill -9 \"$2}' |sh")!=0){
-                                throw new Exception(I18n.t("remote.uninstall.error.kill_process_failed", "kill gbasedbt用户进程失败！"));
-                            };
-                            Platform.runLater(() -> {
-                                customInstallStepHbox1.iconLabel.setVisible(false);
-                                customInstallStepHbox2.iconLabel.setVisible(true);
-                            });
-                            if((executeCommandWithExitStatus("test -f /GBASEDBTTMP/.infxdirs") == 0)){
-                                if(executeCommandWithExitStatus("cat /GBASEDBTTMP/.infxdirs  |awk '{print \"rm -rf \"$1}'|sh")!=0) {
-                                    throw new Exception(I18n.t("remote.uninstall.error.remove_install_dirs_failed", "删除数据库安装目录失败！"));
+                            RemoteUninstallExecutionContext uninstallContext = buildUninstallExecutionContext();
+                            for (int stepNo = 1; stepNo <= uninstallStepBoxes.size(); stepNo++) {
+                                if (!isUninstallStepSelected(stepNo)) {
+                                    continue;
                                 }
-                                if(executeCommandWithExitStatus("rm -rf /GBASEDBTTMP")!=0) {
-                                    throw new Exception(I18n.t("remote.uninstall.error.remove_gbasedbttmp_failed", "删除目录/GBASEDBTTMP失败！"));
+                                if (isCancelled()) {
+                                    return null;
                                 }
+                                final int currentStepNo = stepNo;
+                                Platform.runLater(() -> {
+                                    setUninstallStepIconVisible(currentStepNo, true);
+                                    runningLabel.setText(" " + I18n.t("remote.uninstall.status.uninstalling", "正在卸载..."));
+                                });
+                                activeProvider.executeUninstallStep(stepNo, uninstallContext);
+                                Platform.runLater(() -> setUninstallStepIconVisible(currentStepNo, false));
                             }
-                            if((executeCommandWithExitStatus("test -d /opt/gbase") == 0)){
-                                if(executeCommandWithExitStatus("rm -rf /opt/gbase")!=0) {
-                                    throw new Exception(I18n.t("remote.uninstall.error.remove_opt_gbase_failed", "删除数据库安装目录/opt/gbase失败！"));
-                                }
-                            }
-                            Platform.runLater(() -> {
-                                customInstallStepHbox2.iconLabel.setVisible(false);
-                                customInstallStepHbox3.iconLabel.setVisible(true);
-                            });
-                            if(executeCommandWithExitStatus("find / -user gbasedbt -group gbasedbt -exec rm -rf {} +")!=0){
-                               // throw new Exception("删除gbasedbt用户文件失败！");
-                            };
-
-                            Platform.runLater(() -> {
-                                customInstallStepHbox3.iconLabel.setVisible(false);
-                                customInstallStepHbox4.iconLabel.setVisible(true);
-                            });
-                            if((executeCommandWithExitStatus("test -d /etc/gbasedbt") == 0)) {
-                                if(executeCommandWithExitStatus("rm -rf /etc/gbasedbt")!=0) {
-                                    throw new Exception(I18n.t("remote.uninstall.error.remove_etc_gbasedbt_failed", "删除/etc/gbasedbt目录失败！"));
-                                }
-                            }
-                            Platform.runLater(() -> {
-                                customInstallStepHbox4.iconLabel.setVisible(false);
-                                customInstallStepHbox5.iconLabel.setVisible(true);
-                            });
-                            if((executeCommandWithExitStatus("id gbasedbt") == 0)) {
-                                if(executeCommandWithExitStatus("userdel -r -f gbasedbt")!=0) {
-                                    throw new Exception(I18n.t("remote.uninstall.error.remove_user_failed", "删除用户gbasedbt失败！"));
-                                }
-                                executeCommandWithExitStatus("groupdel gbasedbt");
-                            }
-                            //卸载完成，开始系统检查
-                            Platform.runLater(() -> {
-                                customInstallStepHbox5.iconLabel.setVisible(false);
-                            });
                             return null;
                         }
                     };
                     installTask.setOnSucceeded(event1 -> {
                         backgroundHBox.setVisible(false);
-                        customInstallStepHbox1.iconLabel.setVisible(false);
-                        customInstallStepHbox2.iconLabel.setVisible(false);
-                        customInstallStepHbox3.iconLabel.setVisible(false);
-                        customInstallStepHbox4.iconLabel.setVisible(false);
-                        customInstallStepHbox5.iconLabel.setVisible(false);
+                        hideAllUninstallStepIcons();
                         currentStep.set(currentStep.get() + 1);
                         updateWizardState();
 
                     });
                     installTask.setOnFailed(event1 -> {
                         backgroundHBox.setVisible(false);
-                        customInstallStepHbox1.iconLabel.setVisible(false);
-                        customInstallStepHbox2.iconLabel.setVisible(false);
-                        customInstallStepHbox3.iconLabel.setVisible(false);
-                        customInstallStepHbox4.iconLabel.setVisible(false);
-                        customInstallStepHbox5.iconLabel.setVisible(false);
+                        hideAllUninstallStepIcons();
                         String error = installTask.getException().getMessage();
                         AlertUtil.CustomAlert(I18n.t("common.error", "错误"), error);
                     });
@@ -350,23 +295,15 @@ public class RemoteUninstallerUtil {
                     stopButton.setOnAction(event1->{
                         installTask.cancel();
                         backgroundHBox.setVisible(false);
-                        customInstallStepHbox1.iconLabel.setVisible(false);
-                        customInstallStepHbox2.iconLabel.setVisible(false);
-                        customInstallStepHbox3.iconLabel.setVisible(false);
-                        customInstallStepHbox4.iconLabel.setVisible(false);
-                        customInstallStepHbox5.iconLabel.setVisible(false);
+                        hideAllUninstallStepIcons();
                     });
                     mainDialog.setOnCloseRequest(event1 -> {
                         installTask.cancel();
-                        if (session != null && session.isConnected()) {
-                            session.disconnect();
-                        }
+                        remoteClient.disconnect();
                     });
                     cancelBtn.setOnAction(event1->{
                         installTask.cancel();
-                        if (session != null && session.isConnected()) {
-                            session.disconnect();
-                        }
+                        remoteClient.disconnect();
                     });
                     break;
                 default:
@@ -378,9 +315,7 @@ public class RemoteUninstallerUtil {
 
 
         finishBtn.setOnAction(e -> {
-            if (session != null && session.isConnected()) {
-                session.disconnect();
-            }
+            remoteClient.disconnect();
             mainDialog.close();
         });
 
@@ -439,16 +374,23 @@ public class RemoteUninstallerUtil {
 
         Label desc=new Label();
         desc.textProperty().bind(I18n.bind("remote.uninstall.desc.title", "说明："));
-        Label desc1=new Label();
-        desc1.textProperty().bind(I18n.bind("remote.uninstall.desc.item1", "1、远程卸载仅用于Linux或Unix系统远程卸载，不适用于Windows系统。"));
-        Label desc3=new Label();
-        desc3.textProperty().bind(I18n.bind("remote.uninstall.desc.item2", "2、远程卸载会自动卸载之前已存在的GBase 8s数据库安装，并清理所有相关信息。"));
-        Label desc4=new Label();
-        desc4.textProperty().bind(I18n.bind("remote.uninstall.desc.item3", "3、远程卸载向导支持GBase 8s V8.7、GBase 8s V8.8。"));
         VBox vBox=new VBox(10);
         vBox.setStyle("-fx-padding: 10 0 0 30");
         grid.setStyle("-fx-padding: 10 0 10 0;");
-        vBox.getChildren().addAll(descbefore,grid,desc,desc1,desc3,desc4);
+        vBox.getChildren().addAll(descbefore,grid,desc);
+        int descIndex = 0;
+        for (String ignored : activeProvider.uninstallWizardDescriptionLines()) {
+            Label lineLabel = new Label();
+            final int currentDescIndex = descIndex++;
+            lineLabel.textProperty().bind(Bindings.createStringBinding(
+                    () -> {
+                        java.util.List<String> lines = activeProvider.uninstallWizardDescriptionLines();
+                        return currentDescIndex < lines.size() ? lines.get(currentDescIndex) : "";
+                    },
+                    I18n.localeProperty()
+            ));
+            vBox.getChildren().add(lineLabel);
+        }
         StackPane stackPane = new StackPane(vBox);
 
         // 保存连接任务引用，用于验证步骤1
@@ -466,22 +408,22 @@ public class RemoteUninstallerUtil {
 
     // 步骤2：系统信息面板
     private static Node createStep2Content(Stage parent) {
-        customInstallStepHbox1=new CustomInstallStepHbox("", "");
-        customInstallStepHbox2=new CustomInstallStepHbox("", "");
-        customInstallStepHbox3=new CustomInstallStepHbox("", "");
-        customInstallStepHbox4=new CustomInstallStepHbox("", "");
-        customInstallStepHbox5=new CustomInstallStepHbox("", "");
-        customInstallStepHbox1.checkBox.setDisable(true);
-        customInstallStepHbox2.checkBox.setDisable(true);
-        customInstallStepHbox3.checkBox.setDisable(true);
-        customInstallStepHbox4.checkBox.setDisable(true);
-        customInstallStepHbox5.checkBox.setDisable(true);
-        bindUninstallStepTexts();
+        uninstallStepBoxes.clear();
+        for (RemoteInstallStepSpec stepSpec : activeProvider.buildUninstallStepSpecs()) {
+            CustomInstallStepHbox stepBox = new CustomInstallStepHbox("", "");
+            stepBox.checkBox.setSelected(stepSpec.selected());
+            stepBox.checkBox.setDisable(stepSpec.disabled());
+            stepBox.nameLabel.textProperty().bind(I18n.bind(stepSpec.nameKey(), stepSpec.defaultName()));
+            stepBox.descLabel.textProperty().bind(I18n.bind(stepSpec.descKey(), stepSpec.defaultDesc()));
+            uninstallStepBoxes.add(stepBox);
+        }
         Label titleLabel = new Label();
         titleLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.title", "点击【下一步】开始卸载"));
         HBox titleHBox=new HBox(titleLabel);
         titleHBox.setAlignment(Pos.CENTER);
-        VBox vBox=new VBox(6,titleHBox,customInstallStepHbox1,customInstallStepHbox2,customInstallStepHbox3,customInstallStepHbox4,customInstallStepHbox5);
+        VBox vBox = new VBox(6);
+        vBox.getChildren().add(titleHBox);
+        vBox.getChildren().addAll(uninstallStepBoxes);
         vBox.setAlignment(Pos.TOP_CENTER);
         StackPane stackPane = new StackPane(vBox);
 
@@ -554,19 +496,6 @@ public class RemoteUninstallerUtil {
         }
     }
 
-    private static void bindUninstallStepTexts() {
-        customInstallStepHbox1.nameLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step1.name", "关闭数据库进程"));
-        customInstallStepHbox1.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step1.desc", "kill所有owner为gbasedbt用户进程。"));
-        customInstallStepHbox2.nameLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step2.name", "删除安装目录"));
-        customInstallStepHbox2.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step2.desc", "删除/GBASEDBTTMP/.infxdirs记录的所有目录，删除/GBASEDBTTMP目录，删除/opt/gbase。"));
-        customInstallStepHbox3.nameLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step3.name", "删除数据文件"));
-        customInstallStepHbox3.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step3.desc", "删除所有owner为gbasedbt用户的文件。"));
-        customInstallStepHbox4.nameLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step4.name", "删除用户目录"));
-        customInstallStepHbox4.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step4.desc", "如果存在/etc/gbasedbt，删除该目录。"));
-        customInstallStepHbox5.nameLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step5.name", "删除用户及组"));
-        customInstallStepHbox5.descLabel.textProperty().bind(I18n.bind("remote.uninstall.step2.step5.desc", "删除gbasedbt用户及gbasedbt组。"));
-    }
-
     private static void centerDialogToParent(Stage dialog, Stage parent) {
         Platform.runLater(() -> {
             if (parent == null || !parent.isShowing()) {
@@ -596,17 +525,38 @@ public class RemoteUninstallerUtil {
     }
 
     private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
-        ChannelExec channelExec = (ChannelExec) session.openChannel("exec");
-        channelExec.setCommand(command);
-        channelExec.connect();
+        return remoteClient.executeCommandWithExitStatus(command);
+    }
 
-        while (!channelExec.isClosed()) {
-            Thread.sleep(100);
+    private static String activeProviderName() {
+        return activeProvider == null ? I18n.t("remote.provider.default.name", "数据库") : activeProvider.displayName();
+    }
+
+    private static CustomInstallStepHbox uninstallStepBox(int stepNo) {
+        return uninstallStepBoxes.get(stepNo - 1);
+    }
+
+    private static boolean isUninstallStepSelected(int stepNo) {
+        return stepNo <= uninstallStepBoxes.size() && uninstallStepBox(stepNo).checkBox.isSelected();
+    }
+
+    private static RemoteUninstallExecutionContext buildUninstallExecutionContext() {
+        return new RemoteUninstallExecutionContext(
+                remoteClient,
+                hostname == null ? hostField.getText() : hostname
+        );
+    }
+
+    private static void setUninstallStepIconVisible(int stepNo, boolean visible) {
+        if (stepNo <= uninstallStepBoxes.size()) {
+            uninstallStepBox(stepNo).iconLabel.setVisible(visible);
         }
+    }
 
-        int exitStatus = channelExec.getExitStatus();
-        channelExec.disconnect();
-        return exitStatus;
+    private static void hideAllUninstallStepIcons() {
+        for (CustomInstallStepHbox stepBox : uninstallStepBoxes) {
+            stepBox.iconLabel.setVisible(false);
+        }
     }
 
 }

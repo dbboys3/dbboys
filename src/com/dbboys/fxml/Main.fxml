@@ -46,10 +46,22 @@
                             <MenuItem mnemonicParsing="false"  text="安装MYSQL ( coding )">
                             </MenuItem>
                             -->
-                            <CustomShortcutMenuItem fx:id="menuConfigInstallGbase" mnemonicParsing="false" onAction="#installGBase8S">
-                            </CustomShortcutMenuItem>
-                            <CustomShortcutMenuItem fx:id="menuConfigUninstallGbase" mnemonicParsing="false" onAction="#unInstallGBase8S">
-                            </CustomShortcutMenuItem>
+                            <Menu fx:id="menuConfigInformix" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuConfigInstallInformix" mnemonicParsing="false" onAction="#installInformix">
+                                    </CustomShortcutMenuItem>
+                                    <CustomShortcutMenuItem fx:id="menuConfigUninstallInformix" mnemonicParsing="false" onAction="#unInstallInformix">
+                                    </CustomShortcutMenuItem>
+                                </items>
+                            </Menu>
+                            <Menu fx:id="menuConfigGbase" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuConfigInstallGbase" mnemonicParsing="false" onAction="#installGBase8S">
+                                    </CustomShortcutMenuItem>
+                                    <CustomShortcutMenuItem fx:id="menuConfigUninstallGbase" mnemonicParsing="false" onAction="#unInstallGBase8S">
+                                    </CustomShortcutMenuItem>
+                                </items>
+                            </Menu>
 
                             <!--
                             <MenuItem mnemonicParsing="false"  text="安装PG(Install POSTGRESQL)">

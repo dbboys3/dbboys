@@ -1,10 +1,12 @@
-package com.dbboys.util;
+package com.dbboys.util.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
+import com.dbboys.util.AlertUtil;
+import com.dbboys.util.CustomWindowFrameUtil;
 import com.jcraft.jsch.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -33,7 +35,6 @@ public class RemoteCheckEnvUtil {
     private static final int TOTAL_STEPS = 2;
     private static final double DIALOG_WIDTH = 600;
     private static final double DIALOG_HEIGHT = 400;
-    private static final JSch JSCH = new JSch();
     private static final DoubleProperty progress = new SimpleDoubleProperty(0);
     private static final IntegerProperty currentStep = new SimpleIntegerProperty(1);
 
@@ -41,7 +42,7 @@ public class RemoteCheckEnvUtil {
     private static int port = 22;
     private static String username = "root";
     private static String password;
-    private static Session session;
+    private static final RemoteSessionClient remoteClient = new RemoteSessionClient();
     private static StackPane contentStack;
     private static Stage mainDialog;
     private static DialogPane mainDialogPane;
@@ -171,15 +172,7 @@ public class RemoteCheckEnvUtil {
                             @Override
                             protected Void call() throws Exception {
                                 try {
-                                    if (session != null && session.isConnected()) {
-                                        session.disconnect();
-                                    }
-                                    session = JSCH.getSession(username, hostname, port);
-                                    session.setPassword(password);
-                                    Properties config = new Properties();
-                                    config.put("StrictHostKeyChecking", "no");
-                                    session.setConfig(config);
-                                    session.connect(5000); // 5秒超时
+                                    remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
                                 } catch (JSchException e) {
                                     throw new Exception(I18n.t("remote.check.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
@@ -198,45 +191,31 @@ public class RemoteCheckEnvUtil {
                                 @Override
                                 protected Void call() throws Exception {
                                     try {
-                                        // 收集系统信息
-                                        String machineInfo = executeCommand("dmidecode -s system-product-name");
-                                        String osInfo;
-                                        if (isCommandExists("nkvers")) {
-                                            osInfo = executeCommand("nkvers");
-                                        } else if (executeCommandWithExitStatus("test -f /etc/redhat-release") == 0) {
-                                            osInfo = executeCommand("cat /etc/redhat-release");
-                                        } else {
-                                            osInfo = executeCommand("cat /etc/os-release");
-                                        }
-                                        String cpuInfo = executeCommand("lscpu");
-                                        String memInfo = executeCommand("free -h");
-                                        String fileSystemInfo = executeCommand("df -h");
-                                        String diskInfo = executeCommand("lsblk");
-                                        String kernelInfo = executeCommand("uname -a");
+                                        RemoteSystemInfoSnapshot snapshot = RemoteSystemInfoCollector.collect(remoteClient);
 
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.machine", "服务器型号") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(machineInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.os", "操作系统版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(osInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.kernel", "内核版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(kernelInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.cpu", "CPU信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(cpuInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.memory", "内存信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(memInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.disk", "磁盘信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(diskInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.append(I18n.t("remote.check.info.filesystem", "文件系统信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(fileSystemInfo + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+                                            systemInfoArea.append(snapshot.fileSystemInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.showParagraphAtTop(0);
                                         });
@@ -265,15 +244,11 @@ public class RemoteCheckEnvUtil {
                             });
                             mainDialog.setOnCloseRequest(event1 -> {
                                 systeminfoTask.cancel();
-                                if (session != null && session.isConnected()) {
-                                    session.disconnect();
-                                }
+                                remoteClient.disconnect();
                             });
                             cancelBtn.setOnAction(event1 -> {
                                 systeminfoTask.cancel();
-                                if (session != null && session.isConnected()) {
-                                    session.disconnect();
-                                }
+                                remoteClient.disconnect();
                             });
 
                         });
@@ -293,15 +268,11 @@ public class RemoteCheckEnvUtil {
 
                         mainDialog.setOnCloseRequest(event1 -> {
                             runningTask.cancel();
-                            if (session != null && session.isConnected()) {
-                                session.disconnect();
-                            }
+                            remoteClient.disconnect();
                         });
                         cancelBtn.setOnAction(event1 -> {
                             runningTask.cancel();
-                            if (session != null && session.isConnected()) {
-                                session.disconnect();
-                            }
+                            remoteClient.disconnect();
                         });
                     }
                     runningLabel.setText(" " + I18n.t("remote.check.status.connecting", "正在连接..."));
@@ -315,9 +286,7 @@ public class RemoteCheckEnvUtil {
 
 
         finishBtn.setOnAction(e -> {
-            if (session != null && session.isConnected()) {
-                session.disconnect();
-            }
+            remoteClient.disconnect();
             mainDialog.close();
         });
 
@@ -449,22 +418,7 @@ public class RemoteCheckEnvUtil {
     }
 
     private static String executeCommand(String command) throws JSchException, IOException {
-        ChannelExec channelExec = (ChannelExec) session.openChannel("exec");
-        channelExec.setCommand(command);
-
-        InputStream in = channelExec.getInputStream();
-        channelExec.connect();
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-        StringBuilder output = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            output.append(line).append("\n");
-        }
-
-        channelExec.disconnect();
-        return output.toString().trim();
+        return remoteClient.executeCommand(command);
     }
 
     private static class ProgressMonitorInputStream extends FilterInputStream {
@@ -519,17 +473,7 @@ public class RemoteCheckEnvUtil {
     }
 
     private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
-        ChannelExec channelExec = (ChannelExec) session.openChannel("exec");
-        channelExec.setCommand(command);
-        channelExec.connect();
-
-        while (!channelExec.isClosed()) {
-            Thread.sleep(100);
-        }
-
-        int exitStatus = channelExec.getExitStatus();
-        channelExec.disconnect();
-        return exitStatus;
+        return remoteClient.executeCommandWithExitStatus(command);
     }
 
     private static boolean isCommandExists(String command) throws JSchException, InterruptedException {
