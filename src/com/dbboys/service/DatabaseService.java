@@ -308,6 +308,24 @@ public class DatabaseService implements MetaObjectService {
         backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
     }
 
+    public int importSqlScriptSync(Connect connect, File file, BackgroundSqlTask backSqlTask) throws Exception {
+        if (connect == null || file == null) {
+            return 0;
+        }
+
+        BackgroundSqlTask effectiveTask = backSqlTask == null ? new BackgroundSqlTask() : backSqlTask;
+        String scriptText = stripLeadingBom(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+        if (scriptText.isBlank()) {
+            throw new IOException(I18n.t("metadata.import_sql.error.empty_file", "SQL脚本为空：%s")
+                    .formatted(file.getName()));
+        }
+
+        AtomicInteger executedCount = new AtomicInteger();
+        AtomicInteger totalStatements = new AtomicInteger(Math.max(0, SqlParserUtil.countExecutableStatements(scriptText)));
+        updateImportSqlProgress(effectiveTask, 0, totalStatements.get());
+        return executeStatements(connect, scriptText, file.getName(), effectiveTask, executedCount, totalStatements);
+    }
+
     private CompletableFuture<Integer> startImportSqlCountTask(String scriptText,
                                                                BackgroundSqlTask backSqlTask,
                                                                AtomicInteger executedCount,
@@ -361,7 +379,7 @@ public class DatabaseService implements MetaObjectService {
                     }
 
                     String statement = currentSql.getSqlstr();
-                    if (statement != null && !statement.trim().isEmpty()) {
+                    if (SqlParserUtil.isExecutableStatement(statement)) {
                         affectedRows += executeSingleStatement(conn, statement.trim(), backSqlTask);
                         updateImportSqlProgress(backSqlTask, executedCount.incrementAndGet(), totalStatements.get());
                     }
@@ -371,7 +389,7 @@ public class DatabaseService implements MetaObjectService {
                 }
             }
 
-            if (currentSql.getSqlstr() != null && !currentSql.getSqlstr().trim().isEmpty()) {
+            if (SqlParserUtil.isExecutableStatement(currentSql.getSqlstr())) {
                 checkImportSqlCancelled(backSqlTask);
                 affectedRows += executeSingleStatement(conn, currentSql.getSqlstr().trim(), backSqlTask);
                 updateImportSqlProgress(backSqlTask, executedCount.incrementAndGet(), totalStatements.get());

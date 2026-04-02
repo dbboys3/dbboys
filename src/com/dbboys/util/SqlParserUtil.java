@@ -191,6 +191,17 @@ public class SqlParserUtil {
         return countExecutableStatements(sqlText, Integer.MAX_VALUE);
     }
 
+    public static boolean isExecutableStatement(String sqlText) {
+        if (sqlText == null || sqlText.isBlank()) {
+            return false;
+        }
+        String normalized = stripLeadingSqlDelimiter(sqlText);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return !stripProtectedContent(normalized).trim().isEmpty();
+    }
+
     public static List<Segment> split(String sql) {
         List<Segment> segments = new ArrayList<>();
         processSegments(sql, segment -> {
@@ -272,7 +283,7 @@ public class SqlParserUtil {
                                               List<StatementRange> ranges,
                                               int statementStart,
                                               String statementText) {
-        if (statementText == null || stripProtectedContent(statementText).trim().isEmpty()) {
+        if (!isExecutableStatement(statementText)) {
             return;
         }
         int statementEnd = Math.min(sqlText.length(), statementStart + statementText.length());
@@ -455,6 +466,13 @@ public class SqlParserUtil {
             checkText = matcherAll.replaceAll("").trim();
         }
 
+        if (sql.getSqlstr().isEmpty() && checkText.isEmpty()) {
+            sql.setSqlType("");
+            sql.setSqlStr("");
+            sql.setSqlEnd(true);
+            return sql;
+        }
+
         if (sql.getSqlstr().isEmpty()) {
             if (checkText.toUpperCase().startsWith("SELECT") || checkText.toUpperCase().startsWith("WITH")) {
                 pattern = Pattern.compile("(?i)\\binto\\b");
@@ -568,7 +586,7 @@ public class SqlParserUtil {
 
         if (!result) {
             boolean containBegin = isMultiLineSqlStart(remainderSql) || isAnonymousBlockStart(remainderSql);
-            if (!containBegin && !remainderSql.trim().isEmpty()) {
+            if (!containBegin && isExecutableStatement(remainderSql)) {
                 result = true;
             }
         }
@@ -607,7 +625,7 @@ public class SqlParserUtil {
             do {
                 checkCountInterrupted();
                 currentSql[0] = modifySql(currentSql[0], sqlChunk);
-                if (currentSql[0].getSqlEnd() && !stripProtectedContent(currentSql[0].getSqlstr()).trim().isEmpty()) {
+                if (currentSql[0].getSqlEnd() && isExecutableStatement(currentSql[0].getSqlstr())) {
                     statementCount[0]++;
                     if (statementCount[0] >= stopAfterCount) {
                         stoppedEarly[0] = true;
@@ -622,7 +640,7 @@ public class SqlParserUtil {
         });
 
         checkCountInterrupted();
-        if (!stoppedEarly[0] && !stripProtectedContent(currentSql[0].getSqlstr()).trim().isEmpty()) {
+        if (!stoppedEarly[0] && isExecutableStatement(currentSql[0].getSqlstr())) {
             statementCount[0]++;
         }
         return statementCount[0];
@@ -1119,14 +1137,14 @@ public class SqlParserUtil {
                 if (!currentSql.getSqlEnd()) {
                     break;
                 }
-                if (!currentSql.getSqlstr().trim().isEmpty()) {
+                if (isExecutableStatement(currentSql.getSqlstr())) {
                     statements.add(currentSql.getSqlstr());
                 }
                 remainingChunk = currentSql.getSqlRemainder();
                 currentSql = new Sql();
             }
         }
-        if (!currentSql.getSqlstr().trim().isEmpty()) {
+        if (isExecutableStatement(currentSql.getSqlstr())) {
             statements.add(currentSql.getSqlstr());
         }
         return statements;

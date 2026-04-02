@@ -261,6 +261,23 @@ public class TableService implements MetaObjectService {
         backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
     }
 
+    public int importTableDataSync(Connect connect,
+                                   Database database,
+                                   String tableName,
+                                   File file,
+                                   BackgroundSqlTask backSqlTask) throws Exception {
+        if (connect == null || database == null || file == null || tableName == null || tableName.isBlank()) {
+            return 0;
+        }
+
+        BackgroundSqlTask effectiveTask = backSqlTask == null ? new BackgroundSqlTask() : backSqlTask;
+        ImportPlan importPlan = buildImportPlan(connect, database, tableName, file, effectiveTask);
+        BackgroundSqlUtil.updateTaskProgress(effectiveTask, formatImportProgress(0, importPlan.rows.size()));
+        int affectedRows = executeImport(connect, database, tableName, importPlan, effectiveTask);
+        BackgroundSqlUtil.updateTaskProgress(effectiveTask, formatImportProgress(affectedRows, importPlan.rows.size()));
+        return affectedRows;
+    }
+
     private ImportPlan buildImportPlan(Connect connect,
                                        Database database,
                                        String tableName,

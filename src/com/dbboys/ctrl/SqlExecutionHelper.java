@@ -122,7 +122,7 @@ public class SqlExecutionHelper {
                             return null;
                         }
                         sql = SqlParserUtil.modifySql(sql, sqlChunk);
-                        if (sql.getSqlEnd() && !sql.getSqlstr().trim().isEmpty()) {
+                        if (sql.getSqlEnd() && SqlParserUtil.isExecutableStatement(sql.getSqlstr())) {
                             ctrl.sqlParamList.clear();
                             ctrl.sqlExe = sql.getSqlstr();
                             ctrl.sqlStatementCount++;

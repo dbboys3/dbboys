@@ -928,6 +928,7 @@ class DownloadTaskWrapper {
 
 public class DownloadManagerUtil {
     private static final Logger log = LogManager.getLogger(DownloadManagerUtil.class);
+    private static final String EXPORT_BINARY_PREFIX = "base64:";
     private static final int SQL_EXPORT_MAX_CONCURRENCY = 8;
     private static final ExecutorService SQL_EXPORT_POOL = Executors.newFixedThreadPool(SQL_EXPORT_MAX_CONCURRENCY, r -> {
         Thread t = new Thread(r);
@@ -1054,16 +1055,50 @@ public class DownloadManagerUtil {
                                              String sql,
                                              File file,
                                              BooleanSupplier cancelChecker) throws Exception {
+        return exportSqlToFile(conn, sql, file, "csv", -1, null, cancelChecker);
+    }
+
+    public static boolean exportSqlToFile(Connection conn,
+                                          String sql,
+                                          File file,
+                                          String format,
+                                          long totalRowsHint,
+                                          java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                          BooleanSupplier cancelChecker) throws Exception {
+        throwIfExportCancelled(cancelChecker);
+        long queryTotalRows = totalRowsHint > 0 ? totalRowsHint : -1;
+        if (queryTotalRows <= 0 && progressUpdater != null) {
+            try (PreparedStatement cps = conn.prepareStatement("select count(*) from (" + sql + ") t")) {
+                try (ResultSet crs = cps.executeQuery()) {
+                    if (crs.next()) {
+                        queryTotalRows = crs.getLong(1);
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Count query failed, proceeding without total", e);
+            }
+        }
         try (PreparedStatement ps = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
-            throwIfExportCancelled(cancelChecker);
             try {
                 ps.setFetchSize(500);
             } catch (Exception e) {
                 log.trace("setFetchSize not supported", e);
             }
+            throwIfExportCancelled(cancelChecker);
             try (ResultSet rs = ps.executeQuery()) {
                 ResultSetMetaData meta = rs.getMetaData();
-                return writeCsvFile(rs, meta, file, cancelChecker);
+                return switch (format == null ? "" : format.toLowerCase(Locale.ROOT)) {
+                    case "csv" -> writeCsvFile(rs, meta, file, queryTotalRows, progressUpdater, cancelChecker);
+                    case "json" -> {
+                        writeJsonFile(rs, meta, file, queryTotalRows, progressUpdater, cancelChecker);
+                        yield true;
+                    }
+                    case "sql" -> {
+                        writeSqlFile(rs, meta, file, queryTotalRows, progressUpdater, cancelChecker);
+                        yield true;
+                    }
+                    default -> throw new IllegalArgumentException("Unknown format: " + format);
+                };
             }
         }
     }
@@ -1072,12 +1107,22 @@ public class DownloadManagerUtil {
                                 ResultSetMetaData meta,
                                 File file,
                                 BooleanSupplier cancelChecker) throws Exception {
+        return writeCsvFile(rs, meta, file, -1, null, cancelChecker);
+    }
+
+    private static boolean writeCsvFile(ResultSet rs,
+                                        ResultSetMetaData meta,
+                                        File file,
+                                        long totalRows,
+                                        java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                        BooleanSupplier cancelChecker) throws Exception {
         throwIfExportCancelled(cancelChecker);
         if (!rs.next()) {
             return false;
         }
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             int columnCount = meta.getColumnCount();
+            long row = 1;
             for (int i = 1; i <= columnCount; i++) {
                 if (i > 1) {
                     writer.write(",");
@@ -1087,9 +1132,12 @@ public class DownloadManagerUtil {
             writer.newLine();
             throwIfExportCancelled(cancelChecker);
             writeCsvDataRow(writer, rs, meta, columnCount);
+            updateExportProgress(progressUpdater, row, totalRows);
             while (rs.next()) {
                 throwIfExportCancelled(cancelChecker);
                 writeCsvDataRow(writer, rs, meta, columnCount);
+                row++;
+                updateExportProgress(progressUpdater, row, totalRows);
             }
         }
         return true;
@@ -1134,6 +1182,173 @@ public class DownloadManagerUtil {
             return value;
         }
         return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    private static void writeJsonFile(ResultSet rs,
+                                      ResultSetMetaData meta,
+                                      File file,
+                                      long totalRows,
+                                      java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                      BooleanSupplier cancelChecker) throws Exception {
+        int columnCount = meta.getColumnCount();
+        throwIfExportCancelled(cancelChecker);
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            writer.write("[");
+            long row = 0;
+            while (rs.next()) {
+                throwIfExportCancelled(cancelChecker);
+                if (row > 0) {
+                    writer.write(",\n");
+                }
+                writer.write("{");
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        writer.write(",");
+                    }
+                    String key = meta.getColumnLabel(i);
+                    Object value = readJsonExportValue(rs, meta, i);
+                    writer.write("\"");
+                    writer.write(escapeJsonValue(key));
+                    writer.write("\":");
+                    if (value == null) {
+                        writer.write("null");
+                    } else if (value instanceof Number || value instanceof Boolean) {
+                        writer.write(value.toString());
+                    } else {
+                        writer.write("\"");
+                        writer.write(escapeJsonValue(String.valueOf(value)));
+                        writer.write("\"");
+                    }
+                }
+                writer.write("}");
+                row++;
+                updateExportProgress(progressUpdater, row, totalRows);
+            }
+            writer.write("]");
+        }
+    }
+
+    private static void writeSqlFile(ResultSet rs,
+                                     ResultSetMetaData meta,
+                                     File file,
+                                     long totalRows,
+                                     java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                     BooleanSupplier cancelChecker) throws Exception {
+        int columnCount = meta.getColumnCount();
+        String tableName = meta.getTableName(1);
+        if (tableName == null || tableName.isBlank()) {
+            tableName = "table";
+        }
+        String prefix = "insert into " + tableName + " values";
+        throwIfExportCancelled(cancelChecker);
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            long row = 0;
+            while (rs.next()) {
+                throwIfExportCancelled(cancelChecker);
+                writer.write(prefix);
+                writer.write("(");
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        writer.write(", ");
+                    }
+                    writer.write(readSqlExportValue(rs, meta, i));
+                }
+                writer.write(");\n");
+                row++;
+                updateExportProgress(progressUpdater, row, totalRows);
+            }
+        }
+    }
+
+    private static Object readJsonExportValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
+        String columnType = normalizeExportColumnType(meta.getColumnTypeName(columnIndex));
+        if (columnType.startsWith("BYTE") || columnType.startsWith("BLOB")) {
+            byte[] bytes = rs.getBytes(columnIndex);
+            return bytes == null ? null : EXPORT_BINARY_PREFIX + Base64.getEncoder().encodeToString(bytes);
+        }
+        if (columnType.startsWith("RAW")
+                || columnType.startsWith("TEXT")
+                || columnType.startsWith("CLOB")) {
+            return rs.getString(columnIndex);
+        }
+        Object value = rs.getObject(columnIndex);
+        if (value instanceof byte[]) {
+            return rs.getString(columnIndex);
+        }
+        return value;
+    }
+
+    private static String readSqlExportValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
+        String columnType = normalizeExportColumnType(meta.getColumnTypeName(columnIndex));
+        Object rawValue = rs.getObject(columnIndex);
+        if (rawValue == null && rs.wasNull()) {
+            return "NULL";
+        }
+        if (isNumericExportColumnType(columnType) || isBooleanExportColumnType(columnType)) {
+            String numericValue = rs.getString(columnIndex);
+            return numericValue == null ? "NULL" : numericValue;
+        }
+        String value = readCsvExportValue(rs, meta, columnIndex);
+        if (value == null) {
+            return "NULL";
+        }
+        return "'" + value.replace("'", "''") + "'";
+    }
+
+    private static boolean isNumericExportColumnType(String columnType) {
+        if (columnType == null || columnType.isEmpty()) {
+            return false;
+        }
+        return columnType.startsWith("SMALLINT")
+                || columnType.startsWith("INTEGER")
+                || columnType.equals("INT")
+                || columnType.startsWith("INT(")
+                || columnType.startsWith("BIGINT")
+                || columnType.startsWith("DECIMAL")
+                || columnType.startsWith("NUMERIC")
+                || columnType.startsWith("MONEY")
+                || columnType.startsWith("SMALLFLOAT")
+                || columnType.startsWith("FLOAT")
+                || columnType.startsWith("DOUBLE")
+                || columnType.startsWith("REAL")
+                || columnType.startsWith("SERIAL")
+                || columnType.startsWith("SERIAL8")
+                || columnType.startsWith("BIGSERIAL");
+    }
+
+    private static boolean isBooleanExportColumnType(String columnType) {
+        return columnType != null && columnType.startsWith("BOOLEAN");
+    }
+
+    private static String escapeJsonValue(String value) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : value.toCharArray()) {
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private static void updateExportProgress(java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                             long completedRows,
+                                             long totalRows) {
+        if (progressUpdater != null) {
+            progressUpdater.accept(completedRows, totalRows);
+        }
     }
 
     static void throwIfExportCancelled(BooleanSupplier cancelChecker) {

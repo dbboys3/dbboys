@@ -24,10 +24,14 @@ import javafx.stage.FileChooser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.io.File;
+import java.io.IOException;
 import java.sql.Connection;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -41,12 +45,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class TreeCrudHandler {
     private static final Logger log = LogManager.getLogger(TreeCrudHandler.class);
     private static final String PROP_DB_LOCALE = "DB_LOCALE";
     private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
+    private static final Pattern IMPORT_BUNDLE_DB_LOCALE_PATTERN =
+            Pattern.compile("(?im)^\\s*--\\s*DB_LOCALE\\s*=\\s*(\\S+)\\s*$");
+    private static final Pattern IMPORT_BUNDLE_CREATE_DATABASE_PATTERN =
+            Pattern.compile("(?im)^\\s*create\\s+database\\s+([^\\s;]+)(?:\\s+in\\s+[^\\s;]+)?(?:\\s+with\\s+(buffered\\s+log|log))?\\s*;");
+    private static final Pattern IMPORT_BUNDLE_DATABASE_PATTERN =
+            Pattern.compile("(?im)^\\s*database\\s+([^\\s;]+)\\s*;");
 
     private static final class DatabaseExportRuntime {
         private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
@@ -62,6 +74,93 @@ public class TreeCrudHandler {
             for (Connection connection : activeConnections) {
                 closeConnectionQuietly(connection);
             }
+        }
+    }
+
+    private static final class DatabaseImportBundle {
+        private final File directory;
+        private final File preDdlFile;
+        private final File postDdlFile;
+        private final String databaseName;
+        private final String dbLocale;
+        private final String dbLog;
+        private final List<File> dataFiles;
+
+        private DatabaseImportBundle(File directory,
+                                     File preDdlFile,
+                                     File postDdlFile,
+                                     String databaseName,
+                                     String dbLocale,
+                                     String dbLog,
+                                     List<File> dataFiles) {
+            this.directory = directory;
+            this.preDdlFile = preDdlFile;
+            this.postDdlFile = postDdlFile;
+            this.databaseName = databaseName;
+            this.dbLocale = dbLocale;
+            this.dbLog = dbLog;
+            this.dataFiles = dataFiles;
+        }
+    }
+
+    private static final class TableDataExportRequest {
+        private final String tableName;
+        private final String databaseName;
+        private final Connect connect;
+        private final File file;
+        private final String sql;
+        private final long totalRowsHint;
+
+        private TableDataExportRequest(String tableName,
+                                       String databaseName,
+                                       Connect connect,
+                                       File file,
+                                       String sql,
+                                       long totalRowsHint) {
+            this.tableName = tableName;
+            this.databaseName = databaseName;
+            this.connect = connect;
+            this.file = file;
+            this.sql = sql;
+            this.totalRowsHint = totalRowsHint;
+        }
+    }
+
+    private static final class DatabaseImportRuntime {
+        private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
+        private final AtomicReference<ExecutorService> executorRef = new AtomicReference<>();
+        private final Set<BackgroundSqlTask> activeTasks = ConcurrentHashMap.newKeySet();
+
+        private void registerTask(BackgroundSqlTask task) {
+            if (task == null) {
+                return;
+            }
+            activeTasks.add(task);
+            if (cancelRequested.get()) {
+                task.cancel();
+            }
+        }
+
+        private void unregisterTask(BackgroundSqlTask task) {
+            if (task != null) {
+                activeTasks.remove(task);
+            }
+        }
+
+        private void cancel() {
+            cancelRequested.set(true);
+            ExecutorService executor = executorRef.getAndSet(null);
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+            for (BackgroundSqlTask task : activeTasks) {
+                task.cancel();
+            }
+        }
+
+        private void clear() {
+            activeTasks.clear();
+            executorRef.set(null);
         }
     }
 
@@ -688,8 +787,8 @@ public class TreeCrudHandler {
         if (!ensureDatabaseExportDirectory(exportDir)) {
             return;
         }
-        File preDdlFile = new File(exportDir, database.getName() + "_01_pre_data.sql");
-        File postDdlFile = new File(exportDir, database.getName() + "_02_post_data.sql");
+        File preDdlFile = new File(exportDir, "01_pre_data.sql");
+        File postDdlFile = new File(exportDir, "02_post_data.sql");
         DatabaseExportRuntime runtime = new DatabaseExportRuntime();
         if (preDdlFile.exists()) {
             preDdlFile.delete();
@@ -780,7 +879,7 @@ public class TreeCrudHandler {
                 }
             }
         };
-        String taskDisplayName = I18n.t("metadata.export.ddl_data.task_name", "%s DDL及数据")
+        String taskDisplayName = I18n.t("metadata.export.ddl_data.task_name", "导出数据库\"%s\"")
                 .formatted(database.getName());
         DownloadManagerUtil.addCustomExportTask(taskDisplayName, preDdlFile, true, exportTask, runtime::cancel);
     }
@@ -848,122 +947,30 @@ public class TreeCrudHandler {
                                                        java.util.function.IntConsumer progressUpdater,
                                                        java.util.function.BooleanSupplier cancelChecker,
                                                        DatabaseExportRuntime runtime) throws Exception {
-        List<Table> validTables = new ArrayList<>();
+        List<TableDataExportRequest> exportRequests = new ArrayList<>();
         if (tables != null) {
             for (Table table : tables) {
                 if (table != null && table.getName() != null && !table.getName().isBlank()) {
-                    validTables.add(table);
+                    exportRequests.add(new TableDataExportRequest(
+                            table.getName(),
+                            baseConnect == null ? "" : baseConnect.getDatabase(),
+                            new Connect(baseConnect),
+                            new File(dir, table.getName() + ".csv"),
+                            "select * from " + table.getName(),
+                            table.getNrows()
+                    ));
                 }
             }
         }
-        if (validTables.isEmpty()) {
-            if (progressUpdater != null) {
-                progressUpdater.accept(0);
-            }
-            return List.of();
-        }
-
-        int maxConcurrency = Math.min(8, validTables.size());
-        ExecutorService executor = Executors.newFixedThreadPool(maxConcurrency, r -> {
-            Thread thread = new Thread(r);
-            thread.setDaemon(true);
-            thread.setName("dbboys-db-export-" + thread.getId());
-            return thread;
-        });
-        runtime.executorRef.set(executor);
-        ConcurrentLinkedQueue<Table> tableQueue = new ConcurrentLinkedQueue<>(validTables);
-        AtomicInteger activeExports = new AtomicInteger(0);
-        AtomicInteger activeConnections = new AtomicInteger(0);
-        AtomicInteger completedTables = new AtomicInteger(0);
-        try {
-            List<Future<List<String>>> futures = new ArrayList<>();
-            for (int workerIndex = 0; workerIndex < maxConcurrency; workerIndex++) {
-                final int workerNo = workerIndex + 1;
-                futures.add(executor.submit(() -> {
-                    List<String> workerFailures = new ArrayList<>();
-                    if (cancelChecker != null && cancelChecker.getAsBoolean()) {
-                        throw new CancellationException("Database data export cancelled");
-                    }
-                    Connect workerConnect = new Connect(baseConnect);
-                    int openedConnections = activeConnections.incrementAndGet();
-                    Connection conn = null;
-                    try {
-                        conn = AppContext.get(com.dbboys.api.ConnectionService.class).createConnection(workerConnect);
-                        runtime.activeConnections.add(conn);
-                        while (true) {
-                            if (cancelChecker != null && cancelChecker.getAsBoolean()) {
-                                throw new CancellationException("Database data export cancelled");
-                            }
-                            Table table = tableQueue.poll();
-                            if (table == null) {
-                                break;
-                            }
-                            File file = new File(dir, table.getName() + ".csv");
-                            deleteFileQuietly(file);
-                            int active = activeExports.incrementAndGet();
-                            try {
-                                boolean exported = DownloadManagerUtil.exportSqlToCsvFile(
-                                        conn,
-                                        "select * from " + table.getName(),
-                                        file,
-                                        cancelChecker
-                                );
-                                if (!exported) {
-                                    deleteFileQuietly(file);
-                                }
-                            } catch (CancellationException e) {
-                                deleteFileQuietly(file);
-                                throw e;
-                            } catch (Exception e) {
-                                if (cancelChecker != null && cancelChecker.getAsBoolean()) {
-                                    deleteFileQuietly(file);
-                                    throw new CancellationException("Database data export cancelled");
-                                }
-                                String message = e.getMessage();
-                                log.error("Database CSV export failed. database={}, table={}, worker={}, thread={}, activeExports={}, activeConnections={}",
-                                        baseConnect.getDatabase(), table.getName(), workerNo, Thread.currentThread().getName(), active, activeConnections.get(), e);
-                                workerFailures.add(table.getName() + ": " + (message == null || message.isBlank() ? e.toString() : message));
-                            } finally {
-                                activeExports.decrementAndGet();
-                                int completed = completedTables.incrementAndGet();
-                                if (progressUpdater != null) {
-                                    progressUpdater.accept(completed);
-                                }
-                            }
-                        }
-                    } finally {
-                        runtime.activeConnections.remove(conn);
-                        closeConnectionQuietly(conn);
-                        int remainingConnections = activeConnections.decrementAndGet();
-                    }
-                    return workerFailures;
-                }));
-            }
-
-            List<String> failures = new ArrayList<>();
-            for (Future<List<String>> future : futures) {
-                try {
-                    List<String> workerFailures = future.get();
-                    if (workerFailures != null && !workerFailures.isEmpty()) {
-                        failures.addAll(workerFailures);
-                    }
-                } catch (Exception e) {
-                    Throwable cause = e.getCause();
-                    if (cause instanceof CancellationException cancellationException) {
-                        throw cancellationException;
-                    }
-                    if (e instanceof CancellationException cancellationException) {
-                        throw cancellationException;
-                    }
-                    String message = cause == null ? e.getMessage() : cause.getMessage();
-                    failures.add(message == null || message.isBlank() ? e.toString() : message);
-                }
-            }
-            return failures;
-        } finally {
-            runtime.executorRef.compareAndSet(executor, null);
-            executor.shutdownNow();
-        }
+        return exportTableDataFilesParallel(
+                exportRequests,
+                ExportFormat.CSV,
+                progressUpdater,
+                cancelChecker,
+                runtime,
+                "Database data export cancelled",
+                "Database"
+        );
     }
 
     private static boolean ensureDatabaseExportDirectory(File exportDir) {
@@ -1018,8 +1025,7 @@ public class TreeCrudHandler {
         } else if ("unbuffered".equals(dbLog)) {
             builder.append(" with log");
         }
-        builder.append(";").append(lineSeparator);
-        builder.append("database ").append(databaseName).append(";").append(lineSeparator).append(lineSeparator);
+        builder.append(";").append(lineSeparator).append(lineSeparator);
         return builder.toString();
     }
 
@@ -1201,16 +1207,837 @@ public class TreeCrudHandler {
             case SQL -> ".sql";
         };
 
+        List<TableDataExportRequest> exportRequests = new ArrayList<>();
         for (TreeItem<TreeData> tableItem : tableItems) {
             Table table = (Table) tableItem.getValue();
             Connect connect = buildObjectConnect(tableItem,false);
-            File file = new File(dir, table.getName() + extension);
-            if (file.exists()) {
-                file.delete();
+            if (connect == null) {
+                continue;
             }
-            String exportSql = "select * from " + table.getName();
-            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true, table.getNrows());
+            String databaseName = connect == null ? "" : connect.getDatabase();
+            File file = new File(dir, table.getName() + extension);
+            exportRequests.add(new TableDataExportRequest(
+                    table.getName(),
+                    databaseName,
+                    new Connect(connect),
+                    file,
+                    "select * from " + table.getName(),
+                    table.getNrows()
+            ));
         }
+        if (exportRequests.isEmpty()) {
+            return;
+        }
+
+        DatabaseExportRuntime runtime = new DatabaseExportRuntime();
+        int totalTables = exportRequests.size();
+        String progressPattern = I18n.t("metadata.export.multi.progress.tables", "表 %d/%d");
+        String formatLabel = format.name();
+        Task<Void> exportTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                updateProgress(0, Math.max(1, totalTables));
+                updateMessage(progressPattern.formatted(0, totalTables));
+                try {
+                    List<String> failures = exportTableDataFilesParallel(
+                            exportRequests,
+                            format,
+                            completed -> {
+                                updateProgress(completed, Math.max(1, totalTables));
+                                updateMessage(progressPattern.formatted(completed, totalTables));
+                            },
+                            () -> isDatabaseExportCancelled(this, runtime),
+                            runtime,
+                            "Table data export cancelled",
+                            "Selected table"
+                    );
+                    if (!failures.isEmpty()) {
+                        throw new Exception(buildSelectedTableExportFailureMessage(failures));
+                    }
+                    Platform.runLater(() -> NotificationUtil.showMainNotification(
+                            I18n.t("metadata.export.multi.notice.completed", "已导出 %d 张表数据到：%s")
+                                    .formatted(totalTables, dir.getAbsolutePath())
+                    ));
+                    updateProgress(1, 1);
+                    return null;
+                } catch (CancellationException e) {
+                    runtime.cancel();
+                    throw e;
+                } catch (Exception e) {
+                    runtime.cancel();
+                    throw e;
+                }
+            }
+        };
+        String taskDisplayName = I18n.t("metadata.export.multi.task.summary", "导出%d张表数据(%s)")
+                .formatted(totalTables, formatLabel);
+        File taskPlaceholder = new File(
+                dir,
+                ".dbboys-multi-export-" + format.name().toLowerCase(Locale.ROOT) + "-" + System.nanoTime() + ".task"
+        );
+        DownloadManagerUtil.addCustomExportTask(taskDisplayName, taskPlaceholder, true, exportTask, runtime::cancel);
+    }
+
+    private static List<String> exportTableDataFilesParallel(List<TableDataExportRequest> exportRequests,
+                                                             ExportFormat format,
+                                                             java.util.function.IntConsumer progressUpdater,
+                                                             java.util.function.BooleanSupplier cancelChecker,
+                                                             DatabaseExportRuntime runtime,
+                                                             String cancelMessage,
+                                                             String logPrefix) throws Exception {
+        List<TableDataExportRequest> validRequests = new ArrayList<>();
+        if (exportRequests != null) {
+            for (TableDataExportRequest request : exportRequests) {
+                if (request != null
+                        && request.connect != null
+                        && request.tableName != null
+                        && !request.tableName.isBlank()
+                        && request.file != null
+                        && request.sql != null
+                        && !request.sql.isBlank()) {
+                    validRequests.add(request);
+                }
+            }
+        }
+        if (validRequests.isEmpty()) {
+            if (progressUpdater != null) {
+                progressUpdater.accept(0);
+            }
+            return List.of();
+        }
+
+        int maxConcurrency = Math.min(8, validRequests.size());
+        ExecutorService executor = Executors.newFixedThreadPool(maxConcurrency, r -> {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            thread.setName("dbboys-table-export-" + thread.getId());
+            return thread;
+        });
+        runtime.executorRef.set(executor);
+        ConcurrentLinkedQueue<TableDataExportRequest> requestQueue = new ConcurrentLinkedQueue<>(validRequests);
+        AtomicInteger completedTables = new AtomicInteger(0);
+        try {
+            List<Future<List<String>>> futures = new ArrayList<>();
+            for (int workerIndex = 0; workerIndex < maxConcurrency; workerIndex++) {
+                final int workerNo = workerIndex + 1;
+                futures.add(executor.submit(() -> {
+                    List<String> workerFailures = new ArrayList<>();
+                    java.util.Map<String, Connection> connectionCache = new java.util.HashMap<>();
+                    try {
+                        while (true) {
+                            if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+                                throw new CancellationException(cancelMessage);
+                            }
+                            TableDataExportRequest request = requestQueue.poll();
+                            if (request == null) {
+                                break;
+                            }
+
+                            deleteFileQuietly(request.file);
+                            try {
+                                Connection conn = getOrCreateExportConnection(request.connect, connectionCache, runtime);
+                                boolean exported = DownloadManagerUtil.exportSqlToFile(
+                                        conn,
+                                        request.sql,
+                                        request.file,
+                                        format.name().toLowerCase(Locale.ROOT),
+                                        request.totalRowsHint,
+                                        null,
+                                        cancelChecker
+                                );
+                                if (!exported) {
+                                    deleteFileQuietly(request.file);
+                                }
+                            } catch (CancellationException e) {
+                                deleteFileQuietly(request.file);
+                                throw e;
+                            } catch (Exception e) {
+                                if (cancelChecker != null && cancelChecker.getAsBoolean()) {
+                                    deleteFileQuietly(request.file);
+                                    throw new CancellationException(cancelMessage);
+                                }
+                                deleteFileQuietly(request.file);
+                                String message = e.getMessage();
+                                log.error(
+                                        "{} export failed. database={}, table={}, format={}, worker={}, thread={}",
+                                        logPrefix,
+                                        request.databaseName,
+                                        request.tableName,
+                                        format,
+                                        workerNo,
+                                        Thread.currentThread().getName(),
+                                        e
+                                );
+                                workerFailures.add(request.tableName + ": " + (message == null || message.isBlank() ? e.toString() : message));
+                            } finally {
+                                int completed = completedTables.incrementAndGet();
+                                if (progressUpdater != null) {
+                                    progressUpdater.accept(completed);
+                                }
+                            }
+                        }
+                        return workerFailures;
+                    } finally {
+                        closeExportConnections(connectionCache, runtime);
+                    }
+                }));
+            }
+
+            List<String> failures = new ArrayList<>();
+            for (Future<List<String>> future : futures) {
+                try {
+                    List<String> workerFailures = future.get();
+                    if (workerFailures != null && !workerFailures.isEmpty()) {
+                        failures.addAll(workerFailures);
+                    }
+                } catch (Exception e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    if (e instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    if (e instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new CancellationException(cancelMessage);
+                    }
+                    String message = cause == null ? e.getMessage() : cause.getMessage();
+                    failures.add(message == null || message.isBlank() ? e.toString() : message);
+                }
+            }
+            return failures;
+        } finally {
+            runtime.executorRef.compareAndSet(executor, null);
+            executor.shutdownNow();
+        }
+    }
+
+    private static Connection getOrCreateExportConnection(Connect connect,
+                                                          java.util.Map<String, Connection> connectionCache,
+                                                          DatabaseExportRuntime runtime) throws Exception {
+        String cacheKey = buildExportConnectionCacheKey(connect);
+        Connection cached = connectionCache.get(cacheKey);
+        if (cached != null && !cached.isClosed()) {
+            return cached;
+        }
+        Connect workerConnect = new Connect(connect);
+        Connection created = AppContext.get(com.dbboys.api.ConnectionService.class).createConnection(workerConnect);
+        connectionCache.put(cacheKey, created);
+        runtime.activeConnections.add(created);
+        return created;
+    }
+
+    private static void closeExportConnections(java.util.Map<String, Connection> connectionCache,
+                                               DatabaseExportRuntime runtime) {
+        if (connectionCache == null || connectionCache.isEmpty()) {
+            return;
+        }
+        for (Connection connection : connectionCache.values()) {
+            runtime.activeConnections.remove(connection);
+            closeConnectionQuietly(connection);
+        }
+        connectionCache.clear();
+    }
+
+    private static String buildExportConnectionCacheKey(Connect connect) {
+        if (connect == null) {
+            return "";
+        }
+        return String.join("|",
+                normalizeExportConnectionToken(connect.getDbtype()),
+                normalizeExportConnectionToken(connect.getIp()),
+                normalizeExportConnectionToken(connect.getPort()),
+                normalizeExportConnectionToken(connect.getDatabase()),
+                normalizeExportConnectionToken(connect.getUsername()),
+                normalizeExportConnectionToken(connect.getPassword()),
+                normalizeExportConnectionToken(connect.getDriver()),
+                normalizeExportConnectionToken(connect.getProps()));
+    }
+
+    private static String normalizeExportConnectionToken(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String buildSelectedTableExportFailureMessage(List<String> failures) {
+        int limit = Math.min(failures.size(), 10);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                builder.append("; ");
+            }
+            builder.append(failures.get(i));
+        }
+        if (failures.size() > limit) {
+            builder.append(" ...");
+        }
+        return I18n.t("metadata.export.multi.failure.summary", "共有 %d 张表导出失败：%s")
+                .formatted(failures.size(), builder);
+    }
+
+    public static void importDatabaseDdlAndData(TreeItem<TreeData> selectedItem) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof DatabaseFolder)) {
+            return;
+        }
+
+        Connect metaConnect = TreeNavigator.getMetaConnect(selectedItem);
+        if (metaConnect == null) {
+            AlertUtil.CustomAlert(
+                    I18n.t("metadata.import_ddl_data.error.title", "导入数据库失败"),
+                    I18n.t("metadata.import_ddl_data.error.connection_missing", "未找到可用连接，无法导入数据库")
+            );
+            return;
+        }
+
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle(I18n.t("metadata.import_ddl_data.dir.title", "选择DDL及数据目录"));
+        File dir = chooser.showDialog(AppState.getWindow());
+        if (dir == null) {
+            return;
+        }
+
+        Connect baseConnect = new Connect(metaConnect);
+        long beginMillis = System.currentTimeMillis();
+        String beginTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(beginMillis);
+        String queuedDatabaseName = parseBundleDatabaseName("", dir);
+        String importSummary = buildDatabaseImportTaskTitle(queuedDatabaseName, null);
+        BackgroundSqlTask backSqlTask = new BackgroundSqlTask();
+        DatabaseImportRuntime runtime = new DatabaseImportRuntime();
+        backSqlTask.setConnect(baseConnect);
+        backSqlTask.setBeginTime(beginTime);
+        backSqlTask.setConnectName(baseConnect.getName());
+        backSqlTask.setDatabaseName(queuedDatabaseName);
+        backSqlTask.setSql(importSummary);
+        backSqlTask.setProgress(I18n.t("metadata.import_ddl_data.progress.validating", "校验目录"));
+        BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
+        BackgroundSqlUtil.updateBackSqlUIOnStart();
+
+        AtomicReference<DatabaseImportBundle> bundleRef = new AtomicReference<>();
+        Task<Integer> bgTask = new Task<>() {
+            @Override
+            protected Integer call() throws Exception {
+                UpdateResult updateResult = new UpdateResult();
+                updateResult.setConnectId(baseConnect.getId());
+                updateResult.setDatabase(queuedDatabaseName);
+                updateResult.setUpdateSql(importSummary);
+                updateResult.setStartTime(beginTime);
+                try {
+                    DatabaseImportBundle bundle = resolveDatabaseImportBundle(dir);
+                    bundleRef.set(bundle);
+                    backSqlTask.setDatabaseName(bundle.databaseName);
+                    backSqlTask.setSql(buildDatabaseImportTaskTitle(
+                            bundle.databaseName,
+                            I18n.t("metadata.import_ddl_data.phase.preparing", "准备导入")
+                    ));
+                    updateResult.setDatabase(bundle.databaseName);
+                    updateResult.setUpdateSql(buildDatabaseImportTaskTitle(bundle.databaseName, null));
+                    BackgroundSqlUtil.updateTaskProgress(
+                            backSqlTask,
+                            I18n.t("metadata.import_ddl_data.progress.preparing", "准备中")
+                    );
+                    int affectedRows = importDatabaseBundle(baseConnect, bundle, backSqlTask, runtime);
+                    long endMillis = System.currentTimeMillis();
+                    updateResult.setAffectedRows(affectedRows);
+                    updateResult.setElapsedTime(String.format("%.3f", (endMillis - beginMillis) / 1000.0) + " sec");
+                    updateResult.setEndTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(endMillis));
+                    updateResult.setMark(I18n.t("backsql.history.mark.ui_task", "界面操作任务,独立事务"));
+                    LocalDbRepository.saveSqlHistory(updateResult);
+                    return affectedRows;
+                } catch (CancellationException e) {
+                    runtime.cancel();
+                    throw e;
+                } catch (SQLException e) {
+                    runtime.cancel();
+                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    throw e;
+                } catch (Exception e) {
+                    runtime.cancel();
+                    String message = e.getMessage();
+                    if (message == null || message.isBlank()) {
+                        message = I18n.t("metadata.import_ddl_data.error.unknown", "导入数据库失败，请检查目录内容或数据库连接");
+                    }
+                    showDatabaseBundleImportError(message);
+                    throw e;
+                } finally {
+                    backSqlTask.setStmt(null);
+                    backSqlTask.setConnection(null);
+                    BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
+                    BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                    runtime.clear();
+                }
+            }
+        };
+        bgTask.setOnSucceeded(event -> {
+            DatabaseImportBundle bundle = bundleRef.get();
+            String databaseName = bundle == null ? queuedDatabaseName : bundle.databaseName;
+            String bundlePath = bundle == null ? dir.getAbsolutePath() : bundle.directory.getAbsolutePath();
+            selectedItem.getChildren().clear();
+            selectedItem.setExpanded(false);
+            selectedItem.setExpanded(true);
+            NotificationUtil.showMainNotification(
+                    I18n.t("metadata.import_ddl_data.notice.completed", "数据库\"%s\"导入完成：%s")
+                            .formatted(databaseName, bundlePath)
+            );
+        });
+        backSqlTask.setCancelAction(() -> {
+            runtime.cancel();
+            bgTask.cancel(true);
+        });
+        backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+    }
+
+    private static int importDatabaseBundle(Connect baseConnect,
+                                            DatabaseImportBundle bundle,
+                                            BackgroundSqlTask backSqlTask,
+                                            DatabaseImportRuntime runtime) throws Exception {
+        if (baseConnect == null || bundle == null) {
+            return 0;
+        }
+
+        Database database = new Database(bundle.databaseName);
+        database.setDbLocale(bundle.dbLocale);
+        database.setDbLog(bundle.dbLog);
+        Connect bootstrapConnect = new Connect(baseConnect);
+        if (bundle.dbLocale != null && !bundle.dbLocale.isBlank()) {
+            bootstrapConnect.setProps(
+                    TreeViewUtil.connectionService.modifyProps(bootstrapConnect, PROP_DB_LOCALE, bundle.dbLocale)
+            );
+        }
+
+        int affectedRows = 0;
+        updateDatabaseImportTask(
+                backSqlTask,
+                bootstrapConnect,
+                database.getName(),
+                I18n.t("metadata.import_ddl_data.phase.pre", "DDL预处理")
+        );
+        affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
+                new Connect(bootstrapConnect),
+                bundle.preDdlFile,
+                backSqlTask
+        );
+        backSqlTask.setConnection(null);
+        backSqlTask.setStmt(null);
+
+        Connect databaseConnect = new Connect(baseConnect);
+        applyDatabaseConnectionProps(databaseConnect, database, database.getName());
+        affectedRows += importDatabaseDataFilesParallel(databaseConnect, database, bundle.dataFiles, backSqlTask, runtime);
+
+        if (bundle.postDdlFile != null) {
+            throwIfDatabaseImportCancelled(backSqlTask);
+            updateDatabaseImportTask(
+                    backSqlTask,
+                    databaseConnect,
+                    database.getName(),
+                    I18n.t("metadata.import_ddl_data.phase.post", "DDL后处理")
+            );
+            affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
+                    new Connect(databaseConnect),
+                    bundle.postDdlFile,
+                    backSqlTask
+            );
+            backSqlTask.setConnection(null);
+            backSqlTask.setStmt(null);
+        }
+        return affectedRows;
+    }
+
+    private static int importDatabaseDataFilesParallel(Connect databaseConnect,
+                                                       Database database,
+                                                       List<File> dataFiles,
+                                                       BackgroundSqlTask backSqlTask,
+                                                       DatabaseImportRuntime runtime) throws Exception {
+        List<File> validFiles = new ArrayList<>();
+        if (dataFiles != null) {
+            for (File dataFile : dataFiles) {
+                if (dataFile != null && dataFile.isFile()) {
+                    String tableName = resolveBundleTableName(dataFile);
+                    if (!tableName.isBlank()) {
+                        validFiles.add(dataFile);
+                    }
+                }
+            }
+        }
+        if (validFiles.isEmpty()) {
+            return 0;
+        }
+
+        int totalTables = validFiles.size();
+        updateDatabaseImportTask(
+                backSqlTask,
+                databaseConnect,
+                database.getName(),
+                I18n.t("metadata.import_ddl_data.phase.tables", "表数据导入")
+        );
+        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatDatabaseImportTableProgress(0, totalTables));
+
+        int maxConcurrency = Math.min(8, totalTables);
+        ExecutorService executor = Executors.newFixedThreadPool(maxConcurrency, r -> {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            thread.setName("dbboys-db-import-" + thread.getId());
+            return thread;
+        });
+        runtime.executorRef.set(executor);
+
+        ConcurrentLinkedQueue<File> fileQueue = new ConcurrentLinkedQueue<>(validFiles);
+        AtomicInteger completedTables = new AtomicInteger(0);
+        AtomicInteger affectedRows = new AtomicInteger(0);
+        try {
+            List<Future<List<String>>> futures = new ArrayList<>();
+            for (int workerIndex = 0; workerIndex < maxConcurrency; workerIndex++) {
+                final int workerNo = workerIndex + 1;
+                futures.add(executor.submit(() -> {
+                    List<String> workerFailures = new ArrayList<>();
+                    while (true) {
+                        if (isDatabaseImportCancelled(runtime, backSqlTask)) {
+                            throw new CancellationException("Database data import cancelled");
+                        }
+                        File dataFile = fileQueue.poll();
+                        if (dataFile == null) {
+                            break;
+                        }
+
+                        String tableName = resolveBundleTableName(dataFile);
+                        BackgroundSqlTask workerTask = new BackgroundSqlTask();
+                        Connect workerConnect = new Connect(databaseConnect);
+                        workerTask.setConnect(workerConnect);
+                        workerTask.setConnectName(workerConnect.getName());
+                        workerTask.setDatabaseName(database.getName());
+                        workerTask.setSql(
+                                I18n.t("metadata.import_ddl_data.task.table", "导入表%s <- %s")
+                                        .formatted(tableName, dataFile.getName())
+                        );
+                        runtime.registerTask(workerTask);
+                        try {
+                            Database workerDatabase = copyImportDatabase(database);
+                            int importedRows = TreeViewUtil.tableService.importTableDataSync(
+                                    new Connect(workerConnect),
+                                    workerDatabase,
+                                    tableName,
+                                    dataFile,
+                                    workerTask
+                            );
+                            affectedRows.addAndGet(importedRows);
+                        } catch (CancellationException e) {
+                            throw e;
+                        } catch (Exception e) {
+                            if (isDatabaseImportCancelled(runtime, backSqlTask)) {
+                                throw new CancellationException("Database data import cancelled");
+                            }
+                            String message = e.getMessage();
+                            if (message == null || message.isBlank()) {
+                                message = e.toString();
+                            }
+                            workerFailures.add(tableName + ": " + message);
+                            log.error(
+                                    "Database data import failed. database={}, table={}, worker={}, thread={}",
+                                    database.getName(),
+                                    tableName,
+                                    workerNo,
+                                    Thread.currentThread().getName(),
+                                    e
+                            );
+                        } finally {
+                            runtime.unregisterTask(workerTask);
+                            int completed = completedTables.incrementAndGet();
+                            BackgroundSqlUtil.updateTaskProgress(
+                                    backSqlTask,
+                                    formatDatabaseImportTableProgress(completed, totalTables)
+                            );
+                        }
+                    }
+                    return workerFailures;
+                }));
+            }
+
+            List<String> failures = new ArrayList<>();
+            for (Future<List<String>> future : futures) {
+                try {
+                    List<String> workerFailures = future.get();
+                    if (workerFailures != null && !workerFailures.isEmpty()) {
+                        failures.addAll(workerFailures);
+                    }
+                } catch (Exception e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    if (e instanceof CancellationException cancellationException) {
+                        throw cancellationException;
+                    }
+                    if (e instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new CancellationException("Database data import cancelled");
+                    }
+                    String message = cause == null ? e.getMessage() : cause.getMessage();
+                    failures.add(message == null || message.isBlank() ? e.toString() : message);
+                }
+            }
+            if (!failures.isEmpty()) {
+                throw new Exception(buildDatabaseImportFailureMessage(failures));
+            }
+            return affectedRows.get();
+        } finally {
+            runtime.executorRef.compareAndSet(executor, null);
+            executor.shutdownNow();
+        }
+    }
+
+    private static Database copyImportDatabase(Database database) {
+        Database copy = new Database(database == null ? "" : database.getName());
+        if (database != null) {
+            copy.setDbLocale(database.getDbLocale());
+            copy.setDbLog(database.getDbLog());
+            copy.setDbSpace(database.getDbSpace());
+        }
+        return copy;
+    }
+
+    private static String formatDatabaseImportTableProgress(int completedTables, int totalTables) {
+        int safeCompleted = Math.max(0, completedTables);
+        int safeTotal = Math.max(safeCompleted, Math.max(0, totalTables));
+        return I18n.t("metadata.import_ddl_data.progress.tables", "表 %d/%d")
+                .formatted(safeCompleted, safeTotal);
+    }
+
+    private static String buildDatabaseImportFailureMessage(List<String> failures) {
+        if (failures == null || failures.isEmpty()) {
+            return I18n.t("metadata.import_ddl_data.error.unknown", "导入数据库失败，请检查目录内容或数据库连接");
+        }
+        int limit = Math.min(failures.size(), 10);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                builder.append("; ");
+            }
+            builder.append(failures.get(i));
+        }
+        if (failures.size() > limit) {
+            builder.append(" ...");
+        }
+        return I18n.t("metadata.import_ddl_data.failure.summary", "共有 %d 张表导入失败：%s")
+                .formatted(failures.size(), builder);
+    }
+
+    private static boolean isDatabaseImportCancelled(DatabaseImportRuntime runtime, BackgroundSqlTask backSqlTask) {
+        return (runtime != null && runtime.cancelRequested.get())
+                || (backSqlTask != null && backSqlTask.isCancelled())
+                || Thread.currentThread().isInterrupted();
+    }
+
+    private static DatabaseImportBundle resolveDatabaseImportBundle(File dir) throws Exception {
+        if (dir == null || !dir.exists() || !dir.isDirectory()) {
+            throw new IOException(I18n.t("metadata.import_ddl_data.error.invalid_dir", "导入目录无效，请选择 .dbb 导出目录：%s")
+                    .formatted(dir == null ? "" : dir.getAbsolutePath()));
+        }
+
+        File preDdlFile = findBundleSqlFile(dir, "01_pre_data.sql", "_01_pre_data.sql");
+        if (preDdlFile == null) {
+            throw new IOException(I18n.t("metadata.import_ddl_data.error.pre_missing", "导入目录缺少预处理脚本：01_pre_data.sql"));
+        }
+
+        String preSql = readBundleScript(preDdlFile);
+        if (SqlParserUtil.countExecutableStatements(preSql) <= 0) {
+            throw new IOException(I18n.t("metadata.import_ddl_data.error.pre_invalid", "预处理脚本中没有可执行语句：%s")
+                    .formatted(preDdlFile.getName()));
+        }
+
+        File postDdlFile = findBundleSqlFile(dir, "02_post_data.sql", "_02_post_data.sql");
+        if (postDdlFile != null) {
+            String postSql = readBundleScript(postDdlFile);
+            if (SqlParserUtil.countExecutableStatements(postSql) <= 0) {
+                postDdlFile = null;
+            }
+        }
+
+        String databaseName = parseBundleDatabaseName(preSql, dir);
+        if (databaseName.isBlank()) {
+            throw new IOException(I18n.t("metadata.import_ddl_data.error.database_name", "无法识别导入数据库名：%s")
+                    .formatted(dir.getAbsolutePath()));
+        }
+
+        List<File> dataFiles = listBundleDataFiles(dir, preDdlFile, postDdlFile);
+        return new DatabaseImportBundle(
+                dir,
+                preDdlFile,
+                postDdlFile,
+                databaseName,
+                parseBundleDbLocale(preSql),
+                parseBundleDbLog(preSql),
+                dataFiles
+        );
+    }
+
+    private static File findBundleSqlFile(File dir, String standardName, String legacySuffix) {
+        File standardFile = new File(dir, standardName);
+        if (standardFile.isFile()) {
+            return standardFile;
+        }
+        File[] candidates = dir.listFiles(file ->
+                file != null
+                        && file.isFile()
+                        && file.getName().toLowerCase(Locale.ROOT).endsWith(legacySuffix.toLowerCase(Locale.ROOT))
+        );
+        if (candidates == null || candidates.length == 0) {
+            return null;
+        }
+        List<File> files = new ArrayList<>(List.of(candidates));
+        files.sort(Comparator.comparing(file -> file.getName().toLowerCase(Locale.ROOT)));
+        return files.get(0);
+    }
+
+    private static List<File> listBundleDataFiles(File dir, File preDdlFile, File postDdlFile) {
+        File[] files = dir.listFiles(file -> {
+            if (file == null || !file.isFile()) {
+                return false;
+            }
+            if (matchesFile(preDdlFile, file) || matchesFile(postDdlFile, file)) {
+                return false;
+            }
+            String lowerName = file.getName().toLowerCase(Locale.ROOT);
+            return lowerName.endsWith(".csv") || lowerName.endsWith(".json");
+        });
+        if (files == null || files.length == 0) {
+            return new ArrayList<>();
+        }
+        List<File> dataFiles = new ArrayList<>(List.of(files));
+        dataFiles.sort(Comparator.comparing(file -> file.getName().toLowerCase(Locale.ROOT)));
+        return dataFiles;
+    }
+
+    private static boolean matchesFile(File expected, File actual) {
+        return expected != null && actual != null && expected.equals(actual);
+    }
+
+    private static String readBundleScript(File file) throws IOException {
+        return stripLeadingBom(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+    }
+
+    private static String stripLeadingBom(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        return text.charAt(0) == '\uFEFF' ? text.substring(1) : text;
+    }
+
+    private static String parseBundleDatabaseName(String preSql, File dir) {
+        String databaseName = extractBundleToken(IMPORT_BUNDLE_CREATE_DATABASE_PATTERN, preSql, 1);
+        if (databaseName.isBlank()) {
+            databaseName = extractBundleToken(IMPORT_BUNDLE_DATABASE_PATTERN, preSql, 1);
+        }
+        if (!databaseName.isBlank()) {
+            return databaseName;
+        }
+        if (dir == null || dir.getName() == null) {
+            return "";
+        }
+        String directoryName = dir.getName();
+        if (directoryName.toLowerCase(Locale.ROOT).endsWith(".dbb")) {
+            directoryName = directoryName.substring(0, directoryName.length() - 4);
+        }
+        return normalizeImportBundleToken(directoryName);
+    }
+
+    private static String parseBundleDbLocale(String preSql) {
+        return extractBundleToken(IMPORT_BUNDLE_DB_LOCALE_PATTERN, preSql, 1);
+    }
+
+    private static String parseBundleDbLog(String preSql) {
+        Matcher matcher = IMPORT_BUNDLE_CREATE_DATABASE_PATTERN.matcher(preSql == null ? "" : preSql);
+        if (!matcher.find()) {
+            return "";
+        }
+        String logMode = matcher.group(2);
+        if (logMode == null || logMode.isBlank()) {
+            return "nolog";
+        }
+        if ("buffered log".equalsIgnoreCase(logMode.trim())) {
+            return "buffered";
+        }
+        return "unbuffered";
+    }
+
+    private static String extractBundleToken(Pattern pattern, String text, int groupIndex) {
+        if (pattern == null || text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher matcher = pattern.matcher(text);
+        if (!matcher.find() || matcher.groupCount() < groupIndex) {
+            return "";
+        }
+        return normalizeImportBundleToken(matcher.group(groupIndex));
+    }
+
+    private static String normalizeImportBundleToken(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.trim();
+        if (normalized.endsWith(";")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        if (normalized.length() >= 2 && (
+                (normalized.startsWith("\"") && normalized.endsWith("\""))
+                        || (normalized.startsWith("`") && normalized.endsWith("`"))
+                        || (normalized.startsWith("'") && normalized.endsWith("'")))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        return normalized;
+    }
+
+    private static String resolveBundleTableName(File dataFile) {
+        if (dataFile == null) {
+            return "";
+        }
+        String fileName = dataFile.getName();
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex <= 0) {
+            return fileName;
+        }
+        return fileName.substring(0, dotIndex);
+    }
+
+    private static void updateDatabaseImportTask(BackgroundSqlTask backSqlTask,
+                                                 Connect connect,
+                                                 String databaseName,
+                                                 String phaseLabel) {
+        throwIfDatabaseImportCancelled(backSqlTask);
+        if (backSqlTask == null) {
+            return;
+        }
+        if (connect != null) {
+            backSqlTask.setConnect(connect);
+            backSqlTask.setConnectName(connect.getName());
+        }
+        backSqlTask.setDatabaseName(databaseName);
+        backSqlTask.setSql(buildDatabaseImportTaskTitle(databaseName, phaseLabel));
+        BackgroundSqlUtil.updateTaskProgress(backSqlTask, I18n.t("metadata.import_ddl_data.progress.running", "执行中"));
+    }
+
+    private static String buildDatabaseImportTaskTitle(String databaseName, String phaseLabel) {
+        String safeDatabaseName = databaseName == null || databaseName.isBlank()
+                ? "?"
+                : databaseName.trim();
+        String title = I18n.t("metadata.import_ddl_data.task.summary", "导入数据库\"%s\"")
+                .formatted(safeDatabaseName);
+        if (phaseLabel == null || phaseLabel.isBlank()) {
+            return title;
+        }
+        return title + " - " + phaseLabel.trim();
+    }
+
+    private static void throwIfDatabaseImportCancelled(BackgroundSqlTask backSqlTask) {
+        if ((backSqlTask != null && backSqlTask.isCancelled()) || Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("database ddl and data import cancelled");
+        }
+    }
+
+    private static void showDatabaseBundleImportError(String message) {
+        Platform.runLater(() -> AlertUtil.CustomAlert(
+                I18n.t("metadata.import_ddl_data.error.title", "导入数据库失败"),
+                message
+        ));
     }
 
     public static void importTableData(TreeItem<TreeData> selectedItem) {
