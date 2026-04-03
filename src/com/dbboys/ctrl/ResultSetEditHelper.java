@@ -1,6 +1,6 @@
 package com.dbboys.ctrl;
 
-import com.dbboys.api.MetadataRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.i18n.I18n;
 import com.dbboys.impl.DialectServices;
@@ -20,11 +20,11 @@ import java.util.concurrent.CountDownLatch;
 
 public class ResultSetEditHelper {
     private final ResultSetTabController ctrl;
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public ResultSetEditHelper(ResultSetTabController ctrl) {
         this.ctrl = ctrl;
-        this.metadataRepositoryProvider = resolveMetadataRepositoryProvider();
+        this.platformResolver = resolvePlatformResolver();
     }
 
     public void updateCellValue(int columnIndex,
@@ -119,7 +119,7 @@ public class ResultSetEditHelper {
         if (ctrl.resultFromTable == null || ctrl.resultFromTable.isBlank()) {
             return null;
         }
-        var repo = metadataRepositoryProvider.metadata(ctrl.sqlConnect);
+        var repo = platformResolver.metadata(ctrl.sqlConnect);
         List<String> primaryKeys = normalizeIdentifiers(repo.getPrimaryKeyColumns(ctrl.sqlConnect.getConn(), ctrl.resultFromTable));
         List<String> tableColumns = normalizeIdentifiers(repo.getTableColumnNames(ctrl.sqlConnect.getConn(), ctrl.resultFromTable));
         if (tableColumns.isEmpty()) {
@@ -184,9 +184,9 @@ public class ResultSetEditHelper {
         }
     }
 
-    private static MetadataRepositoryProvider resolveMetadataRepositoryProvider() {
+    private static DatabasePlatformResolver resolvePlatformResolver() {
         try {
-            return AppContext.get(MetadataRepositoryProvider.class);
+            return AppContext.get(DatabasePlatformResolver.class);
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }

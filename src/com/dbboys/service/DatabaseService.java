@@ -1,8 +1,7 @@
 package com.dbboys.service;
 
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.api.DdlRepository;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.i18n.I18n;
@@ -41,48 +40,40 @@ import com.dbboys.util.AlertUtil;
 
 public class DatabaseService implements MetaObjectService {
     private static final Logger log = LogManager.getLogger(DatabaseService.class);
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public DatabaseService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public DatabaseService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public DatabaseService(MetadataRepositoryProvider metadataRepositoryProvider,
-                           DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public DatabaseService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public List<String> getDBspaceForCreateDatabase(Connect connect) throws SQLException {
-        return metadataRepositoryProvider.metadata(connect).getDBspaceForCreateDatabase(connect.getConn());
+        return platformResolver.metadata(connect).getDBspaceForCreateDatabase(connect.getConn());
     }
 
     public List<Database> getDatabases(Connect connect) throws SQLException {
-        return metadataRepositoryProvider.metadata(connect).getDatabases(connect.getConn());
+        return platformResolver.metadata(connect).getDatabases(connect.getConn());
     }
 
     public List<Database> getDatabases(Connect connect, boolean useOracleSyntax) throws SQLException {
-        return metadataRepositoryProvider.metadata(connect).getDatabases(connect.getConn(), useOracleSyntax);
+        return platformResolver.metadata(connect).getDatabases(connect.getConn(), useOracleSyntax);
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printDatabase(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printDatabase(conn, objectName);
     }
 
     public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
         return withMetaSession(connect, database,
-                conn -> ddlRepositoryProvider.ddl(connect).printDatabase(conn, database.getName()));
+                conn -> platformResolver.ddl(connect).printDatabase(conn, database.getName()));
     }
 
     public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
         return withMetaSession(connect, database, conn -> {
-            var ddlRepository = ddlRepositoryProvider.ddl(connect);
+            var ddlRepository = platformResolver.ddl(connect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
             if (progressListener != null) {
                 progressListener.accept(0L, total);
@@ -99,7 +90,7 @@ public class DatabaseService implements MetaObjectService {
                                                                  Database database,
                                                                  BiConsumer<Long, Long> progressListener) throws Exception {
         return withMetaSession(connect, database, conn -> {
-            var ddlRepository = ddlRepositoryProvider.ddl(connect);
+            var ddlRepository = platformResolver.ddl(connect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
             if (progressListener != null) {
                 progressListener.accept(0L, total);
@@ -113,7 +104,7 @@ public class DatabaseService implements MetaObjectService {
 
     public List<Table> getUserTables(Connect connect, Database database) throws Exception {
         return withMetaSession(connect, database,
-                conn -> metadataRepositoryProvider.metadata(connect).getUserTables(conn, database.getName()));
+                conn -> platformResolver.metadata(connect).getUserTables(conn, database.getName()));
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlPartsWithNewConnection(Connect connect,
@@ -121,7 +112,7 @@ public class DatabaseService implements MetaObjectService {
                                                                                   BiConsumer<Long, Long> progressListener) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
-            var ddlRepository = ddlRepositoryProvider.ddl(sessionConnect);
+            var ddlRepository = platformResolver.ddl(sessionConnect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
             if (progressListener != null) {
                 progressListener.accept(0L, total);
@@ -136,7 +127,7 @@ public class DatabaseService implements MetaObjectService {
     public List<Table> getUserTablesWithNewConnection(Connect connect, Database database) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
-            return metadataRepositoryProvider.metadata(sessionConnect).getUserTables(conn, database.getName());
+            return platformResolver.metadata(sessionConnect).getUserTables(conn, database.getName());
         }
     }
 
@@ -154,7 +145,7 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<String> result = new ArrayList<>();
         objectList.setItems(result);

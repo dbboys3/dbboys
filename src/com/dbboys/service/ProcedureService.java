@@ -1,9 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
 import com.dbboys.vo.ObjectList;
@@ -15,25 +14,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProcedureService implements MetaObjectService {
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public ProcedureService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public ProcedureService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public ProcedureService(MetadataRepositoryProvider metadataRepositoryProvider, DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public ProcedureService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Procedure> result = new ArrayList<>();
         objectList.setItems(result);
@@ -45,11 +37,10 @@ public class ProcedureService implements MetaObjectService {
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printProcedure(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printProcedure(conn, objectName);
     }
     public void updateStatistics(Connect connect, String sql, Runnable onSucceededUi) {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 
 }
-

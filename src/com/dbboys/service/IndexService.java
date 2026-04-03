@@ -1,9 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -18,32 +17,25 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class IndexService implements MetaObjectService {
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public IndexService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public IndexService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public IndexService(MetadataRepositoryProvider metadataRepositoryProvider, DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public IndexService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public Index getIndex(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getIndex(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getIndex(conn, database.getName(), objectName));
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printIndex(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printIndex(conn, objectName);
     }
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Index> result = new ArrayList<>();
         objectList.setItems(result);
@@ -94,4 +86,3 @@ public class IndexService implements MetaObjectService {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 }
-

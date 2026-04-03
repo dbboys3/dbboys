@@ -1,7 +1,7 @@
 package com.dbboys.ctrl;
 
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.SqlexeRepository;
-import com.dbboys.api.SqlexeRepositoryProvider;
 import com.dbboys.app.AppContext;
 import com.dbboys.customnode.CustomResultsetTab;
 import com.dbboys.impl.DialectServices;
@@ -26,11 +26,11 @@ public class SqlExecutionHelper {
     private static final Logger log = LogManager.getLogger(SqlExecutionHelper.class);
 
     final SqlTabController ctrl;
-    private final SqlexeRepositoryProvider sqlexeRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public SqlExecutionHelper(SqlTabController ctrl) {
         this.ctrl = ctrl;
-        this.sqlexeRepositoryProvider = resolveSqlexeRepositoryProvider();
+        this.platformResolver = resolvePlatformResolver();
     }
 
     public String resolveSqlText(boolean allowRefresh) {
@@ -496,7 +496,7 @@ public class SqlExecutionHelper {
             @Override
             protected Void call() throws Exception {
                 try {
-                    sqlexeRepositoryProvider.sqlexe(sqlConnect).changeSqlMode(sqlConnect.getConn(), sqlmode);
+                    platformResolver.sqlexe(sqlConnect).changeSqlMode(sqlConnect.getConn(), sqlmode);
                 } catch (UnsupportedOperationException e) {
                     Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported")));
                     throw new Exception("ERROR", e);
@@ -516,12 +516,12 @@ public class SqlExecutionHelper {
     }
 
     private SqlexeRepository sqlexeRepository() {
-        return sqlexeRepositoryProvider.sqlexe(ctrl.sqlConnect);
+        return platformResolver.sqlexe(ctrl.sqlConnect);
     }
 
-    private SqlexeRepositoryProvider resolveSqlexeRepositoryProvider() {
+    private DatabasePlatformResolver resolvePlatformResolver() {
         try {
-            return AppContext.get(SqlexeRepositoryProvider.class);
+            return AppContext.get(DatabasePlatformResolver.class);
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }

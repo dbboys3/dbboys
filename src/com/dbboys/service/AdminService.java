@@ -1,7 +1,7 @@
 package com.dbboys.service;
 
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.InstanceAdminRepository;
-import com.dbboys.api.InstanceAdminRepositoryProvider;
 import com.dbboys.app.AppContext;
 import com.dbboys.customnode.CustomSpaceChart;
 import com.dbboys.api.ConnectionService;
@@ -15,39 +15,39 @@ import java.util.List;
 
 public class AdminService {
     private final ConnectionService connectionService;
-    private final InstanceAdminRepositoryProvider adminRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public AdminService() {
-        this(resolveConnectionService(), resolveAdminRepositoryProvider());
+        this(resolveConnectionService(), resolvePlatformResolver());
     }
 
-    public AdminService(ConnectionService connectionService, InstanceAdminRepositoryProvider adminRepositoryProvider) {
+    public AdminService(ConnectionService connectionService, DatabasePlatformResolver platformResolver) {
         this.connectionService = connectionService;
-        this.adminRepositoryProvider = adminRepositoryProvider;
+        this.platformResolver = platformResolver;
     }
 
     public void modifyChunkExtendable(Connect connect, int chunkId, boolean toExtendAble) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        modifyChunkExtendable(adminRepositoryProvider.admin(connect), conn, chunkId, toExtendAble);
+        modifyChunkExtendable(platformResolver.admin(connect), conn, chunkId, toExtendAble);
         conn.close();
     }
 
     public void unLimitedSpaceSize(Connect connect, String dbspace) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        modifySpaceSize(adminRepositoryProvider.admin(connect), conn, dbspace, 10, 10000, 0);
+        modifySpaceSize(platformResolver.admin(connect), conn, dbspace, 10, 10000, 0);
         conn.close();
     }
 
     public List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(Connect connect) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        List<List<CustomSpaceChart.SpaceUsage>> result = getInstanceDbspaceInfo(adminRepositoryProvider.admin(connect), conn);
+        List<List<CustomSpaceChart.SpaceUsage>> result = getInstanceDbspaceInfo(platformResolver.admin(connect), conn);
         conn.close();
         return result;
     }
 
     public double getMaxDbspaceUsed(Connect connect) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        double result = getMaxDbspaceUsed(adminRepositoryProvider.admin(connect), conn);
+        double result = getMaxDbspaceUsed(platformResolver.admin(connect), conn);
         conn.close();
         return result;
     }
@@ -76,9 +76,9 @@ public class AdminService {
         }
     }
 
-    private static InstanceAdminRepositoryProvider resolveAdminRepositoryProvider() {
+    private static DatabasePlatformResolver resolvePlatformResolver() {
         try {
-            return AppContext.get(InstanceAdminRepositoryProvider.class);
+            return AppContext.get(DatabasePlatformResolver.class);
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }

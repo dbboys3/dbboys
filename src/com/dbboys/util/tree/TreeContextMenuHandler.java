@@ -1,6 +1,6 @@
 package com.dbboys.util.tree;
 
-import com.dbboys.api.InstanceAdminRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
 import com.dbboys.app.AppErrorHandler;
@@ -1632,7 +1632,7 @@ public class TreeContextMenuHandler {
             return null;
         }
         try {
-            String fallback = resolveDialectServices().requireDialect(connect).changeDatabaseFallbackCatalogName();
+            String fallback = resolvePlatformResolver().requireDialect(connect).changeDatabaseFallbackCatalogName();
             if (fallback != null && !fallback.isBlank()) {
                 return fallback;
             }
@@ -1646,23 +1646,15 @@ public class TreeContextMenuHandler {
             return false;
         }
         try {
-            return resolveAdminRepositoryProvider().admin(connect).supportsAdminFeatures(connect);
+            return resolvePlatformResolver().admin(connect).supportsAdminFeatures(connect);
         } catch (Exception ignored) {
             return false;
         }
     }
 
-    private static DialectServices resolveDialectServices() {
+    private static DatabasePlatformResolver resolvePlatformResolver() {
         try {
-            return AppContext.get(DialectServices.class);
-        } catch (IllegalStateException e) {
-            return DialectServices.createDefault();
-        }
-    }
-
-    private static InstanceAdminRepositoryProvider resolveAdminRepositoryProvider() {
-        try {
-            return AppContext.get(InstanceAdminRepositoryProvider.class);
+            return AppContext.get(DatabasePlatformResolver.class);
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }

@@ -16,25 +16,22 @@ public final class AppContext {
 
             var dialectServices = com.dbboys.impl.DialectServices.createDefault();
 
+            register(com.dbboys.api.DatabasePlatformResolver.class, dialectServices);
             register(com.dbboys.impl.DialectServices.class, dialectServices);
-            register(com.dbboys.api.MetadataRepositoryProvider.class, dialectServices);
-            register(com.dbboys.api.SqlexeRepositoryProvider.class, dialectServices);
-            register(com.dbboys.api.DdlRepositoryProvider.class, dialectServices);
-            register(com.dbboys.api.InstanceAdminRepositoryProvider.class, dialectServices);
 
             var connService = new com.dbboys.impl.ConnectionServiceImpl(dialectServices);
             register(com.dbboys.api.ConnectionService.class, connService);
 
             register(com.dbboys.service.DatabaseService.class, new com.dbboys.service.DatabaseService(dialectServices));
-            register(com.dbboys.service.TableService.class, new com.dbboys.service.TableService(dialectServices, dialectServices));
-            register(com.dbboys.service.IndexService.class, new com.dbboys.service.IndexService(dialectServices, dialectServices));
-            register(com.dbboys.service.ViewService.class, new com.dbboys.service.ViewService(dialectServices, dialectServices));
-            register(com.dbboys.service.SequenceService.class, new com.dbboys.service.SequenceService(dialectServices, dialectServices));
-            register(com.dbboys.service.SynonymService.class, new com.dbboys.service.SynonymService(dialectServices, dialectServices));
-            register(com.dbboys.service.FunctionService.class, new com.dbboys.service.FunctionService(dialectServices, dialectServices));
-            register(com.dbboys.service.ProcedureService.class, new com.dbboys.service.ProcedureService(dialectServices, dialectServices));
-            register(com.dbboys.service.TriggerService.class, new com.dbboys.service.TriggerService(dialectServices, dialectServices));
-            register(com.dbboys.service.PackageService.class, new com.dbboys.service.PackageService(dialectServices, dialectServices));
+            register(com.dbboys.service.TableService.class, new com.dbboys.service.TableService(dialectServices));
+            register(com.dbboys.service.IndexService.class, new com.dbboys.service.IndexService(dialectServices));
+            register(com.dbboys.service.ViewService.class, new com.dbboys.service.ViewService(dialectServices));
+            register(com.dbboys.service.SequenceService.class, new com.dbboys.service.SequenceService(dialectServices));
+            register(com.dbboys.service.SynonymService.class, new com.dbboys.service.SynonymService(dialectServices));
+            register(com.dbboys.service.FunctionService.class, new com.dbboys.service.FunctionService(dialectServices));
+            register(com.dbboys.service.ProcedureService.class, new com.dbboys.service.ProcedureService(dialectServices));
+            register(com.dbboys.service.TriggerService.class, new com.dbboys.service.TriggerService(dialectServices));
+            register(com.dbboys.service.PackageService.class, new com.dbboys.service.PackageService(dialectServices));
             register(com.dbboys.service.UserService.class, new com.dbboys.service.UserService(dialectServices));
 
             var dbService = get(com.dbboys.service.DatabaseService.class);

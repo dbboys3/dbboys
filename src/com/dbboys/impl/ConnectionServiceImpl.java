@@ -3,6 +3,7 @@ package com.dbboys.impl;
 import com.dbboys.api.ChangeDatabaseFailureKind;
 import com.dbboys.api.ConnectionService;
 import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.util.MD5Util;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.*;
@@ -31,18 +32,18 @@ public class ConnectionServiceImpl implements ConnectionService {
     private static final String PROP_IFX_TRIMTRAILINGSPACES = "IFX_TRIMTRAILINGSPACES";
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
-    private final DialectServices dialectServices;
+    private final DatabasePlatformResolver platformResolver;
 
     public ConnectionServiceImpl() {
         this(DialectServices.createDefault());
     }
 
-    public ConnectionServiceImpl(DialectServices dialectServices) {
-        this.dialectServices = dialectServices != null ? dialectServices : DialectServices.createDefault();
+    public ConnectionServiceImpl(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver != null ? platformResolver : DialectServices.createDefault();
     }
 
     public Connection createConnection(Connect connect) throws Exception {
-        DatabaseDialect dialect = dialectServices.requireDialect(connect);
+        DatabaseDialect dialect = platformResolver.requireDialect(connect);
         DatabaseDialect.ConnectionParams params = dialect.getConnectionParams(connect);
         Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
         Properties info = buildConnectionProperties(connect, false);
@@ -94,7 +95,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public Connection getConnectionWithSessionInit(Connect connect) throws Exception {
-        DatabaseDialect dialect = dialectServices.requireDialect(connect);
+        DatabaseDialect dialect = platformResolver.requireDialect(connect);
         DatabaseDialect.ConnectionParams params = dialect.getConnectionParams(connect);
         Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
         Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
@@ -119,7 +120,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null || conn == null) {
             return;
         }
-        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
         if (dialect != null && dialect.supportsSessionInit()) {
             try {
                 dialect.sessionInit(conn, connect);
@@ -146,13 +147,13 @@ public class ConnectionServiceImpl implements ConnectionService {
             result.setSuccess(false);
             return result;
         }
-        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
         if (dialect == null) {
             result.setSuccess(false);
             return result;
         }
         try {
-            dialectServices.metadata(connect).changeDatabase(connect.getConn(), database.getName());
+            platformResolver.metadata(connect).changeDatabase(connect.getConn(), database.getName());
             connect.setDatabase(database.getName());
             if (!dialect.isSystemDatabase(database.getName())) {
                 connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
@@ -208,7 +209,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null) {
             return null;
         }
-        return dialectServices.requireDialect(connect).modifyProps(connect, propName, propValue);
+        return platformResolver.requireDialect(connect).modifyProps(connect, propName, propValue);
     }
 
     private void adjustDefaultDatabaseIsolationLevel(Connect connect,
@@ -235,7 +236,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public String setConnectInfo(Connect connect) throws Exception {
-        DatabaseDialect dialect = dialectServices.requireDialect(connect);
+        DatabaseDialect dialect = platformResolver.requireDialect(connect);
         try (Connection connection = getConnectionWithSessionInit(connect)) {
             String primaryInstance = dialect.populateConnectInfo(connection, connect);
             if (connect.getDriver() != null && !connect.getDriver().isEmpty()) {
@@ -254,7 +255,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect.getConn() == null) {
             return false;
         }
-        DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
+        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
         if (dialect == null) {
             return false;
         }
@@ -278,12 +279,12 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     private ConnectionLease acquireConnection(Connect connect, Database database) throws Exception {
         Connection conn = connect.getConn();
-        var repo = dialectServices.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         try {
             repo.setDatabase(conn, database.getName());
             return new ConnectionLease(conn, false);
         } catch (SQLException e) {
-            DatabaseDialect dialect = dialectServices.getDialect(connect.getDbtype());
+            DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
             String fallback = dialect != null ? dialect.changeDatabaseFallbackCatalogName() : null;
             if (dialect != null && dialect.supportsSessionInit()
                     && dialect.classifyChangeDatabaseFailure(e) == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION

@@ -1,9 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.DBPackage;
@@ -16,25 +15,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PackageService implements MetaObjectService {
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public PackageService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public PackageService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public PackageService(MetadataRepositoryProvider metadataRepositoryProvider, DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public PackageService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<DBPackage> result = new ArrayList<>();
         objectList.setItems(result);
@@ -45,7 +37,7 @@ public class PackageService implements MetaObjectService {
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printPackage(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printPackage(conn, objectName);
     }
 
     public String getChildrenDDL(String packageDDL,String objectName) throws SQLException {
@@ -53,4 +45,3 @@ public class PackageService implements MetaObjectService {
     }
 
 }
-

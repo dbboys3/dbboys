@@ -4,7 +4,7 @@ import com.dbboys.ctrl.SqlTabController;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.dbboys.api.ConnectionService;
-import com.dbboys.api.SqlexeRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.vo.Connect;
@@ -20,21 +20,23 @@ public class SqlexeService {
     private static final Logger log = LogManager.getLogger(SqlexeService.class);
     private final ConnectionService connectionService;
     private final DatabaseService databaseService;
-    private final SqlexeRepositoryProvider sqlexeRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public SqlexeService() {
-        this(com.dbboys.app.AppContext.get(ConnectionService.class), com.dbboys.app.AppContext.get(DatabaseService.class), com.dbboys.app.AppContext.get(SqlexeRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(ConnectionService.class),
+                com.dbboys.app.AppContext.get(DatabaseService.class),
+                com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public SqlexeService(ConnectionService connectionService, DatabaseService databaseService, SqlexeRepositoryProvider sqlexeRepositoryProvider) {
+    public SqlexeService(ConnectionService connectionService, DatabaseService databaseService, DatabasePlatformResolver platformResolver) {
         this.connectionService = connectionService;
         this.databaseService = databaseService;
-        this.sqlexeRepositoryProvider = sqlexeRepositoryProvider;
+        this.platformResolver = platformResolver;
     }
 
     public List<String> getSqlMode(Connect connect, Connection conn) {
         try {
-            return sqlexeRepositoryProvider.sqlexe(connect).getSqlMode(conn);
+            return platformResolver.sqlexe(connect).getSqlMode(conn);
         } catch (SQLException e) {
             log.error("Operation failed", e);
             return new ArrayList<>();

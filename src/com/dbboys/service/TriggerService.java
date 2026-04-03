@@ -1,9 +1,8 @@
 package com.dbboys.service;
 
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
@@ -18,29 +17,22 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class TriggerService implements MetaObjectService {
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public TriggerService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public TriggerService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public TriggerService(MetadataRepositoryProvider metadataRepositoryProvider, DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public TriggerService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public Trigger getTrigger(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTrigger(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTrigger(conn, database.getName(), objectName));
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Trigger> result = new ArrayList<>();
         objectList.setItems(result);
@@ -51,7 +43,7 @@ public class TriggerService implements MetaObjectService {
     }
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printTrigger(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printTrigger(conn, objectName);
     }
 
     public void refreshTriggerMeta(Connect connect,
@@ -91,4 +83,3 @@ public class TriggerService implements MetaObjectService {
         executeObjectSql(connect, sql, onSucceededUi);
     }
 }
-

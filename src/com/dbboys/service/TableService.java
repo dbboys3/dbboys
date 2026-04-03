@@ -1,10 +1,9 @@
 package com.dbboys.service;
 
 import com.dbboys.app.AppExecutor;
-import com.dbboys.api.DdlRepositoryProvider;
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
-import com.dbboys.api.MetadataRepositoryProvider;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.i18n.I18n;
@@ -43,25 +42,18 @@ import java.util.function.IntConsumer;
 public class TableService implements MetaObjectService {
     private static final int IMPORT_BATCH_SIZE = 500;
     private static final String CSV_BINARY_PREFIX = "base64:";
-    private final MetadataRepositoryProvider metadataRepositoryProvider;
-    private final DdlRepositoryProvider ddlRepositoryProvider;
+    private final DatabasePlatformResolver platformResolver;
 
     public TableService() {
-        this(com.dbboys.app.AppContext.get(MetadataRepositoryProvider.class),
-                com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
+        this(com.dbboys.app.AppContext.get(DatabasePlatformResolver.class));
     }
 
-    public TableService(MetadataRepositoryProvider metadataRepositoryProvider) {
-        this(metadataRepositoryProvider, com.dbboys.app.AppContext.get(DdlRepositoryProvider.class));
-    }
-
-    public TableService(MetadataRepositoryProvider metadataRepositoryProvider, DdlRepositoryProvider ddlRepositoryProvider) {
-        this.metadataRepositoryProvider = metadataRepositoryProvider;
-        this.ddlRepositoryProvider = ddlRepositoryProvider;
+    public TableService(DatabasePlatformResolver platformResolver) {
+        this.platformResolver = platformResolver;
     }
 
     public ObjectList loadObjects(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<Table> result = new ArrayList<>();
         objectList.setItems(result);
@@ -80,7 +72,7 @@ public class TableService implements MetaObjectService {
 
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> ddlRepositoryProvider.ddl(connect).printTable(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printTable(conn, objectName);
     }
 
 
@@ -89,7 +81,7 @@ public class TableService implements MetaObjectService {
     }
 
     private ObjectList buildSystemTables(Connect connect, Connection conn, String databaseName) throws SQLException {
-        var repo = metadataRepositoryProvider.metadata(connect);
+        var repo = platformResolver.metadata(connect);
         ObjectList objectList = new ObjectList();
         List<SysTable> result = new ArrayList<>();
         objectList.setItems(result);
@@ -100,15 +92,15 @@ public class TableService implements MetaObjectService {
         return objectList;
     }
     public ArrayList<ColumnsInfo> getColumns(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> new ArrayList<>(metadataRepositoryProvider.metadata(connect).getColumns(conn, objectName)));
+        return withMetaSession(connect, database, conn -> new ArrayList<>(platformResolver.metadata(connect).getColumns(conn, objectName)));
     }
 
     public Table getTable(Connect connect, Database database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTable(conn, database.getName(), objectName));
+        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTable(conn, database.getName(), objectName));
     }
 
     public String getTableComment(Connect connect, Database database, String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> metadataRepositoryProvider.metadata(connect).getTableComment(conn, objectName));
+        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTableComment(conn, objectName));
     }
 
     public void updateStatistics(Connect connect, String sql, Runnable onSucceededUi) {
@@ -132,7 +124,7 @@ public class TableService implements MetaObjectService {
             @Override
             protected List<String> call() throws Exception {
                 try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
-                    return metadataRepositoryProvider.metadata(connect).getIndexColumnsForTable(conn, tableName);
+                    return platformResolver.metadata(connect).getIndexColumnsForTable(conn, tableName);
                 }
             }
         };
@@ -859,7 +851,7 @@ public class TableService implements MetaObjectService {
 
     private ArrayList<ColumnsInfo> loadImportColumns(Connect connect, String tableName) throws Exception {
         try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
-            return new ArrayList<>(metadataRepositoryProvider.metadata(connect).getColumns(conn, tableName));
+            return new ArrayList<>(platformResolver.metadata(connect).getColumns(conn, tableName));
         }
     }
 

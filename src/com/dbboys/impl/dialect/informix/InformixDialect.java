@@ -7,10 +7,6 @@ import com.dbboys.api.InstanceAdminRepository;
 import com.dbboys.api.MetadataRepository;
 import com.dbboys.api.SqlexeRepository;
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.dialect.gbase.GbaseDdlRepository;
-import com.dbboys.impl.dialect.gbase.GbaseInstanceAdminRepository;
-import com.dbboys.impl.dialect.gbase.GbaseMetadataRepository;
-import com.dbboys.impl.dialect.gbase.GbaseSqlexeRepository;
 import com.dbboys.vo.Connect;
 
 import java.sql.Connection;
@@ -25,10 +21,10 @@ public final class InformixDialect implements DatabaseDialect {
     private static final String DEFAULT_CONNECTION_PROPS =
             "[{\"propName\":\"APPENDISAM\",\"propValue\":\"\"},{\"propName\":\"CLIENT_LOCALE\",\"propValue\":\"\"},{\"propName\":\"CSM\",\"propValue\":\"\"},{\"propName\":\"DBANSIWARN\",\"propValue\":\"\"},{\"propName\":\"DBDATE\",\"propValue\":\"Y4MD-\"},{\"propName\":\"DBSPACETEMP\",\"propValue\":\"\"},{\"propName\":\"DBTEMP\",\"propValue\":\"\"},{\"propName\":\"DBUPSPACE\",\"propValue\":\"\"},{\"propName\":\"DB_LOCALE\",\"propValue\":\"\"},{\"propName\":\"DELIMIDENT\",\"propValue\":\"\"},{\"propName\":\"ENABLE_TYPE_CACHE\",\"propValue\":\"\"},{\"propName\":\"ENABLE_HDRSWITCH\",\"propValue\":\"\"},{\"propName\":\"FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"INFORMIXCONRETRY\",\"propValue\":\"\"},{\"propName\":\"INFORMIXCONTIME\",\"propValue\":\"\"},{\"propName\":\"INFORMIXOPCACHE\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSERVER\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSERVER_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSTACKSIZE\",\"propValue\":\"\"},{\"propName\":\"IFX_AUTOFREE\",\"propValue\":\"\"},{\"propName\":\"IFX_BATCHUPDATE_PER_SPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_CODESETLOB\",\"propValue\":\"\"},{\"propName\":\"IFX_DIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_EXTDIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_GET_SMFLOAT_AS_FLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_ISOLATION_LEVEL\",\"propValue\":\"5\"},{\"propName\":\"IFX_FLAT_UCSQ\",\"propValue\":\"\"},{\"propName\":\"IFX_LOCK_MODE_WAIT\",\"propValue\":\"10\"},{\"propName\":\"IFX_PAD_VARCHAR\",\"propValue\":\"\"},{\"propName\":\"IFX_SET_FLOAT_AS_SMFLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_SOC_TIMEOUT\",\"propValue\":\"\"},{\"propName\":\"IFX_TRIMTRAILINGSPACES\",\"propValue\":\"1\"},{\"propName\":\"IFX_USEPUT\",\"propValue\":\"\"},{\"propName\":\"IFX_USE_STRENC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASTDCOMPLIANCE_XAEND\",\"propValue\":\"\"},{\"propName\":\"IFXHOST\",\"propValue\":\"\"},{\"propName\":\"IFXHOST_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"JDBCTEMP\",\"propValue\":\"\"},{\"propName\":\"LOBCACHE\",\"propValue\":\"\"},{\"propName\":\"LOGINTIMEOUT\",\"propValue\":\"1000\"},{\"propName\":\"NEWCODESET\",\"propValue\":\"\"},{\"propName\":\"NEWNLSMAP\",\"propValue\":\"\"},{\"propName\":\"NODEFDAC\",\"propValue\":\"\"},{\"propName\":\"OPT_GOAL\",\"propValue\":\"\"},{\"propName\":\"OPTCOMPIND\",\"propValue\":\"\"},{\"propName\":\"OPTOFC\",\"propValue\":\"\"},{\"propName\":\"PATH\",\"propValue\":\"\"},{\"propName\":\"PDQPRIORITY\",\"propValue\":\"\"},{\"propName\":\"PORTNO_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"PROXY\",\"propValue\":\"\"},{\"propName\":\"PSORT_DBTEMP\",\"propValue\":\"\"},{\"propName\":\"PSORT_NPROCS\",\"propValue\":\"\"},{\"propName\":\"SECURITY\",\"propValue\":\"\"},{\"propName\":\"SQLIDEBUG\",\"propValue\":\"\"},{\"propName\":\"SRV_FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"STMT_CACHE\",\"propValue\":\"\"},{\"propName\":\"TRUSTED_CONTEXT\",\"propValue\":\"\"}]";
 
-    private final MetadataRepository metadataRepository = new GbaseMetadataRepository();
-    private final SqlexeRepository sqlexeRepository = new GbaseSqlexeRepository();
-    private final DdlRepository ddlRepository = new GbaseDdlRepository();
-    private final InstanceAdminRepository instanceAdminRepository = new GbaseInstanceAdminRepository();
+    private final MetadataRepository metadataRepository = new InformixMetadataRepository();
+    private final SqlexeRepository sqlexeRepository = new InformixSqlexeRepository();
+    private final DdlRepository ddlRepository = new InformixDdlRepository();
+    private final InstanceAdminRepository instanceAdminRepository = new InformixInstanceAdminRepository();
 
     @Override
     public String getDbType() {
@@ -175,7 +171,7 @@ public final class InformixDialect implements DatabaseDialect {
 
         connect.setInfo(info.toString());
         if (connect.getDbversion() == null || connect.getDbversion().isBlank()) {
-            connect.setDbversion(I18n.t("metadata.dbversion.no_permission", "当前用户无权限获取版本信息，请使用gbasedbt用户连接获取\n"));
+            connect.setDbversion(I18n.t("metadata.dbversion.no_permission", "当前用户无权限获取版本信息，请使用informix用户连接获取\n"));
         }
         return "";
     }
@@ -218,3 +214,4 @@ public final class InformixDialect implements DatabaseDialect {
         return instanceAdminRepository;
     }
 }
+
