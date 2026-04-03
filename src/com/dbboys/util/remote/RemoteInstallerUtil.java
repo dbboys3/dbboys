@@ -38,9 +38,11 @@ import org.apache.logging.log4j.Logger;
 import javax.swing.filechooser.FileSystemView;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class RemoteInstallerUtil {
@@ -1102,8 +1104,19 @@ public class RemoteInstallerUtil {
                 kernelInfo,
                 cpuInfo,
                 memInfo,
-                diskInfo
+                diskInfo,
+                collectSelectedInstallSteps()
         );
+    }
+
+    private static Set<Integer> collectSelectedInstallSteps() {
+        Set<Integer> selectedSteps = new LinkedHashSet<>();
+        for (int stepNo = 1; stepNo <= installStepBoxes.size(); stepNo++) {
+            if (isInstallStepSelected(stepNo)) {
+                selectedSteps.add(stepNo);
+            }
+        }
+        return selectedSteps;
     }
 
     private static void applyDiskSizeDefaults(ObservableList<InstallConfigItem> source, double availableDiskSize) {

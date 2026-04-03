@@ -4,8 +4,10 @@ import com.jcraft.jsch.JSchException;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class RemoteInstallExecutionContext {
     private final RemoteSessionClient remoteClient;
@@ -18,6 +20,7 @@ public final class RemoteInstallExecutionContext {
     private final String cpuInfo;
     private final String memoryInfo;
     private final String diskInfo;
+    private final Set<Integer> selectedInstallSteps;
 
     public RemoteInstallExecutionContext(
             RemoteSessionClient remoteClient,
@@ -29,7 +32,8 @@ public final class RemoteInstallExecutionContext {
             String kernelInfo,
             String cpuInfo,
             String memoryInfo,
-            String diskInfo
+            String diskInfo,
+            Set<Integer> selectedInstallSteps
     ) {
         this.remoteClient = remoteClient;
         this.remotePackagePath = remotePackagePath;
@@ -40,6 +44,7 @@ public final class RemoteInstallExecutionContext {
         this.cpuInfo = cpuInfo;
         this.memoryInfo = memoryInfo;
         this.diskInfo = diskInfo;
+        this.selectedInstallSteps = selectedInstallSteps == null ? Set.of() : Set.copyOf(new HashSet<>(selectedInstallSteps));
         this.fieldValues = new HashMap<>();
         if (fields != null) {
             for (RemoteInstallField field : fields) {
@@ -103,5 +108,9 @@ public final class RemoteInstallExecutionContext {
 
     public String diskInfo() {
         return diskInfo;
+    }
+
+    public boolean isInstallStepSelected(int stepNo) {
+        return selectedInstallSteps.contains(stepNo);
     }
 }

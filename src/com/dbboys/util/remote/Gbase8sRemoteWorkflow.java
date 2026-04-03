@@ -8,6 +8,8 @@ import com.dbboys.vo.Connect;
 import java.io.File;
 
 public final class Gbase8sRemoteWorkflow {
+    private static final int CREATE_DEFAULT_DATABASE_STEP_NO = 12;
+
     private Gbase8sRemoteWorkflow() {
     }
 
@@ -120,7 +122,9 @@ public final class Gbase8sRemoteWorkflow {
         databaseInfoArea.append(I18n.t("remote.install.result.instance_name", "实例名") + "：" + ctx.fieldValue(Gbase8sRemoteFields.GBASEDBTSERVER) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.listen_ip", "监听IP") + "：" + ctx.fieldValue(Gbase8sRemoteFields.LISTEN_IP) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.port", "端口") + "：" + ctx.fieldValue(Gbase8sRemoteFields.LISTEN_PORT) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.db_name", "库名") + "：" + ctx.fieldValue(Gbase8sRemoteFields.DEFAULT_DB_NAME) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        if (ctx.isInstallStepSelected(CREATE_DEFAULT_DATABASE_STEP_NO)) {
+            databaseInfoArea.append(I18n.t("remote.install.result.db_name", "库名") + "：" + ctx.fieldValue(Gbase8sRemoteFields.DEFAULT_DB_NAME) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        }
         databaseInfoArea.append(I18n.t("remote.install.result.user_password", "用户名/密码") + "：" + Gbase8sRemoteFields.LOGIN_USERNAME + "/" + ctx.fieldValue(Gbase8sRemoteFields.GBASEDBT_PASSWORD) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.charset", "字符集") + "：" + ctx.fieldValue(Gbase8sRemoteFields.DB_LOCALE) + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append("GL_USEGLU：" + ctx.fieldValue(Gbase8sRemoteFields.GL_USEGLU) + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
@@ -163,12 +167,22 @@ public final class Gbase8sRemoteWorkflow {
         connect.setDbtype(dialect.getDbType());
         connect.setIp(ctx.host());
         connect.setPort(ctx.fieldValue(Gbase8sRemoteFields.LISTEN_PORT));
-        connect.setDatabase(ctx.fieldValue(Gbase8sRemoteFields.DEFAULT_DB_NAME));
+        connect.setDatabase(resolveInstalledDatabaseName(ctx, dialect.defaultDatabase()));
         connect.setUsername(Gbase8sRemoteFields.LOGIN_USERNAME);
         connect.setPassword(ctx.fieldValue(Gbase8sRemoteFields.GBASEDBT_PASSWORD));
         connect.setProps(dialect.defaultConnectionProps());
         connect.setProps(dialect.modifyProps(connect, "DB_LOCALE", ctx.fieldValue(Gbase8sRemoteFields.DB_LOCALE)));
         return connect;
+    }
+
+    private static String resolveInstalledDatabaseName(RemoteInstallExecutionContext ctx, String fallbackDatabase) {
+        if (ctx != null && ctx.isInstallStepSelected(CREATE_DEFAULT_DATABASE_STEP_NO)) {
+            String databaseName = ctx.fieldValue(Gbase8sRemoteFields.DEFAULT_DB_NAME);
+            if (databaseName != null && !databaseName.isBlank()) {
+                return databaseName;
+            }
+        }
+        return fallbackDatabase;
     }
 
     private static void cleanupExistingInstall(RemoteInstallExecutionContext ctx) throws Exception {
