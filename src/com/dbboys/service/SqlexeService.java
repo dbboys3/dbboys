@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.dbboys.api.ConnectionService;
 import com.dbboys.api.DatabasePlatformResolver;
+import com.dbboys.api.SqlModeCapability;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.vo.Connect;
@@ -35,8 +36,12 @@ public class SqlexeService {
     }
 
     public List<String> getSqlMode(Connect connect, Connection conn) {
+        var repo = platformResolver.sqlexe(connect);
+        if (!(repo instanceof SqlModeCapability sqlModeCapability)) {
+            return List.of();
+        }
         try {
-            return platformResolver.sqlexe(connect).getSqlMode(conn);
+            return sqlModeCapability.getSqlModes(conn);
         } catch (SQLException e) {
             log.error("Operation failed", e);
             return new ArrayList<>();

@@ -21,7 +21,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public List<Database> getDatabases(Connection conn, boolean useOracleSyntax) throws SQLException {
+    public List<Database> getDatabases(Connection conn) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 
@@ -181,7 +181,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public List<String> getDBspaceForCreateDatabase(Connection conn) throws SQLException {
+    public List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 

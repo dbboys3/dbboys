@@ -11,30 +11,17 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * 一种数据库类型的「全家桶」策略：与 {@link com.dbboys.vo.Connect#getDbtype()} 一一对应，
- * 内含建连、（可选）会话初始化、元数据访问、SQL/切库执行等；注册到 {@link com.dbboys.impl.dialect.DatabaseDialectRegistry} 后即参与多库路由。
+ * 一种数据库类型的完整平台适配器：与 {@link com.dbboys.vo.Connect#getDbtype()} 一一对应，
+ * 内含建连、会话初始化、元数据访问、SQL 执行、DDL 导出、实例管理等能力。
  */
-public interface DatabaseDialect {
+public interface DatabasePlatform {
 
-    /**
-     * 本方言对应的数据库类型标识，与 {@link Connect#getDbtype()} 一致，如 "GBASE 8S"、"oracle"。
-     */
     String getDbType();
 
-    /**
-     * 返回该库的 JDBC 连接参数，由 {@link ConnectionService} 实现类用于加载驱动并建连。
-     */
     ConnectionParams getConnectionParams(Connect connect) throws Exception;
 
-    /**
-     * 在已建立的连接上做会话级初始化（如 GBase 的 sqlmode、Oracle 的 schema）。
-     * 不支持时可空实现。
-     */
     void sessionInit(Connection conn, Connect connect) throws Exception;
 
-    /**
-     * 是否支持会话初始化。若为 false，{@link ConnectionService#getConnectionWithSessionInit} 等价于普通建连。
-     */
     default boolean supportsSessionInit() {
         return true;
     }
@@ -60,24 +47,10 @@ public interface DatabaseDialect {
         return props != null && !props.isBlank() && new JSONArray(props).length() > 0;
     }
 
-    default boolean supportsNamedServerConnection() {
-        return false;
-    }
-
-    default String namedServerPropName() {
-        return "";
-    }
-
-    /**
-     * 用于检测连接是否可用的简单查询（单行结果即可）。
-     */
     default String testConnectionSql() {
         return "SELECT 1";
     }
 
-    /**
-     * 执行 {@link #testConnectionSql()} 判断连接是否可用。
-     */
     default boolean testConnection(Connection conn) {
         if (conn == null) {
             return false;
@@ -90,10 +63,6 @@ public interface DatabaseDialect {
         }
     }
 
-    /**
-     * 登录成功后填充版本、实例信息等；返回主实例名等方言相关字段（无则空串）。
-     * 默认使用 {@link DatabaseMetaData}；GBase 等可覆盖。
-     */
     default String populateConnectInfo(Connection connection, Connect connect) throws Exception {
         if (connection == null || connect == null) {
             return "";
@@ -106,31 +75,14 @@ public interface DatabaseDialect {
         return "";
     }
 
-    /**
-     * 切换当前库失败时，对 JDBC 异常分类（断连/需重建连接/其它）。
-     */
     default ChangeDatabaseFailureKind classifyChangeDatabaseFailure(SQLException e) {
         return ChangeDatabaseFailureKind.OTHER;
     }
 
-    /**
-     * 在 {@link #classifyChangeDatabaseFailure} 为 {@link ChangeDatabaseFailureKind#RETRY_WITH_NEW_CONNECTION} 时，
-     * 元数据层可先切到该库再重连，如 GBase 的 {@code sysmaster}；不需要则返回 null。
-     */
-    default String changeDatabaseFallbackCatalogName() {
-        return null;
-    }
-
-    /**
-     * 是否为系统库（切换时通常不调整 DB_LOCALE 等）。
-     */
     default boolean isSystemDatabase(String databaseName) {
         return false;
     }
 
-    /**
-     * 按属性名和值调整连接属性；默认实现会更新现有属性，若不存在则追加。
-     */
     default String modifyProps(Connect connect, String propName, String propValue) {
         if (connect == null) {
             return null;
@@ -157,29 +109,14 @@ public interface DatabaseDialect {
         return jsonArray.toString();
     }
 
-    /**
-     * 该库的元数据访问实现。阶段 2 按 Connect 的 dbtype 通过 Provider 获取。
-     */
-    com.dbboys.api.MetadataRepository getMetadataRepository();
+    MetadataRepository getMetadataRepository();
 
-    /**
-     * 该库的 SQL 执行/模式实现（如 setDatabase、getSqlMode）。阶段 2 按 Connect 的 dbtype 通过 Provider 获取。
-     */
-    com.dbboys.api.SqlexeRepository getSqlexeRepository();
+    SqlexeRepository getSqlexeRepository();
 
-    /**
-     * 该库的 DDL 导出实现。
-     */
-    com.dbboys.api.DdlRepository getDdlRepository();
+    DdlRepository getDdlRepository();
 
-    /**
-     * 该库的实例级管理实现；不支持的数据库可返回抛 UnsupportedOperationException 的实现。
-     */
-    com.dbboys.api.InstanceAdminRepository getInstanceAdminRepository();
+    InstanceAdminRepository getInstanceAdminRepository();
 
-    /**
-     * JDBC 连接参数：URL、驱动类名、驱动 jar 路径。
-     */
     final class ConnectionParams {
         private final String url;
         private final String driverClassName;

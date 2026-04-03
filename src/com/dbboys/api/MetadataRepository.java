@@ -20,22 +20,7 @@ public interface MetadataRepository {
         return false;
     }
 
-    List<Database> getDatabases(Connection conn, boolean useOracleSyntax) throws SQLException;
-
-    default List<Database> getDatabases(Connection conn) throws SQLException {
-        try {
-            return getDatabases(conn, false);
-        } catch (SQLException e) {
-            if (shouldRetryGetDatabases(e)) {
-                return getDatabases(conn, true);
-            }
-            throw e;
-        }
-    }
-
-    default boolean shouldRetryGetDatabases(SQLException e) {
-        return false;
-    }
+    List<Database> getDatabases(Connection conn) throws SQLException;
 
     Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
 
@@ -99,7 +84,7 @@ public interface MetadataRepository {
 
     List<DBPackage> getPackages(Connection conn, String databaseName) throws SQLException;
 
-    List<String> getDBspaceForCreateDatabase(Connection conn) throws SQLException;
+    List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException;
 
     void changeDatabase(Connection conn, String databaseName) throws SQLException;
 

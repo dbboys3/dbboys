@@ -2,8 +2,9 @@ package com.dbboys.impl;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
 import com.dbboys.api.ConnectionService;
-import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DatabasePlatformResolver;
+import com.dbboys.api.ReconnectFallbackCapability;
 import com.dbboys.util.MD5Util;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.*;
@@ -25,8 +26,6 @@ import org.json.JSONObject;
 
 public class ConnectionServiceImpl implements ConnectionService {
     private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
-    private static final String DB_TYPE_GBASE = "GBASE 8S";
-    private static final String DB_TYPE_INFORMIX = "INFORMIX";
     private static final String PROP_DB_LOCALE = "DB_LOCALE";
     private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
     private static final String PROP_IFX_TRIMTRAILINGSPACES = "IFX_TRIMTRAILINGSPACES";
@@ -43,8 +42,8 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public Connection createConnection(Connect connect) throws Exception {
-        DatabaseDialect dialect = platformResolver.requireDialect(connect);
-        DatabaseDialect.ConnectionParams params = dialect.getConnectionParams(connect);
+        DatabasePlatform dialect = platformResolver.requirePlatform(connect);
+        DatabasePlatform.ConnectionParams params = dialect.getConnectionParams(connect);
         Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
         Properties info = buildConnectionProperties(connect, false);
         return driver.connect(params.getUrl(), info);
@@ -95,8 +94,8 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public Connection getConnectionWithSessionInit(Connect connect) throws Exception {
-        DatabaseDialect dialect = platformResolver.requireDialect(connect);
-        DatabaseDialect.ConnectionParams params = dialect.getConnectionParams(connect);
+        DatabasePlatform dialect = platformResolver.requirePlatform(connect);
+        DatabasePlatform.ConnectionParams params = dialect.getConnectionParams(connect);
         Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
         Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
         Connection conn = driver.connect(params.getUrl(), info);
@@ -105,7 +104,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     private boolean shouldIgnoreTrimTrailingSpaces(Connect connect) {
-        return isIfxFamily(connect);
+        return supportsConnectionProperty(connect, PROP_IFX_TRIMTRAILINGSPACES);
     }
 
     public void changeCommitMode(Connection conn, int commitChoiceBoxIndex) throws SQLException {
@@ -120,7 +119,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null || conn == null) {
             return;
         }
-        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
+        DatabasePlatform dialect = platformResolver.getPlatform(connect.getDbtype());
         if (dialect != null && dialect.supportsSessionInit()) {
             try {
                 dialect.sessionInit(conn, connect);
@@ -147,7 +146,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             result.setSuccess(false);
             return result;
         }
-        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
+        DatabasePlatform dialect = platformResolver.getPlatform(connect.getDbtype());
         if (dialect == null) {
             result.setSuccess(false);
             return result;
@@ -156,7 +155,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             platformResolver.metadata(connect).changeDatabase(connect.getConn(), database.getName());
             connect.setDatabase(database.getName());
             if (!dialect.isSystemDatabase(database.getName())) {
-                connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
+                applySupportedConnectionProperty(connect, PROP_DB_LOCALE, database.getDbLocale());
             }
             adjustDefaultDatabaseIsolationLevel(connect, database, persistDefaultDatabase);
             if (persistDefaultDatabase) {
@@ -174,12 +173,12 @@ public class ConnectionServiceImpl implements ConnectionService {
                 try {
                     connect.setDatabase(database.getName());
                     if (!dialect.isSystemDatabase(database.getName())) {
-                        connect.setProps(modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
+                        applySupportedConnectionProperty(connect, PROP_DB_LOCALE, database.getDbLocale());
                     }
                     adjustDefaultDatabaseIsolationLevel(connect, database, persistDefaultDatabase);
                     Connect reconnectConnect = new Connect(connect);
                     if (shouldIgnoreIsolationLevel(database)) {
-                        reconnectConnect.setProps(modifyProps(reconnectConnect, PROP_IFX_ISOLATION_LEVEL, ""));
+                        applySupportedConnectionProperty(reconnectConnect, PROP_IFX_ISOLATION_LEVEL, "");
                     }
                     Connection newConn = sessionInitOnReconnect
                             ? getConnectionWithSessionInit(reconnectConnect)
@@ -209,34 +208,27 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect == null) {
             return null;
         }
-        return platformResolver.requireDialect(connect).modifyProps(connect, propName, propValue);
+        return platformResolver.requirePlatform(connect).modifyProps(connect, propName, propValue);
     }
 
     private void adjustDefaultDatabaseIsolationLevel(Connect connect,
                                                      Database database,
                                                      boolean persistDefaultDatabase) {
-        if (!persistDefaultDatabase || !isIfxFamily(connect)) {
+        if (!persistDefaultDatabase || !supportsConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL)) {
             return;
         }
         if (shouldIgnoreIsolationLevel(database)) {
-            connect.setProps(modifyProps(connect, PROP_IFX_ISOLATION_LEVEL, ""));
+            applySupportedConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL, "");
             return;
         }
         String isolationLevel = connect.getPropByName(PROP_IFX_ISOLATION_LEVEL);
         if (isolationLevel == null || isolationLevel.trim().isEmpty()) {
-            connect.setProps(modifyProps(connect, PROP_IFX_ISOLATION_LEVEL, "5"));
+            applySupportedConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL, "5");
         }
-    }
-
-    private boolean isIfxFamily(Connect connect) {
-        if (connect == null || connect.getDbtype() == null) {
-            return false;
-        }
-        return DB_TYPE_GBASE.equals(connect.getDbtype()) || DB_TYPE_INFORMIX.equals(connect.getDbtype());
     }
 
     public String setConnectInfo(Connect connect) throws Exception {
-        DatabaseDialect dialect = platformResolver.requireDialect(connect);
+        DatabasePlatform dialect = platformResolver.requirePlatform(connect);
         try (Connection connection = getConnectionWithSessionInit(connect)) {
             String primaryInstance = dialect.populateConnectInfo(connection, connect);
             if (connect.getDriver() != null && !connect.getDriver().isEmpty()) {
@@ -255,7 +247,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (connect.getConn() == null) {
             return false;
         }
-        DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
+        DatabasePlatform dialect = platformResolver.getPlatform(connect.getDbtype());
         if (dialect == null) {
             return false;
         }
@@ -284,17 +276,17 @@ public class ConnectionServiceImpl implements ConnectionService {
             repo.setDatabase(conn, database.getName());
             return new ConnectionLease(conn, false);
         } catch (SQLException e) {
-            DatabaseDialect dialect = platformResolver.getDialect(connect.getDbtype());
-            String fallback = dialect != null ? dialect.changeDatabaseFallbackCatalogName() : null;
-            if (dialect != null && dialect.supportsSessionInit()
+            DatabasePlatform dialect = platformResolver.getPlatform(connect.getDbtype());
+            String fallback = resolveReconnectFallbackDatabase(dialect);
+            if (dialect != null
                     && dialect.classifyChangeDatabaseFailure(e) == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION
                     && fallback != null) {
                 repo.setDatabase(connect.getConn(), fallback);
                 Connect connect1 = new Connect(connect);
                 connect1.setDatabase(database.getName());
-                connect1.setProps(modifyProps(connect1, PROP_DB_LOCALE, database.getDbLocale()));
+                applySupportedConnectionProperty(connect1, PROP_DB_LOCALE, database.getDbLocale());
                 if (shouldIgnoreIsolationLevel(database)) {  // 如果数据库日志为nolog，则不设置隔离级别，否则连接报错-256
-                    connect1.setProps(modifyProps(connect1, PROP_IFX_ISOLATION_LEVEL, ""));
+                    applySupportedConnectionProperty(connect1, PROP_IFX_ISOLATION_LEVEL, "");
                 }
                 Connection newConn = getConnectionWithSessionInit(connect1);
                 repo.setDatabase(newConn, database.getName());
@@ -336,6 +328,48 @@ public class ConnectionServiceImpl implements ConnectionService {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());
+    }
+
+    private void applySupportedConnectionProperty(Connect connect, String propName, String propValue) {
+        if (supportsConnectionProperty(connect, propName)) {
+            connect.setProps(modifyProps(connect, propName, propValue));
+        }
+    }
+
+    private boolean supportsConnectionProperty(Connect connect, String propName) {
+        if (connect == null || propName == null || propName.isBlank()) {
+            return false;
+        }
+        if (containsConnectionProperty(connect.getProps(), propName)) {
+            return true;
+        }
+        DatabasePlatform platform = platformResolver.getPlatform(connect.getDbtype());
+        return platform != null && containsConnectionProperty(platform.defaultConnectionProps(), propName);
+    }
+
+    private boolean containsConnectionProperty(String propsJson, String propName) {
+        if (propsJson == null || propsJson.isBlank()) {
+            return false;
+        }
+        try {
+            JSONArray jsonArray = new JSONArray(propsJson);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+                if (propName.equalsIgnoreCase(jsonObject.optString("propName"))) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Unable to inspect connection properties", e);
+        }
+        return false;
+    }
+
+    private String resolveReconnectFallbackDatabase(DatabasePlatform dialect) {
+        if (dialect instanceof ReconnectFallbackCapability capability) {
+            return capability.reconnectFallbackDatabaseName();
+        }
+        return null;
     }
 
     private void applyReconnectFailure(ChangeDefaultDatabaseResult result, Exception ex) {

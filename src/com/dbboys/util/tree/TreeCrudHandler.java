@@ -1,13 +1,14 @@
 package com.dbboys.util.tree;
 
+import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.app.AppState;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
-import com.dbboys.impl.DialectServices;
 import com.dbboys.api.MetaObjectService;
+import com.dbboys.api.ReconnectFallbackCapability;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.util.*;
 import com.dbboys.vo.*;
@@ -440,7 +441,7 @@ public class TreeCrudHandler {
         String databaseName = currentDatabase.getName();
         if (useSysmaster) {
             try {
-                String fallback = resolveDialectServices().requireDialect(connect).changeDatabaseFallbackCatalogName();
+                String fallback = resolveReconnectFallbackDatabase(connect);
                 if (fallback != null && !fallback.isBlank()) {
                     databaseName = fallback;
                 }
@@ -456,9 +457,21 @@ public class TreeCrudHandler {
             return;
         }
         connect.setDatabase(databaseName);
-        connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, PROP_DB_LOCALE, database.getDbLocale()));
+        ConnectionPropertyUtil.applySupportedConnectionProperty(
+                TreeViewUtil.connectionService,
+                resolvePlatformResolver(),
+                connect,
+                PROP_DB_LOCALE,
+                database.getDbLocale()
+        );
         if (isNoLogDatabase(database)) {
-            connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, PROP_IFX_ISOLATION_LEVEL, ""));
+            ConnectionPropertyUtil.applySupportedConnectionProperty(
+                    TreeViewUtil.connectionService,
+                    resolvePlatformResolver(),
+                    connect,
+                    PROP_IFX_ISOLATION_LEVEL,
+                    ""
+            );
         }
     }
 
@@ -468,12 +481,26 @@ public class TreeCrudHandler {
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());
     }
 
-    private static DialectServices resolveDialectServices() {
+    private static DatabasePlatformResolver resolvePlatformResolver() {
         try {
-            return AppContext.get(DialectServices.class);
+            return AppContext.get(DatabasePlatformResolver.class);
         } catch (IllegalStateException e) {
-            return DialectServices.createDefault();
+            return com.dbboys.impl.DialectServices.createDefault();
         }
+    }
+
+    private static String resolveReconnectFallbackDatabase(Connect connect) {
+        if (connect == null) {
+            return null;
+        }
+        try {
+            var dialect = resolvePlatformResolver().requirePlatform(connect);
+            if (dialect instanceof ReconnectFallbackCapability capability) {
+                return capability.reconnectFallbackDatabaseName();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     public static void toggleObjectEnabled(TreeItem<TreeData> selectedItem, boolean enabled) {
@@ -1599,8 +1626,12 @@ public class TreeCrudHandler {
         database.setDbLog(bundle.dbLog);
         Connect bootstrapConnect = new Connect(baseConnect);
         if (bundle.dbLocale != null && !bundle.dbLocale.isBlank()) {
-            bootstrapConnect.setProps(
-                    TreeViewUtil.connectionService.modifyProps(bootstrapConnect, PROP_DB_LOCALE, bundle.dbLocale)
+            ConnectionPropertyUtil.applySupportedConnectionProperty(
+                    TreeViewUtil.connectionService,
+                    resolvePlatformResolver(),
+                    bootstrapConnect,
+                    PROP_DB_LOCALE,
+                    bundle.dbLocale
             );
         }
 

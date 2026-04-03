@@ -1,12 +1,12 @@
 package com.dbboys.impl;
 
 import com.dbboys.api.DatabasePlatformResolver;
-import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
 import com.dbboys.api.InstanceAdminRepository;
 import com.dbboys.api.MetadataRepository;
 import com.dbboys.api.SqlexeRepository;
-import com.dbboys.impl.dialect.DatabaseDialectRegistry;
+import com.dbboys.impl.dialect.DatabasePlatformRegistry;
 import com.dbboys.vo.Connect;
 
 /**
@@ -15,49 +15,52 @@ import com.dbboys.vo.Connect;
  */
 public final class DialectServices implements DatabasePlatformResolver {
 
-    private final DatabaseDialectRegistry registry;
+    private final DatabasePlatformRegistry registry;
 
-    public DialectServices(DatabaseDialectRegistry registry) {
-        this.registry = registry != null ? registry : DatabaseDialectRegistry.createDefault();
+    public DialectServices(DatabasePlatformRegistry registry) {
+        this.registry = registry != null ? registry : DatabasePlatformRegistry.createDefault();
     }
 
     public static DialectServices createDefault() {
-        return new DialectServices(DatabaseDialectRegistry.createDefault());
+        return new DialectServices(DatabasePlatformRegistry.createDefault());
     }
 
-    public DatabaseDialectRegistry getRegistry() {
+    public DatabasePlatformRegistry getPlatformRegistry() {
         return registry;
     }
 
-    public DatabaseDialect getDialect(String dbType) {
-        return registry.getDialect(dbType);
+    @Override
+    public DatabasePlatform getPlatform(String dbType) {
+        return registry.getPlatform(dbType);
     }
 
-    public DatabaseDialect requireDialect(Connect connect) {
-        return registry.requireDialect(connect);
+    @Override
+    public DatabasePlatform requirePlatform(Connect connect) {
+        return registry.requirePlatform(connect);
     }
 
-    public DatabaseDialect requireDialect(String dbType) {
-        return registry.requireDialect(dbType);
+    @Override
+    public DatabasePlatform requirePlatform(String dbType) {
+        return registry.requirePlatform(dbType);
     }
 
     @Override
     public MetadataRepository metadata(Connect connect) {
-        return requireDialect(connect).getMetadataRepository();
+        return requirePlatform(connect).getMetadataRepository();
     }
 
     @Override
     public SqlexeRepository sqlexe(Connect connect) {
-        return requireDialect(connect).getSqlexeRepository();
+        return requirePlatform(connect).getSqlexeRepository();
     }
 
     @Override
     public DdlRepository ddl(Connect connect) {
-        return requireDialect(connect).getDdlRepository();
+        return requirePlatform(connect).getDdlRepository();
     }
 
     @Override
     public InstanceAdminRepository admin(Connect connect) {
-        return requireDialect(connect).getInstanceAdminRepository();
+        return requirePlatform(connect).getInstanceAdminRepository();
     }
 }

@@ -26,46 +26,46 @@ public class AdminService {
         this.platformResolver = platformResolver;
     }
 
-    public void modifyChunkExtendable(Connect connect, int chunkId, boolean toExtendAble) throws Exception {
+    public void setStorageSegmentExtendable(Connect connect, int segmentId, boolean extendable) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        modifyChunkExtendable(platformResolver.admin(connect), conn, chunkId, toExtendAble);
+        setStorageSegmentExtendable(platformResolver.admin(connect), conn, segmentId, extendable);
         conn.close();
     }
 
-    public void unLimitedSpaceSize(Connect connect, String dbspace) throws Exception {
+    public void removeStorageSpaceLimit(Connect connect, String storageSpaceName) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        modifySpaceSize(platformResolver.admin(connect), conn, dbspace, 10, 10000, 0);
+        resizeStorageSpace(platformResolver.admin(connect), conn, storageSpaceName, 10, 10000, 0);
         conn.close();
     }
 
-    public List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(Connect connect) throws Exception {
+    public List<List<CustomSpaceChart.SpaceUsage>> getStorageSpaceUsage(Connect connect) throws Exception {
         Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        List<List<CustomSpaceChart.SpaceUsage>> result = getInstanceDbspaceInfo(platformResolver.admin(connect), conn);
-        conn.close();
-        return result;
-    }
-
-    public double getMaxDbspaceUsed(Connect connect) throws Exception {
-        Connection conn = connectionService.getConnectionWithSessionInit(connect);
-        double result = getMaxDbspaceUsed(platformResolver.admin(connect), conn);
+        List<List<CustomSpaceChart.SpaceUsage>> result = getStorageSpaceUsage(platformResolver.admin(connect), conn);
         conn.close();
         return result;
     }
 
-    private void modifyChunkExtendable(InstanceAdminRepository adminRepository, Connection conn, int chunkId, boolean toExtendable) throws SQLException {
-        adminRepository.modifyChunkExtendable(conn, chunkId, toExtendable);
+    public double getMaxStorageSpaceUsage(Connect connect) throws Exception {
+        Connection conn = connectionService.getConnectionWithSessionInit(connect);
+        double result = getMaxStorageSpaceUsage(platformResolver.admin(connect), conn);
+        conn.close();
+        return result;
     }
 
-    private void modifySpaceSize(InstanceAdminRepository adminRepository, Connection conn, String dbspace, int size1, int size2, int size3) throws SQLException {
-        adminRepository.modifySpaceSize(conn, dbspace, size1, size2, size3);
+    private void setStorageSegmentExtendable(InstanceAdminRepository adminRepository, Connection conn, int segmentId, boolean extendable) throws SQLException {
+        adminRepository.setStorageSegmentExtendable(conn, segmentId, extendable);
     }
 
-    private List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(InstanceAdminRepository adminRepository, Connection conn) throws SQLException {
-        return adminRepository.getInstanceDbspaceInfo(conn);
+    private void resizeStorageSpace(InstanceAdminRepository adminRepository, Connection conn, String storageSpaceName, int size1, int size2, int size3) throws SQLException {
+        adminRepository.resizeStorageSpace(conn, storageSpaceName, size1, size2, size3);
     }
 
-    private double getMaxDbspaceUsed(InstanceAdminRepository adminRepository, Connection conn) throws SQLException {
-        return adminRepository.getMaxDbspaceUsed(conn);
+    private List<List<CustomSpaceChart.SpaceUsage>> getStorageSpaceUsage(InstanceAdminRepository adminRepository, Connection conn) throws SQLException {
+        return adminRepository.getStorageSpaceUsage(conn);
+    }
+
+    private double getMaxStorageSpaceUsage(InstanceAdminRepository adminRepository, Connection conn) throws SQLException {
+        return adminRepository.getMaxStorageSpaceUsage(conn);
     }
 
     private static ConnectionService resolveConnectionService() {

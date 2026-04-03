@@ -18,21 +18,21 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
     }
 
     @Override
-    public void modifyChunkExtendable(Connection conn, int chunkId, boolean toExtendable) throws SQLException {
-        String sql = toExtendable
-                ? "EXECUTE FUNCTION sysadmin:task (\"modify chunk extendable on\"," + chunkId + ")"
-                : "EXECUTE FUNCTION sysadmin:task (\"modify chunk extendable off\"," + chunkId + ")";
+    public void setStorageSegmentExtendable(Connection conn, int segmentId, boolean extendable) throws SQLException {
+        String sql = extendable
+                ? "EXECUTE FUNCTION sysadmin:task (\"modify chunk extendable on\"," + segmentId + ")"
+                : "EXECUTE FUNCTION sysadmin:task (\"modify chunk extendable off\"," + segmentId + ")";
         conn.createStatement().execute(sql);
     }
 
     @Override
-    public void modifySpaceSize(Connection conn, String dbspace, int size1, int size2, int size3) throws SQLException {
-        String sql = "EXECUTE FUNCTION sysadmin:task (\"modify space sp_sizes\",\"" + dbspace + "\",\"" + size1 + "\",\"" + size2 + "\",\"" + size3 + "\")";
+    public void resizeStorageSpace(Connection conn, String storageSpaceName, int size1, int size2, int size3) throws SQLException {
+        String sql = "EXECUTE FUNCTION sysadmin:task (\"modify space sp_sizes\",\"" + storageSpaceName + "\",\"" + size1 + "\",\"" + size2 + "\",\"" + size3 + "\")";
         conn.createStatement().execute(sql);
     }
 
     @Override
-    public List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(Connection conn) throws SQLException {
+    public List<List<CustomSpaceChart.SpaceUsage>> getStorageSpaceUsage(Connection conn) throws SQLException {
         List<List<CustomSpaceChart.SpaceUsage>> result = new ArrayList<>();
 
         List<CustomSpaceChart.SpaceUsage> dbspaceList = new ArrayList<>();
@@ -192,7 +192,7 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
     }
 
     @Override
-    public double getMaxDbspaceUsed(Connection conn) throws SQLException {
+    public double getMaxStorageSpaceUsage(Connection conn) throws SQLException {
         String sql = """
                 SELECT first 1
                   trim(B.name) as name,

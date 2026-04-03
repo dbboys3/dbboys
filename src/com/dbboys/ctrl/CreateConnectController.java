@@ -8,7 +8,8 @@ import com.dbboys.customnode.CustomLostFocusCommitTableCell;
 import com.dbboys.customnode.CustomTableView;
 import com.dbboys.customnode.CustomUserTextField;
 import com.dbboys.api.ConnectionService;
-import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatform;
+import com.dbboys.api.NamedServerConnectionCapability;
 import com.dbboys.impl.DialectServices;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
@@ -395,13 +396,13 @@ public class CreateConnectController {
     }
 
     private void applyDialectDefaults(Connect connect, String oldDbType, String newDbType) {
-        DatabaseDialect oldDialect = resolveDialectServices().getDialect(oldDbType);
-        DatabaseDialect newDialect = resolveDialectServices().getDialect(newDbType);
+        DatabasePlatform oldDialect = resolveDialectServices().getPlatform(oldDbType);
+        DatabasePlatform newDialect = resolveDialectServices().getPlatform(newDbType);
         if (newDialect == null) {
             return;
         }
-        switchGroupOrIP.setVisible(newDialect.supportsNamedServerConnection());
-        if (!newDialect.supportsNamedServerConnection()) {
+        switchGroupOrIP.setVisible(supportsNamedServerConnection(newDialect));
+        if (!supportsNamedServerConnection(newDialect)) {
             groupHbox.setVisible(false);
         }
         if (shouldReplaceField(portTextField.getText(), oldDialect == null ? null : oldDialect.defaultPort())) {
@@ -425,13 +426,13 @@ public class CreateConnectController {
     }
 
     private void refreshDriverPropertyButton(String dbType) {
-        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        DatabasePlatform dialect = resolveDialectServices().getPlatform(dbType);
         boolean supported = dialect != null && dialect.supportsConnectionProperties();
         modifyDriverButton.setDisable(!supported);
     }
 
     private String defaultConnectionPropsFor(String dbType) {
-        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        DatabasePlatform dialect = resolveDialectServices().getPlatform(dbType);
         if (dialect == null) {
             return EMPTY_PROPS;
         }
@@ -446,7 +447,7 @@ public class CreateConnectController {
     }
 
     private String defaultDatabaseFor(String dbType) {
-        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        DatabasePlatform dialect = resolveDialectServices().getPlatform(dbType);
         if (dialect == null) {
             return "";
         }
@@ -463,9 +464,9 @@ public class CreateConnectController {
 
     private List<String> loadAvailableDbTypes() {
         Set<String> registeredDbTypes = new HashSet<>();
-        for (DatabaseDialect dialect : resolveDialectServices().getRegistry().getAllDialects()) {
-            if (dialect != null && dialect.getDbType() != null && !dialect.getDbType().isBlank()) {
-                registeredDbTypes.add(dialect.getDbType());
+        for (DatabasePlatform platform : resolveDialectServices().getPlatformRegistry().getAllPlatforms()) {
+            if (platform != null && platform.getDbType() != null && !platform.getDbType().isBlank()) {
+                registeredDbTypes.add(platform.getDbType());
             }
         }
 
@@ -543,12 +544,16 @@ public class CreateConnectController {
     }
 
     private String namedServerPropNameFor(String dbType) {
-        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
-        if (dialect == null || !dialect.supportsNamedServerConnection()) {
+        DatabasePlatform platform = resolveDialectServices().getPlatform(dbType);
+        if (!(platform instanceof NamedServerConnectionCapability capability)) {
             return "";
         }
-        String propName = dialect.namedServerPropName();
+        String propName = capability.namedServerPropertyName();
         return propName == null ? "" : propName;
+    }
+
+    private boolean supportsNamedServerConnection(DatabasePlatform platform) {
+        return platform instanceof NamedServerConnectionCapability;
     }
 
     public void initialize() throws IOException {

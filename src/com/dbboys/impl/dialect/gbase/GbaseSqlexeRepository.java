@@ -1,5 +1,8 @@
 package com.dbboys.impl.dialect.gbase;
 
+import com.dbboys.api.SqlModeCapability;
+import com.dbboys.api.SqlexeRepository;
+
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -7,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class GbaseSqlexeRepository implements com.dbboys.api.SqlexeRepository {
+public class GbaseSqlexeRepository implements SqlexeRepository, SqlModeCapability {
     public static final String SQL_SYS_DUAL = "select  * from sysmaster:sysdual";
     public static final String SQLMODE_GBASE = "set environment sqlmode 'gbase'";
     public static final String SQLMODE_MYSQL = "set environment sqlmode 'mysql'";
@@ -20,7 +23,7 @@ public class GbaseSqlexeRepository implements com.dbboys.api.SqlexeRepository {
     }
 
 
-    public List<String> getSqlMode(Connection conn) throws SQLException {
+    public List<String> getSqlModes(Connection conn) throws SQLException {
         List<String> sqlmodes = new ArrayList<>();
         ResultSet rs = null;
         java.sql.Statement stmt = null;

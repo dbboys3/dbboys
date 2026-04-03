@@ -15,22 +15,22 @@ public final class OracleInstanceAdminRepository implements InstanceAdminReposit
     private static final String MSG = "Oracle instance admin repository not implemented";
 
     @Override
-    public void modifyChunkExtendable(Connection conn, int chunkId, boolean toExtendable) throws SQLException {
+    public void setStorageSegmentExtendable(Connection conn, int segmentId, boolean extendable) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 
     @Override
-    public void modifySpaceSize(Connection conn, String dbspace, int size1, int size2, int size3) throws SQLException {
+    public void resizeStorageSpace(Connection conn, String storageSpaceName, int size1, int size2, int size3) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 
     @Override
-    public List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(Connection conn) throws SQLException {
+    public List<List<CustomSpaceChart.SpaceUsage>> getStorageSpaceUsage(Connection conn) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 
     @Override
-    public double getMaxDbspaceUsed(Connection conn) throws SQLException {
+    public double getMaxStorageSpaceUsage(Connection conn) throws SQLException {
         throw new UnsupportedOperationException(MSG);
     }
 }

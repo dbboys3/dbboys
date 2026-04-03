@@ -6,6 +6,7 @@ import com.dbboys.api.DdlRepository;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.BackgroundSqlUtil;
+import com.dbboys.util.ConnectionPropertyUtil;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.BackgroundSqlTask;
@@ -50,16 +51,12 @@ public class DatabaseService implements MetaObjectService {
         this.platformResolver = platformResolver;
     }
 
-    public List<String> getDBspaceForCreateDatabase(Connect connect) throws SQLException {
-        return platformResolver.metadata(connect).getDBspaceForCreateDatabase(connect.getConn());
+    public List<String> getStorageSpacesForCreateDatabase(Connect connect) throws SQLException {
+        return platformResolver.metadata(connect).getStorageSpacesForCreateDatabase(connect.getConn());
     }
 
     public List<Database> getDatabases(Connect connect) throws SQLException {
         return platformResolver.metadata(connect).getDatabases(connect.getConn());
-    }
-
-    public List<Database> getDatabases(Connect connect, boolean useOracleSyntax) throws SQLException {
-        return platformResolver.metadata(connect).getDatabases(connect.getConn(), useOracleSyntax);
     }
     @Override
     public DdlFetcher ddlFetcher() {
@@ -137,9 +134,21 @@ public class DatabaseService implements MetaObjectService {
             return sessionConnect;
         }
         sessionConnect.setDatabase(database.getName());
-        sessionConnect.setProps(connectionService().modifyProps(sessionConnect, "DB_LOCALE", database.getDbLocale()));
+        ConnectionPropertyUtil.applySupportedConnectionProperty(
+                connectionService(),
+                platformResolver,
+                sessionConnect,
+                "DB_LOCALE",
+                database.getDbLocale()
+        );
         if (database.getDbLog() != null && "nolog".equalsIgnoreCase(database.getDbLog().trim())) {
-            sessionConnect.setProps(connectionService().modifyProps(sessionConnect, "IFX_ISOLATION_LEVEL", ""));
+            ConnectionPropertyUtil.applySupportedConnectionProperty(
+                    connectionService(),
+                    platformResolver,
+                    sessionConnect,
+                    "IFX_ISOLATION_LEVEL",
+                    ""
+            );
         }
         return sessionConnect;
     }

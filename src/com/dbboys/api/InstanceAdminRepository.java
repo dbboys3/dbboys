@@ -16,11 +16,11 @@ public interface InstanceAdminRepository {
         return false;
     }
 
-    void modifyChunkExtendable(Connection conn, int chunkId, boolean toExtendable) throws SQLException;
+    void setStorageSegmentExtendable(Connection conn, int segmentId, boolean extendable) throws SQLException;
 
-    void modifySpaceSize(Connection conn, String dbspace, int size1, int size2, int size3) throws SQLException;
+    void resizeStorageSpace(Connection conn, String storageSpaceName, int size1, int size2, int size3) throws SQLException;
 
-    List<List<CustomSpaceChart.SpaceUsage>> getInstanceDbspaceInfo(Connection conn) throws SQLException;
+    List<List<CustomSpaceChart.SpaceUsage>> getStorageSpaceUsage(Connection conn) throws SQLException;
 
-    double getMaxDbspaceUsed(Connection conn) throws SQLException;
+    double getMaxStorageSpaceUsage(Connection conn) throws SQLException;
 }

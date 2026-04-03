@@ -1,10 +1,12 @@
 package com.dbboys.impl.dialect.informix;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
-import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
 import com.dbboys.api.InstanceAdminRepository;
 import com.dbboys.api.MetadataRepository;
+import com.dbboys.api.NamedServerConnectionCapability;
+import com.dbboys.api.ReconnectFallbackCapability;
 import com.dbboys.api.SqlexeRepository;
 import com.dbboys.i18n.I18n;
 import com.dbboys.vo.Connect;
@@ -14,10 +16,11 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-public final class InformixDialect implements DatabaseDialect {
+public final class InformixDialect implements DatabasePlatform, NamedServerConnectionCapability, ReconnectFallbackCapability {
 
     private static final String DB_TYPE = "INFORMIX";
     private static final String DRIVER_CLASS = "com.informix.jdbc.IfxDriver";
+    private static final String NAMED_SERVER_PROP = "INFORMIXSERVER";
     private static final String DEFAULT_CONNECTION_PROPS =
             "[{\"propName\":\"APPENDISAM\",\"propValue\":\"\"},{\"propName\":\"CLIENT_LOCALE\",\"propValue\":\"\"},{\"propName\":\"CSM\",\"propValue\":\"\"},{\"propName\":\"DBANSIWARN\",\"propValue\":\"\"},{\"propName\":\"DBDATE\",\"propValue\":\"Y4MD-\"},{\"propName\":\"DBSPACETEMP\",\"propValue\":\"\"},{\"propName\":\"DBTEMP\",\"propValue\":\"\"},{\"propName\":\"DBUPSPACE\",\"propValue\":\"\"},{\"propName\":\"DB_LOCALE\",\"propValue\":\"\"},{\"propName\":\"DELIMIDENT\",\"propValue\":\"\"},{\"propName\":\"ENABLE_TYPE_CACHE\",\"propValue\":\"\"},{\"propName\":\"ENABLE_HDRSWITCH\",\"propValue\":\"\"},{\"propName\":\"FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"INFORMIXCONRETRY\",\"propValue\":\"\"},{\"propName\":\"INFORMIXCONTIME\",\"propValue\":\"\"},{\"propName\":\"INFORMIXOPCACHE\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSERVER\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSERVER_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"INFORMIXSTACKSIZE\",\"propValue\":\"\"},{\"propName\":\"IFX_AUTOFREE\",\"propValue\":\"\"},{\"propName\":\"IFX_BATCHUPDATE_PER_SPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_CODESETLOB\",\"propValue\":\"\"},{\"propName\":\"IFX_DIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_EXTDIRECTIVES\",\"propValue\":\"\"},{\"propName\":\"IFX_GET_SMFLOAT_AS_FLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_ISOLATION_LEVEL\",\"propValue\":\"5\"},{\"propName\":\"IFX_FLAT_UCSQ\",\"propValue\":\"\"},{\"propName\":\"IFX_LOCK_MODE_WAIT\",\"propValue\":\"10\"},{\"propName\":\"IFX_PAD_VARCHAR\",\"propValue\":\"\"},{\"propName\":\"IFX_SET_FLOAT_AS_SMFLOAT\",\"propValue\":\"\"},{\"propName\":\"IFX_SOC_TIMEOUT\",\"propValue\":\"\"},{\"propName\":\"IFX_TRIMTRAILINGSPACES\",\"propValue\":\"1\"},{\"propName\":\"IFX_USEPUT\",\"propValue\":\"\"},{\"propName\":\"IFX_USE_STRENC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASPEC\",\"propValue\":\"\"},{\"propName\":\"IFX_XASTDCOMPLIANCE_XAEND\",\"propValue\":\"\"},{\"propName\":\"IFXHOST\",\"propValue\":\"\"},{\"propName\":\"IFXHOST_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"JDBCTEMP\",\"propValue\":\"\"},{\"propName\":\"LOBCACHE\",\"propValue\":\"\"},{\"propName\":\"LOGINTIMEOUT\",\"propValue\":\"1000\"},{\"propName\":\"NEWCODESET\",\"propValue\":\"\"},{\"propName\":\"NEWNLSMAP\",\"propValue\":\"\"},{\"propName\":\"NODEFDAC\",\"propValue\":\"\"},{\"propName\":\"OPT_GOAL\",\"propValue\":\"\"},{\"propName\":\"OPTCOMPIND\",\"propValue\":\"\"},{\"propName\":\"OPTOFC\",\"propValue\":\"\"},{\"propName\":\"PATH\",\"propValue\":\"\"},{\"propName\":\"PDQPRIORITY\",\"propValue\":\"\"},{\"propName\":\"PORTNO_SECONDARY\",\"propValue\":\"\"},{\"propName\":\"PROXY\",\"propValue\":\"\"},{\"propName\":\"PSORT_DBTEMP\",\"propValue\":\"\"},{\"propName\":\"PSORT_NPROCS\",\"propValue\":\"\"},{\"propName\":\"SECURITY\",\"propValue\":\"\"},{\"propName\":\"SQLIDEBUG\",\"propValue\":\"\"},{\"propName\":\"SRV_FET_BUF_SIZE\",\"propValue\":\"\"},{\"propName\":\"STMT_CACHE\",\"propValue\":\"\"},{\"propName\":\"TRUSTED_CONTEXT\",\"propValue\":\"\"}]";
 
@@ -37,7 +40,7 @@ public final class InformixDialect implements DatabaseDialect {
                 ? defaultDatabase()
                 : connect.getDatabase();
         String url;
-        if (connect.getPropByName(namedServerPropName()).isEmpty()) {
+        if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
             String host = connect.getIp() == null || connect.getIp().isBlank() ? "127.0.0.1" : connect.getIp();
             String port = connect.getPort() == null || connect.getPort().isBlank() ? defaultPort() : connect.getPort();
             url = "jdbc:informix-sqli://" + host + ":" + port + "/" + database;
@@ -79,13 +82,8 @@ public final class InformixDialect implements DatabaseDialect {
     }
 
     @Override
-    public boolean supportsNamedServerConnection() {
-        return true;
-    }
-
-    @Override
-    public String namedServerPropName() {
-        return "INFORMIXSERVER";
+    public String namedServerPropertyName() {
+        return NAMED_SERVER_PROP;
     }
 
     @Override
@@ -106,7 +104,7 @@ public final class InformixDialect implements DatabaseDialect {
     }
 
     @Override
-    public String changeDatabaseFallbackCatalogName() {
+    public String reconnectFallbackDatabaseName() {
         return "sysmaster";
     }
 
@@ -182,7 +180,7 @@ public final class InformixDialect implements DatabaseDialect {
             return null;
         }
         if (!"DB_LOCALE".equals(propName)) {
-            return DatabaseDialect.super.modifyProps(connect, propName, propValue);
+            return DatabasePlatform.super.modifyProps(connect, propName, propValue);
         }
         if (propValue == null || propValue.trim().isEmpty()) {
             return connect.getProps();
@@ -191,7 +189,7 @@ public final class InformixDialect implements DatabaseDialect {
                 .replaceAll("(?i)" + "UTF8", "57372")
                 .replaceAll("(?i)" + "GB18030-2000", "5488")
                 .trim();
-        return DatabaseDialect.super.modifyProps(connect, propName, normalized);
+        return DatabasePlatform.super.modifyProps(connect, propName, normalized);
     }
 
     @Override

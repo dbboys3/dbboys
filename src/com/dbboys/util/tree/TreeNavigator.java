@@ -450,7 +450,7 @@ public class TreeNavigator {
             return true;
         }
         try {
-            return resolveDialectServices().requireDialect(connect).isSystemDatabase(database);
+            return resolveDialectServices().requirePlatform(connect).isSystemDatabase(database);
         } catch (Exception ignored) {
             return false;
         }

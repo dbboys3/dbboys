@@ -14,7 +14,7 @@ import java.util.List;
 public class InformixMetadataRepository implements com.dbboys.api.MetadataRepository {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 30;
 
-    private static final String SQL_DATABASES_GBASE = """
+    private static final String SQL_DATABASES_DEFAULT = """
             select t1.*,t2.allocedsize from(
             SELECT trim(name) dbname,
             trim(owner) owner,
@@ -44,7 +44,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
             on t1.dbname=t2.dbname
             """;
 
-    private static final String SQL_DATABASES_ORACLE = """
+    private static final String SQL_DATABASES_FALLBACK = """
             select t1.*,t2.allocedsize from(
             SELECT trim(name) dbname,
             trim(owner) owner,
@@ -431,9 +431,19 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
         return connect != null && "informix".equalsIgnoreCase(connect.getUsername());
     }
 
-    public List<Database> getDatabases(Connection conn, boolean useOracleSyntax) throws SQLException {
+    public List<Database> getDatabases(Connection conn) throws SQLException {
+        try {
+            return queryDatabases(conn, SQL_DATABASES_DEFAULT);
+        } catch (SQLException e) {
+            if (e != null && e.getErrorCode() == -201) {
+                return queryDatabases(conn, SQL_DATABASES_FALLBACK);
+            }
+            throw e;
+        }
+    }
+
+    private List<Database> queryDatabases(Connection conn, String sql) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
-        String sql = useOracleSyntax ? SQL_DATABASES_ORACLE : SQL_DATABASES_GBASE;
         return runner.query(sql, null, rs -> {
             Database database = new Database(rs.getString(1));
             database.setDbOwner(rs.getString(2));
@@ -445,11 +455,6 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
             database.setDbSize(rs.getString(8));
             return database;
         });
-    }
-
-    @Override
-    public boolean shouldRetryGetDatabases(SQLException e) {
-        return e != null && e.getErrorCode() == -201;
     }
 
     public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
@@ -764,7 +769,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
     }
 
 
-    public List<String> getDBspaceForCreateDatabase(Connection conn) throws SQLException {
+    public List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException {
         //如果连接的上一步操作是切库且报错了，如没有权限，当前连接是没有库的，直接执行会报错，需要先切到sysmaster库
         changeDatabase(conn, "sysmaster");
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);

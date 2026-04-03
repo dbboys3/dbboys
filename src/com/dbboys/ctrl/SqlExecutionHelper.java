@@ -1,6 +1,7 @@
 package com.dbboys.ctrl;
 
 import com.dbboys.api.DatabasePlatformResolver;
+import com.dbboys.api.SqlModeCapability;
 import com.dbboys.api.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.customnode.CustomResultsetTab;
@@ -495,8 +496,13 @@ public class SqlExecutionHelper {
         ctrl.sqlTask = new Task<>() {
             @Override
             protected Void call() throws Exception {
+                SqlModeCapability capability = sqlModeCapability();
+                if (capability == null) {
+                    Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported")));
+                    throw new Exception("ERROR");
+                }
                 try {
-                    platformResolver.sqlexe(sqlConnect).changeSqlMode(sqlConnect.getConn(), sqlmode);
+                    capability.changeSqlMode(sqlConnect.getConn(), sqlmode);
                 } catch (UnsupportedOperationException e) {
                     Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("sql.explain.not_supported")));
                     throw new Exception("ERROR", e);
@@ -519,6 +525,14 @@ public class SqlExecutionHelper {
         return platformResolver.sqlexe(ctrl.sqlConnect);
     }
 
+    private SqlModeCapability sqlModeCapability() {
+        SqlexeRepository repository = sqlexeRepository();
+        if (repository instanceof SqlModeCapability capability) {
+            return capability;
+        }
+        return null;
+    }
+
     private DatabasePlatformResolver resolvePlatformResolver() {
         try {
             return AppContext.get(DatabasePlatformResolver.class);
@@ -529,7 +543,8 @@ public class SqlExecutionHelper {
 
     private String detectSqlMode(String sql) {
         try {
-            return sqlexeRepository().detectSqlMode(sql);
+            SqlModeCapability capability = sqlModeCapability();
+            return capability != null ? capability.detectSqlMode(sql) : null;
         } catch (Exception e) {
             return null;
         }
@@ -545,7 +560,11 @@ public class SqlExecutionHelper {
 
     private boolean autoCommitsDdl() {
         try {
-            return sqlexeRepository().autoCommitsDdl(ctrl.sqlSqlModeChoiceBox.getValue());
+            SqlModeCapability capability = sqlModeCapability();
+            if (capability != null) {
+                return capability.autoCommitsDdl(ctrl.sqlSqlModeChoiceBox.getValue());
+            }
+            return sqlexeRepository().autoCommitsDdl();
         } catch (Exception e) {
             return false;
         }

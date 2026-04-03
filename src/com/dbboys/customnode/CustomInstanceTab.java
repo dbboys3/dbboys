@@ -796,7 +796,7 @@ public class CustomInstanceTab extends CustomTab {
                         @Override
                         protected Void call() throws Exception {
                             try {
-                                adminService.modifyChunkExtendable(connect, chunkId, true);
+                                adminService.setStorageSegmentExtendable(connect, chunkId, true);
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -827,7 +827,7 @@ public class CustomInstanceTab extends CustomTab {
                         @Override
                         protected Void call() throws Exception {
                             try {
-                                adminService.modifyChunkExtendable(connect, chunkId, false);
+                                adminService.setStorageSegmentExtendable(connect, chunkId, false);
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -855,7 +855,7 @@ public class CustomInstanceTab extends CustomTab {
                         @Override
                         protected Void call() throws Exception {
                             try {
-                                adminService.unLimitedSpaceSize(connect, spaceUsage.getName());
+                                adminService.removeStorageSpaceLimit(connect, spaceUsage.getName());
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -1284,7 +1284,7 @@ public class CustomInstanceTab extends CustomTab {
             onstat_l_llog=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -l |grep -c 'U------'");
             onstat_d_greped=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -d|grep -c PD");
             onstat_d=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -d");
-            spaceTopPercent = adminService.getMaxDbspaceUsed(connect);
+            spaceTopPercent = adminService.getMaxStorageSpaceUsage(connect);
             onstat_g_arc_greped=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -g arc |grep -A 1 ' level ' |sed -n '2p' |awk '{print $4}'");
             onstat_g_arc=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -g arc");
             onstat_m=JschUtil.executeCommand(session,JschUtil.extractEnvValue(connect.getInfo())+"onstat -c |awk '/^MSGPATH/ {print \"tail -1000 \"$2}' |sh|egrep -ic 'err|failed|warning|allocated|full|long|down|Died|Aborting|Abort'");
@@ -1774,7 +1774,7 @@ public class CustomInstanceTab extends CustomTab {
 
     private void loadSpaceTabContent(CustomTab spaceTab) {
         try {
-            dataList = adminService.getInstanceDbspaceInfo(connect);
+            dataList = adminService.getStorageSpaceUsage(connect);
         }
         catch (Exception e){
             log.error(e.getMessage(), e);

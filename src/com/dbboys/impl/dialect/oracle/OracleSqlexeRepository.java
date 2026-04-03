@@ -4,7 +4,6 @@ import com.dbboys.api.SqlexeRepository;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.List;
 
 /**
  * Oracle SQL 执行占位实现，所有方法暂抛 UnsupportedOperationException。
@@ -19,12 +18,7 @@ public final class OracleSqlexeRepository implements SqlexeRepository {
     }
 
     @Override
-    public List<String> getSqlMode(Connection conn) throws SQLException {
-        return List.of();
-    }
-
-    @Override
-    public boolean autoCommitsDdl(String sqlMode) {
+    public boolean autoCommitsDdl() {
         return true;
     }
 }

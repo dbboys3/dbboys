@@ -1,6 +1,7 @@
 package com.dbboys.util;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
+import com.dbboys.api.DatabasePlatform;
 import com.dbboys.app.AppContext;
 import com.dbboys.impl.DialectServices;
 import com.dbboys.vo.Connect;
@@ -21,7 +22,7 @@ public final class SqlErrorUtil {
         }
         try {
             return resolveDialectServices()
-                    .requireDialect(connect)
+                    .requirePlatform(connect)
                     .classifyChangeDatabaseFailure(e) == ChangeDatabaseFailureKind.DISCONNECTED;
         } catch (Exception ex) {
             return isDisconnectError(e);
@@ -48,8 +49,8 @@ public final class SqlErrorUtil {
             return false;
         }
         try {
-            for (com.dbboys.api.DatabaseDialect dialect : resolveDialectServices().getRegistry().getAllDialects()) {
-                if (dialect.classifyChangeDatabaseFailure(e) == expectedKind) {
+            for (DatabasePlatform platform : resolveDialectServices().getPlatformRegistry().getAllPlatforms()) {
+                if (platform.classifyChangeDatabaseFailure(e) == expectedKind) {
                     return true;
                 }
             }

@@ -1,6 +1,6 @@
 package com.dbboys.impl.dialect.oracle;
 
-import com.dbboys.api.DatabaseDialect;
+import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
 import com.dbboys.api.InstanceAdminRepository;
 import com.dbboys.api.MetadataRepository;
@@ -12,7 +12,7 @@ import java.sql.Connection;
 /**
  * Oracle 方言占位：建连参数与驱动占位，会话初始化暂不实现。
  */
-public final class OracleDialect implements DatabaseDialect {
+public final class OracleDialect implements DatabasePlatform {
 
     private static final String DB_TYPE = "oracle";
     private static final String DRIVER_CLASS = "oracle.jdbc.OracleDriver";
@@ -35,7 +35,7 @@ public final class OracleDialect implements DatabaseDialect {
         String database = connect.getDatabase() != null ? connect.getDatabase() : "ORCL";
         String url = "jdbc:oracle:thin:@" + host + ":" + port + ":" + database;
         String jarFilePath = "file:extlib/" + connect.getDbtype() + "/" + (connect.getDriver() != null && !connect.getDriver().isEmpty() ? connect.getDriver() : "ojdbc8.jar");
-        return new com.dbboys.api.DatabaseDialect.ConnectionParams(url, DRIVER_CLASS, jarFilePath);
+        return new ConnectionParams(url, DRIVER_CLASS, jarFilePath);
     }
 
     @Override

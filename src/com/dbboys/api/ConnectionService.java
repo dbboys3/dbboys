@@ -9,12 +9,12 @@ import java.sql.SQLException;
 public interface ConnectionService {
 
     /**
-     * 仅创建 JDBC 连接，不做方言会话初始化（如 GBase sqlmode）。需要会话初始化时请用 {@link #getConnectionWithSessionInit}。
+     * 仅创建 JDBC 连接，不做方言会话初始化。需要会话初始化时请用 {@link #getConnectionWithSessionInit}。
      */
     Connection createConnection(Connect connect) throws Exception;
 
     /**
-     * 建连并在方言支持时做会话初始化（如 GBase sqlmode）；与具体数据库品牌无关。
+     * 建连并在方言支持时做会话初始化；与具体数据库品牌无关。
      */
     Connection getConnectionWithSessionInit(Connect connect) throws Exception;
 
@@ -39,7 +39,7 @@ public interface ConnectionService {
     ChangeDefaultDatabaseResult changeSessionDatabase(Connect connect, Database database, boolean sessionInitOnReconnect);
 
     /**
-     * 按属性名和值调整连接属性 JSON；方言可在写入前对特定属性做归一化处理（如 GBase 的 DB_LOCALE）。
+     * 按属性名和值调整连接属性 JSON；方言可在写入前对特定属性做归一化处理。
      */
     String modifyProps(Connect connect, String propName, String propValue);
 

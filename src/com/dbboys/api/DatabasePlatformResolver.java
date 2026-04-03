@@ -16,9 +16,9 @@ public interface DatabasePlatformResolver {
 
     InstanceAdminRepository admin(Connect connect);
 
-    DatabaseDialect getDialect(String dbType);
+    DatabasePlatform getPlatform(String dbType);
 
-    DatabaseDialect requireDialect(Connect connect);
+    DatabasePlatform requirePlatform(Connect connect);
 
-    DatabaseDialect requireDialect(String dbType);
+    DatabasePlatform requirePlatform(String dbType);
 }

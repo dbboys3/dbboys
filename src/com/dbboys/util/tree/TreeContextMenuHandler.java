@@ -1,6 +1,7 @@
 package com.dbboys.util.tree;
 
 import com.dbboys.api.DatabasePlatformResolver;
+import com.dbboys.api.ReconnectFallbackCapability;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
 import com.dbboys.app.AppErrorHandler;
@@ -1091,7 +1092,7 @@ public class TreeContextMenuHandler {
                     log.info("selectitem is "+selectedItem.getValue().getName());
                 }
                 Connect connectForDb = (Connect) selectedItem.getParent().getValue();
-                dbspaceList = FXCollections.observableArrayList(TreeViewUtil.databaseService.getDBspaceForCreateDatabase(connectForDb));
+                dbspaceList = FXCollections.observableArrayList(TreeViewUtil.databaseService.getStorageSpacesForCreateDatabase(connectForDb));
             }catch (SQLException e){
                 AppErrorHandler.handle(e);
             }
@@ -1135,7 +1136,13 @@ public class TreeContextMenuHandler {
                 Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
                 String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
                 connect.setDatabase(resolveFallbackDatabase(connect));
-                connect.setProps(TreeViewUtil.connectionService.modifyProps(connect, "DB_LOCALE", dbLocale));
+                ConnectionPropertyUtil.applySupportedConnectionProperty(
+                        TreeViewUtil.connectionService,
+                        resolvePlatformResolver(),
+                        connect,
+                        "DB_LOCALE",
+                        dbLocale
+                );
                 String sql = "create database " + textField.getText() + " in "
                         + ((String) comboBox1.getValue()).replaceAll("\\([^()]*\\)", "")
                         + " with log";
@@ -1632,7 +1639,7 @@ public class TreeContextMenuHandler {
             return null;
         }
         try {
-            String fallback = resolvePlatformResolver().requireDialect(connect).changeDatabaseFallbackCatalogName();
+            String fallback = resolveReconnectFallbackDatabase(connect);
             if (fallback != null && !fallback.isBlank()) {
                 return fallback;
             }
@@ -1658,5 +1665,19 @@ public class TreeContextMenuHandler {
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }
+    }
+
+    private static String resolveReconnectFallbackDatabase(Connect connect) {
+        if (connect == null) {
+            return null;
+        }
+        try {
+            var dialect = resolvePlatformResolver().requirePlatform(connect);
+            if (dialect instanceof ReconnectFallbackCapability capability) {
+                return capability.reconnectFallbackDatabaseName();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 }
