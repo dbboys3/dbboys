@@ -55,6 +55,13 @@ public final class OracleMetadataRepository implements MetadataRepository {
     private static final String SQL_USERS = """
             select username
             from all_users
+            where username not in (
+                'ANONYMOUS','APPQOSSYS','AUDSYS','CTXSYS','DBSNMP','DIP','DMSYS','DVF','DVSYS',
+                'FLOWS_FILES','GGSYS','GSMADMIN_INTERNAL','GSMCATUSER','GSMUSER','LBACSYS','MDDATA',
+                'MDSYS','OJVMSYS','OLAPSYS','ORACLE_OCM','OUTLN','REMOTE_SCHEDULER_AGENT','SI_INFORMTN_SCHEMA',
+                'SPATIAL_CSW_ADMIN_USR','SPATIAL_WFS_ADMIN_USR','SYS','SYS$UMF','SYSBACKUP','SYSDG',
+                'SYSKM','SYSRAC','SYSTEM','WMSYS','XDB','XS$NULL'
+            )
             order by username
             """;
 
@@ -393,6 +400,28 @@ public final class OracleMetadataRepository implements MetadataRepository {
             order by object_name
             """;
 
+    private static final String SQL_PACKAGE_COUNT = """
+            select count(*)
+            from all_objects
+            where owner = ?
+              and object_type = 'PACKAGE'
+            """;
+
+    private static final String SQL_PACKAGES = """
+            select
+                p.owner,
+                p.object_name as package_name,
+                case when b.object_name is null then 1 else 0 end as is_empty
+            from all_objects p
+            left join all_objects b
+              on b.owner = p.owner
+             and b.object_name = p.object_name
+             and b.object_type = 'PACKAGE BODY'
+            where p.owner = ?
+              and p.object_type = 'PACKAGE'
+            order by p.object_name
+            """;
+
     private static final String SQL_INDEX_COLUMNS_FOR_TABLE = """
             select cols
             from (
@@ -420,7 +449,14 @@ public final class OracleMetadataRepository implements MetadataRepository {
     @Override
     public List<Database> getMetadataDatabases(Connection conn) throws SQLException {
         SqlRunner runner = runner(conn);
-        return runner.query(SQL_USERS, null, rs -> mapSchemaDatabase(rs.getString(1)));
+        List<Database> schemas = runner.query(SQL_USERS, null, rs -> mapSchemaDatabase(rs.getString(1)));
+        String currentSchema = currentSchema(conn);
+        boolean exists = schemas.stream().anyMatch(schema -> currentSchema.equalsIgnoreCase(schema.getName()));
+        if (!exists) {
+            schemas = new ArrayList<>(schemas);
+            schemas.add(0, mapSchemaDatabase(currentSchema));
+        }
+        return schemas;
     }
 
     @Override
@@ -671,13 +707,25 @@ public final class OracleMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public int getPackageCount(Connection conn) {
-        return 0;
+    public int getPackageCount(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = currentSchema(conn);
+        Integer value = runner.queryOne(SQL_PACKAGE_COUNT, List.of(owner), rs -> rs.getInt(1));
+        return value == null ? 0 : value;
     }
 
     @Override
-    public List<DBPackage> getPackages(Connection conn, String databaseName) {
-        return List.of();
+    public List<DBPackage> getPackages(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = (databaseName == null || databaseName.isBlank()) ? currentSchema(conn) : databaseName;
+        return runner.query(SQL_PACKAGES, List.of(owner), rs -> {
+            DBPackage dbPackage = new DBPackage(rs.getString("package_name"));
+            dbPackage.setDatabase(owner);
+            dbPackage.setOwner(rs.getString("owner"));
+            dbPackage.setRows(0);
+            dbPackage.setIsEmpty(rs.getInt("is_empty") == 1);
+            return dbPackage;
+        });
     }
 
     @Override

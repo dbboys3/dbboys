@@ -116,6 +116,11 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
+    public boolean supportsPackages() {
+        return true;
+    }
+
+    @Override
     public String getSessionDatabase(Connect connect) {
         if (connect == null) {
             return "";
