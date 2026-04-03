@@ -64,6 +64,10 @@ public interface DatabaseDialect {
         return false;
     }
 
+    default String namedServerPropName() {
+        return "";
+    }
+
     /**
      * 用于检测连接是否可用的简单查询（单行结果即可）。
      */

@@ -25,6 +25,7 @@ import org.json.JSONObject;
 public class ConnectionServiceImpl implements ConnectionService {
     private static final Logger log = LogManager.getLogger(ConnectionServiceImpl.class);
     private static final String DB_TYPE_GBASE = "GBASE 8S";
+    private static final String DB_TYPE_INFORMIX = "INFORMIX";
     private static final String PROP_DB_LOCALE = "DB_LOCALE";
     private static final String PROP_IFX_ISOLATION_LEVEL = "IFX_ISOLATION_LEVEL";
     private static final String PROP_IFX_TRIMTRAILINGSPACES = "IFX_TRIMTRAILINGSPACES";
@@ -103,7 +104,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     private boolean shouldIgnoreTrimTrailingSpaces(Connect connect) {
-        return connect != null && DB_TYPE_GBASE.equals(connect.getDbtype());
+        return isIfxFamily(connect);
     }
 
     public void changeCommitMode(Connection conn, int commitChoiceBoxIndex) throws SQLException {
@@ -213,7 +214,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     private void adjustDefaultDatabaseIsolationLevel(Connect connect,
                                                      Database database,
                                                      boolean persistDefaultDatabase) {
-        if (!persistDefaultDatabase || connect == null || !DB_TYPE_GBASE.equals(connect.getDbtype())) {
+        if (!persistDefaultDatabase || !isIfxFamily(connect)) {
             return;
         }
         if (shouldIgnoreIsolationLevel(database)) {
@@ -224,6 +225,13 @@ public class ConnectionServiceImpl implements ConnectionService {
         if (isolationLevel == null || isolationLevel.trim().isEmpty()) {
             connect.setProps(modifyProps(connect, PROP_IFX_ISOLATION_LEVEL, "5"));
         }
+    }
+
+    private boolean isIfxFamily(Connect connect) {
+        if (connect == null || connect.getDbtype() == null) {
+            return false;
+        }
+        return DB_TYPE_GBASE.equals(connect.getDbtype()) || DB_TYPE_INFORMIX.equals(connect.getDbtype());
     }
 
     public String setConnectInfo(Connect connect) throws Exception {

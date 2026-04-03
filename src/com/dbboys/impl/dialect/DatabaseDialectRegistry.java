@@ -2,6 +2,7 @@ package com.dbboys.impl.dialect;
 
 import com.dbboys.api.DatabaseDialect;
 import com.dbboys.impl.dialect.gbase.GbaseDialect;
+import com.dbboys.impl.dialect.informix.InformixDialect;
 import com.dbboys.impl.dialect.oracle.OracleDialect;
 import com.dbboys.vo.Connect;
 
@@ -59,6 +60,7 @@ public final class DatabaseDialectRegistry {
     public static DatabaseDialectRegistry createDefault() {
         DatabaseDialectRegistry registry = new DatabaseDialectRegistry();
         registry.register(new GbaseDialect());
+        registry.register(new InformixDialect());
         registry.register(new OracleDialect());
         return registry;
     }

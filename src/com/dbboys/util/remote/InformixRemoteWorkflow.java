@@ -1,6 +1,7 @@
 package com.dbboys.util.remote;
 
 import com.dbboys.customnode.CustomInlineCssTextArea;
+import com.dbboys.impl.dialect.informix.InformixDialect;
 import com.dbboys.i18n.I18n;
 import com.dbboys.vo.Connect;
 
@@ -157,11 +158,17 @@ public final class InformixRemoteWorkflow {
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
+        InformixDialect dialect = new InformixDialect();
         Connect connect = new Connect();
+        connect.setDbtype(dialect.getDbType());
         connect.setIp(ctx.host());
         connect.setPort(ctx.fieldValue(InformixRemoteFields.LISTEN_PORT));
+        connect.setDatabase(ctx.fieldValue(InformixRemoteFields.DEFAULT_DB_NAME));
         connect.setUsername(InformixRemoteFields.LOGIN_USERNAME);
         connect.setPassword(ctx.fieldValue(InformixRemoteFields.INFORMIX_PASSWORD));
+        connect.setProps(dialect.defaultConnectionProps());
+        connect.setProps(dialect.modifyProps(connect, "DB_LOCALE", ctx.fieldValue(InformixRemoteFields.DB_LOCALE)));
+        connect.setProps(dialect.modifyProps(connect, "INFORMIXSERVER", ctx.fieldValue(InformixRemoteFields.INFORMIXSERVER)));
         return connect;
     }
 

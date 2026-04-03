@@ -17,7 +17,6 @@ import com.dbboys.util.*;
 import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
-import com.dbboys.app.Main;
 import com.dbboys.vo.ConnectFolder;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.TreeData;
@@ -179,21 +178,7 @@ public class CreateConnectController {
         connectFolderChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue)->{
             connect.setParentId(newValue.getId());
         });
-        //根据目录里的文件夹，读取数据库种类
-        List<String> dbtypes = new ArrayList<>();
-        File folder = new File("extlib");
-        File[] dbTypeFolders = folder.listFiles();
-        if (dbTypeFolders != null) {
-            for (File file : dbTypeFolders) {
-                if (file.isDirectory()) {
-                    dbtypes.add(file.getName());
-                }
-            }
-        } else {
-            log.warn("extlib directory not found or not accessible: {}", folder.getAbsolutePath());
-        }
-        Collections.sort(dbtypes);
-        ObservableList<String> dbtypelist = FXCollections.observableArrayList(dbtypes);
+        ObservableList<String> dbtypelist = FXCollections.observableArrayList(loadAvailableDbTypes());
         dbTypeChoiceBox.setItems(dbtypelist);
 
 
@@ -227,15 +212,14 @@ public class CreateConnectController {
             refreshConnectionPropertiesForDbType(newValue, initializingDbTypeSelection && treeDataParam instanceof Connect);
             refreshDriverPropertyButton(newValue);
         });
-        dbTypeChoiceBox.getSelectionModel().select(0);
+        if (!dbtypelist.isEmpty()) {
+            dbTypeChoiceBox.getSelectionModel().select(0);
+        }
 
-        //如果安装了数据库，用最后一次安装的配置填充表单
-        if(Main.lastInstallConnect!=null){
-            ipAddressTextField.setText(Main.lastInstallConnect.getIp());
-            portTextField.setText(Main.lastInstallConnect.getPort());
-            usernameTextField.setText(Main.lastInstallConnect.getUsername());
-            passwordTextField.setText(Main.lastInstallConnect.getPassword());
-        }else{
+        Connect installTemplate = AppState.getLastInstallConnect();
+        if (treeDataParam == null && installTemplate != null) {
+            applyInstallTemplate(connect, installTemplate);
+        } else if (dbTypeChoiceBox.getValue() != null) {
             applyDialectDefaults(connect, null, dbTypeChoiceBox.getValue());
         }
 
@@ -249,13 +233,6 @@ public class CreateConnectController {
                 //如果不是分类上右键新建，那就是编辑连接，所有信息填充到表单
                 connectFolder=LocalDbRepository.getConnectType(((Connect) treeDataParam));
                 connectNameTextField.setText(((Connect)treeDataParam).getName());
-                if(!((Connect)treeDataParam).getPropByName("GBASEDBTSERVER").isEmpty()){
-                    groupTextField.setText(((Connect)treeDataParam).getPropByName("GBASEDBTSERVER"));
-                    switchGroupOrIP();
-                }else{
-                    ipAddressTextField.setText(((Connect) treeDataParam).getIp());
-                    portTextField.setText(((Connect) treeDataParam).getPort());
-                }
                 usernameTextField.setText(((Connect) treeDataParam).getUsername());
                 passwordTextField.setText(((Connect) treeDataParam).getPassword());
                 readOnlyCheckBox.setSelected(((Connect) treeDataParam).getReadonly());
@@ -270,14 +247,16 @@ public class CreateConnectController {
                     j++;
                 }
 
-                int z=0;
-                ObservableList<String> driveritems = driverChoiceBox.getItems();
-                for (String item : driveritems) {
-                    if(item.equals(((Connect) treeDataParam).getDriver())){
-                        driverChoiceBox.getSelectionModel().select(z);
-                    }
-                    z++;
+                String namedServerPropName = namedServerPropNameFor(((Connect) treeDataParam).getDbtype());
+                if(!namedServerPropName.isEmpty() && !((Connect)treeDataParam).getPropByName(namedServerPropName).isEmpty()){
+                    groupTextField.setText(((Connect)treeDataParam).getPropByName(namedServerPropName));
+                    groupHbox.setVisible(true);
+                }else{
+                    ipAddressTextField.setText(((Connect) treeDataParam).getIp());
+                    portTextField.setText(((Connect) treeDataParam).getPort());
                 }
+
+                selectChoiceValue(driverChoiceBox, ((Connect) treeDataParam).getDriver());
             }
 
             int i=0;
@@ -351,31 +330,36 @@ public class CreateConnectController {
     public void setConnect(Connect connect){
 
         connect.setProps(props);
-                if(groupHbox.isVisible()){
-                    connect.setPropByName("GBASEDBTSERVER", groupTextField.getText());
-                    if (connectNameTextField.getText().isEmpty()) {
-                    connect.setName(groupTextField.getText());
-                    }else {
-                    connect.setName(connectNameTextField.getText());
-                }
-                    props=connect.getProps();
-                }else{
-                    connect.setIp(ipAddressTextField.getText());
-                    connect.setPort(portTextField.getText());
-                    if (connectNameTextField.getText().isEmpty()) {
-                    connect.setName("[" + connect.getIp() + "_" + connect.getPort() + "]");
-                    }else {
-                    connect.setName(connectNameTextField.getText());
-                }
-                }
+        String namedServerPropName = namedServerPropNameFor(connect.getDbtype());
+        if(groupHbox.isVisible()){
+            if (!namedServerPropName.isEmpty()) {
+                connect.setPropByName(namedServerPropName, groupTextField.getText());
+            }
+            if (connectNameTextField.getText().isEmpty()) {
+                connect.setName(groupTextField.getText());
+            } else {
+                connect.setName(connectNameTextField.getText());
+            }
+            props=connect.getProps();
+        }else{
+            if (!namedServerPropName.isEmpty()) {
+                connect.setPropByName(namedServerPropName, "");
+            }
+            connect.setIp(ipAddressTextField.getText());
+            connect.setPort(portTextField.getText());
+            if (connectNameTextField.getText().isEmpty()) {
+                connect.setName("[" + connect.getIp() + "_" + connect.getPort() + "]");
+            } else {
+                connect.setName(connectNameTextField.getText());
+            }
+        }
 
-                if (connect.getDatabase() == null || connect.getDatabase().isBlank()) {
-                    connect.setDatabase(defaultDatabaseFor(connect.getDbtype()));
-                }
-                connect.setUsername(usernameTextField.getText());
-                connect.setPassword(passwordTextField.getText());
-                
-                connect.setReadonly(readOnlyCheckBox.isSelected());
+        if (connect.getDatabase() == null || connect.getDatabase().isBlank()) {
+            connect.setDatabase(defaultDatabaseFor(connect.getDbtype()));
+        }
+        connect.setUsername(usernameTextField.getText());
+        connect.setPassword(passwordTextField.getText());
+        connect.setReadonly(readOnlyCheckBox.isSelected());
             
     }
     public boolean checkInput(){
@@ -475,6 +459,96 @@ public class CreateConnectController {
         } catch (IllegalStateException e) {
             return DialectServices.createDefault();
         }
+    }
+
+    private List<String> loadAvailableDbTypes() {
+        Set<String> registeredDbTypes = new HashSet<>();
+        for (DatabaseDialect dialect : resolveDialectServices().getRegistry().getAllDialects()) {
+            if (dialect != null && dialect.getDbType() != null && !dialect.getDbType().isBlank()) {
+                registeredDbTypes.add(dialect.getDbType());
+            }
+        }
+
+        List<String> dbtypes = new ArrayList<>();
+        File folder = new File("extlib");
+        File[] dbTypeFolders = folder.listFiles();
+        if (dbTypeFolders == null) {
+            log.warn("extlib directory not found or not accessible: {}", folder.getAbsolutePath());
+            return dbtypes;
+        }
+        for (File file : dbTypeFolders) {
+            if (file.isDirectory() && registeredDbTypes.contains(file.getName()) && hasDriverJar(file)) {
+                dbtypes.add(file.getName());
+            }
+        }
+        dbtypes.sort(String.CASE_INSENSITIVE_ORDER);
+        return dbtypes;
+    }
+
+    private boolean hasDriverJar(File dbTypeFolder) {
+        File[] driverFiles = dbTypeFolder.listFiles();
+        if (driverFiles == null) {
+            return false;
+        }
+        for (File file : driverFiles) {
+            if (file.isFile() && file.getName().toLowerCase(Locale.ROOT).endsWith(".jar")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applyInstallTemplate(Connect connect, Connect template) {
+        if (template == null) {
+            return;
+        }
+        boolean matchedDbType = selectChoiceValue(dbTypeChoiceBox, template.getDbtype());
+        if (matchedDbType && template.getProps() != null && !template.getProps().isBlank()) {
+            props = template.getProps();
+        }
+        if (template.getDriver() != null && !template.getDriver().isBlank()) {
+            selectChoiceValue(driverChoiceBox, template.getDriver());
+        }
+        connect.setDatabase(template.getDatabase());
+        String namedServerPropName = namedServerPropNameFor(template.getDbtype());
+        if (!namedServerPropName.isEmpty()) {
+            String namedServer = template.getPropByName(namedServerPropName);
+            if (namedServer != null && !namedServer.isBlank()) {
+                groupTextField.setText(namedServer);
+                groupHbox.setVisible(true);
+            }
+        }
+        ipAddressTextField.setText(template.getIp());
+        portTextField.setText(template.getPort());
+        usernameTextField.setText(template.getUsername());
+        passwordTextField.setText(template.getPassword());
+        readOnlyCheckBox.setSelected(Boolean.TRUE.equals(template.getReadonly()));
+    }
+
+    private boolean selectChoiceValue(ChoiceBox<String> choiceBox, String value) {
+        if (choiceBox == null || value == null || value.isBlank()) {
+            return false;
+        }
+        ObservableList<String> items = choiceBox.getItems();
+        if (items == null) {
+            return false;
+        }
+        for (int i = 0; i < items.size(); i++) {
+            if (value.equals(items.get(i))) {
+                choiceBox.getSelectionModel().select(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String namedServerPropNameFor(String dbType) {
+        DatabaseDialect dialect = resolveDialectServices().getDialect(dbType);
+        if (dialect == null || !dialect.supportsNamedServerConnection()) {
+            return "";
+        }
+        String propName = dialect.namedServerPropName();
+        return propName == null ? "" : propName;
     }
 
     public void initialize() throws IOException {
@@ -758,14 +832,21 @@ public class CreateConnectController {
         VBox contentBox = new VBox();
         contentBox.setId("modifyProps");
         contentBox.setAlignment(Pos.TOP_LEFT);
-        Path file = Paths.get("extlib/GBase 8S/sqlhosts");
+        Path file = Paths.get("extlib", dbTypeChoiceBox.getValue(), "sqlhosts");
         String content="";
-        String defaultContent="db_group\tgroup\t-\t-\ngbase01\tonsoctcp\t192.168.1.1\t9088\tg=db_group\ngbase02\tonsoctcp\t192.168.1.2\t9088\tg=db_group";
+        String groupName = groupTextField.getText() == null || groupTextField.getText().isBlank() ? "db_group" : groupTextField.getText().trim();
+        String defaultContent = groupName + "\tgroup\t-\t-\n"
+                + "node01\tonsoctcp\t192.168.1.1\t9088\tg=" + groupName + "\n"
+                + "node02\tonsoctcp\t192.168.1.2\t9088\tg=" + groupName;
         try {
             // 1. 判断文件是否存在
             if (Files.exists(file)) {
                 content = Files.readString(file, StandardCharsets.UTF_8);
             } else {
+                Path parent = file.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
                 Files.writeString(file, defaultContent, StandardCharsets.UTF_8);
                 content = defaultContent; // 写入后返回默认内容
             }

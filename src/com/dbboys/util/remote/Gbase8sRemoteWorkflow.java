@@ -1,6 +1,7 @@
 package com.dbboys.util.remote;
 
 import com.dbboys.customnode.CustomInlineCssTextArea;
+import com.dbboys.impl.dialect.gbase.GbaseDialect;
 import com.dbboys.i18n.I18n;
 import com.dbboys.vo.Connect;
 
@@ -157,11 +158,16 @@ public final class Gbase8sRemoteWorkflow {
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
+        GbaseDialect dialect = new GbaseDialect();
         Connect connect = new Connect();
+        connect.setDbtype(dialect.getDbType());
         connect.setIp(ctx.host());
         connect.setPort(ctx.fieldValue(Gbase8sRemoteFields.LISTEN_PORT));
+        connect.setDatabase(ctx.fieldValue(Gbase8sRemoteFields.DEFAULT_DB_NAME));
         connect.setUsername(Gbase8sRemoteFields.LOGIN_USERNAME);
         connect.setPassword(ctx.fieldValue(Gbase8sRemoteFields.GBASEDBT_PASSWORD));
+        connect.setProps(dialect.defaultConnectionProps());
+        connect.setProps(dialect.modifyProps(connect, "DB_LOCALE", ctx.fieldValue(Gbase8sRemoteFields.DB_LOCALE)));
         return connect;
     }
 

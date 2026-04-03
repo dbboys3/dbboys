@@ -2,7 +2,6 @@ package com.dbboys.util.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
-import com.dbboys.app.Main;
 import com.dbboys.customnode.*;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
@@ -611,7 +610,7 @@ public class RemoteInstallerUtil {
             mainDialog.close();
             Connect installedConnect = activeProvider.buildInstalledConnect(buildInstallExecutionContext());
             if (installedConnect != null) {
-                Main.lastInstallConnect = installedConnect;
+                AppState.setLastInstallConnect(installedConnect);
                 Platform.runLater(AppState::createConnectLeaf);
             }
         });

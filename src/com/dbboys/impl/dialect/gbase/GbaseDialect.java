@@ -37,10 +37,10 @@ public final class GbaseDialect implements DatabaseDialect {
     @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
         String url;
-        if (connect.getPropByName("GBASEDBTSERVER").isEmpty()) {
+        if (connect.getPropByName(namedServerPropName()).isEmpty()) {
             url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + connect.getDatabase();
         } else {
-            url = "jdbc:gbasedbt-sqli:/" + connect.getDatabase() + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/GBASE 8S/sqlhosts;";
+            url = "jdbc:gbasedbt-sqli:/" + connect.getDatabase() + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/" + connect.getDbtype() + "/sqlhosts;";
         }
         String jarFilePath = "file:extlib/" + connect.getDbtype() + "/" + connect.getDriver();
         return new com.dbboys.api.DatabaseDialect.ConnectionParams(url, DRIVER_CLASS, jarFilePath);
@@ -83,6 +83,11 @@ public final class GbaseDialect implements DatabaseDialect {
     @Override
     public boolean supportsNamedServerConnection() {
         return true;
+    }
+
+    @Override
+    public String namedServerPropName() {
+        return "GBASEDBTSERVER";
     }
 
     @Override
