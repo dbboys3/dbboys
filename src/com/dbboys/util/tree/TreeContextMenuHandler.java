@@ -1469,9 +1469,11 @@ public class TreeContextMenuHandler {
                 }
                 //数据库对象文件夹
                 else if(selectedItem.getValue() instanceof DatabaseFolder){
-                    treeview_menu.getItems().add(createDatabaseItem);
+                    if (!isOracleSchemaFolder(selectedItem)) {
+                        treeview_menu.getItems().add(createDatabaseItem);
+                        treeview_menu.getItems().add(importDdlAndDataItem);
+                    }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
-                    treeview_menu.getItems().add(importDdlAndDataItem);
                 }
                 else if(selectedItem.getValue() instanceof UserFolder) {
                     treeview_menu.getItems().add(addUserItem);
@@ -1483,16 +1485,23 @@ public class TreeContextMenuHandler {
                 }
                 //数据库
                 else if(selectedItem.getValue() instanceof Database) {
-                    treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
-                    treeview_menu.getItems().add(setDefaultDatabaseItem);
-                    treeview_menu.getItems().add(updateStatisticsItem);
-                    treeview_menu.getItems().add(copyItem);
-                    treeview_menu.getItems().add(TreeViewUtil.refreshItem);
-                    treeview_menu.getItems().add(renameItem);
-                    treeview_menu.getItems().add(deleteItem);
-                    treeview_menu.getItems().add(importMenu);
-                    treeview_menu.getItems().add(exportDdlAndDataItem);
-                    treeview_menu.getItems().add(exportDdlMenu);
+                    if (isOracleSchemaNode(selectedItem)) {
+                        treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
+                        treeview_menu.getItems().add(copyItem);
+                        treeview_menu.getItems().add(TreeViewUtil.refreshItem);
+                        treeview_menu.getItems().add(importMenu);
+                    } else {
+                        treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
+                        treeview_menu.getItems().add(setDefaultDatabaseItem);
+                        treeview_menu.getItems().add(updateStatisticsItem);
+                        treeview_menu.getItems().add(copyItem);
+                        treeview_menu.getItems().add(TreeViewUtil.refreshItem);
+                        treeview_menu.getItems().add(renameItem);
+                        treeview_menu.getItems().add(deleteItem);
+                        treeview_menu.getItems().add(importMenu);
+                        treeview_menu.getItems().add(exportDdlAndDataItem);
+                        treeview_menu.getItems().add(exportDdlMenu);
+                    }
                 }
                 //对象文件夹
                 else if(selectedItem.getValue() instanceof ObjectFolder) {
@@ -1632,6 +1641,23 @@ public class TreeContextMenuHandler {
             return false;
         }
         return expectedType.equalsIgnoreCase(tableTypeCode.trim());
+    }
+
+    private static boolean isOracleSchemaFolder(TreeItem<TreeData> selectedItem) {
+        return selectedItem != null
+                && selectedItem.getValue() instanceof DatabaseFolder
+                && isOracleTreeItem(selectedItem);
+    }
+
+    private static boolean isOracleSchemaNode(TreeItem<TreeData> selectedItem) {
+        return selectedItem != null
+                && selectedItem.getValue() instanceof Database
+                && isOracleTreeItem(selectedItem);
+    }
+
+    private static boolean isOracleTreeItem(TreeItem<TreeData> selectedItem) {
+        Connect connect = TreeNavigator.getMetaConnect(selectedItem);
+        return connect != null && "ORACLE".equalsIgnoreCase(connect.getDbtype());
     }
 
     private static String resolveFallbackDatabase(Connect connect) {

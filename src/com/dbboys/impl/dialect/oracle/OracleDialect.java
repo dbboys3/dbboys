@@ -58,12 +58,15 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
 
     @Override
     public void sessionInit(Connection conn, Connect connect) throws Exception {
-        // Oracle 暂无额外会话初始化
+        String sessionDatabase = getSessionDatabase(connect);
+        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
+            metadataRepository.setDatabase(conn, sessionDatabase);
+        }
     }
 
     @Override
     public boolean supportsSessionInit() {
-        return false;
+        return true;
     }
 
     @Override
@@ -100,6 +103,37 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
                 "INTERVAL YEAR TO MONTH", "INTERVAL DAY TO SECOND",
                 "RAW", "LONG", "LONG RAW", "CLOB", "NCLOB", "BLOB", "JSON"
         );
+    }
+
+    @Override
+    public String getDatabaseFolderI18nKey() {
+        return "metadata.folder.schemas";
+    }
+
+    @Override
+    public String getDatabaseFolderDefaultText() {
+        return "模式";
+    }
+
+    @Override
+    public String getSessionDatabase(Connect connect) {
+        if (connect == null) {
+            return "";
+        }
+        String sessionDatabase = connect.getSessionDatabase();
+        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
+            return sessionDatabase;
+        }
+        String username = connect.getUsername();
+        return username == null ? "" : username;
+    }
+
+    @Override
+    public void setSessionDatabase(Connect connect, String databaseName) {
+        if (connect == null) {
+            return;
+        }
+        connect.setSessionDatabase(databaseName);
     }
 
     @Override

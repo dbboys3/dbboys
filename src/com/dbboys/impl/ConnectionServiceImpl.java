@@ -154,7 +154,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
         try {
             platformResolver.metadata(connect).changeDatabase(connect.getConn(), database.getName());
-            connect.setDatabase(database.getName());
+            applyTargetDatabase(dialect, connect, database, persistDefaultDatabase);
             if (!dialect.isSystemDatabase(database.getName())) {
                 applySupportedConnectionProperty(connect, PROP_DB_LOCALE, database.getDbLocale());
             }
@@ -170,9 +170,10 @@ public class ConnectionServiceImpl implements ConnectionService {
             } else if (kind == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION) {
                 Connection oldConn = connect.getConn();
                 String previousDatabase = connect.getDatabase();
+                String previousSessionDatabase = connect.getSessionDatabase();
                 String previousProps = connect.getProps();
                 try {
-                    connect.setDatabase(database.getName());
+                    applyTargetDatabase(dialect, connect, database, persistDefaultDatabase);
                     if (!dialect.isSystemDatabase(database.getName())) {
                         applySupportedConnectionProperty(connect, PROP_DB_LOCALE, database.getDbLocale());
                     }
@@ -194,6 +195,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                 } catch (Exception ex) {
                     connect.setConn(oldConn);
                     connect.setDatabase(previousDatabase);
+                    connect.setSessionDatabase(previousSessionDatabase);
                     connect.setProps(previousProps);
                     applyReconnectFailure(result, ex);
                 }
@@ -284,7 +286,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                     && fallback != null) {
                 repo.setDatabase(connect.getConn(), fallback);
                 Connect connect1 = new Connect(connect);
-                connect1.setDatabase(database.getName());
+                dialect.connection().setSessionDatabase(connect1, database.getName());
                 applySupportedConnectionProperty(connect1, PROP_DB_LOCALE, database.getDbLocale());
                 if (shouldIgnoreIsolationLevel(database)) {  // 如果数据库日志为nolog，则不设置隔离级别，否则连接报错-256
                     applySupportedConnectionProperty(connect1, PROP_IFX_ISOLATION_LEVEL, "");
@@ -295,6 +297,25 @@ public class ConnectionServiceImpl implements ConnectionService {
             }
             throw e;
         }
+    }
+
+    private void applyTargetDatabase(DatabasePlatform dialect,
+                                     Connect connect,
+                                     Database database,
+                                     boolean persistDefaultDatabase) {
+        if (dialect == null || connect == null || database == null) {
+            return;
+        }
+        if (persistDefaultDatabase) {
+            connect.setDatabase(database.getName());
+            if ("ORACLE".equalsIgnoreCase(dialect.getDbType())) {
+                connect.setSessionDatabase("");
+            } else {
+                connect.setSessionDatabase(database.getName());
+            }
+            return;
+        }
+        dialect.connection().setSessionDatabase(connect, database.getName());
     }
 
     public <T> T withMetaSession(Connect connect, Database database, SqlWork<T> action) throws Exception {

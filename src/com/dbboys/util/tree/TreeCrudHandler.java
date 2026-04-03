@@ -456,7 +456,7 @@ public class TreeCrudHandler {
         if (connect == null || database == null) {
             return;
         }
-        connect.setDatabase(databaseName);
+        resolvePlatformResolver().requirePlatform(connect).connection().setSessionDatabase(connect, databaseName);
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 TreeViewUtil.connectionService,
                 resolvePlatformResolver(),

@@ -18,6 +18,7 @@ public class Connect extends TreeData{
     private StringProperty  ip=new SimpleStringProperty();
     private StringProperty  port=new SimpleStringProperty();
     private StringProperty  database=new SimpleStringProperty();
+    private StringProperty  sessionDatabase=new SimpleStringProperty();
     private StringProperty  username=new SimpleStringProperty();
     private StringProperty  password=new SimpleStringProperty();
     private Connection conn;
@@ -45,6 +46,7 @@ public class Connect extends TreeData{
         setIp(connect.getIp());
         setPort(connect.getPort());
         setDatabase(connect.getDatabase());
+        setSessionDatabase(connect.getSessionDatabase());
         setUsername(connect.getUsername());
         setPassword(connect.getPassword());
         setDriver(connect.getDriver());
@@ -141,6 +143,18 @@ public class Connect extends TreeData{
 
     public void setDatabase(String database) {
         this.database.set(database);
+    }
+
+    public String getSessionDatabase() {
+        return sessionDatabase.get();
+    }
+
+    public StringProperty sessionDatabaseProperty() {
+        return sessionDatabase;
+    }
+
+    public void setSessionDatabase(String sessionDatabase) {
+        this.sessionDatabase.set(sessionDatabase);
     }
 
     public String getUsername() {

@@ -41,6 +41,14 @@ public interface DatabasePlatform {
         return List.of();
     }
 
+    default String getDatabaseFolderI18nKey() {
+        return "metadata.folder.databases";
+    }
+
+    default String getDatabaseFolderDefaultText() {
+        return "数据库";
+    }
+
     default <T> Optional<T> capability(Class<T> type) {
         if (type == null || !type.isInstance(this)) {
             return Optional.empty();

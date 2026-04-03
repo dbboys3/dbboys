@@ -133,7 +133,7 @@ public class DatabaseService implements MetaObjectService {
         if (database == null) {
             return sessionConnect;
         }
-        sessionConnect.setDatabase(database.getName());
+        platformResolver.requirePlatform(sessionConnect).connection().setSessionDatabase(sessionConnect, database.getName());
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 connectionService(),
                 platformResolver,

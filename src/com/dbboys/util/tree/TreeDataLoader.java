@@ -55,7 +55,13 @@ public class TreeDataLoader {
                             //查询到结果后删除loading节点
                             Platform.runLater(() -> {
                                 DatabaseFolder databaseTreeData = new DatabaseFolder();
-                                bindFolderName(databaseTreeData, "metadata.folder.databases", "数据库");
+                                DatabasePlatformResolver resolver = resolvePlatformResolver();
+                                var platform = resolver.requirePlatform(connect);
+                                bindFolderName(
+                                        databaseTreeData,
+                                        platform.getDatabaseFolderI18nKey(),
+                                        platform.getDatabaseFolderDefaultText()
+                                );
                                 TreeItem<TreeData> databaseItem = TreeViewBuilder.createTreeItem(databaseTreeData);
                                 UserFolder userTreeData = new UserFolder();
                                 bindFolderName(userTreeData, "metadata.folder.users", "用户");
@@ -91,7 +97,8 @@ public class TreeDataLoader {
                     () -> {
                           final List<Database> databases = new ArrayList<>();
                           try {
-                              databases.addAll(TreeViewUtil.databaseService.getDatabases(TreeNavigator.getMetaConnect(treeItem)));
+                              Connect connect = TreeNavigator.getMetaConnect(treeItem);
+                              databases.addAll(resolvePlatformResolver().metadata(connect).getMetadataDatabases(connect.getConn()));
                           } catch (SQLException e) {
                               AppErrorHandler.handle(e);
                           }

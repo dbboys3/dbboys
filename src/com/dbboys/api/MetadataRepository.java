@@ -22,6 +22,10 @@ public interface MetadataRepository {
 
     List<Database> getDatabases(Connection conn) throws SQLException;
 
+    default List<Database> getMetadataDatabases(Connection conn) throws SQLException {
+        return getDatabases(conn);
+    }
+
     Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
 
     int getUserTablesCount(Connection conn) throws SQLException;

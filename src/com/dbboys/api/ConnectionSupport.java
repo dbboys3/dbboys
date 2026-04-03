@@ -38,6 +38,26 @@ public interface ConnectionSupport {
         return "[]";
     }
 
+    default String getSessionDatabase(Connect connect) {
+        if (connect == null) {
+            return "";
+        }
+        String sessionDatabase = connect.getSessionDatabase();
+        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
+            return sessionDatabase;
+        }
+        String database = connect.getDatabase();
+        return database == null ? "" : database;
+    }
+
+    default void setSessionDatabase(Connect connect, String databaseName) {
+        if (connect == null) {
+            return;
+        }
+        connect.setSessionDatabase(databaseName);
+        connect.setDatabase(databaseName);
+    }
+
     default boolean supportsConnectionProperties() {
         String props = defaultConnectionProps();
         return props != null && !props.isBlank() && new JSONArray(props).length() > 0;

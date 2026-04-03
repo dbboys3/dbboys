@@ -695,7 +695,12 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     }
 
     private String formatRowsSize(Object nrows, Object totalSize) {
-        return nrows + I18n.t("treecell.row_size_separator", "行/") + totalSize;
+        String separator = I18n.t("treecell.row_size_separator", "行/");
+        String sizeText = totalSize == null ? "" : totalSize.toString();
+        if (sizeText.isBlank()) {
+            return (String.valueOf(nrows) + separator).replaceFirst("[/\\s]+$", "");
+        }
+        return nrows + separator + sizeText;
     }
 
     private void bindRowsSizeText(Label label, ObservableValue<?> nrows, ObservableValue<?> totalSize) {

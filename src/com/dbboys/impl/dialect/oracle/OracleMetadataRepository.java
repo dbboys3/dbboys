@@ -48,10 +48,26 @@ public final class OracleMetadataRepository implements MetadataRepository {
             select sys_context('USERENV', 'CURRENT_SCHEMA') from dual
             """;
 
+    private static final String SQL_SESSION_USER = """
+            select user from dual
+            """;
+
     private static final String SQL_USERS = """
             select username
             from all_users
             order by username
+            """;
+
+    private static final String SQL_SCHEMA_INFO = """
+            select
+                username as schema_name,
+                to_char(created, 'YYYY-MM-DD') as created_time,
+                nvl(sys_context('USERENV', 'SERVICE_NAME'),
+                    nvl(sys_context('USERENV', 'CON_NAME'),
+                        sys_context('USERENV', 'DB_NAME'))) as service_name,
+                sys_context('USERENV', 'LANGUAGE') as db_locale
+            from all_users
+            where upper(username) = upper(?)
             """;
 
     private static final String SQL_USER_TABLES_COUNT = """
@@ -402,11 +418,21 @@ public final class OracleMetadataRepository implements MetadataRepository {
     }
 
     @Override
+    public List<Database> getMetadataDatabases(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        return runner.query(SQL_USERS, null, rs -> mapSchemaDatabase(rs.getString(1)));
+    }
+
+    @Override
     public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
-        Database current = loadCurrentDatabase(conn);
         if (databaseName == null || databaseName.isBlank()) {
-            return current;
+            return loadCurrentDatabase(conn);
         }
+        Database schema = loadSchemaInfo(conn, databaseName);
+        if (schema != null) {
+            return schema;
+        }
+        Database current = loadCurrentDatabase(conn);
         return databaseName.equalsIgnoreCase(current.getName()) ? current : null;
     }
 
@@ -419,6 +445,9 @@ public final class OracleMetadataRepository implements MetadataRepository {
 
     @Override
     public String getUserTablesSize(Connection conn, String databaseName) throws SQLException {
+        if (!canReadCurrentSchemaSegmentSize(conn)) {
+            return null;
+        }
         return queryFormattedSize(conn, SQL_USER_TABLES_SIZE, null);
     }
 
@@ -441,8 +470,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Table> getUserTables(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.query(SQL_USER_TABLES, List.of(owner), rs -> mapTable(rs, currentDatabaseName));
+        boolean includeSize = canReadSchemaSegmentSize(conn, owner);
+        return runner.query(SQL_USER_TABLES, List.of(owner), rs -> mapTable(rs, owner, includeSize));
     }
 
     @Override
@@ -450,8 +479,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
         QualifiedObjectName objectName = parseObjectName(tableName);
         SqlRunner runner = runner(conn);
         String owner = resolveOwner(conn, objectName.owner());
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.queryOne(SQL_TABLE_DETAIL, List.of(owner, objectName.objectName()), rs -> mapTable(rs, currentDatabaseName));
+        boolean includeSize = canReadSchemaSegmentSize(conn, owner);
+        return runner.queryOne(SQL_TABLE_DETAIL, List.of(owner, objectName.objectName()), rs -> mapTable(rs, owner, includeSize));
     }
 
     @Override
@@ -491,8 +520,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Index> getIndexes(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.query(SQL_INDEXES, List.of(owner), rs -> mapIndex(rs, currentDatabaseName));
+        boolean includeSize = canReadSchemaSegmentSize(conn, owner);
+        return runner.query(SQL_INDEXES, List.of(owner), rs -> mapIndex(rs, owner, includeSize));
     }
 
     @Override
@@ -504,6 +533,9 @@ public final class OracleMetadataRepository implements MetadataRepository {
 
     @Override
     public String getIndexSize(Connection conn) throws SQLException {
+        if (!canReadCurrentSchemaSegmentSize(conn)) {
+            return null;
+        }
         return queryFormattedSize(conn, SQL_INDEX_SIZE, null);
     }
 
@@ -512,8 +544,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
         QualifiedObjectName objectName = parseObjectName(indexName);
         SqlRunner runner = runner(conn);
         String owner = resolveOwner(conn, objectName.owner());
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.queryOne(SQL_INDEX_DETAIL, List.of(owner, objectName.objectName()), rs -> mapIndex(rs, currentDatabaseName));
+        boolean includeSize = canReadSchemaSegmentSize(conn, owner);
+        return runner.queryOne(SQL_INDEX_DETAIL, List.of(owner, objectName.objectName()), rs -> mapIndex(rs, owner, includeSize));
     }
 
     @Override
@@ -527,8 +559,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Sequence> getSequences(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.query(SQL_SEQUENCES, List.of(owner), rs -> mapSequence(rs, currentDatabaseName));
+        return runner.query(SQL_SEQUENCES, List.of(owner), rs -> mapSequence(rs, owner));
     }
 
     @Override
@@ -542,8 +573,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Synonym> getSynonyms(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.query(SQL_SYNONYMS, List.of(owner), rs -> mapSynonym(rs, currentDatabaseName));
+        return runner.query(SQL_SYNONYMS, List.of(owner), rs -> mapSynonym(rs, owner));
     }
 
     @Override
@@ -557,8 +587,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Trigger> getTriggers(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.query(SQL_TRIGGERS, List.of(owner), rs -> mapTrigger(rs, currentDatabaseName));
+        return runner.query(SQL_TRIGGERS, List.of(owner), rs -> mapTrigger(rs, owner));
     }
 
     @Override
@@ -566,8 +595,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
         QualifiedObjectName objectName = parseObjectName(triggerName);
         SqlRunner runner = runner(conn);
         String owner = resolveOwner(conn, objectName.owner());
-        String currentDatabaseName = currentDatabaseName(conn);
-        return runner.queryOne(SQL_TRIGGER_DETAIL, List.of(owner, objectName.objectName()), rs -> mapTrigger(rs, currentDatabaseName));
+        return runner.queryOne(SQL_TRIGGER_DETAIL, List.of(owner, objectName.objectName()), rs -> mapTrigger(rs, owner));
     }
 
     @Override
@@ -581,10 +609,9 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<View> getViews(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
         return runner.query(SQL_VIEWS, List.of(owner), rs -> {
             View view = new View(rs.getString("view_name"));
-            view.setDbname(currentDatabaseName);
+            view.setDbname(owner);
             view.setOwner(rs.getString("owner"));
             view.setCreateTime(blankToEmpty(rs.getString("created_time")));
             view.setFlags(ORACLE_FLAGS);
@@ -613,10 +640,9 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Function> getFunctions(Connection conn, String databaseName, boolean filterType) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
         return runner.query(SQL_FUNCTIONS, List.of(owner), rs -> {
             Function function = new Function(rs.getString("object_name"));
-            function.setDatabase(currentDatabaseName);
+            function.setDatabase(owner);
             function.setOwner(rs.getString("owner"));
             function.setRows(0);
             return function;
@@ -634,10 +660,9 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public List<Procedure> getProcedures(Connection conn, String databaseName, boolean filterType) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        String currentDatabaseName = currentDatabaseName(conn);
         return runner.query(SQL_PROCEDURES, List.of(owner), rs -> {
             Procedure procedure = new Procedure(rs.getString("object_name"));
-            procedure.setDatabase(currentDatabaseName);
+            procedure.setDatabase(owner);
             procedure.setOwner(rs.getString("owner"));
             procedure.setRows(0);
             procedure.setProcFlags(ORACLE_PROC_FLAGS);
@@ -661,13 +686,13 @@ public final class OracleMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public void changeDatabase(Connection conn, String databaseName) {
-        // Oracle service switching is handled by reconnecting with a different JDBC URL.
+    public void changeDatabase(Connection conn, String databaseName) throws SQLException {
+        applyCurrentSchema(conn, databaseName);
     }
 
     @Override
-    public void setDatabase(Connection conn, String databaseName) {
-        // Metadata browsing stays on the current service/schema.
+    public void setDatabase(Connection conn, String databaseName) throws SQLException {
+        applyCurrentSchema(conn, databaseName);
     }
 
     @Override
@@ -711,8 +736,24 @@ public final class OracleMetadataRepository implements MetadataRepository {
         return fallback;
     }
 
-    private String currentDatabaseName(Connection conn) throws SQLException {
-        return loadCurrentDatabase(conn).getName();
+    private Database loadSchemaInfo(Connection conn, String schemaName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String sessionUser = sessionUser(conn);
+        return runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName), rs -> {
+            Database schema = new Database(blankToFallback(rs.getString("schema_name"), schemaName));
+            schema.setDbOwner(blankToFallback(rs.getString("schema_name"), schemaName));
+            schema.setDbCreated(blankToEmpty(rs.getString("created_time")));
+            schema.setDbSpace("");
+            schema.setDbLog("");
+            schema.setDbUseGLU(blankToEmpty(rs.getString("service_name")));
+            schema.setDbLocale(blankToEmpty(rs.getString("db_locale")));
+            if (schema.getName().equalsIgnoreCase(sessionUser)) {
+                schema.setDbSize(queryFormattedSize(conn, SQL_USER_TABLES_SIZE, null));
+            } else {
+                schema.setDbSize("");
+            }
+            return schema;
+        });
     }
 
     private String currentSchema(Connection conn) throws SQLException {
@@ -726,6 +767,20 @@ public final class OracleMetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         String schema = runner.queryOne(SQL_CURRENT_SCHEMA, null, rs -> rs.getString(1));
         return blankToFallback(schema, "ORACLE");
+    }
+
+    private String sessionUser(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String sessionUser = runner.queryOne(SQL_SESSION_USER, null, rs -> rs.getString(1));
+        return blankToFallback(sessionUser, "ORACLE");
+    }
+
+    private boolean canReadCurrentSchemaSegmentSize(Connection conn) throws SQLException {
+        return currentSchema(conn).equalsIgnoreCase(sessionUser(conn));
+    }
+
+    private boolean canReadSchemaSegmentSize(Connection conn, String schemaName) throws SQLException {
+        return schemaName != null && schemaName.equalsIgnoreCase(sessionUser(conn));
     }
 
     private String fallbackDatabaseName(Connection conn) {
@@ -750,13 +805,35 @@ public final class OracleMetadataRepository implements MetadataRepository {
         return owner == null || owner.isBlank() ? currentSchema(conn) : owner;
     }
 
+    private void applyCurrentSchema(Connection conn, String databaseName) throws SQLException {
+        if (conn == null || databaseName == null || databaseName.isBlank()) {
+            return;
+        }
+        String quotedSchema = "\"" + databaseName.replace("\"", "\"\"") + "\"";
+        try (var stmt = conn.createStatement()) {
+            stmt.execute("alter session set current_schema = " + quotedSchema);
+        }
+    }
+
     private String queryFormattedSize(Connection conn, String sql, List<Object> params) throws SQLException {
         SqlRunner runner = runner(conn);
         BigDecimal value = runner.queryOne(sql, params, rs -> rs.getBigDecimal(1));
         return formatBytes(value);
     }
 
-    private Table mapTable(java.sql.ResultSet rs, String databaseName) throws SQLException {
+    private Database mapSchemaDatabase(String schemaName) {
+        Database database = new Database(blankToFallback(schemaName, "ORACLE"));
+        database.setDbOwner(database.getName());
+        database.setDbCreated("");
+        database.setDbSpace("");
+        database.setDbLog("");
+        database.setDbUseGLU("");
+        database.setDbLocale("");
+        database.setDbSize("");
+        return database;
+    }
+
+    private Table mapTable(java.sql.ResultSet rs, String databaseName, boolean includeSize) throws SQLException {
         Table table = new Table(rs.getString("table_name"));
         table.setTableCatalog(databaseName);
         table.setTableOwner(rs.getString("owner"));
@@ -769,13 +846,13 @@ public final class OracleMetadataRepository implements MetadataRepository {
         table.setNrows(rs.getInt("num_rows"));
         table.setPagesize(0);
         table.setNptotal(rs.getInt("blocks"));
-        table.setTotalsize(formatBytes(rs.getBigDecimal("size_bytes")));
+        table.setTotalsize(includeSize ? formatBytes(rs.getBigDecimal("size_bytes")) : "");
         table.setNpdata(rs.getInt("blocks"));
-        table.setUsedsize(formatBytes(rs.getBigDecimal("size_bytes")));
+        table.setUsedsize(includeSize ? formatBytes(rs.getBigDecimal("size_bytes")) : "");
         return table;
     }
 
-    private Index mapIndex(java.sql.ResultSet rs, String databaseName) throws SQLException {
+    private Index mapIndex(java.sql.ResultSet rs, String databaseName, boolean includeSize) throws SQLException {
         Index index = new Index(rs.getString("index_name"));
         index.setDatabase(databaseName);
         index.setIndexOwner(rs.getString("owner"));
@@ -787,7 +864,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
         index.setUniqvalues(String.valueOf(rs.getLong("distinct_keys")));
         index.setPagesize("");
         index.setTotalpages(String.valueOf(rs.getLong("leaf_blocks")));
-        index.setTotalsize(formatBytes(rs.getBigDecimal("size_bytes")));
+        index.setTotalsize(includeSize ? formatBytes(rs.getBigDecimal("size_bytes")) : "");
         index.setIsdisabled(!"VALID".equalsIgnoreCase(rs.getString("status")));
         return index;
     }

@@ -376,6 +376,9 @@ public class TreeNavigator {
         if (isReadOnlyObject(selectedItem) || isSystemDatabaseObject(selectedItem)) {
             return false;
         }
+        if (treeData instanceof Database && isOracleSchemaNode(selectedItem)) {
+            return false;
+        }
         if (treeData instanceof Index && !treeData.getName().isEmpty() && treeData.getName().charAt(0) == ' ') {
             return false;
         }
@@ -414,10 +417,21 @@ public class TreeNavigator {
         if (isReadOnlyObject(selectedItem) || isSystemDatabaseObject(selectedItem)) {
             return false;
         }
+        if (treeData instanceof Database && isOracleSchemaNode(selectedItem)) {
+            return false;
+        }
         if (treeData instanceof Index && !treeData.getName().isEmpty() && treeData.getName().charAt(0) == ' ') {
             return false;
         }
         return true;
+    }
+
+    private static boolean isOracleSchemaNode(TreeItem<TreeData> selectedItem) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database)) {
+            return false;
+        }
+        Connect connect = getMetaConnect(selectedItem);
+        return connect != null && "ORACLE".equalsIgnoreCase(connect.getDbtype());
     }
 
     public static boolean isReadOnlyObject(TreeItem<TreeData> selectedItem) {
