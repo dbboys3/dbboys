@@ -48,11 +48,18 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
+        String sessionDatabase = getSessionDatabase(connect);
+        if (sessionDatabase == null || sessionDatabase.isBlank()) {
+            sessionDatabase = connect.getDatabase();
+        }
+        if (sessionDatabase == null || sessionDatabase.isBlank()) {
+            sessionDatabase = defaultDatabase();
+        }
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
-            url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + connect.getDatabase();
+            url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + sessionDatabase;
         } else {
-            url = "jdbc:gbasedbt-sqli:/" + connect.getDatabase() + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/" + connect.getDbtype() + "/sqlhosts;";
+            url = "jdbc:gbasedbt-sqli:/" + sessionDatabase + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/" + connect.getDbtype() + "/sqlhosts;";
         }
         String jarFilePath = "file:extlib/" + connect.getDbtype() + "/" + connect.getDriver();
         return new ConnectionParams(url, DRIVER_CLASS, jarFilePath);
@@ -90,6 +97,14 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
     @Override
     public String defaultConnectionProps() {
         return DEFAULT_CONNECTION_PROPS;
+    }
+
+    @Override
+    public void setSessionDatabase(Connect connect, String databaseName) {
+        if (connect == null) {
+            return;
+        }
+        connect.setSessionDatabase(databaseName);
     }
 
     @Override

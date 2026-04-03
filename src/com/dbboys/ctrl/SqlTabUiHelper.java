@@ -26,6 +26,8 @@ import java.io.IOException;
 
 public class SqlTabUiHelper {
     private static final Logger log = LogManager.getLogger(SqlTabUiHelper.class);
+    /** Same slot as {@link com.dbboys.customnode.CustomTreeCell} connect icons — stable toolbar alignment. */
+    private static final double SQL_HEADER_ICON_SLOT = 16.0;
 
     private final SqlTabController ctrl;
 
@@ -49,6 +51,10 @@ public class SqlTabUiHelper {
         ctrl.sqlReadOnlyLabel.setGraphic(IconFactory.group(IconPaths.SQL_READONLY, 0.5, IconFactory.stopColor()));
 
         if (ctrl.sqlDbIconPane != null) {
+            ctrl.sqlDbIconPane.setMinSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+            ctrl.sqlDbIconPane.setPrefSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+            ctrl.sqlDbIconPane.setMaxSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+            ctrl.sqlDbIconPane.setAlignment(Pos.CENTER);
             ctrl.sqlDbIconPane.getChildren().setAll(IconFactory.group(IconPaths.SQL_DATABASE, 0.4, Color.valueOf("rgb(220,220,220)")));
             ctrl.sqlDbIconPane.opacityProperty().bind(
                     Bindings.when(ctrl.sqlConnectChoiceBox.disableProperty()).then(0.4).otherwise(1.0)
@@ -138,7 +144,13 @@ public class SqlTabUiHelper {
         ctrl.sqlConnectChoiceBoxIconStackPane.getChildren().addAll(ctrl.sqlConnectChoiceBoxDbIcon, ctrl.sqlConnectChoiceBoxLoadingIcon);
 
         ctrl.sqlConnectIconPath = IconFactory.create(IconPaths.CONNECTION_LINK, 0.6, 0.6, Color.valueOf("#888"));
-        ctrl.sqlConnectChoiceBoxDbIcon.setGraphic(new Group(ctrl.sqlConnectIconPath));
+        Group connectGraphic = new Group(ctrl.sqlConnectIconPath);
+        StackPane connectSlot = new StackPane(connectGraphic);
+        connectSlot.setMinSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+        connectSlot.setPrefSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+        connectSlot.setMaxSize(SQL_HEADER_ICON_SLOT, SQL_HEADER_ICON_SLOT);
+        connectSlot.setAlignment(Pos.CENTER);
+        ctrl.sqlConnectChoiceBoxDbIcon.setGraphic(connectSlot);
 
         ImageView loadingIcon = IconFactory.loadingImageView(0.7);
         ctrl.sqlConnectChoiceBoxLoadingIcon.setGraphic(loadingIcon);

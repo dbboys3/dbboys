@@ -15,11 +15,9 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.scene.Group;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TreeItem;
-import javafx.scene.paint.Color;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -172,7 +170,7 @@ public class SqlConnectionHandler {
             ctrl.sqlConnectIconPath.setScaleX(0.6);
             ctrl.sqlConnectIconPath.setScaleY(0.6);
         }
-        ctrl.sqlConnectChoiceBoxDbIcon.setGraphic(new Group(ctrl.sqlConnectIconPath));
+        // Graphic is a fixed-size StackPane from SqlTabUiHelper.setupConnectIcons(); only mutate sqlConnectIconPath.
     }
 
     private void loadDatabasesForConnect() {

@@ -45,9 +45,13 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) {
-        String database = connect.getDatabase() == null || connect.getDatabase().isBlank()
-                ? defaultDatabase()
-                : connect.getDatabase();
+        String database = getSessionDatabase(connect);
+        if (database == null || database.isBlank()) {
+            database = connect.getDatabase();
+        }
+        if (database == null || database.isBlank()) {
+            database = defaultDatabase();
+        }
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
             String host = connect.getIp() == null || connect.getIp().isBlank() ? "127.0.0.1" : connect.getIp();
@@ -88,6 +92,14 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
     @Override
     public String defaultConnectionProps() {
         return DEFAULT_CONNECTION_PROPS;
+    }
+
+    @Override
+    public void setSessionDatabase(Connect connect, String databaseName) {
+        if (connect == null) {
+            return;
+        }
+        connect.setSessionDatabase(databaseName);
     }
 
     @Override

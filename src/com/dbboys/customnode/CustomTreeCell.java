@@ -4,7 +4,6 @@ import com.dbboys.app.AppState;
 import com.dbboys.i18n.I18n;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
-import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.NotificationUtil;
 import com.dbboys.util.PopupWindowUtil;
 import com.dbboys.util.TabpaneUtil;
@@ -12,7 +11,6 @@ import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
 import javafx.beans.binding.Bindings;
 import javafx.beans.value.ObservableValue;
-import javafx.concurrent.Task;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.SnapshotParameters;
@@ -47,6 +45,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     private static final Set<String> SYSTEM_DATABASES = Set.of(
             "sysmaster", "sysuser", "sysadmin", "sysutils", "sysha", "syscdr", "syscdcv1", "gbasedbt", "sys"
     );
+    private static final double ICON_SLOT_SIZE = 16.0;
 
     private final int iconSize = 11;
     private final Label nameLabel = new Label();
@@ -413,6 +412,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     }
 
     private void renderConnect(Connect connect, TreeData item) {
+        applyConnectIconSlot(true);
         applyDatabaseTypeIcon(connect.getDbtype());
         applyConnectedVisualStyle();
         String status = I18n.t("treecell.status.connected", "Connected");
@@ -438,6 +438,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     }
 
     private void renderDatabase(Database database, TreeData item, TreeItem<TreeData> treeItem) {
+        applyConnectIconSlot(false);
         nodeIcon.setContent(IconPaths.TREECELL_DATABASE);
         nodeIcon.setScaleX(0.4);
         nodeIcon.setScaleY(0.4);
@@ -542,8 +543,22 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         warnIcon.setVisible(false);
         nodeIconGroup.visibleProperty().unbind();
         nodeIconGroup.setVisible(true);
+        applyConnectIconSlot(false);
         nodeIconStackpane.getChildren().remove(runningIcon);
         graphicHbox.getChildren().clear();
+    }
+
+    private void applyConnectIconSlot(boolean fixed) {
+        if (fixed) {
+            nodeIconStackpane.setMinSize(ICON_SLOT_SIZE, ICON_SLOT_SIZE);
+            nodeIconStackpane.setPrefSize(ICON_SLOT_SIZE, ICON_SLOT_SIZE);
+            nodeIconStackpane.setMaxSize(ICON_SLOT_SIZE, ICON_SLOT_SIZE);
+        } else {
+            nodeIconStackpane.setMinSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
+            nodeIconStackpane.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
+            nodeIconStackpane.setMaxSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
+        }
+        nodeIconStackpane.setAlignment(Pos.CENTER);
     }
 
     private void configureLeafNodeActions(TreeData item) {
