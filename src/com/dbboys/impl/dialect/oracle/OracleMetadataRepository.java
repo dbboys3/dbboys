@@ -172,6 +172,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
 
     private static final String SQL_COLUMNS = """
             select
+                c.data_default as default_value,
                 c.column_id,
                 c.column_name,
                 c.data_type,
@@ -183,8 +184,6 @@ public final class OracleMetadataRepository implements MetadataRepository {
                 nvl(c.data_scale, 0) as scale_value,
                 c.nullable,
                 case when pk.column_name is not null then 1 else 0 end as is_pk,
-                case when c.data_default is not null then 'DEFAULT' else '' end as default_type,
-                trim(replace(replace(c.data_default, chr(10), ' '), chr(13), ' ')) as default_value,
                 nvl(cc.comments, '') as comments
             from all_tab_columns c
             left join all_col_comments cc
@@ -583,6 +582,10 @@ public final class OracleMetadataRepository implements MetadataRepository {
         String owner = resolveOwner(conn, objectName.owner());
         List<ColumnsInfo> rows = runner.query(SQL_COLUMNS, List.of(owner, objectName.objectName()), rs -> {
             ColumnsInfo columnsInfo = new ColumnsInfo();
+            // ALL_TAB_COLUMNS.DATA_DEFAULT is LONG: cannot appear in CASE/REPLACE/TO_CLOB in SQL; JDBC must read it before other columns.
+            String defNorm = normalizeOracleColumnDefault(rs.getString("default_value"));
+            columnsInfo.setColDefType(defNorm.isEmpty() ? "" : "DEFAULT");
+            columnsInfo.setColDef(defNorm);
             columnsInfo.setColNo(rs.getInt("column_id"));
             columnsInfo.setColName(rs.getString("column_name"));
             columnsInfo.setColType(rs.getString("data_type"));
@@ -591,8 +594,6 @@ public final class OracleMetadataRepository implements MetadataRepository {
             columnsInfo.setTypeS(rs.getInt("scale_value"));
             columnsInfo.setIsNullable("Y".equalsIgnoreCase(rs.getString("nullable")));
             columnsInfo.setIsPK(rs.getInt("is_pk") == 1);
-            columnsInfo.setColDefType(blankToEmpty(rs.getString("default_type")));
-            columnsInfo.setColDef(blankToEmpty(rs.getString("default_value")));
             columnsInfo.setColComm(blankToEmpty(rs.getString("comments")));
             columnsInfo.setIsAutoincrement(false);
             return columnsInfo;
@@ -1055,6 +1056,15 @@ public final class OracleMetadataRepository implements MetadataRepository {
             return Long.MIN_VALUE;
         }
         return value.longValue();
+    }
+
+    /** Whitespace cleanup previously done in SQL; kept for LONG defaults read via JDBC. */
+    private static String normalizeOracleColumnDefault(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.replace("\r", " ").replace("\n", " ").trim();
+        return t.isEmpty() ? "" : t;
     }
 
     private String blankToEmpty(String value) {

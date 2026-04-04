@@ -1228,7 +1228,15 @@ public class TreeCrudHandler {
             }
 
             String exportSql = "select * from " + table.getName();
-            DownloadManagerUtil.addSqlExportTask(connect, exportSql, file, format.name().toLowerCase(), true, table.getNrows());
+            DownloadManagerUtil.addSqlExportTask(
+                    connect,
+                    exportSql,
+                    file,
+                    format.name().toLowerCase(),
+                    true,
+                    table.getNrows(),
+                    table.getName()
+            );
             return;
         }
 
@@ -1382,7 +1390,8 @@ public class TreeCrudHandler {
                                         format.name().toLowerCase(Locale.ROOT),
                                         request.totalRowsHint,
                                         null,
-                                        cancelChecker
+                                        cancelChecker,
+                                        request.tableName
                                 );
                                 if (!exported) {
                                     deleteFileQuietly(request.file);

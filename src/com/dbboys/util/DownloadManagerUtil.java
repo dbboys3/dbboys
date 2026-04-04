@@ -38,6 +38,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -462,10 +463,19 @@ class DownloadTaskWrapper {
                     }
                 };
                 try {
+                    DownloadManagerUtil.logExportColumnMetadata(meta, "resultSetExport format=" + format);
                     switch (format.toLowerCase()) {
                         case "csv" -> writeCsvStreaming(rs, meta, file, progressCb, msg, totalRows);
                         case "json" -> writeJsonStreaming(rs, meta, file, progressCb, msg, totalRows);
-                        case "sql" -> writeSqlStreaming(rs, meta, file, progressCb, msg, totalRows);
+                        case "sql" -> writeSqlStreaming(
+                                rs,
+                                meta,
+                                file,
+                                progressCb,
+                                msg,
+                                totalRows,
+                                DownloadManagerUtil.resolveSqlInsertTableName(meta, null, null)
+                        );
                         default -> throw new IllegalArgumentException("Unknown format: " + format);
                     }
                     if (!cancelled) {
@@ -518,6 +528,10 @@ class DownloadTaskWrapper {
 
                         try (ResultSet rs = ps.executeQuery()) {
                             ResultSetMetaData meta = rs.getMetaData();
+                            DownloadManagerUtil.logExportColumnMetadata(
+                                    meta,
+                                    "sqlExport format=" + source.format + " sql=" + source.sql
+                            );
                             if (queryTotalRows > 0) {
                                 updateProgress(0, queryTotalRows);
                                 updateMessage("0/" + queryTotalRows);
@@ -545,7 +559,19 @@ class DownloadTaskWrapper {
                                     }
                                 }
                                 case "json" -> writeJsonStreaming(rs, meta, file, progressCb, msg, queryTotalRows);
-                                case "sql" -> writeSqlStreaming(rs, meta, file, progressCb, msg, queryTotalRows);
+                                case "sql" -> writeSqlStreaming(
+                                        rs,
+                                        meta,
+                                        file,
+                                        progressCb,
+                                        msg,
+                                        queryTotalRows,
+                                        DownloadManagerUtil.resolveSqlInsertTableName(
+                                                meta,
+                                                source.sqlInsertTargetTable,
+                                                source.sql
+                                        )
+                                );
                                 default -> throw new IllegalArgumentException("Unknown format: " + source.format);
                             }
                         }
@@ -706,10 +732,12 @@ class DownloadTaskWrapper {
     private void writeSqlStreaming(ResultSet rs, ResultSetMetaData meta, File file,
                                    java.util.function.BiConsumer<Long, Long> progressUpdater,
                                    java.util.function.Consumer<String> messageUpdater,
-                                   long totalRows) throws Exception {
+                                   long totalRows,
+                                   String insertTableName) throws Exception {
         int columnCount = meta.getColumnCount();
-        String tableName = meta.getTableName(1);
-        if (tableName == null || tableName.isBlank()) tableName = "table";
+        String tableName = insertTableName == null || insertTableName.isBlank()
+                ? "dbboys_unknown_table"
+                : insertTableName.trim();
         String prefix = "insert into " + tableName + " values";
 
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
@@ -732,15 +760,22 @@ class DownloadTaskWrapper {
     }
 
     private String readSqlCellLiteral(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
-        String columnType = normalizeColumnType(meta.getColumnTypeName(columnIndex));
         Object rawValue = rs.getObject(columnIndex);
         if (rawValue == null && rs.wasNull()) {
             return "NULL";
         }
-
-        if (isNumericExportColumnType(columnType) || isBooleanExportColumnType(columnType)) {
-            String numericValue = rs.getString(columnIndex);
-            return numericValue == null ? "NULL" : numericValue;
+        if (rawValue instanceof Number) {
+            return rawValue.toString();
+        }
+        String columnType = normalizeColumnType(meta.getColumnTypeName(columnIndex));
+        if (isNumericExportColumnType(columnType)) {
+            return rawValue == null ? "NULL" : rawValue.toString();
+        }
+        if (isBooleanExportColumnType(columnType)) {
+            if (rawValue instanceof Boolean b) {
+                return b ? "1" : "0";
+            }
+            return rawValue == null ? "NULL" : rawValue.toString();
         }
 
         String value = readCsvCellValue(rs, meta, columnIndex);
@@ -751,24 +786,7 @@ class DownloadTaskWrapper {
     }
 
     private boolean isNumericExportColumnType(String columnType) {
-        if (columnType == null || columnType.isEmpty()) {
-            return false;
-        }
-        return columnType.startsWith("SMALLINT")
-                || columnType.startsWith("INTEGER")
-                || columnType.equals("INT")
-                || columnType.startsWith("INT(")
-                || columnType.startsWith("BIGINT")
-                || columnType.startsWith("DECIMAL")
-                || columnType.startsWith("NUMERIC")
-                || columnType.startsWith("MONEY")
-                || columnType.startsWith("SMALLFLOAT")
-                || columnType.startsWith("FLOAT")
-                || columnType.startsWith("DOUBLE")
-                || columnType.startsWith("REAL")
-                || columnType.startsWith("SERIAL")
-                || columnType.startsWith("SERIAL8")
-                || columnType.startsWith("BIGSERIAL");
+        return DownloadManagerUtil.isSqlExportNumericTypeName(columnType);
     }
 
     private boolean isBooleanExportColumnType(String columnType) {
@@ -937,6 +955,104 @@ public class DownloadManagerUtil {
         return t;
     });
 
+    /**
+     * 导出写入文件前记录 JDBC 解析到的列标签、字典名、类型名与 JDBC 类型（便于排查 Oracle 等与驱动相关的类型问题）。
+     */
+    public static void logExportColumnMetadata(ResultSetMetaData meta, String contextHint) {
+        if (meta == null) {
+            return;
+        }
+        try {
+            int n = meta.getColumnCount();
+            StringBuilder sb = new StringBuilder(Math.max(64, n * 64));
+            for (int i = 1; i <= n; i++) {
+                if (i > 1) {
+                    sb.append(" | ");
+                }
+                sb.append('[').append(i).append(']');
+                sb.append("label=").append(meta.getColumnLabel(i));
+                sb.append(",name=").append(meta.getColumnName(i));
+                sb.append(",typeName=").append(meta.getColumnTypeName(i));
+                sb.append(",jdbcType=").append(meta.getColumnType(i));
+            }
+            String ctx = contextHint == null ? "" : contextHint;
+            if (ctx.length() > 500) {
+                ctx = ctx.substring(0, 500) + "...";
+            }
+            log.info("Export column metadata (before write), context=\"{}\": {}", ctx, sb);
+        } catch (SQLException e) {
+            log.warn("Failed to read ResultSetMetaData for export logging", e);
+        }
+    }
+
+    private static final Pattern SQL_EXPORT_FROM_TABLE =
+            Pattern.compile("(?is)\\bfrom\\s+((?:\"[^\"]+\"|[\\w$#]+)(?:\\.(?:\"[^\"]+\"|[\\w$#]+))?)\\s");
+
+    /**
+     * SQL 导出用的 insert 目标表名：优先调用方传入（元数据树导出），否则 JDBC {@link ResultSetMetaData#getTableName(int)}，
+     * 再从 {@code select ... from <表>} 简单解析；避免使用保留字 {@code table} 作占位。
+     */
+    public static String resolveSqlInsertTableName(ResultSetMetaData meta, String override, String sql)
+            throws SQLException {
+        if (override != null && !override.isBlank()) {
+            return override.trim();
+        }
+        if (meta != null) {
+            String t = meta.getTableName(1);
+            if (t != null && !t.isBlank()) {
+                return t.trim();
+            }
+        }
+        if (sql != null && !sql.isBlank()) {
+            String inferred = tryInferTableFromSelectSql(sql);
+            if (inferred != null && !inferred.isBlank()) {
+                return inferred;
+            }
+        }
+        return "dbboys_unknown_table";
+    }
+
+    static String tryInferTableFromSelectSql(String sql) {
+        Matcher m = SQL_EXPORT_FROM_TABLE.matcher(sql);
+        if (m.find()) {
+            String cand = m.group(1).trim();
+            if (!cand.isEmpty() && !cand.equalsIgnoreCase("(")) {
+                return cand;
+            }
+        }
+        Matcher end = Pattern.compile("(?is)\\bfrom\\s+((?:\"[^\"]+\"|[\\w$#]+)(?:\\.(?:\"[^\"]+\"|[\\w$#]+))?)\\s*;?\\s*$")
+                .matcher(sql.strip());
+        if (end.find()) {
+            return end.group(1).trim();
+        }
+        return null;
+    }
+
+    /** Oracle {@code NUMBER} / {@code BINARY_FLOAT} 等与 JDBC {@link Number} 字面量导出。 */
+    static boolean isSqlExportNumericTypeName(String columnType) {
+        if (columnType == null || columnType.isEmpty()) {
+            return false;
+        }
+        return columnType.startsWith("NUMBER")
+                || columnType.startsWith("BINARY_FLOAT")
+                || columnType.startsWith("BINARY_DOUBLE")
+                || columnType.startsWith("SMALLINT")
+                || columnType.startsWith("INTEGER")
+                || columnType.equals("INT")
+                || columnType.startsWith("INT(")
+                || columnType.startsWith("BIGINT")
+                || columnType.startsWith("DECIMAL")
+                || columnType.startsWith("NUMERIC")
+                || columnType.startsWith("MONEY")
+                || columnType.startsWith("SMALLFLOAT")
+                || columnType.startsWith("FLOAT")
+                || columnType.startsWith("DOUBLE")
+                || columnType.startsWith("REAL")
+                || columnType.startsWith("SERIAL")
+                || columnType.startsWith("SERIAL8")
+                || columnType.startsWith("BIGSERIAL");
+    }
+
     public static StackPane downloadStackPane; // 默认下载容器
     private static final Map<StackPane, DownloadQueue> queueByStackPane = new HashMap<>();
 
@@ -975,9 +1091,11 @@ public class DownloadManagerUtil {
         public final String format;
         public final ExecutorService executor;
         public final long totalRowsHint;
+        /** 非空时用于 SQL 导出 {@code insert into <此名> values(...)}（JDBC 元数据常拿不到表名） */
+        public final String sqlInsertTargetTable;
 
         public SqlExportSource(Connect connect, String sql, String format, ExecutorService executor) {
-            this(connect, sql, format, executor, -1);
+            this(connect, sql, format, executor, -1, null);
         }
 
         public SqlExportSource(Connect connect,
@@ -985,11 +1103,23 @@ public class DownloadManagerUtil {
                                String format,
                                ExecutorService executor,
                                long totalRowsHint) {
+            this(connect, sql, format, executor, totalRowsHint, null);
+        }
+
+        public SqlExportSource(Connect connect,
+                               String sql,
+                               String format,
+                               ExecutorService executor,
+                               long totalRowsHint,
+                               String sqlInsertTargetTable) {
             this.connect = connect;
             this.sql = sql;
             this.format = format;
             this.executor = executor;
             this.totalRowsHint = totalRowsHint;
+            this.sqlInsertTargetTable = (sqlInsertTargetTable == null || sqlInsertTargetTable.isBlank())
+                    ? null
+                    : sqlInsertTargetTable.trim();
         }
     }
 
@@ -1042,6 +1172,7 @@ public class DownloadManagerUtil {
             }
             try (ResultSet rs = ps.executeQuery()) {
                 ResultSetMetaData meta = rs.getMetaData();
+                logExportColumnMetadata(meta, "exportSqlToCsvFile sql=" + sql);
                 return writeCsvFile(rs, meta, file, cancelChecker);
             }
         }
@@ -1055,7 +1186,7 @@ public class DownloadManagerUtil {
                                              String sql,
                                              File file,
                                              BooleanSupplier cancelChecker) throws Exception {
-        return exportSqlToFile(conn, sql, file, "csv", -1, null, cancelChecker);
+        return exportSqlToFile(conn, sql, file, "csv", -1, null, cancelChecker, null);
     }
 
     public static boolean exportSqlToFile(Connection conn,
@@ -1065,6 +1196,20 @@ public class DownloadManagerUtil {
                                           long totalRowsHint,
                                           java.util.function.BiConsumer<Long, Long> progressUpdater,
                                           BooleanSupplier cancelChecker) throws Exception {
+        return exportSqlToFile(conn, sql, file, format, totalRowsHint, progressUpdater, cancelChecker, null);
+    }
+
+    /**
+     * @param sqlInsertTargetTable 非空时用于 {@code insert into} 目标表名（JDBC 元数据常拿不到表名）；可为 null
+     */
+    public static boolean exportSqlToFile(Connection conn,
+                                          String sql,
+                                          File file,
+                                          String format,
+                                          long totalRowsHint,
+                                          java.util.function.BiConsumer<Long, Long> progressUpdater,
+                                          BooleanSupplier cancelChecker,
+                                          String sqlInsertTargetTable) throws Exception {
         throwIfExportCancelled(cancelChecker);
         long queryTotalRows = totalRowsHint > 0 ? totalRowsHint : -1;
         if (queryTotalRows <= 0 && progressUpdater != null) {
@@ -1087,6 +1232,7 @@ public class DownloadManagerUtil {
             throwIfExportCancelled(cancelChecker);
             try (ResultSet rs = ps.executeQuery()) {
                 ResultSetMetaData meta = rs.getMetaData();
+                logExportColumnMetadata(meta, "exportSqlToFile format=" + format + " sql=" + sql);
                 return switch (format == null ? "" : format.toLowerCase(Locale.ROOT)) {
                     case "csv" -> writeCsvFile(rs, meta, file, queryTotalRows, progressUpdater, cancelChecker);
                     case "json" -> {
@@ -1094,7 +1240,15 @@ public class DownloadManagerUtil {
                         yield true;
                     }
                     case "sql" -> {
-                        writeSqlFile(rs, meta, file, queryTotalRows, progressUpdater, cancelChecker);
+                        writeSqlFile(
+                                rs,
+                                meta,
+                                file,
+                                queryTotalRows,
+                                progressUpdater,
+                                cancelChecker,
+                                resolveSqlInsertTableName(meta, sqlInsertTargetTable, sql)
+                        );
                         yield true;
                     }
                     default -> throw new IllegalArgumentException("Unknown format: " + format);
@@ -1233,12 +1387,12 @@ public class DownloadManagerUtil {
                                      File file,
                                      long totalRows,
                                      java.util.function.BiConsumer<Long, Long> progressUpdater,
-                                     BooleanSupplier cancelChecker) throws Exception {
+                                     BooleanSupplier cancelChecker,
+                                     String insertTableName) throws Exception {
         int columnCount = meta.getColumnCount();
-        String tableName = meta.getTableName(1);
-        if (tableName == null || tableName.isBlank()) {
-            tableName = "table";
-        }
+        String tableName = insertTableName == null || insertTableName.isBlank()
+                ? "dbboys_unknown_table"
+                : insertTableName.trim();
         String prefix = "insert into " + tableName + " values";
         throwIfExportCancelled(cancelChecker);
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
@@ -1279,41 +1433,28 @@ public class DownloadManagerUtil {
     }
 
     private static String readSqlExportValue(ResultSet rs, ResultSetMetaData meta, int columnIndex) throws Exception {
-        String columnType = normalizeExportColumnType(meta.getColumnTypeName(columnIndex));
         Object rawValue = rs.getObject(columnIndex);
         if (rawValue == null && rs.wasNull()) {
             return "NULL";
         }
-        if (isNumericExportColumnType(columnType) || isBooleanExportColumnType(columnType)) {
-            String numericValue = rs.getString(columnIndex);
-            return numericValue == null ? "NULL" : numericValue;
+        if (rawValue instanceof Number) {
+            return rawValue.toString();
+        }
+        String columnType = normalizeExportColumnType(meta.getColumnTypeName(columnIndex));
+        if (isSqlExportNumericTypeName(columnType)) {
+            return rawValue == null ? "NULL" : rawValue.toString();
+        }
+        if (isBooleanExportColumnType(columnType)) {
+            if (rawValue instanceof Boolean b) {
+                return b ? "1" : "0";
+            }
+            return rawValue == null ? "NULL" : rawValue.toString();
         }
         String value = readCsvExportValue(rs, meta, columnIndex);
         if (value == null) {
             return "NULL";
         }
         return "'" + value.replace("'", "''") + "'";
-    }
-
-    private static boolean isNumericExportColumnType(String columnType) {
-        if (columnType == null || columnType.isEmpty()) {
-            return false;
-        }
-        return columnType.startsWith("SMALLINT")
-                || columnType.startsWith("INTEGER")
-                || columnType.equals("INT")
-                || columnType.startsWith("INT(")
-                || columnType.startsWith("BIGINT")
-                || columnType.startsWith("DECIMAL")
-                || columnType.startsWith("NUMERIC")
-                || columnType.startsWith("MONEY")
-                || columnType.startsWith("SMALLFLOAT")
-                || columnType.startsWith("FLOAT")
-                || columnType.startsWith("DOUBLE")
-                || columnType.startsWith("REAL")
-                || columnType.startsWith("SERIAL")
-                || columnType.startsWith("SERIAL8")
-                || columnType.startsWith("BIGSERIAL");
     }
 
     private static boolean isBooleanExportColumnType(String columnType) {
@@ -1563,8 +1704,18 @@ public class DownloadManagerUtil {
                                         String format,
                                         boolean autoCloseOnComplete,
                                         long totalRowsHint) {
+        addSqlExportTask(sqlConnect, sql, file, format, autoCloseOnComplete, totalRowsHint, null);
+    }
+
+    public static void addSqlExportTask(Connect sqlConnect,
+                                        String sql,
+                                        File file,
+                                        String format,
+                                        boolean autoCloseOnComplete,
+                                        long totalRowsHint,
+                                        String sqlInsertTargetTable) {
         addDownloadInternal(
-                new SqlExportSource(new Connect(sqlConnect), sql, format, SQL_EXPORT_POOL, totalRowsHint),
+                new SqlExportSource(new Connect(sqlConnect), sql, format, SQL_EXPORT_POOL, totalRowsHint, sqlInsertTargetTable),
                 file,
                 autoCloseOnComplete,
                 null,
