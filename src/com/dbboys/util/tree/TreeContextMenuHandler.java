@@ -1398,13 +1398,15 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     if (!schemaModel) {
                         treeview_menu.getItems().add(renameItem);
-                        treeview_menu.getItems().add(deleteItem);
                     }
+                    treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(importMenu);
-                    if (!schemaModel) {
-                        treeview_menu.getItems().add(exportDdlAndDataItem);
-                        treeview_menu.getItems().add(exportDdlMenu);
-                    }
+                    exportDdlAndDataItem.textProperty().unbind();
+                    String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";
+                    String exportDefault = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuDefaultText() : "导出数据库";
+                    exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
+                    treeview_menu.getItems().add(exportDdlAndDataItem);
+                    treeview_menu.getItems().add(exportDdlMenu);
                 }
                 //对象文件夹
                 else if(selectedItem.getValue() instanceof ObjectFolder) {
@@ -1721,7 +1723,8 @@ public class TreeContextMenuHandler {
             } else {
                 event.consume();
                 Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
-                String quotedName = "\"" + schemaName.getText().trim().replace("\"", "\"\"") + "\"";
+                String name = schemaName.getText().trim().toUpperCase();
+                String quotedName = "\"" + name.replace("\"", "\"\"") + "\"";
                 String quotedPassword = "\"" + passwordField1.getText().trim().replace("\"", "\"\"") + "\"";
                 String sql = "CREATE USER " + quotedName + " IDENTIFIED BY " + quotedPassword;
                 TreeViewUtil.databaseService.executeObjectSql(connect, sql, () -> {
@@ -1729,7 +1732,7 @@ public class TreeContextMenuHandler {
                     selectedItem.setExpanded(false);
                     selectedItem.setExpanded(true);
                     NotificationUtil.showMainNotification(
-                            I18n.t("metadata.success.create_schema", "模式[%s]创建成功").formatted(schemaName.getText().trim())
+                            I18n.t("metadata.success.create_schema", "模式[%s]创建成功").formatted(name)
                     );
                     dialog.getStage().close();
                 });

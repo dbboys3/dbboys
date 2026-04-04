@@ -80,6 +80,14 @@ public interface DatabasePlatform {
         return "导入数据库";
     }
 
+    default String getExportDdlDataMenuI18nKey() {
+        return "metadata.menu.export_ddl_data";
+    }
+
+    default String getExportDdlDataMenuDefaultText() {
+        return "导出数据库";
+    }
+
     default boolean canDropDatabase() {
         return true;
     }

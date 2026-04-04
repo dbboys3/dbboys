@@ -164,8 +164,18 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
+    public String getExportDdlDataMenuI18nKey() {
+        return "metadata.menu.export_ddl_schema";
+    }
+
+    @Override
+    public String getExportDdlDataMenuDefaultText() {
+        return "导出模式";
+    }
+
+    @Override
     public boolean canDropDatabase() {
-        return false;
+        return true;
     }
 
     @Override

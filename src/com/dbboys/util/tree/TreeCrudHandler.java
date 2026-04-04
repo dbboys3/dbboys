@@ -350,6 +350,9 @@ public class TreeCrudHandler {
         }
 
         String sql = "drop " + objectType + " " + selectedItem.getValue().getName();
+        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database) {
+            sql += " cascade";
+        }
         Connect connect = buildObjectConnect(selectedItem, useSysmaster);
         service.deleteObject(connect, sql, () -> {
             TreeItem<TreeData> parent = selectedItem.getParent();
@@ -412,7 +415,12 @@ public class TreeCrudHandler {
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
         }else if(treeData instanceof Database){
-            deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
+            DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
+            if (platform != null && platform.usesSchemaModel()) {
+                deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
+            } else {
+                deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
+            }
         }else if(treeData instanceof Table){
             deleteDatabaseObject(TreeViewUtil.tableService, selectedItem, "table", false);
         }else if(treeData instanceof View){
