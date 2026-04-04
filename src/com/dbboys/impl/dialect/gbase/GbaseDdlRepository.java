@@ -2288,11 +2288,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private String printDBAll_00_Header(String databasename,String productversion){
         StringBuilder ddl = new StringBuilder();
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String datestr = formatter.format(new Date(System.currentTimeMillis()));
-        ddl.append("-- ### product version : ").append(productversion).append("\n");
-        ddl.append("-- ### export database : ").append(databasename).append("\n");
-        ddl.append("-- ### export datetime : ").append(datestr).append("\n\n");
+        ddl.append("-- ### product version : ").append(productversion).append("\n\n");
         return ddl.toString();
     }
 

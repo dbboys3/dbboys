@@ -6,8 +6,6 @@ import com.dbboys.db.SqlRunner;
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.function.LongConsumer;
@@ -182,13 +180,6 @@ public final class OracleDdlRepository implements DdlRepository {
 
         StringBuilder ddl = new StringBuilder();
         long completed = 0;
-
-        String dateStr = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-        ddl.append("-- ############################################################\n");
-        ddl.append("-- ### Oracle Schema DDL Export\n");
-        ddl.append("-- ### Schema   : ").append(schema).append("\n");
-        ddl.append("-- ### Datetime : ").append(dateStr).append("\n");
-        ddl.append("-- ############################################################\n\n");
 
         completed = appendObjectsDdl(conn, ddl, schema, "SEQUENCE", "Sequences", completed, progressCallback);
         completed = appendObjectsDdl(conn, ddl, schema, "TABLE", "Tables", completed, progressCallback);

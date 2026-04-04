@@ -892,11 +892,14 @@ public class TreeCrudHandler {
                     if (!failures.isEmpty()) {
                         throw new Exception(buildDatabaseExportFailureMessage(failures));
                     }
+                    DatabasePlatform exportPlatform = TreeNavigator.resolvePlatform(selectedItem);
+                    String exportNoticeKey = exportPlatform != null && exportPlatform.usesSchemaModel()
+                            ? "metadata.export.ddl_schema.notice.completed" : "metadata.export.ddl_data.notice.completed";
+                    String exportNoticeDefault = exportPlatform != null && exportPlatform.usesSchemaModel()
+                            ? "模式已导出到：%s" : "数据库已导出到：%s";
                     Platform.runLater(() -> NotificationUtil.showMainNotification(
-                            I18n.t(
-                                    "metadata.export.ddl_data.notice.completed",
-                                    "数据库已导出到：%s"
-                            ).formatted(database.getName(), exportDir.getAbsolutePath())
+                            I18n.t(exportNoticeKey, exportNoticeDefault)
+                                    .formatted(exportDir.getAbsolutePath())
                     ));
                     updateProgress(1, 1);
                     return null;
@@ -915,8 +918,12 @@ public class TreeCrudHandler {
                 }
             }
         };
-        String taskDisplayName = I18n.t("metadata.export.ddl_data.task_name", "导出数据库\"%s\"")
-                .formatted(database.getName());
+        DatabasePlatform taskPlatform = TreeNavigator.resolvePlatform(selectedItem);
+        String taskNameKey = taskPlatform != null && taskPlatform.usesSchemaModel()
+                ? "metadata.export.ddl_schema.task_name" : "metadata.export.ddl_data.task_name";
+        String taskNameDefault = taskPlatform != null && taskPlatform.usesSchemaModel()
+                ? "导出模式\"%s\"" : "导出数据库\"%s\"";
+        String taskDisplayName = I18n.t(taskNameKey, taskNameDefault).formatted(database.getName());
         DownloadManagerUtil.addCustomExportTask(taskDisplayName, preDdlFile, true, exportTask, runtime::cancel);
     }
 
@@ -1043,34 +1050,7 @@ public class TreeCrudHandler {
         if (platform == null || !platform.canCreateDatabase()) {
             return "";
         }
-        String databaseName = normalizeSqlToken(database.getName());
-        if (databaseName.isEmpty()) {
-            return "";
-        }
-        String dbspace = normalizeSqlToken(database.getDbSpace());
-        String dbLog = normalizeSqlToken(database.getDbLog()).toLowerCase(Locale.ROOT);
-        String dbLocale = normalizeSqlToken(database.getDbLocale());
-        String lineSeparator = System.lineSeparator();
-
-        StringBuilder builder = new StringBuilder();
-        if (!dbLocale.isEmpty()) {
-            builder.append("-- DB_LOCALE=").append(dbLocale).append(lineSeparator);
-        }
-        builder.append("create database ").append(databaseName);
-        if (!dbspace.isEmpty()) {
-            builder.append(" in ").append(dbspace);
-        }
-        if ("buffered".equals(dbLog)) {
-            builder.append(" with buffered log");
-        } else if ("unbuffered".equals(dbLog)) {
-            builder.append(" with log");
-        }
-        builder.append(";").append(lineSeparator).append(lineSeparator);
-        return builder.toString();
-    }
-
-    private static String normalizeSqlToken(String value) {
-        return value == null ? "" : value.trim();
+        return platform.buildBootstrapSql(database);
     }
 
     private static String buildDatabaseExportFailureMessage(List<String> failures) {

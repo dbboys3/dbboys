@@ -64,12 +64,14 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
-        return withMetaSession(connect, database,
+        String bootstrap = buildBootstrapHeader(connect, database);
+        return bootstrap + withMetaSession(connect, database,
                 conn -> platformResolver.ddl(connect).printDatabase(conn, database.getName()));
     }
 
     public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
-        return withMetaSession(connect, database, conn -> {
+        String bootstrap = buildBootstrapHeader(connect, database);
+        return bootstrap + withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
             if (progressListener != null) {
@@ -81,6 +83,17 @@ public class DatabaseService implements MetaObjectService {
                     : null;
             return ddlRepository.printDatabase(conn, database.getName(), progressCallback);
         });
+    }
+
+    private String buildBootstrapHeader(Connect connect, Database database) {
+        try {
+            var platform = platformResolver.getPlatform(connect.getDbtype());
+            if (platform != null && platform.canCreateDatabase()) {
+                return platform.buildBootstrapSql(database);
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connect connect,

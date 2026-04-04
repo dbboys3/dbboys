@@ -1,6 +1,7 @@
 package com.dbboys.impl.dialect.gbase;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
+import com.dbboys.vo.Database;
 import com.dbboys.api.ConnectionSupport;
 import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
@@ -171,6 +172,38 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
     @Override
     public Set<String> systemDatabaseNames() {
         return SYS_DBS;
+    }
+
+    @Override
+    public String buildBootstrapSql(Database database) {
+        if (database == null || database.getName() == null || database.getName().isBlank()) {
+            return "";
+        }
+        String name = database.getName().trim();
+        String dbspace = database.getDbSpace() == null ? "" : database.getDbSpace().trim();
+        String dbLog = database.getDbLog() == null ? "" : database.getDbLog().trim().toLowerCase(java.util.Locale.ROOT);
+        String dbLocale = database.getDbLocale() == null ? "" : database.getDbLocale().trim();
+        String dateStr = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+        StringBuilder sb = new StringBuilder();
+        sb.append("-- ############################################################\n");
+        sb.append("-- ### GBase Database DDL Export\n");
+        sb.append("-- ### Database : ").append(name).append("\n");
+        sb.append("-- ### Datetime : ").append(dateStr).append("\n");
+        sb.append("-- ############################################################\n\n");
+        if (!dbLocale.isEmpty()) {
+            sb.append("-- DB_LOCALE=").append(dbLocale).append("\n");
+        }
+        sb.append("create database ").append(name);
+        if (!dbspace.isEmpty()) {
+            sb.append(" in ").append(dbspace);
+        }
+        if ("buffered".equals(dbLog)) {
+            sb.append(" with buffered log");
+        } else if ("unbuffered".equals(dbLog)) {
+            sb.append(" with log");
+        }
+        sb.append(";\n\n");
+        return sb.toString();
     }
 
     @Override

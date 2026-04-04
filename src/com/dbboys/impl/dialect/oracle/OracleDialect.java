@@ -8,6 +8,7 @@ import com.dbboys.api.MetadataRepository;
 import com.dbboys.api.SqlexeRepository;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.vo.Connect;
+import com.dbboys.vo.Database;
 
 import java.sql.Connection;
 import java.util.List;
@@ -176,6 +177,23 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     @Override
     public boolean canDropDatabase() {
         return true;
+    }
+
+    @Override
+    public String buildBootstrapSql(Database database) {
+        if (database == null || database.getName() == null || database.getName().isBlank()) {
+            return "";
+        }
+        String schema = database.getName().trim().toUpperCase();
+        String dateStr = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+        StringBuilder sb = new StringBuilder();
+        sb.append("-- ############################################################\n");
+        sb.append("-- ### Oracle Schema DDL Export\n");
+        sb.append("-- ### Schema   : ").append(schema).append("\n");
+        sb.append("-- ### Datetime : ").append(dateStr).append("\n");
+        sb.append("-- ############################################################\n\n");
+        sb.append("CREATE USER \"").append(schema).append("\" IDENTIFIED BY \"").append(schema).append("\";\n\n");
+        return sb.toString();
     }
 
     @Override

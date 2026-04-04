@@ -46,7 +46,7 @@ public final class InformixDdlRepository implements DdlRepository {
      * @throws SQLException
      */
     private static String getActiveDbname(Connection connection) throws SQLException {
-        String sqlstr = "select dbinfo('dbname') as dbname from dual";
+        String sqlstr = "select dbinfo('dbname') as dbname from sysmaster:sysdual";
         String currdatabase = "sysmaster";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
              ResultSet resultSet = preparedStatement.executeQuery()) {
@@ -83,7 +83,7 @@ public final class InformixDdlRepository implements DdlRepository {
      * @throws SQLException
      */
     public static int getDataBaseProductVersionNumber(Connection connection) {
-        String sqlstr = "select dbinfo('version','minor') as version from dual";
+        String sqlstr = "select dbinfo('version','minor') as version from sysmaster:sysdual";
         String pattern = "\\d+\\.\\d+\\.\\d+";
         Pattern r = Pattern.compile(pattern);
         String tmpversion = "0.0.0";
@@ -2275,11 +2275,7 @@ public final class InformixDdlRepository implements DdlRepository {
      */
     private String printDBAll_00_Header(String databasename,String productversion){
         StringBuilder ddl = new StringBuilder();
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String datestr = formatter.format(new Date(System.currentTimeMillis()));
-        ddl.append("-- ### product version : ").append(productversion).append("\n");
-        ddl.append("-- ### export database : ").append(databasename).append("\n");
-        ddl.append("-- ### export datetime : ").append(datestr).append("\n\n");
+        ddl.append("-- ### product version : ").append(productversion).append("\n\n");
         return ddl.toString();
     }
 

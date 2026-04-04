@@ -1,6 +1,7 @@
 package com.dbboys.api;
 
 import com.dbboys.vo.Connect;
+import com.dbboys.vo.Database;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -86,6 +87,10 @@ public interface DatabasePlatform {
 
     default String getExportDdlDataMenuDefaultText() {
         return "导出数据库";
+    }
+
+    default String buildBootstrapSql(Database database) {
+        return "";
     }
 
     default boolean canDropDatabase() {
