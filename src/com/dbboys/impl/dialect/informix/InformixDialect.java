@@ -60,6 +60,7 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
         if (database == null || database.isBlank()) {
             database = defaultDatabase();
         }
+        connect.setSessionDatabase(database);
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
             String host = connect.getIp() == null || connect.getIp().isBlank() ? "127.0.0.1" : connect.getIp();

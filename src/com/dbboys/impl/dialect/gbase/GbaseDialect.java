@@ -63,6 +63,7 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
         if (sessionDatabase == null || sessionDatabase.isBlank()) {
             sessionDatabase = defaultDatabase();
         }
+        connect.setSessionDatabase(sessionDatabase);
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
             url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + sessionDatabase;

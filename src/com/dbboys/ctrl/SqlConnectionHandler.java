@@ -186,12 +186,12 @@ public class SqlConnectionHandler {
 
     private void selectCurrentDatabase() {
         String sessionDb = ctrl.sqlConnect.getSessionDatabase();
-        String database = ctrl.sqlConnect.getDatabase();
+        if (sessionDb == null || sessionDb.isBlank()) {
+            return;
+        }
         int i = 0;
         for (Database item : ctrl.databaseChoiceBoxList) {
-            String name = item.getName();
-            if (name.equals(database)
-                    || (sessionDb != null && !sessionDb.isBlank() && name.equalsIgnoreCase(sessionDb))) {
+            if (item.getName().equalsIgnoreCase(sessionDb)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
                 return;
             }
