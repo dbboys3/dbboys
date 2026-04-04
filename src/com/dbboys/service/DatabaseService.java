@@ -406,6 +406,9 @@ public class DatabaseService implements MetaObjectService {
     }
 
     private int executeSingleStatement(Connection conn, String sql, BackgroundSqlTask backSqlTask) throws Exception {
+        if (sql.endsWith(";")) {
+            sql = sql.substring(0, sql.length() - 1).trim();
+        }
         try (Statement stmt = conn.createStatement()) {
             backSqlTask.setStmt(stmt);
             boolean hasResultSet = stmt.execute(sql);

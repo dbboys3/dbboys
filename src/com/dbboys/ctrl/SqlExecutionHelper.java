@@ -125,7 +125,7 @@ public class SqlExecutionHelper {
                         sql = SqlParserUtil.modifySql(sql, sqlChunk);
                         if (sql.getSqlEnd() && SqlParserUtil.isExecutableStatement(sql.getSqlstr())) {
                             ctrl.sqlParamList.clear();
-                            ctrl.sqlExe = sql.getSqlstr();
+                            ctrl.sqlExe = stripTrailingSemicolon(sql.getSqlstr());
                             ctrl.sqlStatementCount++;
                             highlightCurrentSegment(segment, sql);
 
@@ -249,7 +249,7 @@ public class SqlExecutionHelper {
         }
         ctrl.sqlTotalTime += ctrl.sqlUsedTime;
         ctrl.updateResult.setResult(ctrl.sqlExecutionResult);
-        ctrl.updateResult.setDatabase(ctrl.sqlConnect.getDatabase());
+        ctrl.updateResult.setDatabase(resolveEffectiveDatabase());
         ctrl.updateResult.setUpdateSql(ctrl.sqlExe.trim());
         ctrl.updateResult.setStartTime(sdf.format(ctrl.sqlStartTime));
         ctrl.updateResult.setEndTime(sdf.format(ctrl.sqlEndTime));
@@ -267,7 +267,7 @@ public class SqlExecutionHelper {
         ctrl.sqlAffect = 0;
         ctrl.sqlExecutionSuccess = true;
         ctrl.sqlExecutionResult = I18n.t("sql.exec.success");
-        ctrl.updateResult.setDatabase(ctrl.sqlConnect.getDatabase());
+        ctrl.updateResult.setDatabase(resolveEffectiveDatabase());
 
         if (sql.getSqlType().equals("SELECT") || sql.getSqlType().equals("CALL")) {
             executeSelectOrCallInBatch(sdf, sql, task);
@@ -579,5 +579,20 @@ public class SqlExecutionHelper {
                 || upperSql.startsWith("CREATE")
                 || upperSql.startsWith("DROP")
                 || upperSql.startsWith("TRUNCATE");
+    }
+
+    private String resolveEffectiveDatabase() {
+        String sessionDb = ctrl.sqlConnect.getSessionDatabase();
+        if (sessionDb != null && !sessionDb.isBlank()) {
+            return sessionDb;
+        }
+        return ctrl.sqlConnect.getDatabase();
+    }
+
+    private static String stripTrailingSemicolon(String sql) {
+        if (sql != null && sql.endsWith(";")) {
+            return sql.substring(0, sql.length() - 1).trim();
+        }
+        return sql;
     }
 }
