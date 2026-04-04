@@ -501,7 +501,7 @@ class DownloadTaskWrapper {
             @Override
             protected Void call() throws Exception {
                 long queryTotalRows = source.totalRowsHint > 0 ? source.totalRowsHint : -1;
-                try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).createConnection(source.connect)) {
+                try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).getConnectionWithSessionInit(source.connect)) {
                     if (cancelled || isCancelled() || Thread.currentThread().isInterrupted()) {
                         return null;
                     }
@@ -1162,7 +1162,7 @@ public class DownloadManagerUtil {
                                              String sql,
                                              File file,
                                              BooleanSupplier cancelChecker) throws Exception {
-        try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).createConnection(sqlConnect);
+        try (Connection conn = com.dbboys.app.AppContext.get(ConnectionService.class).getConnectionWithSessionInit(sqlConnect);
              PreparedStatement ps = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
             throwIfExportCancelled(cancelChecker);
             try {

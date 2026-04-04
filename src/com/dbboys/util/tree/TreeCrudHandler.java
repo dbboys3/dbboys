@@ -1470,7 +1470,7 @@ public class TreeCrudHandler {
             return cached;
         }
         Connect workerConnect = new Connect(connect);
-        Connection created = AppContext.get(com.dbboys.api.ConnectionService.class).createConnection(workerConnect);
+        Connection created = AppContext.get(com.dbboys.api.ConnectionService.class).getConnectionWithSessionInit(workerConnect);
         connectionCache.put(cacheKey, created);
         runtime.activeConnections.add(created);
         return created;
