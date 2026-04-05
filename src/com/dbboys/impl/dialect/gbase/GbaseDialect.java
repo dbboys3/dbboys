@@ -331,6 +331,16 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
+    public boolean supportsObjectTypesFolder() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsObjectQueuesFolder() {
+        return true;
+    }
+
+    @Override
     public SqlexeRepository sql() {
         return sqlexeRepository;
     }

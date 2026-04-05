@@ -31,6 +31,8 @@ public class TreeDataLoader {
         FUNCTIONS,
         PROCEDURES,
         PACKAGES,
+        TYPES,
+        QUEUES,
         UNKNOWN
     }
 
@@ -177,52 +179,51 @@ public class TreeDataLoader {
                                 Platform.runLater(() -> {
                                     treeItem.setValue((Database) objectList.getInfo());
                                     treeItem.getChildren().clear();
-                                    //查询到的结果添加到数据库条目下
-                                    DatabasePlatform folderPlatform = TreeNavigator.resolvePlatform(treeItem);
-                                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, folderPlatform);
-                                    objectFolder.setDescription(objectList.getItems().get(0).toString());
-                                    TreeItem<TreeData> systableTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
+                                    List<String> items = objectList.getItems();
+                                    int i = 0;
+                                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, p);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.TABLES);
-                                    objectFolder.setDescription(objectList.getItems().get(1).toString());
-                                    TreeItem<TreeData> tableTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.VIEWS);
-                                    objectFolder.setDescription(objectList.getItems().get(2).toString());
-                                    TreeItem<TreeData> viewTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.INDEXES);
-                                    objectFolder.setDescription(objectList.getItems().get(3).toString());
-                                    TreeItem<TreeData> indexTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.SEQUENCES);
-                                    objectFolder.setDescription(objectList.getItems().get(4).toString());
-                                    TreeItem<TreeData> sequenceTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.SYNONYMS);
-                                    objectFolder.setDescription(objectList.getItems().get(5).toString());
-                                    TreeItem<TreeData> synTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.TRIGGERS);
-                                    objectFolder.setDescription(objectList.getItems().get(6).toString());
-                                    TreeItem<TreeData> triggerTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.FUNCTIONS);
-                                    objectFolder.setDescription(objectList.getItems().get(7).toString());
-                                    TreeItem<TreeData> functionTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.PROCEDURES);
-                                    objectFolder.setDescription(objectList.getItems().get(8).toString());
-                                    TreeItem<TreeData> procedureTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
-                                    treeItem.getChildren().add(systableTreeItem);
-                                    treeItem.getChildren().add(tableTreeItem);
-                                    treeItem.getChildren().add(viewTreeItem);
-                                    treeItem.getChildren().add(indexTreeItem);
-                                    treeItem.getChildren().add(sequenceTreeItem);
-                                    treeItem.getChildren().add(synTreeItem);
-                                    treeItem.getChildren().add(triggerTreeItem);
-                                    treeItem.getChildren().add(functionTreeItem);
-                                    treeItem.getChildren().add(procedureTreeItem);
-                                    if (supportsPackages(TreeNavigator.getMetaConnect(treeItem))
-                                            && objectList.getItems().size() > 9) {
+                                    objectFolder.setDescription(items.get(i++).toString());
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    if (p.supportsPackages()) {
                                         objectFolder = createObjectFolder(ObjectFolderKind.PACKAGES);
-                                        objectFolder.setDescription(objectList.getItems().get(9).toString());
-                                        TreeItem<TreeData> packageTreeItem = TreeViewBuilder.createTreeItem(objectFolder);
-                                        treeItem.getChildren().add(packageTreeItem);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     }
-                                    //addExpandedPropertyListen(treeItem);
+                                    if (p.supportsObjectTypesFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.TYPES);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    if (p.supportsObjectQueuesFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.QUEUES);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
                                 });
                             }
                         }else{
@@ -417,22 +418,36 @@ public class TreeDataLoader {
                     treeItem.getChildren().add(TreeViewBuilder.createTreeItem(pkg));
                 }
             }
+            case TYPES -> {
+                List<MetadataType> types = objectList.getItems();
+                for (MetadataType row : types) {
+                    treeItem.getChildren().add(TreeViewBuilder.createLeafTreeItem(row));
+                }
+            }
+            case QUEUES -> {
+                List<MetadataQueue> queues = objectList.getItems();
+                for (MetadataQueue row : queues) {
+                    treeItem.getChildren().add(TreeViewBuilder.createLeafTreeItem(row));
+                }
+            }
             default -> {
             }
         }
     }
 
     public static ObjectFolder createObjectFolder(ObjectFolderKind kind, DatabasePlatform platform) {
-        ObjectFolder objectFolder = new ObjectFolder();
+        ObjectFolder objectFolder = createObjectFolder(kind);
         if (kind == ObjectFolderKind.SYSTEM_TABLE_VIEW && platform != null) {
             bindFolderName(objectFolder, platform.getSystemTableFolderI18nKey(), platform.getSystemTableFolderDefaultText());
-            return objectFolder;
         }
-        return createObjectFolder(kind);
+        return objectFolder;
     }
 
     public static ObjectFolder createObjectFolder(ObjectFolderKind kind) {
         ObjectFolder objectFolder = new ObjectFolder();
+        if (kind != null && kind != ObjectFolderKind.UNKNOWN) {
+            objectFolder.setKindTag(kind.name());
+        }
         switch (kind) {
             case SYSTEM_TABLE_VIEW -> bindFolderName(objectFolder, "metadata.folder.system_table_view", "系统表/视图");
             case TABLES -> bindFolderName(objectFolder, "metadata.folder.tables", "表");
@@ -444,6 +459,8 @@ public class TreeDataLoader {
             case FUNCTIONS -> bindFolderName(objectFolder, "metadata.folder.functions", "函数");
             case PROCEDURES -> bindFolderName(objectFolder, "metadata.folder.procedures", "存储过程");
             case PACKAGES -> bindFolderName(objectFolder, "metadata.folder.packages", "包");
+            case TYPES -> bindFolderName(objectFolder, "metadata.folder.types", "类型");
+            case QUEUES -> bindFolderName(objectFolder, "metadata.folder.queues", "队列");
             default -> objectFolder.setName("");
         }
         return objectFolder;
@@ -468,6 +485,8 @@ public class TreeDataLoader {
             case FUNCTIONS -> TreeViewUtil.functionService;
             case PROCEDURES -> TreeViewUtil.procedureService;
             case PACKAGES -> TreeViewUtil.packageService;
+            case TYPES -> TreeViewUtil.objectTypeService;
+            case QUEUES -> TreeViewUtil.queueService;
             default -> null;
         };
     }
@@ -475,6 +494,15 @@ public class TreeDataLoader {
     public static ObjectFolderKind getObjectFolderKind(TreeItem<TreeData> treeItem) {
         if (treeItem == null || !(treeItem.getValue() instanceof ObjectFolder)) {
             return ObjectFolderKind.UNKNOWN;
+        }
+        ObjectFolder folder = (ObjectFolder) treeItem.getValue();
+        String key = folder.getKindTag();
+        if (key != null && !key.isBlank()) {
+            try {
+                return ObjectFolderKind.valueOf(key);
+            } catch (IllegalArgumentException e) {
+                return ObjectFolderKind.UNKNOWN;
+            }
         }
         TreeItem<TreeData> parent = treeItem.getParent();
         if (parent == null) {
@@ -512,14 +540,9 @@ public class TreeDataLoader {
                 || kind == ObjectFolderKind.TRIGGERS
                 || kind == ObjectFolderKind.FUNCTIONS
                 || kind == ObjectFolderKind.PROCEDURES
-                || kind == ObjectFolderKind.PACKAGES;
-    }
-
-    private static boolean supportsPackages(Connect connect) {
-        if (connect == null) {
-            return false;
-        }
-        return resolvePlatformResolver().requirePlatform(connect).supportsPackages();
+                || kind == ObjectFolderKind.PACKAGES
+                || kind == ObjectFolderKind.TYPES
+                || kind == ObjectFolderKind.QUEUES;
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {

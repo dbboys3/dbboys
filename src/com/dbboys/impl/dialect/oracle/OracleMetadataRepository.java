@@ -7,6 +7,8 @@ import com.dbboys.vo.DBPackage;
 import com.dbboys.vo.Database;
 import com.dbboys.vo.Function;
 import com.dbboys.vo.Index;
+import com.dbboys.vo.MetadataQueue;
+import com.dbboys.vo.MetadataType;
 import com.dbboys.vo.Procedure;
 import com.dbboys.vo.Sequence;
 import com.dbboys.vo.Synonym;
@@ -692,6 +694,32 @@ public final class OracleMetadataRepository implements MetadataRepository {
             order by p.object_name
             """;
 
+    private static final String SQL_TYPE_COUNT = """
+            select count(*)
+            from all_types
+            where owner = ?
+            """;
+
+    private static final String SQL_TYPES = """
+            select type_name, owner, typecode
+            from all_types
+            where owner = ?
+            order by type_name
+            """;
+
+    private static final String SQL_QUEUE_COUNT = """
+            select count(*)
+            from all_queues
+            where owner = ?
+            """;
+
+    private static final String SQL_QUEUES = """
+            select name, owner, queue_table
+            from all_queues
+            where owner = ?
+            order by name
+            """;
+
     private static final String SQL_INDEX_COLUMNS_FOR_TABLE = """
             select cols
             from (
@@ -1101,6 +1129,75 @@ public final class OracleMetadataRepository implements MetadataRepository {
             dbPackage.setIsEmpty(rs.getInt("is_empty") == 1);
             return dbPackage;
         });
+    }
+
+    @Override
+    public int getObjectTypeCount(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = (databaseName == null || databaseName.isBlank()) ? currentSchema(conn) : databaseName;
+        try {
+            Integer value = runner.queryOne(SQL_TYPE_COUNT, List.of(owner), rs -> rs.getInt(1));
+            return value == null ? 0 : value;
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return 0;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public List<MetadataType> getObjectTypes(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = (databaseName == null || databaseName.isBlank()) ? currentSchema(conn) : databaseName;
+        try {
+            return runner.query(SQL_TYPES, List.of(owner), rs -> {
+                MetadataType row = new MetadataType(rs.getString("type_name"));
+                row.setDatabase(owner);
+                row.setOwner(rs.getString("owner"));
+                row.setTypeKind(blankToEmpty(rs.getString("typecode")));
+                return row;
+            });
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return List.of();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public int getQueueCount(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = (databaseName == null || databaseName.isBlank()) ? currentSchema(conn) : databaseName;
+        try {
+            Integer value = runner.queryOne(SQL_QUEUE_COUNT, List.of(owner), rs -> rs.getInt(1));
+            return value == null ? 0 : value;
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return 0;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public List<MetadataQueue> getQueues(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String owner = (databaseName == null || databaseName.isBlank()) ? currentSchema(conn) : databaseName;
+        try {
+            return runner.query(SQL_QUEUES, List.of(owner), rs -> {
+                MetadataQueue row = new MetadataQueue(rs.getString("name"));
+                row.setDatabase(owner);
+                row.setOwner(rs.getString("owner"));
+                return row;
+            });
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return List.of();
+            }
+            throw e;
+        }
     }
 
     @Override

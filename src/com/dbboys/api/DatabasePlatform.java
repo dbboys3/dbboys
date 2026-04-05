@@ -39,6 +39,16 @@ public interface DatabasePlatform {
         return false;
     }
 
+    /** When true, schema/database object tree shows an object types folder (Oracle / GBase 8S). */
+    default boolean supportsObjectTypesFolder() {
+        return false;
+    }
+
+    /** When true, schema/database object tree shows a queues folder (Oracle AQ; GBase shows folder with empty list if N/A). */
+    default boolean supportsObjectQueuesFolder() {
+        return false;
+    }
+
     default List<String> getColumnTypes() {
         return List.of();
     }

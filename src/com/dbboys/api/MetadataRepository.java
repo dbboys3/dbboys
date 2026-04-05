@@ -88,6 +88,22 @@ public interface MetadataRepository {
 
     List<DBPackage> getPackages(Connection conn, String databaseName) throws SQLException;
 
+    default int getObjectTypeCount(Connection conn, String databaseName) throws SQLException {
+        return 0;
+    }
+
+    default List<MetadataType> getObjectTypes(Connection conn, String databaseName) throws SQLException {
+        return List.of();
+    }
+
+    default int getQueueCount(Connection conn, String databaseName) throws SQLException {
+        return 0;
+    }
+
+    default List<MetadataQueue> getQueues(Connection conn, String databaseName) throws SQLException {
+        return List.of();
+    }
+
     List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException;
 
     void changeDatabase(Connection conn, String databaseName) throws SQLException;

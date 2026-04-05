@@ -8,8 +8,10 @@ import com.dbboys.api.ConnectionService;
 import com.dbboys.service.DatabaseService;
 import com.dbboys.service.FunctionService;
 import com.dbboys.service.IndexService;
+import com.dbboys.service.ObjectTypeService;
 import com.dbboys.service.PackageService;
 import com.dbboys.service.ProcedureService;
+import com.dbboys.service.QueueService;
 import com.dbboys.service.SequenceService;
 import com.dbboys.service.SynonymService;
 import com.dbboys.service.TableService;
@@ -41,6 +43,8 @@ public class TreeViewUtil {
     public static FunctionService functionService;
     public static ProcedureService procedureService;
     public static PackageService packageService;
+    public static ObjectTypeService objectTypeService;
+    public static QueueService queueService;
     public static UserService userService;
     public static CustomShortcutMenuItem refreshItem;
     public static CustomShortcutMenuItem databaseOpenFileItem;
@@ -63,6 +67,8 @@ public class TreeViewUtil {
         functionService = AppContext.get(FunctionService.class);
         procedureService = AppContext.get(ProcedureService.class);
         packageService = AppContext.get(PackageService.class);
+        objectTypeService = AppContext.get(ObjectTypeService.class);
+        queueService = AppContext.get(QueueService.class);
         userService = AppContext.get(UserService.class);
     }
 

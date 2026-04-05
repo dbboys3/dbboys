@@ -243,6 +243,40 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                         "CREATED  : " , sequence.createdProperty()
                 );
             }
+            else if (item instanceof MetadataType metaType) {
+                nodeIcon.setContent(IconPaths.TREECELL_TABLE);
+                nodeIcon.setScaleX(0.38);
+                nodeIcon.setScaleY(0.38);
+                applyPrimaryIconStyle(nodeIcon);
+                bindNameLabel(item);
+                descripLabel.textProperty().unbind();
+                descripLabel.textProperty().bind(
+                        Bindings.createStringBinding(() -> {
+                            String k = metaType.getTypeKind();
+                            return k == null || k.isBlank() ? "TYPE" : k;
+                        }, metaType.typeKindProperty())
+                );
+                bindTooltip(
+                        "DATABASE : ", metaType.databaseProperty(), "\n",
+                        "TYPE     : ", metaType.nameProperty(), "\n",
+                        "OWNER    : ", metaType.ownerProperty(), "\n",
+                        "KIND     : ", metaType.typeKindProperty()
+                );
+            }
+            else if (item instanceof MetadataQueue metaQueue) {
+                nodeIcon.setContent(IconPaths.RESULTSET_ROW_NUMBER);
+                nodeIcon.setScaleX(0.5);
+                nodeIcon.setScaleY(0.5);
+                applyPrimaryIconStyle(nodeIcon);
+                bindNameLabel(item);
+                descripLabel.textProperty().unbind();
+                descripLabel.setText("QUEUE");
+                bindTooltip(
+                        "DATABASE : ", metaQueue.databaseProperty(), "\n",
+                        "QUEUE    : ", metaQueue.nameProperty(), "\n",
+                        "OWNER    : ", metaQueue.ownerProperty()
+                );
+            }
             else if(item instanceof Synonym){
                 Synonym synonym=(Synonym)item;
                 nodeIcon.setContent(IconPaths.TREECELL_SYNONYM);

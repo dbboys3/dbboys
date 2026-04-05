@@ -374,6 +374,16 @@ public class GbaseMetadataRepository implements com.dbboys.api.MetadataRepositor
             select %s,procname,owner,count(*) FROM sysprocedures WHERE mode='O' and retsize=0 group by 1,2,3 order by 1,2
             """;
 
+    private static final String SQL_XTDTYPE_COUNT = """
+            select count(*) from sysxtdtypes
+            """;
+
+    private static final String SQL_XTDTYPES = """
+            select %s, trim(name) as type_name, trim(owner) as type_owner, type as type_id
+            from sysxtdtypes
+            order by 2
+            """;
+
     private static final String SQL_PRIMARY_KEY_COLUMNS = """
             select trim(case when i.part1>0 then (select colname from syscolumns where colno=i.part1 and tabid=i.tabid) else '' end)||
             trim(case when i.part2>0 then (select ','||colname from syscolumns where colno=i.part2 and tabid=i.tabid) else '' end)||
@@ -779,6 +789,54 @@ public class GbaseMetadataRepository implements com.dbboys.api.MetadataRepositor
         });
     }
 
+    @Override
+    public int getObjectTypeCount(Connection conn, String databaseName) throws SQLException {
+        try {
+            SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+            Integer value = runner.queryOne(SQL_XTDTYPE_COUNT, null, rs -> rs.getInt(1));
+            return value == null ? 0 : value;
+        } catch (SQLException e) {
+            return 0;
+        }
+    }
+
+    @Override
+    public List<MetadataType> getObjectTypes(Connection conn, String databaseName) throws SQLException {
+        try {
+            SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+            String dbLit = toSqlStringLiteral(databaseName);
+            String sql = SQL_XTDTYPES.formatted(dbLit);
+            return runner.query(sql, null, rs -> {
+                MetadataType row = new MetadataType(rs.getString(2));
+                row.setDatabase(rs.getString(1));
+                row.setOwner(rs.getString(3));
+                row.setTypeKind(gbaseXtdTypeKind(rs.getInt(4)));
+                return row;
+            });
+        } catch (SQLException e) {
+            return List.of();
+        }
+    }
+
+    @Override
+    public int getQueueCount(Connection conn, String databaseName) throws SQLException {
+        return 0;
+    }
+
+    @Override
+    public List<MetadataQueue> getQueues(Connection conn, String databaseName) throws SQLException {
+        return List.of();
+    }
+
+    private static String gbaseXtdTypeKind(int typeId) {
+        return switch (typeId) {
+            case 0 -> "DISTINCT";
+            case 1 -> "ROW";
+            case 2 -> "OPAQUE";
+            case 3 -> "COLLECTION";
+            default -> String.valueOf(typeId);
+        };
+    }
 
     public List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException {
         //如果连接的上一步操作是切库且报错了，如没有权限，当前连接是没有库的，直接执行会报错，需要先切到sysmaster库

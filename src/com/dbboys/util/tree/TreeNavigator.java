@@ -88,7 +88,9 @@ public class TreeNavigator {
                         retrunTreeItem.getValue() instanceof Trigger||
                         retrunTreeItem.getValue() instanceof Function||
                         retrunTreeItem.getValue() instanceof Procedure||
-                        retrunTreeItem.getValue() instanceof DBPackage
+                        retrunTreeItem.getValue() instanceof DBPackage||
+                        retrunTreeItem.getValue() instanceof MetadataType||
+                        retrunTreeItem.getValue() instanceof MetadataQueue
         ){
             return  retrunTreeItem.getParent().getParent().getParent().getParent();
         }
@@ -129,7 +131,9 @@ public class TreeNavigator {
                         retrunTreeItem.getValue() instanceof Trigger||
                         retrunTreeItem.getValue() instanceof Function||
                         retrunTreeItem.getValue() instanceof Procedure||
-                        retrunTreeItem.getValue() instanceof DBPackage
+                        retrunTreeItem.getValue() instanceof DBPackage||
+                        retrunTreeItem.getValue() instanceof MetadataType||
+                        retrunTreeItem.getValue() instanceof MetadataQueue
         ){
             return  (Database) retrunTreeItem.getParent().getParent().getValue();
         }else if(
@@ -450,7 +454,9 @@ public class TreeNavigator {
                 || treeData instanceof Trigger
                 || treeData instanceof Function
                 || treeData instanceof Procedure
-                || treeData instanceof DBPackage)) {
+                || treeData instanceof DBPackage
+                || treeData instanceof MetadataType
+                || treeData instanceof MetadataQueue)) {
             return false;
         }
         Connect connect = getMetaConnect(selectedItem);
@@ -481,6 +487,8 @@ public class TreeNavigator {
                 || treeData instanceof Function
                 || treeData instanceof Procedure
                 || treeData instanceof DBPackage
+                || treeData instanceof MetadataType
+                || treeData instanceof MetadataQueue
                 || treeData instanceof PackageFunction
                 || treeData instanceof PackageProcedure;
     }

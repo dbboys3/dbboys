@@ -1333,7 +1333,9 @@ public class TreeContextMenuHandler {
                         selectedItem.getValue() instanceof Trigger||
                         selectedItem.getValue() instanceof Function||
                         selectedItem.getValue() instanceof Procedure||
-                        selectedItem.getValue() instanceof DBPackage
+                        selectedItem.getValue() instanceof DBPackage||
+                        selectedItem.getValue() instanceof MetadataType||
+                        selectedItem.getValue() instanceof MetadataQueue
                 ) {
                     if (TreeNavigator.isSystemDatabaseObject(selectedItem)) {
                         truncateItem.setDisable(true);
@@ -1584,6 +1586,14 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
+                    treeview_menu.getItems().add(ddlMenu);
+                }
+                else if(selectedItem.getValue() instanceof MetadataType) {
+                    treeview_menu.getItems().add(copyItem);
+                    treeview_menu.getItems().add(ddlMenu);
+                }
+                else if(selectedItem.getValue() instanceof MetadataQueue) {
+                    treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(ddlMenu);
                 }
                 //同义词
