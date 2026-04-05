@@ -178,6 +178,65 @@ public final class OracleDdlRepository implements DdlRepository {
     }
 
     /**
+     * {@link #normalizePlSqlInternalWhitespace} does not squeeze spaces <em>between</em> tokens on one line.
+     * {@code DBMS_METADATA.GET_DDL} often pads heavily after {@code PACKAGE} / {@code PACKAGE BODY}; procedures
+     * and functions are usually tighter, which is why packages looked worse.
+     */
+    private static String collapseHeaderLineKeywordSpacing(String line) {
+        if (line == null || line.isEmpty()) {
+            return line;
+        }
+        String s = line;
+        s = s.replaceAll("(?i)(\\bcreate)\\h{2,}(?=or\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\bor)\\h{2,}(?=replace\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\breplace)\\h{2,}(?=editionable\\b|editioning\\b|noneditionable\\b|package\\b|procedure\\b|function\\b|trigger\\b|type\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\beditionable)\\h{2,}(?=package\\b|procedure\\b|function\\b|trigger\\b|type\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\beditioning)\\h{2,}(?=package\\b|procedure\\b|function\\b|trigger\\b|type\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\bnoneditionable)\\h{2,}(?=package\\b|procedure\\b|function\\b|trigger\\b|type\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\bpackage\\s+body)\\h{2,}", "$1 ");
+        s = s.replaceAll("(?i)(\\bpackage)\\h{2,}(?!body\\b)", "$1 ");
+        s = s.replaceAll("(?i)(\\bprocedure)\\h{2,}", "$1 ");
+        s = s.replaceAll("(?i)(\\bfunction)\\h{2,}", "$1 ");
+        s = s.replaceAll("(?i)(\\btrigger)\\h{2,}", "$1 ");
+        return s;
+    }
+
+    /**
+     * Apply {@link #collapseHeaderLineKeywordSpacing} only on the opening DDL lines (after leading comments),
+     * so we do not rewrite spaces inside arbitrary PL/SQL bodies or string literals below {@code BEGIN}.
+     */
+    private static String collapseMetadataKeywordSpacing(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        int start = skipLeadingSqlCommentsAndWhitespace(ddl);
+        String prefix = ddl.substring(0, start);
+        String code = ddl.substring(start);
+        if (code.isEmpty()) {
+            return ddl;
+        }
+        String[] lines = code.split("\n", -1);
+        int budget = 16;
+        for (int i = 0; i < lines.length && budget > 0; i++) {
+            String raw = lines[i];
+            String t = raw.stripLeading();
+            if (t.isEmpty()) {
+                continue;
+            }
+            if (t.startsWith("--")) {
+                continue;
+            }
+            if (t.length() >= 5 && t.regionMatches(true, 0, "BEGIN", 0, 5)
+                    && (t.length() == 5 || Character.isWhitespace(t.charAt(5)))) {
+                break;
+            }
+            lines[i] = collapseHeaderLineKeywordSpacing(raw);
+            budget--;
+        }
+        return prefix + String.join("\n", lines);
+    }
+
+    /**
      * Strip a trailing SQL*Plus {@code /} line, then ensure the unit ends with {@code ;}.
      * Does not append {@code /} (callers add a single {@code /} between exported units).
      */
@@ -343,10 +402,12 @@ public final class OracleDdlRepository implements DdlRepository {
         if ("PACKAGE_SPEC".equals(objectType) || "PACKAGE_BODY".equals(objectType)) {
             ddl = ensureCreateOrReplacePackagePrefix(ddl);
             ddl = normalizePlSqlInternalWhitespace(ddl);
+            ddl = collapseMetadataKeywordSpacing(ddl);
             ddl = ensureTrailingSemicolon(ddl);
         } else if ("PROCEDURE".equals(objectType) || "FUNCTION".equals(objectType)) {
             ddl = ensureCreateOrReplaceRoutinePrefix(ddl);
             ddl = normalizePlSqlInternalWhitespace(ddl);
+            ddl = collapseMetadataKeywordSpacing(ddl);
             ddl = ensureTrailingSemicolon(ddl);
         }
         return ddl;
