@@ -273,6 +273,29 @@ public final class OracleMetadataRepository implements MetadataRepository {
               and upper(t.table_name) = upper(?)
             """;
 
+    /** Same row shape as detail queries; coarse size from blocks (aligned with SQL_USER_TABLES) when all_segments is unavailable. */
+    private static final String SQL_TABLE_DETAIL_BLOCK_SIZE_ESTIMATE = """
+            select
+                t.owner,
+                t.table_name,
+                to_char(o.created, 'YYYY-MM-DD HH24:MI:SS') as created_time,
+                nvl(tc.comments, '') as table_comment,
+                nvl(t.num_rows, 0) as num_rows,
+                nvl(t.blocks, 0) as blocks,
+                nvl(t.logging, 'YES') as logging,
+                (nvl(t.blocks, 0) * 8192) as size_bytes
+            from all_tables t
+            join all_objects o
+              on o.owner = t.owner
+             and o.object_name = t.table_name
+             and o.object_type = 'TABLE'
+            left join all_tab_comments tc
+              on tc.owner = t.owner
+             and tc.table_name = t.table_name
+            where upper(t.owner) = upper(?)
+              and upper(t.table_name) = upper(?)
+            """;
+
     private static final String SQL_TABLE_COMMENT = """
             select nvl(comments, '')
             from all_tab_comments
@@ -839,7 +862,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
 
     @Override
     public String getUserTablesSize(Connection conn, String databaseName) throws SQLException {
-        return queryOwnerTableSegmentsTotalSize(conn, currentSchema(conn));
+        return queryOwnerTableSegmentsTotalSize(conn, resolveBrowsedSchemaOwner(conn, databaseName));
     }
 
     @Override
@@ -870,7 +893,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     @Override
     public List<Table> getUserTables(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        String owner = currentSchema(conn);
+        String owner = resolveBrowsedSchemaOwner(conn, databaseName);
         boolean includeSize = canReadSchemaSegmentSize(owner);
         try {
             return runner.query(SQL_USER_TABLES, List.of(owner), rs -> mapTable(rs, owner, includeSize));
@@ -886,7 +909,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     public Table getTable(Connection conn, String databaseName, String tableName) throws SQLException {
         QualifiedObjectName objectName = parseObjectName(tableName);
         SqlRunner runner = runner(conn);
-        String owner = resolveOwner(conn, objectName.owner());
+        String owner = resolveTableOwner(conn, databaseName, objectName.owner());
         boolean includeSize = canReadSchemaSegmentSize(owner);
         String tab = objectName.objectName();
         try {
@@ -898,7 +921,14 @@ public final class OracleMetadataRepository implements MetadataRepository {
             if (owner.equalsIgnoreCase(sessionUser(conn))) {
                 return runner.queryOne(SQL_TABLE_DETAIL_VIA_USER_SEGMENTS, List.of(owner, tab), rs -> mapTable(rs, owner, includeSize));
             }
-            return runner.queryOne(SQL_TABLE_DETAIL_WITHOUT_SEGMENT_BYTES, List.of(owner, tab), rs -> mapTable(rs, owner, false));
+            try {
+                return runner.queryOne(SQL_TABLE_DETAIL_BLOCK_SIZE_ESTIMATE, List.of(owner, tab), rs -> mapTable(rs, owner, true));
+            } catch (SQLException e2) {
+                if (!isOra942ObjectNotExists(e2)) {
+                    throw e2;
+                }
+                return runner.queryOne(SQL_TABLE_DETAIL_WITHOUT_SEGMENT_BYTES, List.of(owner, tab), rs -> mapTable(rs, owner, false));
+            }
         }
     }
 
@@ -1383,6 +1413,21 @@ public final class OracleMetadataRepository implements MetadataRepository {
 
     private String resolveOwner(Connection conn, String owner) throws SQLException {
         return owner == null || owner.isBlank() ? currentSchema(conn) : owner;
+    }
+
+    /** Schema / database node in the tree (e.g. other user's schema); avoids relying on JDBC {@code getSchema()} alone. */
+    private String resolveBrowsedSchemaOwner(Connection conn, String databaseName) throws SQLException {
+        if (databaseName != null && !databaseName.isBlank()) {
+            return databaseName.trim();
+        }
+        return currentSchema(conn);
+    }
+
+    private String resolveTableOwner(Connection conn, String databaseName, String ownerFromQualifier) throws SQLException {
+        if (ownerFromQualifier != null && !ownerFromQualifier.isBlank()) {
+            return ownerFromQualifier;
+        }
+        return resolveBrowsedSchemaOwner(conn, databaseName);
     }
 
     private void applyCurrentSchema(Connection conn, String databaseName) throws SQLException {
