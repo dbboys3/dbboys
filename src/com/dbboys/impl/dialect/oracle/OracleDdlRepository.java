@@ -433,7 +433,8 @@ public final class OracleDdlRepository implements DdlRepository {
         if (ddl == null || ddl.isBlank()) {
             return ddl;
         }
-        String s = ddl.replaceAll("(?i)(\\bfor\\s+each\\s+row)\\s+(enable|disable)\\b", "$1");
+        // Horizontal space only: do not treat the newline after ROW as part of same-line ENABLE/DISABLE.
+        String s = ddl.replaceAll("(?i)(\\bfor\\s+each\\s+row)[ \t]+(enable|disable)\\b", "$1");
         return s.replaceAll("(?i)(\\bfor\\s+each\\s+row)([ \t]*\\R[ \t]*)(enable|disable)\\b\\s*", "$1$2");
     }
 
@@ -464,6 +465,7 @@ public final class OracleDdlRepository implements DdlRepository {
         if (alterWasDisable) {
             Matcher rowM = FOR_EACH_ROW_TOKEN.matcher(ddl);
             if (rowM.find()) {
+                // Same line: FOR EACH ROW DISABLE, then original newline / rest unchanged.
                 ddl = ddl.substring(0, rowM.end()) + " DISABLE" + ddl.substring(rowM.end());
             }
         }
