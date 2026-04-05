@@ -3,8 +3,12 @@ package com.dbboys.impl.dialect.oracle;
 import com.dbboys.api.DdlRepository;
 import com.dbboys.db.SqlRunner;
 
+import java.io.IOException;
+import java.io.Reader;
 import java.sql.Clob;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -56,21 +60,296 @@ public final class OracleDdlRepository implements DdlRepository {
         return result != null ? result.toUpperCase() : "ORACLE";
     }
 
+    private static final int CLOB_READ_CHUNK = 32_767;
+
+    /**
+     * Reads {@code DBMS_METADATA.GET_DDL} CLOB. Prefers {@link ResultSet#getClob(int)} (more reliable than
+     * {@link ResultSet#getObject(int)} with some Oracle drivers), then reads in chunks to avoid single-call
+     * {@link Clob#getSubString(long, int)} truncation; falls back to character stream when length is unknown.
+     */
+    private static String readDdlClob(ResultSet rs, int columnIndex) throws SQLException {
+        Clob clob = rs.getClob(columnIndex);
+        if (rs.wasNull() || clob == null) {
+            return rs.getString(columnIndex);
+        }
+        try {
+            long len = clob.length();
+            if (len > Integer.MAX_VALUE) {
+                throw new SQLException("DDL CLOB length exceeds Java string limit");
+            }
+            if (len > 0) {
+                StringBuilder sb = new StringBuilder((int) len);
+                long pos = 1;
+                while (pos <= len) {
+                    int n = (int) Math.min(CLOB_READ_CHUNK, len - pos + 1);
+                    sb.append(clob.getSubString(pos, n));
+                    pos += n;
+                }
+                return sb.toString();
+            }
+            Reader reader = clob.getCharacterStream();
+            if (reader == null) {
+                return "";
+            }
+            try {
+                StringBuilder sb = new StringBuilder();
+                char[] buf = new char[16384];
+                int n;
+                while ((n = reader.read(buf)) != -1) {
+                    sb.append(buf, 0, n);
+                }
+                return sb.toString();
+            } catch (IOException e) {
+                throw new SQLException("Failed reading DDL CLOB", e);
+            } finally {
+                try {
+                    reader.close();
+                } catch (IOException ignored) {
+                }
+            }
+        } finally {
+            try {
+                clob.free();
+            } catch (SQLException ignored) {
+            }
+        }
+    }
+
+    /** Heuristic: package / procedure source normally ends with an {@code END ...;} tail. */
+    private static boolean oraclePlSqlLooksComplete(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return false;
+        }
+        return ddl.strip().matches("(?is).*\\bend\\b.*;\\s*$");
+    }
+
+    private static boolean startsWithIgnoreCase(String s, String prefix) {
+        return s.length() >= prefix.length() && s.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
+
+    /** Index of first code token after leading whitespace, line comments, and block comments. */
+    private static int skipLeadingSqlCommentsAndWhitespace(String ddl) {
+        int i = 0;
+        int n = ddl.length();
+        while (i < n) {
+            while (i < n && Character.isWhitespace(ddl.charAt(i))) {
+                i++;
+            }
+            if (i >= n) {
+                break;
+            }
+            if (i + 1 < n && ddl.charAt(i) == '-' && ddl.charAt(i + 1) == '-') {
+                while (i < n && ddl.charAt(i) != '\n' && ddl.charAt(i) != '\r') {
+                    i++;
+                }
+                continue;
+            }
+            if (i + 1 < n && ddl.charAt(i) == '/' && ddl.charAt(i + 1) == '*') {
+                i += 2;
+                while (i + 1 < n && !(ddl.charAt(i) == '*' && ddl.charAt(i + 1) == '/')) {
+                    i++;
+                }
+                i = Math.min(n, i + 2);
+                continue;
+            }
+            break;
+        }
+        return i;
+    }
+
+    /**
+     * Trim trailing spaces per line, normalize newlines, collapse runs of blank lines (keeps at most one blank line).
+     */
+    private static String normalizePlSqlInternalWhitespace(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        String t = ddl.replace("\r\n", "\n").replace('\r', '\n');
+        String[] lines = t.split("\n", -1);
+        StringBuilder sb = new StringBuilder(t.length());
+        for (int i = 0; i < lines.length; i++) {
+            sb.append(lines[i].stripTrailing());
+            if (i < lines.length - 1) {
+                sb.append('\n');
+            }
+        }
+        t = sb.toString().replaceAll("\n{3,}", "\n\n");
+        return t.stripLeading();
+    }
+
+    /**
+     * Strip a trailing SQL*Plus {@code /} line, then ensure the unit ends with {@code ;}.
+     * Does not append {@code /} (callers add a single {@code /} between exported units).
+     */
+    private static String ensureTrailingSemicolon(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        String t = ddl.stripTrailing();
+        t = t.replaceFirst("(?s)\\n\\s*/\\s*$", "").stripTrailing();
+        if (t.isEmpty()) {
+            return ddl;
+        }
+        if (!t.endsWith(";")) {
+            t = t + ";";
+        }
+        return t;
+    }
+
+    /** Single-unit DDL for UI: ensure a SQL*Plus {@code /} line after the final {@code ;}. */
+    private static String withTrailingSqlPlusSlash(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        String t = ddl.stripTrailing();
+        if (t.endsWith("/")) {
+            return t;
+        }
+        return t + "\n/";
+    }
+
+    /**
+     * {@code ALL_SOURCE} (and some {@code GET_DDL} forms) may omit {@code CREATE OR REPLACE} before
+     * {@code PACKAGE} / {@code PACKAGE BODY}; prepend so exported scripts are runnable. Preserves leading comments.
+     */
+    private static String ensureCreateOrReplacePackagePrefix(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        int i = skipLeadingSqlCommentsAndWhitespace(ddl);
+        String rest = ddl.substring(i);
+        if (rest.isEmpty()) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "CREATE ")) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "ALTER ")) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "PACKAGE BODY")) {
+            return ddl.substring(0, i) + "CREATE OR REPLACE " + rest;
+        }
+        if (startsWithIgnoreCase(rest, "PACKAGE") && rest.length() > "PACKAGE".length()
+                && Character.isWhitespace(rest.charAt("PACKAGE".length()))) {
+            return ddl.substring(0, i) + "CREATE OR REPLACE " + rest;
+        }
+        return ddl;
+    }
+
+    /** {@code ALL_SOURCE} often starts at {@code PROCEDURE}/{@code FUNCTION} without {@code CREATE OR REPLACE}. */
+    private static String ensureCreateOrReplaceRoutinePrefix(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        int i = skipLeadingSqlCommentsAndWhitespace(ddl);
+        String rest = ddl.substring(i);
+        if (rest.isEmpty()) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "CREATE ")) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "ALTER ")) {
+            return ddl;
+        }
+        if (startsWithIgnoreCase(rest, "PROCEDURE")
+                && rest.length() > "PROCEDURE".length()
+                && Character.isWhitespace(rest.charAt("PROCEDURE".length()))) {
+            return ddl.substring(0, i) + "CREATE OR REPLACE " + rest;
+        }
+        if (startsWithIgnoreCase(rest, "FUNCTION")
+                && rest.length() > "FUNCTION".length()
+                && Character.isWhitespace(rest.charAt("FUNCTION".length()))) {
+            return ddl.substring(0, i) + "CREATE OR REPLACE " + rest;
+        }
+        return ddl;
+    }
+
+    /**
+     * Reconstruct PL/SQL text from the data dictionary when {@code GET_DDL} LOB handling returns a fragment.
+     */
+    private static String fetchPlSqlFromAllSource(Connection conn, String owner, String objectName, String allSourceType)
+            throws SQLException {
+        String sql = "SELECT text FROM all_source WHERE owner = ? AND name = ? AND type = ? ORDER BY line";
+        StringBuilder sb = new StringBuilder();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setQueryTimeout(QUERY_TIMEOUT);
+            ps.setString(1, owner);
+            ps.setString(2, objectName);
+            ps.setString(3, allSourceType);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String line = rs.getString(1);
+                    if (line != null) {
+                        sb.append(line);
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     private String getDdl(Connection conn, String objectType, String objectName, String schema) throws SQLException {
         String sql = "SELECT DBMS_METADATA.GET_DDL(?, ?, ?) FROM dual";
         SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        String ddl = runner.queryOne(sql, List.of(objectType, objectName, schema), rs -> {
-            Object obj = rs.getObject(1);
-            if (obj instanceof Clob clob) {
-                try {
-                    return clob.getSubString(1, (int) clob.length());
-                } finally {
-                    clob.free();
+        String ddl = runner.queryOne(sql, List.of(objectType, objectName, schema), rs -> readDdlClob(rs, 1));
+        if (ddl != null) {
+            ddl = ddl.trim();
+        } else {
+            ddl = "";
+        }
+        if ("PACKAGE_SPEC".equals(objectType) && !oraclePlSqlLooksComplete(ddl)) {
+            try {
+                String fromDict = fetchPlSqlFromAllSource(conn, schema, objectName, "PACKAGE");
+                if (!fromDict.isBlank()) {
+                    log.debug("PACKAGE_SPEC GET_DDL fragment for {}.{}, using ALL_SOURCE", schema, objectName);
+                    ddl = fromDict.trim();
                 }
+            } catch (SQLException e) {
+                log.debug("ALL_SOURCE fallback for PACKAGE_SPEC {}.{}: {}", schema, objectName, e.getMessage());
             }
-            return rs.getString(1);
-        });
-        return ddl != null ? ddl.trim() : "";
+        } else if ("PACKAGE_BODY".equals(objectType) && !oraclePlSqlLooksComplete(ddl)) {
+            try {
+                String fromDict = fetchPlSqlFromAllSource(conn, schema, objectName, "PACKAGE BODY");
+                if (!fromDict.isBlank()) {
+                    log.debug("PACKAGE_BODY GET_DDL fragment for {}.{}, using ALL_SOURCE", schema, objectName);
+                    ddl = fromDict.trim();
+                }
+            } catch (SQLException e) {
+                log.debug("ALL_SOURCE fallback for PACKAGE_BODY {}.{}: {}", schema, objectName, e.getMessage());
+            }
+        } else if ("PROCEDURE".equals(objectType) && !oraclePlSqlLooksComplete(ddl)) {
+            try {
+                String fromDict = fetchPlSqlFromAllSource(conn, schema, objectName, "PROCEDURE");
+                if (!fromDict.isBlank()) {
+                    log.debug("PROCEDURE GET_DDL fragment for {}.{}, using ALL_SOURCE", schema, objectName);
+                    ddl = fromDict.trim();
+                }
+            } catch (SQLException e) {
+                log.debug("ALL_SOURCE fallback for PROCEDURE {}.{}: {}", schema, objectName, e.getMessage());
+            }
+        } else if ("FUNCTION".equals(objectType) && !oraclePlSqlLooksComplete(ddl)) {
+            try {
+                String fromDict = fetchPlSqlFromAllSource(conn, schema, objectName, "FUNCTION");
+                if (!fromDict.isBlank()) {
+                    log.debug("FUNCTION GET_DDL fragment for {}.{}, using ALL_SOURCE", schema, objectName);
+                    ddl = fromDict.trim();
+                }
+            } catch (SQLException e) {
+                log.debug("ALL_SOURCE fallback for FUNCTION {}.{}: {}", schema, objectName, e.getMessage());
+            }
+        }
+        if ("PACKAGE_SPEC".equals(objectType) || "PACKAGE_BODY".equals(objectType)) {
+            ddl = ensureCreateOrReplacePackagePrefix(ddl);
+            ddl = normalizePlSqlInternalWhitespace(ddl);
+            ddl = ensureTrailingSemicolon(ddl);
+        } else if ("PROCEDURE".equals(objectType) || "FUNCTION".equals(objectType)) {
+            ddl = ensureCreateOrReplaceRoutinePrefix(ddl);
+            ddl = normalizePlSqlInternalWhitespace(ddl);
+            ddl = ensureTrailingSemicolon(ddl);
+        }
+        return ddl;
     }
 
     private String getDdlSafe(Connection conn, String objectType, String objectName, String schema) {
@@ -129,13 +408,15 @@ public final class OracleDdlRepository implements DdlRepository {
     @Override
     public String printFunction(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
-        return getDdl(conn, "FUNCTION", objectName.toUpperCase(), schema);
+        configureMetadataTransform(conn);
+        return withTrailingSqlPlusSlash(getDdl(conn, "FUNCTION", objectName.toUpperCase(), schema));
     }
 
     @Override
     public String printProcedure(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
-        return getDdl(conn, "PROCEDURE", objectName.toUpperCase(), schema);
+        configureMetadataTransform(conn);
+        return withTrailingSqlPlusSlash(getDdl(conn, "PROCEDURE", objectName.toUpperCase(), schema));
     }
 
     @Override
@@ -147,17 +428,22 @@ public final class OracleDdlRepository implements DdlRepository {
     @Override
     public String printPackage(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
-        StringBuilder sb = new StringBuilder();
-        sb.append(getDdl(conn, "PACKAGE_SPEC", objectName.toUpperCase(), schema));
+        configureMetadataTransform(conn);
+        String spec = getDdl(conn, "PACKAGE_SPEC", objectName.toUpperCase(), schema);
+        String body;
         try {
-            String body = getDdl(conn, "PACKAGE_BODY", objectName.toUpperCase(), schema);
-            if (!body.isEmpty()) {
-                sb.append("\n/\n\n");
-                sb.append(body);
-            }
-        } catch (Exception ignored) {
+            body = getDdl(conn, "PACKAGE_BODY", objectName.toUpperCase(), schema);
+        } catch (Exception e) {
+            body = "";
         }
-        return sb.toString();
+        StringBuilder sb = new StringBuilder();
+        if (!spec.isEmpty()) {
+            sb.append(spec).append("\n/\n");
+        }
+        if (!body.isEmpty() && !body.startsWith("-- ERROR")) {
+            sb.append(body).append("\n/\n");
+        }
+        return sb.toString().stripTrailing();
     }
 
     @Override
@@ -209,6 +495,7 @@ public final class OracleDdlRepository implements DdlRepository {
         }
 
         ddl.append("-- ### ").append(label).append(" (").append(names.size()).append(")\n\n");
+        boolean plsqlRoutine = "FUNCTION".equals(objectType) || "PROCEDURE".equals(objectType);
         for (String name : names) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new CancellationException("Export cancelled");
@@ -216,10 +503,15 @@ public final class OracleDdlRepository implements DdlRepository {
             String objDdl = getDdlSafe(conn, objectType, name, schema);
             if (!objDdl.isEmpty()) {
                 ddl.append(objDdl);
-                if (!objDdl.endsWith(";")) {
-                    ddl.append("\n;");
+                if (plsqlRoutine && !objDdl.startsWith("-- ERROR")) {
+                    ddl.append("\n/\n");
+                } else if (!plsqlRoutine) {
+                    if (!objDdl.endsWith(";")) {
+                        ddl.append("\n;");
+                    }
+                    ddl.append("\n");
                 }
-                ddl.append("\n\n");
+                ddl.append("\n");
             }
             completed++;
             if (progressCallback != null) {
@@ -246,20 +538,13 @@ public final class OracleDdlRepository implements DdlRepository {
             }
             String specDdl = getDdlSafe(conn, "PACKAGE_SPEC", name, schema);
             if (!specDdl.isEmpty()) {
-                ddl.append(specDdl);
-                if (!specDdl.endsWith("/")) {
-                    ddl.append("\n/");
-                }
-                ddl.append("\n\n");
+                ddl.append(specDdl).append("\n/\n");
             }
             String bodyDdl = getDdlSafe(conn, "PACKAGE_BODY", name, schema);
             if (!bodyDdl.isEmpty() && !bodyDdl.startsWith("-- ERROR")) {
-                ddl.append(bodyDdl);
-                if (!bodyDdl.endsWith("/")) {
-                    ddl.append("\n/");
-                }
-                ddl.append("\n\n");
+                ddl.append(bodyDdl).append("\n/\n");
             }
+            ddl.append("\n");
             completed++;
             if (progressCallback != null) {
                 progressCallback.accept(completed);
