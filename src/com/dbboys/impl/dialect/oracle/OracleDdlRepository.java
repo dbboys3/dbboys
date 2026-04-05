@@ -10,8 +10,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.function.LongConsumer;
 
 import org.apache.logging.log4j.LogManager;
@@ -21,6 +24,17 @@ public final class OracleDdlRepository implements DdlRepository {
 
     private static final Logger log = LogManager.getLogger(OracleDdlRepository.class);
     private static final int QUERY_TIMEOUT = 60;
+
+    /**
+     * {@code CREATE OR REPLACE … (PACKAGE [BODY]|PROCEDURE|FUNCTION) <name>} header; group 3 is the dotted name chain.
+     */
+    private static final Pattern ORACLE_QUALIFIABLE_HEADER = Pattern.compile(
+            "(?is)^\\s*create\\s+or\\s+replace\\s+(?:editionable\\s+|editioning\\s+|noneditionable\\s+)*"
+                    + "(?:\\s*(?:\\r\\n|[\\r\\n])\\s*)*"
+                    + "(package\\s+body|package|procedure|function)(\\s+)"
+                    + "((?:\\\"[^\\\"]+\\\"|[a-zA-Z][a-zA-Z0-9_$#]*)(?:\\s*\\.\\s*(?:\\\"[^\\\"]+\\\"|[a-zA-Z][a-zA-Z0-9_$#]*))*)"
+                    + "(?=\\s*(?:\\(|is\\b|as\\b|;|[\\r\\n]|$))"
+    );
 
     private static final String SQL_OBJECT_COUNT = """
             SELECT COUNT(*) FROM all_objects
@@ -236,6 +250,92 @@ public final class OracleDdlRepository implements DdlRepository {
         return prefix + String.join("\n", lines);
     }
 
+    private static String oracleQuoteIdent(String ident) {
+        if (ident == null) {
+            return "\"\"";
+        }
+        return "\"" + ident.replace("\"", "\"\"") + "\"";
+    }
+
+    private static List<String> splitOracleDottedIdentifiers(String chain) {
+        List<String> parts = new ArrayList<>();
+        if (chain == null) {
+            return parts;
+        }
+        int i = 0;
+        int n = chain.length();
+        while (i < n) {
+            while (i < n && Character.isWhitespace(chain.charAt(i))) {
+                i++;
+            }
+            if (i >= n) {
+                break;
+            }
+            if (chain.charAt(i) == '"') {
+                int j = chain.indexOf('"', i + 1);
+                if (j < 0) {
+                    break;
+                }
+                parts.add(chain.substring(i + 1, j).replace("\"\"", "\""));
+                i = j + 1;
+            } else {
+                int j = i;
+                while (j < n && (Character.isLetterOrDigit(chain.charAt(j))
+                        || chain.charAt(j) == '_' || chain.charAt(j) == '$' || chain.charAt(j) == '#')) {
+                    j++;
+                }
+                if (j == i) {
+                    break;
+                }
+                parts.add(chain.substring(i, j));
+                i = j;
+            }
+            while (i < n && Character.isWhitespace(chain.charAt(i))) {
+                i++;
+            }
+            if (i < n && chain.charAt(i) == '.') {
+                i++;
+            }
+        }
+        return parts;
+    }
+
+    /**
+     * If the opening {@code PACKAGE} / {@code PACKAGE BODY} / {@code PROCEDURE} / {@code FUNCTION} name is not
+     * already {@code owner.object}, rewrite to {@code "OWNER".OBJECT} (owner quoted, object unquoted).
+     */
+    private static String qualifyOwnerInPlSqlHeader(String ddl, String owner, String baseObjectName) {
+        if (ddl == null || ddl.isBlank() || owner == null || owner.isBlank()
+                || baseObjectName == null || baseObjectName.isBlank()) {
+            return ddl;
+        }
+        String ou = owner.trim();
+        String bu = baseObjectName.trim();
+
+        int st = skipLeadingSqlCommentsAndWhitespace(ddl);
+        String slice = ddl.substring(st);
+        Matcher m = ORACLE_QUALIFIABLE_HEADER.matcher(slice);
+        if (!m.find()) {
+            return ddl;
+        }
+        String nameChain = m.group(3).trim();
+        List<String> parts = splitOracleDottedIdentifiers(nameChain);
+        if (parts.isEmpty()) {
+            return ddl;
+        }
+        String last = parts.get(parts.size() - 1);
+        if (!last.equalsIgnoreCase(bu)) {
+            return ddl;
+        }
+        if (parts.size() >= 2 && parts.get(0).equalsIgnoreCase(ou)) {
+            return ddl;
+        }
+        String qualified = oracleQuoteIdent(ou) + "." + bu;
+        int absStart = st + m.start(3);
+        int absEnd = st + m.end(3);
+        return ddl.substring(0, absStart) + qualified + ddl.substring(absEnd);
+    }
+
     /**
      * Strip a trailing SQL*Plus {@code /} line, then ensure the unit ends with {@code ;}.
      * Does not append {@code /} (callers add a single {@code /} between exported units).
@@ -403,11 +503,13 @@ public final class OracleDdlRepository implements DdlRepository {
             ddl = ensureCreateOrReplacePackagePrefix(ddl);
             ddl = normalizePlSqlInternalWhitespace(ddl);
             ddl = collapseMetadataKeywordSpacing(ddl);
+            ddl = qualifyOwnerInPlSqlHeader(ddl, schema, objectName);
             ddl = ensureTrailingSemicolon(ddl);
         } else if ("PROCEDURE".equals(objectType) || "FUNCTION".equals(objectType)) {
             ddl = ensureCreateOrReplaceRoutinePrefix(ddl);
             ddl = normalizePlSqlInternalWhitespace(ddl);
             ddl = collapseMetadataKeywordSpacing(ddl);
+            ddl = qualifyOwnerInPlSqlHeader(ddl, schema, objectName);
             ddl = ensureTrailingSemicolon(ddl);
         }
         return ddl;
@@ -470,14 +572,14 @@ public final class OracleDdlRepository implements DdlRepository {
     public String printFunction(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
         configureMetadataTransform(conn);
-        return withTrailingSqlPlusSlash(getDdl(conn, "FUNCTION", objectName.toUpperCase(), schema));
+        return withTrailingSqlPlusSlash(getDdl(conn, "FUNCTION", objectName, schema));
     }
 
     @Override
     public String printProcedure(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
         configureMetadataTransform(conn);
-        return withTrailingSqlPlusSlash(getDdl(conn, "PROCEDURE", objectName.toUpperCase(), schema));
+        return withTrailingSqlPlusSlash(getDdl(conn, "PROCEDURE", objectName, schema));
     }
 
     @Override
@@ -490,10 +592,10 @@ public final class OracleDdlRepository implements DdlRepository {
     public String printPackage(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
         configureMetadataTransform(conn);
-        String spec = getDdl(conn, "PACKAGE_SPEC", objectName.toUpperCase(), schema);
+        String spec = getDdl(conn, "PACKAGE_SPEC", objectName, schema);
         String body;
         try {
-            body = getDdl(conn, "PACKAGE_BODY", objectName.toUpperCase(), schema);
+            body = getDdl(conn, "PACKAGE_BODY", objectName, schema);
         } catch (Exception e) {
             body = "";
         }

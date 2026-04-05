@@ -23,7 +23,11 @@ public class SqlParserUtil {
             "(?m)^\\s*/\\s*$";
     private static final String DROP_DATABASE = "(?i)(?:drop\\s+)+database\\s+(\\w+)";
     private static final String CREATE_DATABASE = "(?i)(?:create\\s+)?database\\s+(?<dbname>(\\w+))";
-    private static final String PACKAGE_BODY_PATTERN = "(?i)\\bcreate\\s+(OR\\s+REPLACE\\s+)?(package)\\s+body\\s+([a-zA-Z_][a-zA-Z0-9_$.]*)\\s+(AS|IS)";
+    /** Matches {@code CREATE [OR REPLACE] [EDITIONABLE] PACKAGE BODY} with quoted or schema-qualified names. */
+    private static final String PACKAGE_BODY_PATTERN =
+            "(?i)\\bcreate\\s+(?:or\\s+replace\\s+)?(?:editionable\\s+|editioning\\s+|noneditionable\\s+)?package\\s+body\\s+"
+                    + "((?:\\\"[^\\\"]+\\\"|[a-zA-Z_][a-zA-Z0-9_$#]*)(?:\\s*\\.\\s*(?:\\\"[^\\\"]+\\\"|[a-zA-Z_][a-zA-Z0-9_$#]*))*)\\s*"
+                    + "(AS|IS)\\b";
     private static final String PACKAGE_MEMBER_PATTERN =
             "(?i)\\bfunction\\s+(?<FUNC>[a-zA-Z0-9_$.]+)\\s*(\\([\\s\\S]*?\\))?\\s+return\\s+([a-zA-Z0-9_$.]+)\\s*(PIPELINED\\s+|DETERMINISTIC\\s+|RESULT_CACHE\\s+)?(AS|IS|;)"
             + "|"
@@ -1009,6 +1013,9 @@ public class SqlParserUtil {
             }
         }
         if (bodySql.isEmpty()) {
+            bodySql = extractPackageBodyAfterSqlPlusSlash(packageDdl);
+        }
+        if (bodySql.isEmpty()) {
             bodySql = packageDdl;
         }
 
@@ -1019,16 +1026,42 @@ public class SqlParserUtil {
                         + "|" + PACKAGE_MEMBER_PATTERN
         );
         Matcher memberMatcher = memberPattern.matcher(bodySql);
+        LinkedHashMap<String, PackageMember> dedup = new LinkedHashMap<>();
         while (memberMatcher.find()) {
             if (memberMatcher.group("FUNC") != null) {
-                members.add(new PackageMember(memberMatcher.group("FUNC"), "FUNC"));
+                String n = memberMatcher.group("FUNC");
+                dedup.putIfAbsent("F:" + n.toLowerCase(Locale.ROOT), new PackageMember(n, "FUNC"));
             }
             if (memberMatcher.group("PROC") != null) {
-                members.add(new PackageMember(memberMatcher.group("PROC"), "PROC"));
+                String n = memberMatcher.group("PROC");
+                dedup.putIfAbsent("P:" + n.toLowerCase(Locale.ROOT), new PackageMember(n, "PROC"));
             }
         }
+        members.addAll(dedup.values());
 
         return members;
+    }
+
+    /**
+     * When spec+body are concatenated with a SQL*Plus {@code /} line, prefer scanning only the body so forward
+     * declarations in the spec are not merged with implementations (which produced duplicate tree nodes).
+     */
+    private static String extractPackageBodyAfterSqlPlusSlash(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return "";
+        }
+        String[] chunks = ddl.split("\\R\\s*/\\s*\\R");
+        Pattern bodyStart = Pattern.compile(
+                "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?(?:editionable\\s+|editioning\\s+|noneditionable\\s+)?package\\s+body\\b");
+        for (String chunk : chunks) {
+            if (chunk == null) {
+                continue;
+            }
+            if (bodyStart.matcher(chunk.stripLeading()).find()) {
+                return chunk;
+            }
+        }
+        return "";
     }
 
     public static String printPackageFunction(String packagesql, String function) {
