@@ -731,7 +731,15 @@ public class SqlParserUtil {
         }
         if (PACKAGE_DECLARATION_PATTERN.matcher(normalized).find()) {
             String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
-            return lowerNormalized.contains(" as") || lowerNormalized.contains(" is");
+            // Same-line AS/IS: "... PACKAGE name AS ..." / "... name IS ..."
+            if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
+                return true;
+            }
+            // Oracle style: AS/IS alone on the next line (no leading space before keyword on that line)
+            if (Pattern.compile("(?im)^\\s*(as|is)\\b").matcher(normalized).find()) {
+                return true;
+            }
+            return false;
         }
 
         Matcher matcher = ROUTINE_DECLARATION_PATTERN.matcher(normalized);

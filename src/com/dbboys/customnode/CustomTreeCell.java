@@ -167,7 +167,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                     bindRowsSizeText(descripLabel, sysTable.nrowsProperty(), sysTable.totalsizeProperty());
                 }
                 bindTooltip(
-                        "DATABASE  : " , sysTable.getTableCatalog() , "\n" ,
+                        metadataCatalogTooltipLabelWide() , sysTable.getTableCatalog() , "\n" ,
                         "TABLENAME : " , sysTable.nameProperty() , "\n" ,
                         "OWNER     : " , sysTable.tableOwnerProperty() , "\n" ,
                         "CREATED   : " , sysTable.createTimeProperty() , "\n" ,
@@ -210,7 +210,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                                 .otherwise(index.totalsizeProperty())
                 );
                 bindTooltip(
-                        "DATABASE  : ", index.databaseProperty(), "\n",
+                        metadataCatalogTooltipLabelWide(), index.databaseProperty(), "\n",
                         "INDEXNAME : ", index.nameProperty(), "\n",
                         "TABLENAME : ", index.tabnameProperty(), "\n",
                         "COLS      : ", index.colsProperty(), "\n",
@@ -233,7 +233,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 descripLabel.textProperty().unbind();
                 descripLabel.setText("SEQ");
                 bindTooltip(
-                        "DATABASE : " , sequence.databaseProperty() , "\n" ,
+                        metadataCatalogTooltipLabelMid() , sequence.databaseProperty() , "\n" ,
                         "SEQNAME  : " , sequence.nameProperty() , "\n" ,
                         "MINVALUE : " , sequence.minValueProperty() , "\n" ,
                         "MAXVALUE : " , sequence.maxValueProperty() , "\n" ,
@@ -257,7 +257,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                         }, metaType.typeKindProperty())
                 );
                 bindTooltip(
-                        "DATABASE : ", metaType.databaseProperty(), "\n",
+                        metadataCatalogTooltipLabelMid(), metaType.databaseProperty(), "\n",
                         "TYPE     : ", metaType.nameProperty(), "\n",
                         "OWNER    : ", metaType.ownerProperty(), "\n",
                         "KIND     : ", metaType.typeKindProperty()
@@ -272,7 +272,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 descripLabel.textProperty().unbind();
                 descripLabel.setText("QUEUE");
                 bindTooltip(
-                        "DATABASE : ", metaQueue.databaseProperty(), "\n",
+                        metadataCatalogTooltipLabelMid(), metaQueue.databaseProperty(), "\n",
                         "QUEUE    : ", metaQueue.nameProperty(), "\n",
                         "OWNER    : ", metaQueue.ownerProperty()
                 );
@@ -285,7 +285,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
-                        "DATABASE: " , synonym.databaseProperty() , "\n" ,
+                        metadataCatalogTooltipLabelTight() , synonym.databaseProperty() , "\n" ,
                         "SYNNAME : " , synonym.nameProperty() , "\n" ,
                         "SYNTYPE : " , synonym.synonymTypeProperty() , "\n" ,
                         "CREATED : " , synonym.createdProperty()
@@ -303,7 +303,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 warnIcon.visibleProperty().bind(trigger.isdisabledProperty());
                 bindNameLabel(item);
                 bindTooltip(
-                        "DATABASE: " , trigger.databaseProperty() , "\n" ,
+                        metadataCatalogTooltipLabelTight() , trigger.databaseProperty() , "\n" ,
                         "TABNAME : " , trigger.tableNameProperty() , "\n" ,
                         "TRINAME : " , trigger.nameProperty() , "\n" ,
                         "TRITYPE : " , trigger.triggerTypeProperty() , "\n" ,
@@ -324,7 +324,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
-                        "DATABASE: ",function.databaseProperty(),"\n",
+                        metadataCatalogTooltipLabelTight(),function.databaseProperty(),"\n",
                         "OWNER   : ",function.ownerProperty(),"\n",
                         "FUNCNAME: ",function.nameProperty()
                 );
@@ -339,7 +339,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 applyPrimaryIconStyle(nodeIcon);
                 bindNameLabel(item);
                 bindTooltip(
-                        "DATABASE: ",procedure.databaseProperty(),"\n",
+                        metadataCatalogTooltipLabelTight(),procedure.databaseProperty(),"\n",
                         "OWNER   : ",procedure.ownerProperty(),"\n",
                         "PROCNAME: ",procedure.nameProperty()
                 );
@@ -356,7 +356,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 warnIcon.visibleProperty().bind(dbPackage.isEmptyProperty());
                 bindNameLabel(item);
                 bindTooltip(
-                        "DATABASE: ",dbPackage.databaseProperty(),"\n",
+                        metadataCatalogTooltipLabelTight(),dbPackage.databaseProperty(),"\n",
                         "OWNER   : ",dbPackage.ownerProperty(),"\n",
                         "PKGNAME : ",dbPackage.nameProperty()
                 );
@@ -508,6 +508,34 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         bindDatabaseTooltip(database, platform);
     }
 
+    private String resolveMetadataCatalogTooltipLabel() {
+        TreeItem<TreeData> ti = getTreeItem();
+        if (ti == null) {
+            return "DATABASE";
+        }
+        try {
+            DatabasePlatform p = TreeNavigator.resolvePlatform(ti);
+            return p != null ? p.metadataTooltipCatalogLabel() : "DATABASE";
+        } catch (Exception e) {
+            return "DATABASE";
+        }
+    }
+
+    /** Matches former {@code "DATABASE  : "} width for table/index/sys-table tooltips. */
+    private String metadataCatalogTooltipLabelWide() {
+        return resolveMetadataCatalogTooltipLabel() + "  : ";
+    }
+
+    /** Matches former {@code "DATABASE : "} for sequence/type/queue tooltips. */
+    private String metadataCatalogTooltipLabelMid() {
+        return resolveMetadataCatalogTooltipLabel() + " : ";
+    }
+
+    /** Matches former {@code "DATABASE: "} for synonym/trigger/func/proc/package/view tooltips. */
+    private String metadataCatalogTooltipLabelTight() {
+        return resolveMetadataCatalogTooltipLabel() + ": ";
+    }
+
     private void bindDatabaseTooltip(Database database, DatabasePlatform platform) {
         java.util.List<DatabasePlatform.TooltipField> fields = platform != null
                 ? platform.databaseTooltipFields()
@@ -564,7 +592,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 table.tableTypeCodeProperty()
         ));
         bindRowsSizeText(descripLabel, table.nrowsProperty(), table.totalsizeProperty());
-        bindTooltip("DATABASE  : ", table.getTableCatalog(), "\n",
+        bindTooltip(metadataCatalogTooltipLabelWide(), table.getTableCatalog(), "\n",
                 "TABLENAME : ", table.nameProperty(), "\n",
                 "OWNER     : ", table.tableOwnerProperty(), "\n",
                 "CREATED   : ", table.createTimeProperty(), "\n",
@@ -588,7 +616,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         bindNameLabel(item);
         descripLabel.textProperty().unbind();
         descripLabel.setText("VIEW");
-        bindTooltip("DATABASE: ", view.dbnameProperty(), "\n",
+        bindTooltip(metadataCatalogTooltipLabelTight(), view.dbnameProperty(), "\n",
                 "VIEWNAME: ", view.nameProperty(), "\n",
                 "OWNER   : ", view.ownerProperty(), "\n",
                 "CREATED : ", view.createTimeProperty(), "\n");

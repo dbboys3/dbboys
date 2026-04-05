@@ -261,6 +261,14 @@ public interface DatabasePlatform {
         return DEFAULT_DATABASE_TOOLTIP_FIELDS;
     }
 
+    /**
+     * English label for schema/catalog in metadata tree object tooltips (table, index, …).
+     * Oracle overrides to {@code SCHEMA}; Informix-style platforms keep {@code DATABASE}.
+     */
+    default String metadataTooltipCatalogLabel() {
+        return "DATABASE";
+    }
+
     default <T> Optional<T> capability(Class<T> type) {
         if (type == null || !type.isInstance(this)) {
             return Optional.empty();

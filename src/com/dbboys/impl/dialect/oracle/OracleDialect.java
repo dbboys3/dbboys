@@ -330,6 +330,11 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
+    public String metadataTooltipCatalogLabel() {
+        return "SCHEMA";
+    }
+
+    @Override
     public List<TooltipField> databaseTooltipFields() {
         return List.of(
                 new TooltipField("SCHEMA",  "name"),
