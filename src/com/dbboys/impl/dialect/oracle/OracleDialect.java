@@ -227,7 +227,8 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
         sb.append("-- ### Schema   : ").append(schema).append("\n");
         sb.append("-- ### Datetime : ").append(dateStr).append("\n");
         sb.append("-- ############################################################\n\n");
-        sb.append("CREATE USER ").append(schema).append(" IDENTIFIED BY ").append(schema).append(";\n\n");
+        sb.append("CREATE USER ").append(schema).append(" IDENTIFIED BY ").append(schema)
+                .append(" QUOTA UNLIMITED ON USERS;\n\n");
         return sb.toString();
     }
 

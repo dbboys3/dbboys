@@ -1836,7 +1836,8 @@ public class TreeContextMenuHandler {
                 Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
                 String name = schemaName.getText().trim();
                 String escapedPassword = "\"" + passwordField1.getText().trim().replace("\"", "\"\"") + "\"";
-                String sql = "CREATE USER " + name + " IDENTIFIED BY " + escapedPassword;
+                String sql = "CREATE USER " + name + " IDENTIFIED BY " + escapedPassword
+                        + " QUOTA UNLIMITED ON USERS";
                 TreeViewUtil.databaseService.executeObjectSql(connect, sql, () -> {
                     selectedItem.getChildren().clear();
                     selectedItem.setExpanded(false);
