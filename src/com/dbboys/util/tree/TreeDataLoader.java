@@ -33,6 +33,8 @@ public class TreeDataLoader {
         PACKAGES,
         TYPES,
         QUEUES,
+        JOBS,
+        RECYCLE_BIN,
         UNKNOWN
     }
 
@@ -221,6 +223,16 @@ public class TreeDataLoader {
                                     }
                                     if (p.supportsObjectQueuesFolder()) {
                                         objectFolder = createObjectFolder(ObjectFolderKind.QUEUES);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    if (p.supportsSchedulerJobsFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.JOBS);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    if (p.supportsRecycleBinFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.RECYCLE_BIN);
                                         objectFolder.setDescription(items.get(i++).toString());
                                         treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     }
@@ -430,6 +442,18 @@ public class TreeDataLoader {
                     treeItem.getChildren().add(TreeViewBuilder.createLeafTreeItem(row));
                 }
             }
+            case JOBS -> {
+                List<SchedulerJob> jobs = objectList.getItems();
+                for (SchedulerJob row : jobs) {
+                    treeItem.getChildren().add(TreeViewBuilder.createLeafTreeItem(row));
+                }
+            }
+            case RECYCLE_BIN -> {
+                List<RecycleBinObject> rows = objectList.getItems();
+                for (RecycleBinObject row : rows) {
+                    treeItem.getChildren().add(TreeViewBuilder.createLeafTreeItem(row));
+                }
+            }
             default -> {
             }
         }
@@ -461,6 +485,8 @@ public class TreeDataLoader {
             case PACKAGES -> bindFolderName(objectFolder, "metadata.folder.packages", "包");
             case TYPES -> bindFolderName(objectFolder, "metadata.folder.types", "类型");
             case QUEUES -> bindFolderName(objectFolder, "metadata.folder.queues", "队列");
+            case JOBS -> bindFolderName(objectFolder, "metadata.folder.jobs", "作业");
+            case RECYCLE_BIN -> bindFolderName(objectFolder, "metadata.folder.recycle_bin", "回收站");
             default -> objectFolder.setName("");
         }
         return objectFolder;
@@ -487,6 +513,8 @@ public class TreeDataLoader {
             case PACKAGES -> TreeViewUtil.packageService;
             case TYPES -> TreeViewUtil.objectTypeService;
             case QUEUES -> TreeViewUtil.queueService;
+            case JOBS -> TreeViewUtil.schedulerJobService;
+            case RECYCLE_BIN -> TreeViewUtil.recycleBinService;
             default -> null;
         };
     }
@@ -542,7 +570,9 @@ public class TreeDataLoader {
                 || kind == ObjectFolderKind.PROCEDURES
                 || kind == ObjectFolderKind.PACKAGES
                 || kind == ObjectFolderKind.TYPES
-                || kind == ObjectFolderKind.QUEUES;
+                || kind == ObjectFolderKind.QUEUES
+                || kind == ObjectFolderKind.JOBS
+                || kind == ObjectFolderKind.RECYCLE_BIN;
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {

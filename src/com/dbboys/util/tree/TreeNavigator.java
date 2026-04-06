@@ -90,7 +90,9 @@ public class TreeNavigator {
                         retrunTreeItem.getValue() instanceof Procedure||
                         retrunTreeItem.getValue() instanceof DBPackage||
                         retrunTreeItem.getValue() instanceof Type||
-                        retrunTreeItem.getValue() instanceof Queue
+                        retrunTreeItem.getValue() instanceof Queue||
+                        retrunTreeItem.getValue() instanceof SchedulerJob||
+                        retrunTreeItem.getValue() instanceof RecycleBinObject
         ){
             return  retrunTreeItem.getParent().getParent().getParent().getParent();
         }
@@ -133,7 +135,9 @@ public class TreeNavigator {
                         retrunTreeItem.getValue() instanceof Procedure||
                         retrunTreeItem.getValue() instanceof DBPackage||
                         retrunTreeItem.getValue() instanceof Type||
-                        retrunTreeItem.getValue() instanceof Queue
+                        retrunTreeItem.getValue() instanceof Queue||
+                        retrunTreeItem.getValue() instanceof SchedulerJob||
+                        retrunTreeItem.getValue() instanceof RecycleBinObject
         ){
             return  (Database) retrunTreeItem.getParent().getParent().getValue();
         }else if(
@@ -456,7 +460,9 @@ public class TreeNavigator {
                 || treeData instanceof Procedure
                 || treeData instanceof DBPackage
                 || treeData instanceof Type
-                || treeData instanceof Queue)) {
+                || treeData instanceof Queue
+                || treeData instanceof SchedulerJob
+                || treeData instanceof RecycleBinObject)) {
             return false;
         }
         Connect connect = getMetaConnect(selectedItem);
@@ -489,6 +495,8 @@ public class TreeNavigator {
                 || treeData instanceof DBPackage
                 || treeData instanceof Type
                 || treeData instanceof Queue
+                || treeData instanceof SchedulerJob
+                || treeData instanceof RecycleBinObject
                 || treeData instanceof PackageFunction
                 || treeData instanceof PackageProcedure;
     }

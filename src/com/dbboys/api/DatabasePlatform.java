@@ -49,6 +49,16 @@ public interface DatabasePlatform {
         return false;
     }
 
+    /** When true, schema tree shows a scheduler jobs folder (e.g. Oracle {@code USER_SCHEDULER_JOBS}). */
+    default boolean supportsSchedulerJobsFolder() {
+        return false;
+    }
+
+    /** When true, schema tree shows a recycle bin folder (e.g. Oracle {@code USER_RECYCLEBIN}). */
+    default boolean supportsRecycleBinFolder() {
+        return false;
+    }
+
     default List<String> getColumnTypes() {
         return List.of();
     }

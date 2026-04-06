@@ -11,6 +11,8 @@ import com.dbboys.service.IndexService;
 import com.dbboys.service.ObjectTypeService;
 import com.dbboys.service.PackageService;
 import com.dbboys.service.ProcedureService;
+import com.dbboys.service.RecycleBinService;
+import com.dbboys.service.SchedulerJobService;
 import com.dbboys.service.QueueService;
 import com.dbboys.service.SequenceService;
 import com.dbboys.service.SynonymService;
@@ -45,6 +47,8 @@ public class TreeViewUtil {
     public static PackageService packageService;
     public static ObjectTypeService objectTypeService;
     public static QueueService queueService;
+    public static SchedulerJobService schedulerJobService;
+    public static RecycleBinService recycleBinService;
     public static UserService userService;
     public static CustomShortcutMenuItem refreshItem;
     public static CustomShortcutMenuItem databaseOpenFileItem;
@@ -69,6 +73,8 @@ public class TreeViewUtil {
         packageService = AppContext.get(PackageService.class);
         objectTypeService = AppContext.get(ObjectTypeService.class);
         queueService = AppContext.get(QueueService.class);
+        schedulerJobService = AppContext.get(SchedulerJobService.class);
+        recycleBinService = AppContext.get(RecycleBinService.class);
         userService = AppContext.get(UserService.class);
     }
 

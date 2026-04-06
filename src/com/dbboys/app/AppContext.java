@@ -34,6 +34,8 @@ public final class AppContext {
             register(com.dbboys.service.PackageService.class, new com.dbboys.service.PackageService(platforms));
             register(com.dbboys.service.ObjectTypeService.class, new com.dbboys.service.ObjectTypeService(platforms));
             register(com.dbboys.service.QueueService.class, new com.dbboys.service.QueueService(platforms));
+            register(com.dbboys.service.SchedulerJobService.class, new com.dbboys.service.SchedulerJobService(platforms));
+            register(com.dbboys.service.RecycleBinService.class, new com.dbboys.service.RecycleBinService(platforms));
             register(com.dbboys.service.UserService.class, new com.dbboys.service.UserService(platforms));
 
             var dbService = get(com.dbboys.service.DatabaseService.class);

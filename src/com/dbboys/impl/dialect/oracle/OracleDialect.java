@@ -145,6 +145,16 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
+    public boolean supportsSchedulerJobsFolder() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsRecycleBinFolder() {
+        return true;
+    }
+
+    @Override
     public boolean usesSchemaModel() {
         return true;
     }

@@ -1335,7 +1335,9 @@ public class TreeContextMenuHandler {
                         selectedItem.getValue() instanceof Procedure||
                         selectedItem.getValue() instanceof DBPackage||
                         selectedItem.getValue() instanceof Type||
-                        selectedItem.getValue() instanceof Queue
+                        selectedItem.getValue() instanceof Queue||
+                        selectedItem.getValue() instanceof SchedulerJob||
+                        selectedItem.getValue() instanceof RecycleBinObject
                 ) {
                     if (TreeNavigator.isSystemDatabaseObject(selectedItem)) {
                         truncateItem.setDisable(true);
@@ -1593,6 +1595,11 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(ddlMenu);
                 }
                 else if(selectedItem.getValue() instanceof Queue) {
+                    treeview_menu.getItems().add(copyItem);
+                    treeview_menu.getItems().add(ddlMenu);
+                }
+                else if(selectedItem.getValue() instanceof SchedulerJob
+                        || selectedItem.getValue() instanceof RecycleBinObject) {
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(ddlMenu);
                 }

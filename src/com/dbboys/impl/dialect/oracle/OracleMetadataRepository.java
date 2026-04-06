@@ -743,6 +743,24 @@ public final class OracleMetadataRepository implements MetadataRepository {
             order by name
             """;
 
+    private static final String SQL_SCHEDULER_JOB_COUNT = """
+            select count(*) from user_scheduler_jobs
+            """;
+
+    private static final String SQL_SCHEDULER_JOB_NAMES = """
+            select job_name from user_scheduler_jobs order by job_name
+            """;
+
+    private static final String SQL_RECYCLE_BIN_COUNT = """
+            select count(*) from user_recyclebin
+            """;
+
+    private static final String SQL_RECYCLE_BIN_NAMES = """
+            select nvl(nullif(trim(original_name), ''), object_name) as display_name
+            from user_recyclebin
+            order by object_name
+            """;
+
     private static final String SQL_INDEX_COLUMNS_FOR_TABLE = """
             select cols
             from (
@@ -1222,6 +1240,60 @@ public final class OracleMetadataRepository implements MetadataRepository {
                 row.setOwner(rs.getString("owner"));
                 return row;
             });
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return List.of();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public int getSchedulerJobCount(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        try {
+            Integer value = runner.queryOne(SQL_SCHEDULER_JOB_COUNT, null, rs -> rs.getInt(1));
+            return value == null ? 0 : value;
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return 0;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public List<String> getSchedulerJobNames(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        try {
+            return runner.query(SQL_SCHEDULER_JOB_NAMES, null, rs -> blankToEmpty(rs.getString(1)));
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return List.of();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public int getRecycleBinCount(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        try {
+            Integer value = runner.queryOne(SQL_RECYCLE_BIN_COUNT, null, rs -> rs.getInt(1));
+            return value == null ? 0 : value;
+        } catch (SQLException e) {
+            if (isOra942ObjectNotExists(e)) {
+                return 0;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public List<String> getRecycleBinDisplayNames(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        try {
+            return runner.query(SQL_RECYCLE_BIN_NAMES, null, rs -> blankToEmpty(rs.getString(1)));
         } catch (SQLException e) {
             if (isOra942ObjectNotExists(e)) {
                 return List.of();

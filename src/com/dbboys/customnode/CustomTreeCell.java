@@ -277,6 +277,26 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                         "OWNER    : ", metaQueue.ownerProperty()
                 );
             }
+            else if (item instanceof SchedulerJob job) {
+                nodeIcon.setContent(IconPaths.TREECELL_PROCEDURE);
+                nodeIcon.setScaleX(0.5);
+                nodeIcon.setScaleY(0.5);
+                applyPrimaryIconStyle(nodeIcon);
+                bindNameLabel(item);
+                descripLabel.textProperty().unbind();
+                descripLabel.setText("JOB");
+                bindTooltip(metadataCatalogTooltipLabelTight(), "JOB: ", job.nameProperty());
+            }
+            else if (item instanceof RecycleBinObject binObj) {
+                nodeIcon.setContent(IconPaths.TREECELL_SYNONYM);
+                nodeIcon.setScaleX(0.35);
+                nodeIcon.setScaleY(0.35);
+                applyPrimaryIconStyle(nodeIcon);
+                bindNameLabel(item);
+                descripLabel.textProperty().unbind();
+                descripLabel.setText("BIN");
+                bindTooltip(metadataCatalogTooltipLabelTight(), "RECYCLE: ", binObj.nameProperty());
+            }
             else if(item instanceof Synonym){
                 Synonym synonym=(Synonym)item;
                 nodeIcon.setContent(IconPaths.TREECELL_SYNONYM);

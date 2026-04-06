@@ -219,6 +219,12 @@ public class DatabaseService implements MetaObjectService {
         if (platform.supportsObjectQueuesFolder()) {
             result.add(repo.getQueueCount(conn, databaseName) + "个");
         }
+        if (platform.supportsSchedulerJobsFolder()) {
+            result.add(repo.getSchedulerJobCount(conn, databaseName) + "个");
+        }
+        if (platform.supportsRecycleBinFolder()) {
+            result.add(repo.getRecycleBinCount(conn) + "个");
+        }
 
         objectList.setSuccess(true);
         return objectList;

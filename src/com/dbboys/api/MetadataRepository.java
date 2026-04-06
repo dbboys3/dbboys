@@ -104,6 +104,22 @@ public interface MetadataRepository {
         return List.of();
     }
 
+    default int getSchedulerJobCount(Connection conn, String databaseName) throws SQLException {
+        return 0;
+    }
+
+    default List<String> getSchedulerJobNames(Connection conn, String databaseName) throws SQLException {
+        return List.of();
+    }
+
+    default int getRecycleBinCount(Connection conn) throws SQLException {
+        return 0;
+    }
+
+    default List<String> getRecycleBinDisplayNames(Connection conn) throws SQLException {
+        return List.of();
+    }
+
     List<String> getStorageSpacesForCreateDatabase(Connection conn) throws SQLException;
 
     void changeDatabase(Connection conn, String databaseName) throws SQLException;
