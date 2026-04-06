@@ -248,7 +248,60 @@ public class SqlParserUtil {
                 return range;
             }
         }
+        range = findStatementRangeForCaretInOracleSlashGap(ranges, sqlText, clampedCaret);
+        return range;
+    }
+
+    /**
+     * Executable ranges end at {@code END;} and do not include a following SQL*Plus {@code /} line.
+     * Caret on that slash line (or whitespace-only gap before it) is not inside {@code [start, end)},
+     * so Ctrl+Enter would not select any statement. Map such positions to the preceding statement.
+     */
+    private static StatementRange findStatementRangeForCaretInOracleSlashGap(List<StatementRange> ranges,
+                                                                             String sqlText,
+                                                                             int pos) {
+        if (ranges.isEmpty()) {
+            return null;
+        }
+        for (int i = 0; i < ranges.size(); i++) {
+            StatementRange r = ranges.get(i);
+            if (pos < r.getEnd()) {
+                continue;
+            }
+            if (i + 1 < ranges.size()) {
+                int nextStart = ranges.get(i + 1).getStart();
+                if (pos >= nextStart) {
+                    continue;
+                }
+                String gap = sqlText.substring(r.getEnd(), nextStart);
+                if (gapIsWhitespaceOrOracleSlashLinesOnly(gap)) {
+                    return r;
+                }
+            } else {
+                /*
+                 * Last statement: gap runs to EOF. Caret after the final '/' is pos == sqlText.length();
+                 * previously pos >= nextStart with nextStart == length incorrectly skipped this case.
+                 */
+                String gap = sqlText.substring(r.getEnd(), sqlText.length());
+                if (pos >= r.getEnd() && gapIsWhitespaceOrOracleSlashLinesOnly(gap)) {
+                    return r;
+                }
+            }
+        }
         return null;
+    }
+
+    private static boolean gapIsWhitespaceOrOracleSlashLinesOnly(String gap) {
+        if (gap.isEmpty()) {
+            return true;
+        }
+        for (String line : gap.split("\n", -1)) {
+            String t = line.trim();
+            if (!t.isEmpty() && !t.equals("/")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static StatementRange findContainingRange(List<StatementRange> ranges, int position) {
