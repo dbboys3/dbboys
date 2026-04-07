@@ -9,6 +9,10 @@ import com.dbboys.util.remote.RemoteCheckEnvUtil;
 import com.dbboys.util.remote.RemoteDatabaseProviders;
 import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.*;
+import javafx.animation.Animation;
+import javafx.animation.FadeTransition;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.event.EventHandler;
@@ -53,6 +57,12 @@ public class MainController {
     private static final int MESSAGE_BUBBLE_RADIUS = 6;
     private static final double AI_INPUT_HEIGHT = 90;
     private static final int AI_HISTORY_TURNS = 3;
+    /** 流式正文标签（与主题 token 一致） */
+    private static final String AI_STREAMING_LABEL_STYLE =
+            "-fx-text-fill: -color-fg-default; -fx-font-size: 10px; -fx-padding: 6 10 6 10;";
+    /** 「正在思考」占位：弱化前景色，随明暗主题走 -color-fg-muted */
+    private static final String AI_THINKING_LABEL_STYLE =
+            "-fx-text-fill: -color-fg-muted; -fx-font-size: 10px; -fx-padding: 6 10 6 10;";
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
             "doubao-seed-2-0-mini-260215",
             "qwen3.6-plus"
@@ -103,11 +113,59 @@ public class MainController {
         private final StackPane bubble;
         private final HBox buttonRow;
         private final StringBuilder rawContent = new StringBuilder();
+        private FadeTransition thinkingFade;
+        private Timeline thinkingDotsTimeline;
 
         private AiMessageView(VBox messageGroup, StackPane bubble, HBox buttonRow) {
             this.messageGroup = messageGroup;
             this.bubble = bubble;
             this.buttonRow = buttonRow;
+        }
+
+        /** 去掉文案末尾省略号，便于与动画点号拼接（避免「正在思考...」叠成多组点） */
+        private static String aiThinkingBaseText(String i18nReplying) {
+            if (i18nReplying == null) {
+                return "";
+            }
+            return i18nReplying.replaceAll("\\.+\\s*$", "").trim();
+        }
+
+        private static String thinkingDotSuffix(int stepMod4) {
+            int n = Math.floorMod(stepMod4, 4);
+            return n == 0 ? "" : ".".repeat(n);
+        }
+
+        private void startThinkingAnimation(String baseText) {
+            stopThinkingAnimation();
+            streamingLabel.setStyle(AI_THINKING_LABEL_STYLE);
+            thinkingFade = new FadeTransition(Duration.millis(950), streamingLabel);
+            thinkingFade.setFromValue(0.52);
+            thinkingFade.setToValue(1.0);
+            thinkingFade.setCycleCount(Animation.INDEFINITE);
+            thinkingFade.setAutoReverse(true);
+            thinkingFade.play();
+
+            thinkingDotsTimeline = new Timeline(
+                    new KeyFrame(Duration.ZERO, e -> streamingLabel.setText(baseText + thinkingDotSuffix(0))),
+                    new KeyFrame(Duration.millis(400), e -> streamingLabel.setText(baseText + thinkingDotSuffix(1))),
+                    new KeyFrame(Duration.millis(800), e -> streamingLabel.setText(baseText + thinkingDotSuffix(2))),
+                    new KeyFrame(Duration.millis(1200), e -> streamingLabel.setText(baseText + thinkingDotSuffix(3)))
+            );
+            thinkingDotsTimeline.setCycleCount(Timeline.INDEFINITE);
+            thinkingDotsTimeline.play();
+        }
+
+        private void stopThinkingAnimation() {
+            if (thinkingFade != null) {
+                thinkingFade.stop();
+                thinkingFade = null;
+            }
+            if (thinkingDotsTimeline != null) {
+                thinkingDotsTimeline.stop();
+                thinkingDotsTimeline = null;
+            }
+            streamingLabel.setOpacity(1.0);
+            streamingLabel.setStyle(AI_STREAMING_LABEL_STYLE);
         }
 
         private synchronized void appendRaw(String delta) {
@@ -1091,6 +1149,10 @@ public class MainController {
 
     private void cancelAiRequest() {
         aiCancelled = true;
+        AiMessageView streaming = aiStreamingMessage;
+        if (streaming != null) {
+            streaming.stopThinkingAnimation();
+        }
         if (aiTaskFuture != null && !aiTaskFuture.isDone()) {
             aiTaskFuture.cancel(true);
         }
@@ -1175,7 +1237,7 @@ public class MainController {
     private void configureAiStreamingLabel(Label label, StackPane bubble) {
         label.setWrapText(true);
         label.setMaxWidth(Double.MAX_VALUE);
-        label.setStyle("-fx-text-fill: -color-fg-default; -fx-font-size: 10px; -fx-padding: 6 10 6 10;");
+        label.setStyle(AI_STREAMING_LABEL_STYLE);
         label.maxWidthProperty().bind(bubble.widthProperty().subtract(20));
         StackPane.setAlignment(label, Pos.CENTER_LEFT);
     }
@@ -1204,6 +1266,7 @@ public class MainController {
         if (view == null) {
             return;
         }
+        view.stopThinkingAnimation();
         if (updateRaw) {
             view.setRaw(content);
         }
@@ -1219,7 +1282,20 @@ public class MainController {
             return;
         }
         showStreamingAiContent(view);
-        view.streamingLabel.setText(content == null ? "" : content);
+        String raw = view.getRaw();
+        if (raw.isEmpty() && isAiReplyingPlaceholder(content)) {
+            view.startThinkingAnimation(AiMessageView.aiThinkingBaseText(I18n.t("ai.replying")));
+        } else {
+            view.stopThinkingAnimation();
+            view.streamingLabel.setText(content == null ? "" : content);
+        }
+    }
+
+    private static boolean isAiReplyingPlaceholder(String content) {
+        if (content == null) {
+            return true;
+        }
+        return content.trim().equals(I18n.t("ai.replying").trim());
     }
 
     private void showStreamingAiContent(AiMessageView view) {
