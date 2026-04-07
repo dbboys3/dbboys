@@ -171,7 +171,7 @@
                                             StackPane.alignment="TOP_LEFT" translateX="6.0" translateY="6.0"/>
                                 </StackPane>
                                 <AnchorPane minHeight="90" prefHeight="90" maxHeight="90" VBox.vgrow="NEVER" pickOnBounds="false">
-                                    <CustomUserTextarea fx:id="aiInputField" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" style="-fx-padding: 6 44 34 6; -fx-font-size: 10px;" AnchorPane.topAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" />
+                                    <CustomUserTextarea fx:id="aiInputField" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" style="-fx-padding: 6 6 25 6; -fx-font-size: 10px;" AnchorPane.topAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" />
                                     <HBox alignment="CENTER_LEFT" spacing="4" pickOnBounds="false" AnchorPane.leftAnchor="6.0" AnchorPane.bottomAnchor="6.0">
                                         <ChoiceBox fx:id="aiModelChoiceBox" focusTraversable="false" prefWidth="162" style="-fx-font-size: 9px;"/>
                                         <Button fx:id="aiSettingsButton" styleClass="small" focusTraversable="false"/>
