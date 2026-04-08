@@ -661,7 +661,7 @@ public final class OracleDdlRepository implements DdlRepository {
         } else if ("TRIGGER".equals(objectType)) {
             ddl = normalizeOracleTriggerAlterAndForEachRow(ddl);
             ddl = ensureTrailingSemicolon(ddl);
-        } else if ("TYPE".equals(objectType) || "QUEUE".equals(objectType)) {
+        } else if ("TYPE".equals(objectType) || "AQ_QUEUE".equals(objectType)) {
             ddl = normalizePlSqlInternalWhitespace(ddl);
             ddl = collapseMetadataKeywordSpacing(ddl);
             ddl = ensureTrailingSemicolon(ddl);
@@ -799,7 +799,7 @@ public final class OracleDdlRepository implements DdlRepository {
     public String printQueue(Connection conn, String objectName) throws SQLException {
         String schema = currentSchema(conn);
         configureMetadataTransform(conn);
-        return getDdl(conn, "QUEUE", objectName, schema);
+        return getDdl(conn, "AQ_QUEUE", objectName.toUpperCase(), schema);
     }
 
     @Override
