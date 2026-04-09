@@ -10,6 +10,8 @@ import com.dbboys.vo.BackgroundSqlTask;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.StringBinding;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -20,6 +22,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -92,6 +95,13 @@ public class PopupWindowUtil {
     private static Image ddlPopupStageIcon = new Image(IconPaths.MAIN_LOGO);
     private static Label ddlPopupStageLoadingLabel = new Label();
 
+    //适配列表
+    private static final double COMPATIBILITY_POPUP_WIDTH = 920;
+    private static final double COMPATIBILITY_POPUP_HEIGHT = 460;
+    private static final Stage compatibilityPopupStage = new Stage();
+    private static final CustomTableView<CompatibilityRow> compatibilityTableView = new CustomTableView<>();
+    private static final StackPane compatibilityPopupStageStackPane = new StackPane(compatibilityTableView);
+
     //显示巡检命令输出
     private static Stage checkOutputPopupStage = new Stage();
     private static CustomInfoStackPane checkOutputPopupStageStackPane = new CustomInfoStackPane(new CustomInfoCodeArea());
@@ -107,6 +117,22 @@ public class PopupWindowUtil {
     private static final StringBinding taskCanceledBinding = I18n.bind("popup.back_sql.notice.canceled", "任务已取消！");
 
     //初始化
+    private static final StringBinding compatibilityTitleBinding = I18n.bind("main.menu.help.compatibility_list", "适配列表");
+
+    private static final List<String> COMPATIBILITY_FEATURE_LABELS = List.of(
+            "元数据列表",
+            "元数据详细信息",
+            "元数据变更",
+            "执行SQL",
+            "执行计划",
+            "导入导出",
+            "实例管理"
+    );
+
+    private record CompatibilityFeature(String label, boolean supported) {}
+
+    private record CompatibilityRow(String dbType, String version, List<CompatibilityFeature> features) {}
+
     static {
         //关于弹出面板
         aboutPopupStageStackPane.setAlignment(Pos.CENTER);
@@ -354,6 +380,76 @@ public class PopupWindowUtil {
             ddlPopupStageStackPane.codeArea.replaceText("");
         });
 
+        compatibilityTableView.setItems(FXCollections.observableArrayList(buildCompatibilityRows()));
+        compatibilityTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        compatibilityTableView.setPlaceholder(new Label(I18n.t("main.compatibility.empty", "暂无适配信息")));
+        compatibilityTableView.setFixedCellSize(58);
+        compatibilityTableView.setStyle("-fx-background-insets: 0;");
+
+        TableColumn<CompatibilityRow, String> compatibilityTypeColumn = new TableColumn<>();
+        compatibilityTypeColumn.textProperty().bind(I18n.bind("main.compatibility.type", "数据库类型"));
+        compatibilityTypeColumn.setCellValueFactory(data -> new ReadOnlyStringWrapper(data.getValue().dbType()));
+        compatibilityTypeColumn.setMinWidth(130);
+        compatibilityTypeColumn.setReorderable(false);
+        compatibilityTypeColumn.setSortable(false);
+
+        TableColumn<CompatibilityRow, String> compatibilityVersionColumn = new TableColumn<>();
+        compatibilityVersionColumn.textProperty().bind(I18n.bind("main.compatibility.version", "已适配版本"));
+        compatibilityVersionColumn.setCellValueFactory(data -> new ReadOnlyStringWrapper(data.getValue().version()));
+        compatibilityVersionColumn.setMinWidth(120);
+        compatibilityVersionColumn.setReorderable(false);
+        compatibilityVersionColumn.setSortable(false);
+
+        TableColumn<CompatibilityRow, List<CompatibilityFeature>> compatibilityFeaturesColumn = new TableColumn<>();
+        compatibilityFeaturesColumn.textProperty().bind(I18n.bind("main.compatibility.features", "已适配功能"));
+        compatibilityFeaturesColumn.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue().features()));
+        compatibilityFeaturesColumn.setMinWidth(540);
+        compatibilityFeaturesColumn.setReorderable(false);
+        compatibilityFeaturesColumn.setSortable(false);
+        compatibilityFeaturesColumn.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(List<CompatibilityFeature> item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    return;
+                }
+                FlowPane pane = new FlowPane();
+                pane.setHgap(12);
+                pane.setVgap(6);
+                pane.setPadding(new Insets(4, 0, 4, 0));
+                pane.prefWrapLengthProperty().bind(col.widthProperty().subtract(24));
+                for (CompatibilityFeature feature : item) {
+                    CheckBox checkBox = new CheckBox(feature.label());
+                    checkBox.setSelected(feature.supported());
+                    checkBox.setDisable(true);
+                    pane.getChildren().add(checkBox);
+                }
+                setText(null);
+                setGraphic(pane);
+            }
+        });
+        compatibilityTableView.getColumns().addAll(
+                compatibilityTypeColumn,
+                compatibilityVersionColumn,
+                compatibilityFeaturesColumn
+        );
+
+        CustomWindowFrameUtil.Frame compatibilityFrame = CustomWindowFrameUtil.createModalPopup(
+                compatibilityPopupStage,
+                compatibilityTitleBinding,
+                compatibilityPopupStageStackPane,
+                COMPATIBILITY_POPUP_WIDTH,
+                COMPATIBILITY_POPUP_HEIGHT,
+                true
+        );
+        compatibilityPopupStage.titleProperty().bind(compatibilityTitleBinding);
+        compatibilityFrame.scene.setFill(Color.TRANSPARENT);
+        compatibilityPopupStage.setResizable(true);
+        compatibilityPopupStage.setMinWidth(COMPATIBILITY_POPUP_WIDTH);
+        compatibilityPopupStage.setMinHeight(COMPATIBILITY_POPUP_HEIGHT);
+
 
     }
 
@@ -415,6 +511,11 @@ public class PopupWindowUtil {
     public static void openAboutWindow() {
         aboutPopupStage.show();
 
+    }
+
+    public static void openCompatibilityListWindow() {
+        compatibilityPopupStage.show();
+        compatibilityPopupStage.toFront();
     }
 
     public static boolean openSqlConfirmPopupWindow(
@@ -578,5 +679,25 @@ public class PopupWindowUtil {
     private static ButtonType showCustomDialog(String title, javafx.scene.Node content, double width, double height, ButtonType... buttonTypes) {
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(title, content, width, height, buttonTypes);
         return dialog.showAndWait();
+    }
+
+    private static List<CompatibilityRow> buildCompatibilityRows() {
+        return List.of(
+                new CompatibilityRow("GBASE 8S", "8.7 / 8.8", compatibilityFeatures(
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出", "实例管理")),
+                new CompatibilityRow("INFORMIX", "12.1", compatibilityFeatures(
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出", "实例管理")),
+                new CompatibilityRow("ORACLE", "19C", compatibilityFeatures(
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "导入导出"))
+        );
+    }
+
+    private static List<CompatibilityFeature> compatibilityFeatures(String... labels) {
+        List<CompatibilityFeature> features = new ArrayList<>();
+        List<String> supportedLabels = labels == null ? List.of() : List.of(labels);
+        for (String label : COMPATIBILITY_FEATURE_LABELS) {
+            features.add(new CompatibilityFeature(label, supportedLabels.contains(label)));
+        }
+        return features;
     }
 }

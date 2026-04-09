@@ -91,6 +91,8 @@
                         <items>
                             <CustomShortcutMenuItem fx:id="menuHelpAbout" mnemonicParsing="false"  id="helpMenu" onAction="#aboutDBboys">
                             </CustomShortcutMenuItem>
+                            <CustomShortcutMenuItem fx:id="menuHelpCompatibilityList" mnemonicParsing="false" onAction="#showCompatibilityList">
+                            </CustomShortcutMenuItem>
                         </items>
                         <CustomShortcutMenuItem fx:id="menuHelpCommunity" mnemonicParsing="false"  id="community" onAction="#community">
                         </CustomShortcutMenuItem>
@@ -224,7 +226,6 @@
     <StackPane fx:id="noticePane" maxWidth="360" maxHeight="25" style="-fx-background-color: none;-fx-alignment: center" StackPane.alignment="CENTER" visible="false">
     </StackPane>
 </StackPane>
-
 
 
 

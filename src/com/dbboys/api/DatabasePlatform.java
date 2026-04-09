@@ -254,6 +254,10 @@ public interface DatabasePlatform {
         return Set.of();
     }
 
+    default String supportedVersionLabel() {
+        return "";
+    }
+
     enum MetadataObjectType {
         DATABASE,
         SYS_TABLE,

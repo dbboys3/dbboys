@@ -240,6 +240,8 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuHelpAbout;
     @FXML
+    private CustomShortcutMenuItem menuHelpCompatibilityList;
+    @FXML
     private CustomShortcutMenuItem menuHelpCommunity;
     @FXML
     private CustomShortcutMenuItem menuHelpCheckUpdate;
@@ -355,6 +357,7 @@ public class MainController {
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
         menuSettingsReset.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_RESET, 0.6));
         menuHelpAbout.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_HELP, 0.6));
+        menuHelpCompatibilityList.setGraphic(IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.45));
         menuHelpCommunity.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_COMMUNITY, 0.5));
         menuHelpCheckUpdate.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_HOME, 0.5));
 
@@ -759,6 +762,7 @@ public class MainController {
 
         bindText(menuHelp, "main.menu.help");
         bindText(menuHelpAbout, "main.menu.help.about");
+        bindText(menuHelpCompatibilityList, "main.menu.help.compatibility_list");
         bindText(menuHelpCommunity, "main.menu.help.community");
         bindText(menuHelpCheckUpdate, "main.menu.help.check_update");
 
@@ -932,6 +936,10 @@ public class MainController {
 
     public void aboutDBboys() {
         PopupWindowUtil.openAboutWindow();
+    }
+
+    public void showCompatibilityList() {
+        PopupWindowUtil.openCompatibilityListWindow();
     }
 
     //文件-新建连接响应函数
