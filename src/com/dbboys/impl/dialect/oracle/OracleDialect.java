@@ -1,5 +1,6 @@
 package com.dbboys.impl.dialect.oracle;
 
+import com.dbboys.api.ChangeDatabaseFailureKind;
 import com.dbboys.api.ConnectionSupport;
 import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
@@ -11,6 +12,7 @@ import com.dbboys.vo.Connect;
 import com.dbboys.vo.Database;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 
@@ -101,6 +103,18 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     @Override
     public String testConnectionSql() {
         return "SELECT 1 FROM DUAL";
+    }
+
+    @Override
+    public ChangeDatabaseFailureKind classifyChangeDatabaseFailure(SQLException e) {
+        if (e == null) {
+            return ChangeDatabaseFailureKind.OTHER;
+        }
+        int code = e.getErrorCode();
+        if (code == 1012 || code == 3113 || code == 3114 || code == 17008) {
+            return ChangeDatabaseFailureKind.DISCONNECTED;
+        }
+        return ChangeDatabaseFailureKind.OTHER;
     }
 
     @Override
