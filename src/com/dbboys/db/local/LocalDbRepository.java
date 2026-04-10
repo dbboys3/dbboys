@@ -196,7 +196,7 @@ public  class LocalDbRepository {
             psmt.setObject(4, connect.getDriver());
             psmt.setObject(5, connect.getIp());
             psmt.setObject(6, connect.getPort());
-            psmt.setObject(7, connect.getDatabase());
+            psmt.setObject(7, connect.getCatalog());
             psmt.setObject(8, connect.getReadonly()?"1":"0");
             psmt.setObject(9, connect.getUsername());
             psmt.setObject(10, connect.getPassword());
@@ -271,7 +271,7 @@ public  class LocalDbRepository {
                 connect.setName(rs.getString(3));
                 connect.setIp(rs.getString(4));
                 connect.setPort(rs.getString(5));
-                connect.setDatabase(rs.getString(6));
+                connect.setCatalog(rs.getString(6));
                 connect.setUsername(rs.getString(7));
                 connect.setDbtype(rs.getString(8));
                 connect.setPassword(rs.getString(9));
@@ -308,7 +308,7 @@ public  class LocalDbRepository {
                     connect.setDbtype(rs.getString(4));
                     connect.setIp(rs.getString(5));
                     connect.setPort(rs.getString(6));
-                    connect.setDatabase(rs.getString(7));
+                    connect.setCatalog(rs.getString(7));
                     connect.setReadonly(rs.getString(8).equals("1")?true:false);
                     connect.setUsername(rs.getString(9));
                     connect.setPassword(rs.getString(10));
@@ -354,7 +354,7 @@ public  class LocalDbRepository {
                    psmt= conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_database=?,c_props=? where c_id=?");
                    psmt.setInt(1,connect.getParentId());
                    psmt.setString(2,connect.getName());
-                   psmt.setString(3,connect.getDatabase());
+                   psmt.setString(3,connect.getCatalog());
                    psmt.setString(4,connect.getProps());
                    psmt.setInt(5,connect.getId());
                    psmt.executeUpdate();
@@ -530,7 +530,7 @@ public  class LocalDbRepository {
                    psmt.setObject(6,connect.getDriver());
                    psmt.setObject(7,connect.getIp());
                    psmt.setObject(8,connect.getPort());
-                   psmt.setObject(9,connect.getDatabase());
+                   psmt.setObject(9,connect.getCatalog());
                    psmt.setObject(10,connect.getReadonly());
                    psmt.setObject(11,connect.getUsername());
                    psmt.setObject(12,connect.getPassword());

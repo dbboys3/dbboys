@@ -172,7 +172,7 @@ public class TreeViewUtil {
         return TreeNavigator.getMetaConnect(treeItem);
     }
 
-    public static Database getCurrentDatabase(TreeItem<TreeData> treeItem) {
+    public static Catalog getCurrentDatabase(TreeItem<TreeData> treeItem) {
         return TreeNavigator.getCurrentDatabase(treeItem);
     }
 

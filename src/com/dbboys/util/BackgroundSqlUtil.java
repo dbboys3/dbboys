@@ -76,7 +76,7 @@ public class BackgroundSqlUtil {
                                     "连接名称: %s/%s\n执行任务: %s\n错误信息: %s %s"
                             ).formatted(
                                     backSqlTask.getConnect().getName(),
-                                    backSqlTask.getConnect().getDatabase(),
+                                    backSqlTask.getConnect().getCatalog(),
                                     backSqlTask.getSql(),
                                     se.getErrorCode(),
                                     se.getMessage()

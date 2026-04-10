@@ -10,7 +10,7 @@ import com.dbboys.util.ConnectionPropertyUtil;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.BackgroundSqlTask;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.ObjectList;
 import com.dbboys.vo.Sql;
 import com.dbboys.vo.Table;
@@ -55,7 +55,7 @@ public class DatabaseService implements MetaObjectService {
         return platformResolver.metadata(connect).getStorageSpacesForCreateDatabase(connect.getConn());
     }
 
-    public List<Database> getDatabases(Connect connect) throws SQLException {
+    public List<Catalog> getDatabases(Connect connect) throws SQLException {
         return platformResolver.metadata(connect).getDatabases(connect.getConn());
     }
     @Override
@@ -63,13 +63,13 @@ public class DatabaseService implements MetaObjectService {
         return (connect, conn, objectName) -> platformResolver.ddl(connect).printDatabase(conn, objectName);
     }
 
-    public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
+    public String exportDatabaseDdl(Connect connect, Catalog database) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database,
                 conn -> platformResolver.ddl(connect).printDatabase(conn, database.getName()));
     }
 
-    public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
+    public String exportDatabaseDdl(Connect connect, Catalog database, BiConsumer<Long, Long> progressListener) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
@@ -85,7 +85,7 @@ public class DatabaseService implements MetaObjectService {
         });
     }
 
-    private String buildBootstrapHeader(Connect connect, Database database) {
+    private String buildBootstrapHeader(Connect connect, Catalog database) {
         try {
             var platform = platformResolver.getPlatform(connect.getDbtype());
             if (platform != null && platform.canCreateDatabase()) {
@@ -97,7 +97,7 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connect connect,
-                                                                 Database database,
+                                                                 Catalog database,
                                                                  BiConsumer<Long, Long> progressListener) throws Exception {
         return withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
@@ -112,13 +112,13 @@ public class DatabaseService implements MetaObjectService {
         });
     }
 
-    public List<Table> getUserTables(Connect connect, Database database) throws Exception {
+    public List<Table> getUserTables(Connect connect, Catalog database) throws Exception {
         return withMetaSession(connect, database,
                 conn -> platformResolver.metadata(connect).getUserTables(conn, database.getName()));
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlPartsWithNewConnection(Connect connect,
-                                                                                  Database database,
+                                                                                  Catalog database,
                                                                                   BiConsumer<Long, Long> progressListener) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
@@ -134,19 +134,19 @@ public class DatabaseService implements MetaObjectService {
         }
     }
 
-    public List<Table> getUserTablesWithNewConnection(Connect connect, Database database) throws Exception {
+    public List<Table> getUserTablesWithNewConnection(Connect connect, Catalog database) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
             return platformResolver.metadata(sessionConnect).getUserTables(conn, database.getName());
         }
     }
 
-    private Connect buildDatabaseSessionConnect(Connect connect, Database database) {
+    private Connect buildDatabaseSessionConnect(Connect connect, Catalog database) {
         Connect sessionConnect = new Connect(connect);
         if (database == null) {
             return sessionConnect;
         }
-        platformResolver.requirePlatform(sessionConnect).connection().setSessionDatabase(sessionConnect, database.getName());
+        platformResolver.requirePlatform(sessionConnect).connection().setSessionCatalog(sessionConnect, database.getName());
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 connectionService(),
                 platformResolver,
@@ -173,7 +173,7 @@ public class DatabaseService implements MetaObjectService {
         objectList.setItems(result);
         objectList.setSuccess(false);
 
-        Database database = repo.getDatabaseInfo(conn, databaseName);
+        Catalog database = repo.getDatabaseInfo(conn, databaseName);
         objectList.setInfo(database);
 
         boolean filterType = repo.hasSysProcTypeColumn(conn);
@@ -251,14 +251,14 @@ public class DatabaseService implements MetaObjectService {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
                 UpdateResult updateResult = new UpdateResult();
                 updateResult.setConnectId(connect.getId());
-                updateResult.setDatabase(connect.getEffectiveDatabase());
+                updateResult.setDatabase(connect.getEffectiveCatalog());
                 updateResult.setUpdateSql(importSummary);
                 updateResult.setStartTime(sdf.format(beginTime));
 
                 backSqlTask.setConnect(connect);
                 backSqlTask.setBeginTime(sdf.format(beginTime));
                 backSqlTask.setConnectName(connect.getName());
-                backSqlTask.setDatabaseName(connect.getDatabase());
+                backSqlTask.setDatabaseName(connect.getCatalog());
                 backSqlTask.setSql(importSummary);
                 backSqlTask.setProgress(formatImportSqlExecuted(0));
                 BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);

@@ -5,7 +5,7 @@ import com.dbboys.util.BackgroundSqlUtil;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.vo.BackgroundSqlTask;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.ObjectList;
 import com.dbboys.vo.UpdateResult;
 import javafx.concurrent.Task;
@@ -36,16 +36,16 @@ public interface MetaObjectService {
     }
 
     default <T> T withMetaSession(Connect connect,
-                                  Database database,
+                                  Catalog database,
                                   ConnectionService.SqlWork<T> work) throws Exception {
         return connectionService().withMetaSession(connect, database, work);
     }
 
-    default String getDDL(Connect connect, Database database, String objectName) throws Exception {
+    default String getDDL(Connect connect, Catalog database, String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> ddlFetcher().fetch(connect, conn, objectName));
     }
 
-    default ObjectList loadObjects(Connect connect, Database database) throws Exception {
+    default ObjectList loadObjects(Connect connect, Catalog database) throws Exception {
         return withMetaSession(connect, database, conn -> loadObjects(connect, conn, database.getName()));
     }
 
@@ -71,7 +71,7 @@ public interface MetaObjectService {
                         throw new Exception("ERROR");
                     }
 
-                    String effectiveDb = connect.getEffectiveDatabase();
+                    String effectiveDb = connect.getEffectiveCatalog();
                     updateResult.setConnectId(connect.getId());
                     updateResult.setDatabase(effectiveDb);
                     updateResult.setUpdateSql(sql);
@@ -155,7 +155,7 @@ public interface MetaObjectService {
                         String execSql = stripTrailingSemicolon(sql);
                         long beginTime = System.currentTimeMillis();
                         UpdateResult updateResult = new UpdateResult();
-                        String effectiveDb2 = connect.getEffectiveDatabase();
+                        String effectiveDb2 = connect.getEffectiveCatalog();
                         updateResult.setConnectId(connect.getId());
                         updateResult.setDatabase(effectiveDb2);
                         updateResult.setUpdateSql(execSql);

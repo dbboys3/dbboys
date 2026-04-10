@@ -13,7 +13,7 @@ import com.dbboys.util.*;
 import com.dbboys.util.tree.TreeViewUtil;
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.HealthCheck;
 import com.dbboys.vo.Index;
 import com.dbboys.vo.Table;
@@ -122,7 +122,7 @@ public class CustomTableInfoTab extends CustomTab {
     private String originalTableComment = "";
     private boolean createMode = false;
     private String tableName = "";
-    private Database database;
+    private Catalog database;
 
 
 

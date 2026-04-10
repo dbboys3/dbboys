@@ -688,7 +688,7 @@ public class PopupWindowUtil {
                 new CompatibilityRow("INFORMIX", "12.1", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出", "实例管理")),
                 new CompatibilityRow("ORACLE", "19C", compatibilityFeatures(
-                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "导入导出"))
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出"))
         );
     }
 

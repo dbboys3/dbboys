@@ -1,7 +1,7 @@
 package com.dbboys.impl.dialect.informix;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.api.ConnectionSupport;
 import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
@@ -54,14 +54,14 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) {
-        String database = getSessionDatabase(connect);
+        String database = getSessionCatalog(connect);
         if (database == null || database.isBlank()) {
-            database = connect.getDatabase();
+            database = connect.getCatalog();
         }
         if (database == null || database.isBlank()) {
             database = defaultDatabase();
         }
-        connect.setSessionDatabase(database);
+        connect.setSessionCatalog(database);
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
             String host = connect.getIp() == null || connect.getIp().isBlank() ? "127.0.0.1" : connect.getIp();
@@ -105,11 +105,11 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
     }
 
     @Override
-    public void setSessionDatabase(Connect connect, String databaseName) {
+    public void setSessionCatalog(Connect connect, String catalogName) {
         if (connect == null) {
             return;
         }
-        connect.setSessionDatabase(databaseName);
+        connect.setSessionCatalog(catalogName);
     }
 
     @Override
@@ -170,7 +170,7 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
     }
 
     @Override
-    public String buildBootstrapSql(Database database) {
+    public String buildBootstrapSql(Catalog database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

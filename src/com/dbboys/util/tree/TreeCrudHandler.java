@@ -240,7 +240,7 @@ public class TreeCrudHandler {
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
-            }else if(treeData instanceof Database){
+            }else if(treeData instanceof Catalog){
                 DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
                 if (renamePlatform != null && renamePlatform.usesSchemaModel()) {
                     renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, newName.toUpperCase(), "user",
@@ -289,7 +289,7 @@ public class TreeCrudHandler {
         if (treeData instanceof Connect) {
             return I18n.t("metadata.dialog.rename.connection", "重命名数据库连接：%s").formatted(treeData.getName());
         }
-        if (treeData instanceof Database) {
+        if (treeData instanceof Catalog) {
             return I18n.t("metadata.dialog.rename.database", "重命名数据库：%s").formatted(treeData.getName());
         }
         if (treeData instanceof Table) {
@@ -321,7 +321,7 @@ public class TreeCrudHandler {
         String oldName = selectedItem.getValue().getName();
         String objectDisplayName = getDeleteObjectDisplayName(objectType);
         String sql;
-        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database) {
+        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Catalog) {
             sql = "ALTER USER \"" + oldName + "\" RENAME TO \"" + newName + "\"";
         } else {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
@@ -430,7 +430,7 @@ public class TreeCrudHandler {
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
-        }else if(treeData instanceof Database){
+        }else if(treeData instanceof Catalog){
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
             if (platform != null && platform.usesSchemaModel()) {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
@@ -462,7 +462,7 @@ public class TreeCrudHandler {
 
     public static Connect buildObjectConnect(TreeItem<TreeData> selectedItem, boolean useSysmaster) {
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
-        Database currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
+        Catalog currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
         String databaseName = currentDatabase.getName();
         if (useSysmaster) {
             try {
@@ -477,11 +477,11 @@ public class TreeCrudHandler {
         return connect;
     }
 
-    public static void applyDatabaseConnectionProps(Connect connect, Database database, String databaseName) {
+    public static void applyDatabaseConnectionProps(Connect connect, Catalog database, String databaseName) {
         if (connect == null || database == null) {
             return;
         }
-        resolvePlatformResolver().requirePlatform(connect).connection().setSessionDatabase(connect, databaseName);
+        resolvePlatformResolver().requirePlatform(connect).connection().setSessionCatalog(connect, databaseName);
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 TreeViewUtil.connectionService,
                 resolvePlatformResolver(),
@@ -500,7 +500,7 @@ public class TreeCrudHandler {
         }
     }
 
-    private static boolean isNoLogDatabase(Database database) {
+    private static boolean isNoLogDatabase(Catalog database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());
@@ -699,7 +699,7 @@ public class TreeCrudHandler {
                     data.setRunning(true);
                     updateMessage(multi ? loadingProgressPattern.formatted(processed + 1, totalItems) : loadingMessage);
                     Connect connectParam = TreeNavigator.getMetaConnect(item);
-                    Database database = TreeNavigator.getCurrentDatabase(item);
+                    Catalog database = TreeNavigator.getCurrentDatabase(item);
                     String ddlText = "";
                     if (data instanceof Table) {
                         ddlText = TreeViewUtil.tableService.getDDL(connectParam, database, data.getName());
@@ -785,7 +785,7 @@ public class TreeCrudHandler {
 
     public static void handleDatabaseDdlAction(TreeView<TreeData> treeView, BiConsumer<TreeData, String> onSuccess) {
         TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Catalog database)) {
             return;
         }
 
@@ -838,7 +838,7 @@ public class TreeCrudHandler {
 
     public static void exportDatabaseDdlAndData(TreeView<TreeData> treeView) {
         TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Catalog database)) {
             return;
         }
 
@@ -1023,7 +1023,7 @@ public class TreeCrudHandler {
                 if (table != null && table.getName() != null && !table.getName().isBlank()) {
                     exportRequests.add(new TableDataExportRequest(
                             table.getName(),
-                            baseConnect == null ? "" : baseConnect.getDatabase(),
+                            baseConnect == null ? "" : baseConnect.getCatalog(),
                             new Connect(baseConnect),
                             new File(dir, table.getName() + ".csv"),
                             "select * from " + table.getName(),
@@ -1069,7 +1069,7 @@ public class TreeCrudHandler {
         return false;
     }
 
-    private static String buildDatabaseBootstrapSql(Connect connect, Database database) {
+    private static String buildDatabaseBootstrapSql(Connect connect, Catalog database) {
         if (connect == null || database == null) {
             return "";
         }
@@ -1145,7 +1145,7 @@ public class TreeCrudHandler {
         if (tableItem == null || !(tableItem.getValue() instanceof Table table)) {
             return false;
         }
-        Database database = TreeNavigator.getCurrentDatabase(tableItem);
+        Catalog database = TreeNavigator.getCurrentDatabase(tableItem);
         Connect connect = TreeNavigator.getMetaConnect(tableItem);
         if (database == null || connect == null) {
             return false;
@@ -1269,7 +1269,7 @@ public class TreeCrudHandler {
             if (connect == null) {
                 continue;
             }
-            String databaseName = connect == null ? "" : connect.getDatabase();
+            String databaseName = connect == null ? "" : connect.getCatalog();
             File file = new File(dir, table.getName() + extension);
             exportRequests.add(new TableDataExportRequest(
                     table.getName(),
@@ -1504,7 +1504,7 @@ public class TreeCrudHandler {
                 normalizeExportConnectionToken(connect.getDbtype()),
                 normalizeExportConnectionToken(connect.getIp()),
                 normalizeExportConnectionToken(connect.getPort()),
-                normalizeExportConnectionToken(connect.getDatabase()),
+                normalizeExportConnectionToken(connect.getCatalog()),
                 normalizeExportConnectionToken(connect.getUsername()),
                 normalizeExportConnectionToken(connect.getPassword()),
                 normalizeExportConnectionToken(connect.getDriver()),
@@ -1650,7 +1650,7 @@ public class TreeCrudHandler {
             return 0;
         }
 
-        Database database = new Database(bundle.databaseName);
+        Catalog database = new Catalog(bundle.databaseName);
         database.setDbLocale(bundle.dbLocale);
         database.setDbLog(bundle.dbLog);
         Connect bootstrapConnect = new Connect(baseConnect);
@@ -1703,7 +1703,7 @@ public class TreeCrudHandler {
     }
 
     private static int importDatabaseDataFilesParallel(Connect databaseConnect,
-                                                       Database database,
+                                                       Catalog database,
                                                        List<File> dataFiles,
                                                        BackgroundSqlTask backSqlTask,
                                                        DatabaseImportRuntime runtime) throws Exception {
@@ -1770,7 +1770,7 @@ public class TreeCrudHandler {
                         );
                         runtime.registerTask(workerTask);
                         try {
-                            Database workerDatabase = copyImportDatabase(database);
+                            Catalog workerDatabase = copyImportDatabase(database);
                             int importedRows = TreeViewUtil.tableService.importTableDataSync(
                                     new Connect(workerConnect),
                                     workerDatabase,
@@ -1844,8 +1844,8 @@ public class TreeCrudHandler {
         }
     }
 
-    private static Database copyImportDatabase(Database database) {
-        Database copy = new Database(database == null ? "" : database.getName());
+    private static Catalog copyImportDatabase(Catalog database) {
+        Catalog copy = new Catalog(database == null ? "" : database.getName());
         if (database != null) {
             copy.setDbLocale(database.getDbLocale());
             copy.setDbLog(database.getDbLog());
@@ -2105,7 +2105,7 @@ public class TreeCrudHandler {
             return;
         }
 
-        Database database = TreeNavigator.getCurrentDatabase(selectedItem);
+        Catalog database = TreeNavigator.getCurrentDatabase(selectedItem);
         if (database == null) {
             AlertUtil.CustomAlert(
                     I18n.t("common.error", "错误"),

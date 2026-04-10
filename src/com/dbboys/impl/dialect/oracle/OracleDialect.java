@@ -9,7 +9,7 @@ import com.dbboys.api.MetadataRepository;
 import com.dbboys.api.SqlexeRepository;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -57,15 +57,15 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
-        if (connect.getSessionDatabase() == null || connect.getSessionDatabase().isBlank()) {
+        if (connect.getSessionCatalog() == null || connect.getSessionCatalog().isBlank()) {
             String username = connect.getUsername();
             if (username != null && !username.isBlank()) {
-                connect.setSessionDatabase(username.toUpperCase());
+                connect.setSessionCatalog(username.toUpperCase());
             }
         }
         String host = connect.getIp() != null ? connect.getIp() : "localhost";
         String port = connect.getPort() != null && !connect.getPort().isEmpty() ? connect.getPort() : "1521";
-        String database = connect.getDatabase() != null ? connect.getDatabase() : "ORCL";
+        String database = connect.getCatalog() != null ? connect.getCatalog() : "ORCL";
         String url = "jdbc:oracle:thin:@//" + host + ":" + port + "/" + database;
         String jarFilePath = "file:extlib/" + DB_TYPE + "/" + (connect.getDriver() != null && !connect.getDriver().isEmpty() ? connect.getDriver() : "ojdbc8.jar");
         return new ConnectionParams(url, DRIVER_CLASS, jarFilePath);
@@ -73,10 +73,10 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
 
     @Override
     public void sessionInit(Connection conn, Connect connect) throws Exception {
-        String sessionDatabase = getSessionDatabase(connect);
-        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
-            metadataRepository.setDatabase(conn, sessionDatabase);
-            connect.setSessionDatabase(sessionDatabase);
+        String sessionCatalog = getSessionCatalog(connect);
+        if (sessionCatalog != null && !sessionCatalog.isBlank()) {
+            metadataRepository.setDatabase(conn, sessionCatalog);
+            connect.setSessionCatalog(sessionCatalog);
         }
     }
 
@@ -239,7 +239,7 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
-    public String buildBootstrapSql(Database database) {
+    public String buildBootstrapSql(Catalog database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }
@@ -415,24 +415,24 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
-    public String getSessionDatabase(Connect connect) {
+    public String getSessionCatalog(Connect connect) {
         if (connect == null) {
             return "";
         }
-        String sessionDatabase = connect.getSessionDatabase();
-        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
-            return sessionDatabase;
+        String sessionCatalog = connect.getSessionCatalog();
+        if (sessionCatalog != null && !sessionCatalog.isBlank()) {
+            return sessionCatalog;
         }
         String username = connect.getUsername();
         return username == null ? "" : username;
     }
 
     @Override
-    public void setSessionDatabase(Connect connect, String databaseName) {
+    public void setSessionCatalog(Connect connect, String catalogName) {
         if (connect == null) {
             return;
         }
-        connect.setSessionDatabase(databaseName);
+        connect.setSessionCatalog(catalogName);
     }
 
     @Override

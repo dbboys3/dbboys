@@ -130,16 +130,16 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    public ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Database database, boolean sessionInitOnReconnect) {
+    public ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Catalog database, boolean sessionInitOnReconnect) {
         return changeDatabase(connect, database, sessionInitOnReconnect, true);
     }
 
-    public ChangeDefaultDatabaseResult changeSessionDatabase(Connect connect, Database database, boolean sessionInitOnReconnect) {
+    public ChangeDefaultDatabaseResult changeSessionDatabase(Connect connect, Catalog database, boolean sessionInitOnReconnect) {
         return changeDatabase(connect, database, sessionInitOnReconnect, false);
     }
 
     private ChangeDefaultDatabaseResult changeDatabase(Connect connect,
-                                                       Database database,
+                                                       Catalog database,
                                                        boolean sessionInitOnReconnect,
                                                        boolean persistDefaultDatabase) {
         ChangeDefaultDatabaseResult result = new ChangeDefaultDatabaseResult();
@@ -169,8 +169,8 @@ public class ConnectionServiceImpl implements ConnectionService {
                 result.setDisconnected(true);
             } else if (kind == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION) {
                 Connection oldConn = connect.getConn();
-                String previousDatabase = connect.getDatabase();
-                String previousSessionDatabase = connect.getSessionDatabase();
+                String previousDatabase = connect.getCatalog();
+                String previousSessionDatabase = connect.getSessionCatalog();
                 String previousProps = connect.getProps();
                 try {
                     applyTargetDatabase(dialect, connect, database, persistDefaultDatabase);
@@ -194,8 +194,8 @@ public class ConnectionServiceImpl implements ConnectionService {
                     result.setReconnected(true);
                 } catch (Exception ex) {
                     connect.setConn(oldConn);
-                    connect.setDatabase(previousDatabase);
-                    connect.setSessionDatabase(previousSessionDatabase);
+                    connect.setCatalog(previousDatabase);
+                    connect.setSessionCatalog(previousSessionDatabase);
                     connect.setProps(previousProps);
                     applyReconnectFailure(result, ex);
                 }
@@ -215,7 +215,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     private void adjustDefaultDatabaseIsolationLevel(Connect connect,
-                                                     Database database,
+                                                     Catalog database,
                                                      boolean persistDefaultDatabase) {
         if (!persistDefaultDatabase || !supportsConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL)) {
             return;
@@ -272,7 +272,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    private ConnectionLease acquireConnection(Connect connect, Database database) throws Exception {
+    private ConnectionLease acquireConnection(Connect connect, Catalog database) throws Exception {
         Connection conn = connect.getConn();
         var repo = platformResolver.metadata(connect);
         try {
@@ -286,7 +286,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                     && fallback != null) {
                 repo.setDatabase(connect.getConn(), fallback);
                 Connect connect1 = new Connect(connect);
-                dialect.connection().setSessionDatabase(connect1, database.getName());
+                dialect.connection().setSessionCatalog(connect1, database.getName());
                 applySupportedConnectionProperty(connect1, PROP_DB_LOCALE, database.getDbLocale());
                 if (shouldIgnoreIsolationLevel(database)) {  // 如果数据库日志为nolog，则不设置隔离级别，否则连接报错-256
                     applySupportedConnectionProperty(connect1, PROP_IFX_ISOLATION_LEVEL, "");
@@ -301,24 +301,24 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     private void applyTargetDatabase(DatabasePlatform dialect,
                                      Connect connect,
-                                     Database database,
+                                     Catalog database,
                                      boolean persistDefaultDatabase) {
         if (dialect == null || connect == null || database == null) {
             return;
         }
         if (persistDefaultDatabase) {
-            connect.setDatabase(database.getName());
+            connect.setCatalog(database.getName());
             if ("ORACLE".equalsIgnoreCase(dialect.getDbType())) {
-                connect.setSessionDatabase("");
+                connect.setSessionCatalog("");
             } else {
-                connect.setSessionDatabase(database.getName());
+                connect.setSessionCatalog(database.getName());
             }
             return;
         }
-        dialect.connection().setSessionDatabase(connect, database.getName());
+        dialect.connection().setSessionCatalog(connect, database.getName());
     }
 
-    public <T> T withMetaSession(Connect connect, Database database, SqlWork<T> action) throws Exception {
+    public <T> T withMetaSession(Connect connect, Catalog database, SqlWork<T> action) throws Exception {
         if (connect == null) {
             return null;
         }
@@ -346,7 +346,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    private boolean shouldIgnoreIsolationLevel(Database database) {
+    private boolean shouldIgnoreIsolationLevel(Catalog database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

@@ -1,7 +1,7 @@
 package com.dbboys.impl.dialect.gbase;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.api.ConnectionSupport;
 import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
@@ -57,19 +57,19 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
-        String sessionDatabase = getSessionDatabase(connect);
-        if (sessionDatabase == null || sessionDatabase.isBlank()) {
-            sessionDatabase = connect.getDatabase();
+        String sessionCatalog = getSessionCatalog(connect);
+        if (sessionCatalog == null || sessionCatalog.isBlank()) {
+            sessionCatalog = connect.getCatalog();
         }
-        if (sessionDatabase == null || sessionDatabase.isBlank()) {
-            sessionDatabase = defaultDatabase();
+        if (sessionCatalog == null || sessionCatalog.isBlank()) {
+            sessionCatalog = defaultDatabase();
         }
-        connect.setSessionDatabase(sessionDatabase);
+        connect.setSessionCatalog(sessionCatalog);
         String url;
         if (connect.getPropByName(NAMED_SERVER_PROP).isEmpty()) {
-            url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + sessionDatabase;
+            url = "jdbc:gbasedbt-sqli://" + connect.getIp() + ":" + connect.getPort() + "/" + sessionCatalog;
         } else {
-            url = "jdbc:gbasedbt-sqli:/" + sessionDatabase + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/" + connect.getDbtype() + "/sqlhosts;";
+            url = "jdbc:gbasedbt-sqli:/" + sessionCatalog + ":SQLH_TYPE=FILE;SQLH_FILE=extlib/" + connect.getDbtype() + "/sqlhosts;";
         }
         String jarFilePath = "file:extlib/" + connect.getDbtype() + "/" + connect.getDriver();
         return new ConnectionParams(url, DRIVER_CLASS, jarFilePath);
@@ -110,11 +110,11 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public void setSessionDatabase(Connect connect, String databaseName) {
+    public void setSessionCatalog(Connect connect, String catalogName) {
         if (connect == null) {
             return;
         }
-        connect.setSessionDatabase(databaseName);
+        connect.setSessionCatalog(catalogName);
     }
 
     @Override
@@ -175,7 +175,7 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public String buildBootstrapSql(Database database) {
+    public String buildBootstrapSql(Catalog database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

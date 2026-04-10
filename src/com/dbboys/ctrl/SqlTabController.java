@@ -47,7 +47,7 @@ public class SqlTabController {
     @FXML
     public ChoiceBox<Connect> sqlConnectChoiceBox;
     @FXML
-    public ChoiceBox<Database> sqlDbChoiceBox;
+    public ChoiceBox<Catalog> sqlDbChoiceBox;
     @FXML
     public ChoiceBox<String> sqlCommitModeChoiceBox;
     //sql编辑框及结果集
@@ -68,7 +68,7 @@ public class SqlTabController {
             return null;
         }
     };
-    public ObservableList<Database> databaseChoiceBoxList = FXCollections.observableArrayList();
+    public ObservableList<Catalog> databaseChoiceBoxList = FXCollections.observableArrayList();
     public CustomSearchReplaceVbox searchReplaceBox = new CustomSearchReplaceVbox(null);
     public VBox resultSetVBox = new VBox();
     public ResultSetTabController currentResultSetTabController;
@@ -148,7 +148,7 @@ public class SqlTabController {
     private final ConnectionService connectionService = AppContext.get(ConnectionService.class);
     private final SqlexeService sqlexeService = AppContext.get(SqlexeService.class);
     final Connect defaultConnect = new Connect();
-    final Database defaultDatabase = new Database();
+    final Catalog defaultDatabase = new Catalog();
     List<Object> sqlParamList = new ArrayList<>();
     String sqlExecutionResult = "";
     boolean sqlExecutionSuccess = false;

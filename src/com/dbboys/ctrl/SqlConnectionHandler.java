@@ -13,7 +13,7 @@ import com.dbboys.ui.IconPaths;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.TreeData;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -170,7 +170,7 @@ public class SqlConnectionHandler {
     }
 
     private void loadDatabasesForConnect() {
-        List<Database> db_names = sqlexeService.getDatabases(ctrl.sqlConnect);
+        List<Catalog> db_names = sqlexeService.getDatabases(ctrl.sqlConnect);
         ctrl.databaseChoiceBoxList = FXCollections.observableArrayList(db_names);
         Platform.runLater(() -> {
             ctrl.sqlDbChoiceBox.setValue(ctrl.defaultDatabase);
@@ -183,12 +183,12 @@ public class SqlConnectionHandler {
     }
 
     private void selectCurrentDatabase() {
-        String sessionDb = ctrl.sqlConnect.getSessionDatabase();
+        String sessionDb = ctrl.sqlConnect.getSessionCatalog();
         if (sessionDb == null || sessionDb.isBlank()) {
             return;
         }
         int i = 0;
-        for (Database item : ctrl.databaseChoiceBoxList) {
+        for (Catalog item : ctrl.databaseChoiceBoxList) {
             if (item.getName().equalsIgnoreCase(sessionDb)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
                 return;
@@ -243,7 +243,7 @@ public class SqlConnectionHandler {
         });
     }
 
-    private void applyCommitModeAfterDatabaseSwitch(Database database, boolean reconnected) {
+    private void applyCommitModeAfterDatabaseSwitch(Catalog database, boolean reconnected) {
         if (isNoLogDatabase(database)) {
             tryApplyAutoCommitModeAndSelectAuto();
             return;
@@ -300,7 +300,7 @@ public class SqlConnectionHandler {
         }
     }
 
-    private boolean isNoLogDatabase(Database database) {
+    private boolean isNoLogDatabase(Catalog database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

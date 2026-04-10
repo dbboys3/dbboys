@@ -241,7 +241,7 @@ public class TreeContextMenuHandler {
         importDataItem.setOnAction(ev -> TreeCrudHandler.importTableData(treeView.getSelectionModel().getSelectedItem()));
         importSqlScriptItem.setOnAction(event -> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-            if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+            if (selectedItem == null || !(selectedItem.getValue() instanceof Catalog database)) {
                 return;
             }
             FileChooser fileChooser = new FileChooser();
@@ -330,7 +330,7 @@ public class TreeContextMenuHandler {
                 return;
             }
             if (event.getCode() == KeyCode.N && event.isControlDown()) {
-                if (selectedItem.getValue() instanceof Database) {
+                if (selectedItem.getValue() instanceof Catalog) {
                     TreeViewUtil.databaseOpenFileItem.fire();
                     event.consume();
                 }
@@ -575,7 +575,7 @@ public class TreeContextMenuHandler {
         TreeViewUtil.databaseOpenFileItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect(TreeNavigator.getMetaConnect(selectedItem));
-            Database database=TreeNavigator.getCurrentDatabase(selectedItem);
+            Catalog database=TreeNavigator.getCurrentDatabase(selectedItem);
             TreeCrudHandler.applyDatabaseConnectionProps(connect, database, database.getName());
             TabpaneUtil.addCustomSqlTab(connect);
         });
@@ -832,7 +832,7 @@ public class TreeContextMenuHandler {
             if (!confirm) {
                     return;
                 }
-            if (treeData instanceof Database) {
+            if (treeData instanceof Catalog) {
                 String schemaSql = platform != null ? platform.gatherSchemaSql(schemaName) : "update statistics";
                 TreeViewUtil.databaseService.updateStatistics(connect, schemaSql, ()->{
                     NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
@@ -1195,7 +1195,7 @@ public class TreeContextMenuHandler {
                 Class<?> anchorType = firstSelected == null || firstSelected.getValue() == null
                         ? null
                         : firstSelected.getValue().getClass();
-                if (anchorType == Database.class || anchorType == ObjectFolder.class) {
+                if (anchorType == Catalog.class || anchorType == ObjectFolder.class) {
                     treeview_menu.hide();
                     return;
                 }
@@ -1322,7 +1322,7 @@ public class TreeContextMenuHandler {
                 }
 
                 //如果是系统库，禁用变更操作
-                if(selectedItem.getValue() instanceof Database||
+                if(selectedItem.getValue() instanceof Catalog||
                         selectedItem.getValue() instanceof ObjectFolder||
                         selectedItem.getValue() instanceof SysTable||
                         selectedItem.getValue() instanceof Table||
@@ -1470,7 +1470,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(deleteItem);
                 }
                 //数据库
-                else if(selectedItem.getValue() instanceof Database) {
+                else if(selectedItem.getValue() instanceof Catalog) {
                     DatabasePlatform dbNodePlatform = TreeNavigator.resolvePlatform(selectedItem);
                     treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
                     if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
@@ -1759,7 +1759,7 @@ public class TreeContextMenuHandler {
         if (result == buttonTypeOk) {
             Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
             String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
-            connect.setDatabase(resolveFallbackDatabase(connect));
+            connect.setCatalog(resolveFallbackDatabase(connect));
             ConnectionPropertyUtil.applySupportedConnectionProperty(
                     TreeViewUtil.connectionService,
                     resolvePlatformResolver(),
@@ -1872,7 +1872,7 @@ public class TreeContextMenuHandler {
             }
         } catch (Exception ignored) {
         }
-        return connect.getDatabase();
+        return connect.getCatalog();
     }
 
     private static boolean supportsInstanceAdmin(Connect connect) {

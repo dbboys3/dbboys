@@ -3,16 +3,18 @@ package com.dbboys.vo;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
-public class Database extends TreeData{
-    private StringProperty dbCreated=new SimpleStringProperty();
-    private StringProperty dbLocale=new SimpleStringProperty();
-    private StringProperty dbOwner=new SimpleStringProperty();
-    private StringProperty dbLog=new SimpleStringProperty();
-    private StringProperty dbUseGLU=new SimpleStringProperty();
-    private StringProperty dbSpace=new SimpleStringProperty();
-    private StringProperty dbSize=new SimpleStringProperty();
-    public Database() {}
-    public Database(String name) {
+public class Catalog extends TreeData {
+    private StringProperty dbCreated = new SimpleStringProperty();
+    private StringProperty dbLocale = new SimpleStringProperty();
+    private StringProperty dbOwner = new SimpleStringProperty();
+    private StringProperty dbLog = new SimpleStringProperty();
+    private StringProperty dbUseGLU = new SimpleStringProperty();
+    private StringProperty dbSpace = new SimpleStringProperty();
+    private StringProperty dbSize = new SimpleStringProperty();
+
+    public Catalog() {}
+
+    public Catalog(String name) {
         super(name);
     }
 

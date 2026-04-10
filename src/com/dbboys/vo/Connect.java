@@ -17,8 +17,8 @@ public class Connect extends TreeData{
     private StringProperty  dbtype=new SimpleStringProperty();
     private StringProperty  ip=new SimpleStringProperty();
     private StringProperty  port=new SimpleStringProperty();
-    private StringProperty  database=new SimpleStringProperty();
-    private StringProperty  sessionDatabase=new SimpleStringProperty();
+    private StringProperty  catalog=new SimpleStringProperty();
+    private StringProperty  sessionCatalog=new SimpleStringProperty();
     private StringProperty  username=new SimpleStringProperty();
     private StringProperty  password=new SimpleStringProperty();
     private Connection conn;
@@ -45,8 +45,8 @@ public class Connect extends TreeData{
         setDbtype(connect.getDbtype());
         setIp(connect.getIp());
         setPort(connect.getPort());
-        setDatabase(connect.getDatabase());
-        setSessionDatabase(connect.getSessionDatabase());
+        setCatalog(connect.getCatalog());
+        setSessionCatalog(connect.getSessionCatalog());
         setUsername(connect.getUsername());
         setPassword(connect.getPassword());
         setDriver(connect.getDriver());
@@ -133,33 +133,33 @@ public class Connect extends TreeData{
         this.port.set(port);
     }
 
-    public String getDatabase() {
-        return database.get();
+    public String getCatalog() {
+        return catalog.get();
     }
 
-    public StringProperty databaseProperty() {
-        return database;
+    public StringProperty catalogProperty() {
+        return catalog;
     }
 
-    public void setDatabase(String database) {
-        this.database.set(database);
+    public void setCatalog(String catalog) {
+        this.catalog.set(catalog);
     }
 
-    public String getSessionDatabase() {
-        return sessionDatabase.get();
+    public String getSessionCatalog() {
+        return sessionCatalog.get();
     }
 
-    public StringProperty sessionDatabaseProperty() {
-        return sessionDatabase;
+    public StringProperty sessionCatalogProperty() {
+        return sessionCatalog;
     }
 
-    public void setSessionDatabase(String sessionDatabase) {
-        this.sessionDatabase.set(sessionDatabase);
+    public void setSessionCatalog(String sessionCatalog) {
+        this.sessionCatalog.set(sessionCatalog);
     }
 
-    public String getEffectiveDatabase() {
-        String sd = getSessionDatabase();
-        return sd != null && !sd.isBlank() ? sd : getDatabase();
+    public String getEffectiveCatalog() {
+        String sd = getSessionCatalog();
+        return sd != null && !sd.isBlank() ? sd : getCatalog();
     }
 
     public String getUsername() {

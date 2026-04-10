@@ -426,7 +426,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
         return connect != null && "informix".equalsIgnoreCase(connect.getUsername());
     }
 
-    public List<Database> getDatabases(Connection conn) throws SQLException {
+    public List<Catalog> getDatabases(Connection conn) throws SQLException {
         try {
             return queryDatabases(conn, SQL_DATABASES_DEFAULT);
         } catch (SQLException e) {
@@ -437,10 +437,10 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
         }
     }
 
-    private List<Database> queryDatabases(Connection conn, String sql) throws SQLException {
+    private List<Catalog> queryDatabases(Connection conn, String sql) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(sql, null, rs -> {
-            Database database = new Database(rs.getString(1));
+            Catalog database = new Catalog(rs.getString(1));
             database.setDbOwner(rs.getString(2));
             database.setDbCreated(rs.getString(3));
             database.setDbSpace(rs.getString(4));
@@ -452,10 +452,10 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
         });
     }
 
-    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.queryOne(SQL_DATABASE_INFO, List.of(databaseName, databaseName), rs -> {
-            Database database = new Database(rs.getString(1));
+            Catalog database = new Catalog(rs.getString(1));
             database.setDbOwner(rs.getString(2));
             database.setDbCreated(rs.getString(3));
             database.setDbSpace(rs.getString(4));
@@ -630,7 +630,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
         });
     }
 
-    public List<Sequence> getSequences(Connection conn, Database database) throws SQLException {
+    public List<Sequence> getSequences(Connection conn, Catalog database) throws SQLException {
         return getSequences(conn, database.getName());
     }
 

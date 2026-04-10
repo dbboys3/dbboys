@@ -229,7 +229,7 @@ public class CreateConnectController {
                 passwordTextField.setText(((Connect) treeDataParam).getPassword());
                 readOnlyCheckBox.setSelected(((Connect) treeDataParam).getReadonly());
                 connect.setId(((Connect) treeDataParam).getId()); //用于检查连接名称是否已存在，如果是编辑，要排除自己的名字
-                connect.setDatabase(((Connect) treeDataParam).getDatabase());
+                connect.setCatalog(((Connect) treeDataParam).getCatalog());
                 int j=0;
                 ObservableList<String> items = dbTypeChoiceBox.getItems();
                 for (String item : items) {
@@ -264,7 +264,7 @@ public class CreateConnectController {
 
         initializingDbTypeSelection = false;
         refreshDriverPropertyButton(dbTypeChoiceBox.getValue());
-        refreshInstanceField(dbTypeChoiceBox.getValue(), connect.getDatabase());
+        refreshInstanceField(dbTypeChoiceBox.getValue(), connect.getCatalog());
         applyTextFormatters();
 
 
@@ -350,12 +350,12 @@ public class CreateConnectController {
         if (isOracleDbType(connect.getDbtype())) {
             String serviceName = instanceNameTextField == null ? "" : instanceNameTextField.getText();
             if (serviceName == null || serviceName.isBlank()) {
-                connect.setDatabase(defaultDatabaseFor(connect.getDbtype()));
+                connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
             } else {
-                connect.setDatabase(serviceName.trim());
+                connect.setCatalog(serviceName.trim());
             }
-        } else if (connect.getDatabase() == null || connect.getDatabase().isBlank()) {
-            connect.setDatabase(defaultDatabaseFor(connect.getDbtype()));
+        } else if (connect.getCatalog() == null || connect.getCatalog().isBlank()) {
+            connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
         }
         String username = usernameTextField.getText();
         if (isOracleDbType(connect.getDbtype()) && username != null) {
@@ -425,12 +425,12 @@ public class CreateConnectController {
         if (shouldReplaceField(usernameTextField.getText(), oldDialect == null ? null : oldDialect.connection().defaultUsername())) {
             usernameTextField.setText(newDialect.connection().defaultUsername());
         }
-        if (connect.getDatabase() == null
-                || connect.getDatabase().isBlank()
-                || (oldDialect != null && connect.getDatabase().equalsIgnoreCase(oldDialect.connection().defaultDatabase()))) {
-            connect.setDatabase(newDialect.connection().defaultDatabase());
+        if (connect.getCatalog() == null
+                || connect.getCatalog().isBlank()
+                || (oldDialect != null && connect.getCatalog().equalsIgnoreCase(oldDialect.connection().defaultDatabase()))) {
+            connect.setCatalog(newDialect.connection().defaultDatabase());
         }
-        refreshInstanceField(newDbType, connect.getDatabase());
+        refreshInstanceField(newDbType, connect.getCatalog());
     }
 
     private void refreshConnectionPropertiesForDbType(String newDbType, boolean preserveExistingProps) {
@@ -556,8 +556,8 @@ public class CreateConnectController {
         if (template.getDriver() != null && !template.getDriver().isBlank()) {
             selectChoiceValue(driverChoiceBox, template.getDriver());
         }
-        connect.setDatabase(template.getDatabase());
-        refreshInstanceField(template.getDbtype(), template.getDatabase());
+        connect.setCatalog(template.getCatalog());
+        refreshInstanceField(template.getDbtype(), template.getCatalog());
         String namedServerPropName = namedServerPropNameFor(template.getDbtype());
         if (!namedServerPropName.isEmpty()) {
             String namedServer = template.getPropByName(namedServerPropName);

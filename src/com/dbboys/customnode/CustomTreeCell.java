@@ -135,7 +135,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
-            else if(item instanceof Database database){
+            else if(item instanceof Catalog database){
                 renderDatabase(database, item, treeItem);
             }
             else if(item instanceof ObjectFolder objectFolder){
@@ -436,7 +436,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nIP ADDR: ", connect.ipProperty(), "\nPORT   : ", connect.portProperty(), "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
     }
 
-    private void renderDatabase(Database database, TreeData item, TreeItem<TreeData> treeItem) {
+    private void renderDatabase(Catalog database, TreeData item, TreeItem<TreeData> treeItem) {
         applyConnectIconSlot(false);
         DatabasePlatform platform = TreeNavigator.resolvePlatform(treeItem);
         if (platform != null && platform.usesSchemaModel()) {
@@ -656,7 +656,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setOnDragDetected(null);
         setOnDragDone(null);
 
-        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof Database)) {
+        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof Catalog)) {
             return;
         }
 
@@ -703,7 +703,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             TreeViewUtil.connectInfoItem.fire();
             return;
         }
-        if (item instanceof Database) {
+        if (item instanceof Catalog) {
             TreeViewUtil.databaseOpenFileItem.fire();
             return;
         }
@@ -889,7 +889,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 || "nologging".equalsIgnoreCase(normalized);
     }
 
-    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, Database database) {
+    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, Catalog database) {
         TreeItem<TreeData> parent = treeItem.getParent();
         if (parent == null || parent.getParent() == null) {
             return false;
@@ -898,7 +898,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         if (!(connectData instanceof Connect connect)) {
             return false;
         }
-        return database.getName().equals(connect.getDatabase());
+        return database.getName().equals(connect.getCatalog());
     }
 
     private void bindNameLabel(TreeData item) {

@@ -20,13 +20,13 @@ public interface MetadataRepository {
         return false;
     }
 
-    List<Database> getDatabases(Connection conn) throws SQLException;
+    List<Catalog> getDatabases(Connection conn) throws SQLException;
 
-    default List<Database> getMetadataDatabases(Connection conn) throws SQLException {
+    default List<Catalog> getMetadataDatabases(Connection conn) throws SQLException {
         return getDatabases(conn);
     }
 
-    Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
+    Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
 
     int getUserTablesCount(Connection conn) throws SQLException;
 

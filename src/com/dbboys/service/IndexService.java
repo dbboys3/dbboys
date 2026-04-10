@@ -5,7 +5,7 @@ import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.Index;
 import com.dbboys.vo.ObjectList;
 import javafx.concurrent.Task;
@@ -27,7 +27,7 @@ public class IndexService implements MetaObjectService {
         this.platformResolver = platformResolver;
     }
 
-    public Index getIndex(Connect connect, Database database,String objectName) throws Exception {
+    public Index getIndex(Connect connect, Catalog database,String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getIndex(conn, database.getName(), objectName));
     }
     @Override
@@ -51,7 +51,7 @@ public class IndexService implements MetaObjectService {
     }
 
     public void refreshIndexMeta(Connect connect,
-                                 Database database,
+                                 Catalog database,
                                  String indexName,
                                  Consumer<Index> onLoadedUi,
                                  Runnable onFinishedUi) {

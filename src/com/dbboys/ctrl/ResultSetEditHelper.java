@@ -92,7 +92,7 @@ public class ResultSetEditHelper {
         updateResult.setEndTime(sdf.format(sql_finish_time));
         updateResult.setElapsedTime(String.format("%.3f", (sql_finish_time - sql_begin_time) / 1000.0) + " sec");
         updateResult.setAffectedRows(sqlAffect);
-        updateResult.setDatabase(ctrl.sqlConnect.getEffectiveDatabase());
+        updateResult.setDatabase(ctrl.sqlConnect.getEffectiveCatalog());
         updateResult.setUpdateSql(updateSql);
         if (commitmode.getSelectionModel().getSelectedIndex() == 1) {
             updateResult.setMark(String.format(I18n.t("resultset.mark.manual_edit", "手动提交，查询结果集编辑，参数[%s,%s]"), newValue, sqlParams));

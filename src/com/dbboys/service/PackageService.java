@@ -6,7 +6,7 @@ import com.dbboys.api.MetaObjectService.DdlFetcher;
 import com.dbboys.util.SqlParserUtil;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.DBPackage;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.ObjectList;
 
 import java.sql.Connection;

@@ -10,7 +10,7 @@ import com.dbboys.i18n.I18n;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.Sql;
 import com.dbboys.vo.UpdateResult;
 import javafx.application.Platform;
@@ -387,7 +387,7 @@ public class SqlExecutionHelper {
                         ctrl.connectionDisconnected();
                     } else if (requiresRecovery) {
                         try {
-                            sqlexeRepository().recoverSession(ctrl.sqlConnect.getConn(), ctrl.sqlConnect.getDatabase());
+                            sqlexeRepository().recoverSession(ctrl.sqlConnect.getConn(), ctrl.sqlConnect.getCatalog());
                         } catch (Exception ex) {
                             log.error(ex.getMessage(), ex);
                         }
@@ -407,10 +407,10 @@ public class SqlExecutionHelper {
             LocalDbRepository.saveSqlHistory(ctrl.updateResult);
 
             if (sql.getSqlType().startsWith("DATABASE")) {
-                ctrl.sqlConnect.setDatabase(sql.getSqlType().split(" ")[1]);
+                ctrl.sqlConnect.setCatalog(sql.getSqlType().split(" ")[1]);
                 Platform.runLater(() -> {
-                    Database db = new Database();
-                    db.setName(ctrl.sqlConnect.getDatabase());
+                    Catalog db = new Catalog();
+                    db.setName(ctrl.sqlConnect.getCatalog());
                     ctrl.sqlDbChoiceBox.setValue(db);
                 });
             }
@@ -598,7 +598,7 @@ public class SqlExecutionHelper {
     }
 
     private String resolveEffectiveDatabase() {
-        return ctrl.sqlConnect.getEffectiveDatabase();
+        return ctrl.sqlConnect.getEffectiveCatalog();
     }
 
     private static String stripTrailingSemicolon(String sql) {

@@ -1,7 +1,7 @@
 package com.dbboys.api;
 
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -125,7 +125,7 @@ public interface DatabasePlatform {
         return "导出数据库\"%s\"";
     }
 
-    default String buildBootstrapSql(Database database) {
+    default String buildBootstrapSql(Catalog database) {
         return "";
     }
 

@@ -38,24 +38,24 @@ public interface ConnectionSupport {
         return "[]";
     }
 
-    default String getSessionDatabase(Connect connect) {
+    default String getSessionCatalog(Connect connect) {
         if (connect == null) {
             return "";
         }
-        String sessionDatabase = connect.getSessionDatabase();
-        if (sessionDatabase != null && !sessionDatabase.isBlank()) {
-            return sessionDatabase;
+        String sessionCatalog = connect.getSessionCatalog();
+        if (sessionCatalog != null && !sessionCatalog.isBlank()) {
+            return sessionCatalog;
         }
-        String database = connect.getDatabase();
-        return database == null ? "" : database;
+        String catalog = connect.getCatalog();
+        return catalog == null ? "" : catalog;
     }
 
-    default void setSessionDatabase(Connect connect, String databaseName) {
+    default void setSessionCatalog(Connect connect, String catalogName) {
         if (connect == null) {
             return;
         }
-        connect.setSessionDatabase(databaseName);
-        connect.setDatabase(databaseName);
+        connect.setSessionCatalog(catalogName);
+        connect.setCatalog(catalogName);
     }
 
     default boolean supportsConnectionProperties() {

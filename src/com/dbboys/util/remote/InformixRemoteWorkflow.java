@@ -167,7 +167,7 @@ public final class InformixRemoteWorkflow {
         connect.setDbtype(dialect.getDbType());
         connect.setIp(ctx.host());
         connect.setPort(ctx.fieldValue(InformixRemoteFields.LISTEN_PORT));
-        connect.setDatabase(resolveInstalledDatabaseName(ctx, dialect.connection().defaultDatabase()));
+        connect.setCatalog(resolveInstalledDatabaseName(ctx, dialect.connection().defaultDatabase()));
         connect.setUsername(InformixRemoteFields.LOGIN_USERNAME);
         connect.setPassword(ctx.fieldValue(InformixRemoteFields.INFORMIX_PASSWORD));
         connect.setProps(dialect.connection().defaultConnectionProps());

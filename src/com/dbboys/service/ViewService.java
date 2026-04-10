@@ -4,7 +4,7 @@ import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.api.MetaObjectService;
 import com.dbboys.api.MetaObjectService.DdlFetcher;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.vo.ObjectList;
 import com.dbboys.vo.View;
 

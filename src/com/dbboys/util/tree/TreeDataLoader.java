@@ -100,7 +100,7 @@ public class TreeDataLoader {
             //创建子线程加载数据库
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
-                          final List<Database> databases = new ArrayList<>();
+                          final List<Catalog> databases = new ArrayList<>();
                           try {
                               Connect connect = TreeNavigator.getMetaConnect(treeItem);
                               databases.addAll(resolvePlatformResolver().metadata(connect).getMetadataDatabases(connect.getConn()));
@@ -112,7 +112,7 @@ public class TreeDataLoader {
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 //查询到的结果添加到数据库条目下
-                                for (Database database : databases) {
+                                for (Catalog database : databases) {
                                     TreeItem<TreeData> item = TreeViewBuilder.createTreeItem(database);
                                     treeItem.getChildren().add(item);
                                 }
@@ -152,12 +152,12 @@ public class TreeDataLoader {
                         }
                     });
         }
-        else if(treeItem.getValue() instanceof Database){
+        else if(treeItem.getValue() instanceof Catalog){
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
                         ObjectList objectList;
                         try {
-                            Database database = TreeNavigator.getCurrentDatabase(treeItem);
+                            Catalog database = TreeNavigator.getCurrentDatabase(treeItem);
                             objectList = TreeViewUtil.databaseService.loadObjects(TreeNavigator.getMetaConnect(treeItem), database);
                         } catch (Exception e) {
                             AppErrorHandler.handle(e);
@@ -179,7 +179,7 @@ public class TreeDataLoader {
                             }else {
                                 //查询到结果后删除loading节点
                                 Platform.runLater(() -> {
-                                    treeItem.setValue((Database) objectList.getInfo());
+                                    treeItem.setValue((Catalog) objectList.getInfo());
                                     treeItem.getChildren().clear();
                                     DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
                                     List<String> items = objectList.getItems();

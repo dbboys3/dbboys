@@ -9,7 +9,7 @@ import com.dbboys.api.SqlModeCapability;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.vo.Connect;
-import com.dbboys.vo.Database;
+import com.dbboys.vo.Catalog;
 import com.dbboys.util.tree.TreeViewUtil;
 
 import java.sql.Connection;
@@ -49,7 +49,7 @@ public class SqlexeService {
     }
 
     public ConnectionService.ChangeDefaultDatabaseResult activeDatabase(Connect connect,
-                                                                       Database database,
+                                                                       Catalog database,
                                                                        SqlTabController sqlTabController) {
         ConnectionService.ChangeDefaultDatabaseResult result =
                 connectionService.changeSessionDatabase(connect, database, false);
@@ -68,8 +68,8 @@ public class SqlexeService {
         return result;
     }
 
-    public List<Database> getDatabases(Connect connect) {
-        List<Database> catalogs = new ArrayList<>();
+    public List<Catalog> getDatabases(Connect connect) {
+        List<Catalog> catalogs = new ArrayList<>();
         try {
             catalogs = databaseService.getDatabases(connect);
         } catch (SQLException e) {
