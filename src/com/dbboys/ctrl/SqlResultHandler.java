@@ -5,8 +5,10 @@ import com.dbboys.i18n.I18n;
 import com.dbboys.vo.UpdateResult;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.StackPane;
 
 public class SqlResultHandler {
     private final SqlTabController ctrl;
@@ -16,6 +18,16 @@ public class SqlResultHandler {
     }
 
     public void setupResultsetTotalTable() {
+        Label tableviewEmptyLabel = new Label();
+        tableviewEmptyLabel.textProperty().bind(I18n.bind("resultset.placeholder.empty"));
+        StackPane runningPlaceholder = new StackPane();
+        runningPlaceholder.setMinSize(0, 0);
+        runningPlaceholder.setPrefSize(0, 0);
+        ctrl.resultsetTotalTableView.setPlaceholder(ctrl.sqlExecuteProcessStackPane.isVisible() ? runningPlaceholder : tableviewEmptyLabel);
+        ctrl.sqlExecuteProcessStackPane.visibleProperty().addListener((obs, oldVal, running) ->
+                ctrl.resultsetTotalTableView.setPlaceholder(running ? runningPlaceholder : tableviewEmptyLabel)
+        );
+
         TableColumn<ObservableList<String>, Object> resultcol = new TableColumn<>();
         ctrl.i18nHelper.bindColumnText(resultcol, "sql.table.result");
         resultcol.setCellFactory(col -> new CustomResultsetTableCell<>());
