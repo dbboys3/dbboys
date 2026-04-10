@@ -15,8 +15,7 @@ public class Table extends TreeData{
     private IntegerProperty nextExtSize = new SimpleIntegerProperty();      // 下一区段大小
     private StringProperty tableComm = new SimpleStringProperty();          // 表注释
     private StringProperty tableTypeCode = new SimpleStringProperty();      // 表类型：T 表, E 外部表, V 视图, Q 序列, P 专用同义词, S 公共同义词
-    @Deprecated
-    private StringProperty tableSqlMode = new SimpleStringProperty();       // 建表模式：Oracle, GBase, MySql
+    private StringProperty tableSqlMode = new SimpleStringProperty();       // 建表模式：Oracle, GBase, MySQL
     /*
      * 表标识(smallint两字节)：
      * 1, 最高位开始第一位是1时（位与16384值为16384时），SQLMODE=Oracle，
@@ -130,19 +129,22 @@ public class Table extends TreeData{
         this.tableTypeCode.set(tableTypeCode == null ? "" : tableTypeCode.trim());
     }
 
-    @Deprecated
     public String getTableSqlMode() {
         return tableSqlMode.get();
     }
 
-    @Deprecated
     public StringProperty tableSqlModeProperty() {
         return tableSqlMode;
     }
 
-    @Deprecated
-    public void setTableSqlMode(String tableSqlMode) {
-        this.tableSqlMode.set(tableSqlMode);
+    public void setTableSqlMode(int tableSqlMode) {
+        String sqlmode = "GBase";
+        if ((tableSqlMode & 16384) == 16384){
+            sqlmode = "Oracle";
+        } else if ((tableSqlMode & 65536) == 65536){
+            sqlmode = "MySQL";
+        }
+        this.tableSqlMode.set(sqlmode);
     }
 
     public int getFlags() {
@@ -287,17 +289,6 @@ public class Table extends TreeData{
 
     public void setUsedsize(String usedsize) {
         this.usedsize.set(usedsize);
-    }
-
-    /**
-     * 返回 SQLMODE
-     * @return
-     */
-    public String getTableSqlModeFunc(){
-        if ((this.flags.get() & 16384) == 16384) {
-            return "Oracle";
-        }
-        return "GBase";
     }
 
     /**

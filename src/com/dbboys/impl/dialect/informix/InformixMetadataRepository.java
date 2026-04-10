@@ -204,12 +204,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
             join sysmaster:systabinfo i on i.ti_partnum=partnum
             """;
 
-    private static final String SQL_TABLE_COMMENT = """
-            select max(c.comments)
-            from systables t
-            left join syscomments c on t.tabname = c.tabname
-            where t.tabtype in ('T','E') and t.tabname=?
-            """;
+    private static final String SQL_TABLE_COMMENT = "";
 
     private static final String SQL_INDEXES = """
             select %s, i.idxname, t.tabname,
@@ -561,9 +556,7 @@ public class InformixMetadataRepository implements com.dbboys.api.MetadataReposi
     }
 
     public String getTableComment(Connection conn, String tableName) throws SQLException {
-        SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
-        String comment = runner.queryOne(SQL_TABLE_COMMENT, List.of(tableName), rs -> rs.getString(1));
-        return comment == null ? "" : comment;
+        return "";
     }
 
     public List<Index> getIndexes(Connection conn, String databaseName) throws SQLException {

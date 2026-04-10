@@ -14,6 +14,7 @@ public class Index extends TreeData {
     private StringProperty tableName=new SimpleStringProperty();
     private IntegerProperty tableId=new SimpleIntegerProperty();
     private StringProperty tableType=new SimpleStringProperty();
+    private StringProperty tableSqlMode=new SimpleStringProperty();
     private StringProperty tableOwner=new SimpleStringProperty();
     private StringProperty indexType=new SimpleStringProperty();           // 索引类型
     private StringProperty indexCluster=new SimpleStringProperty();        // 是否cluster类型
@@ -54,6 +55,24 @@ public class Index extends TreeData {
 
     public void setTableType(String tableType) {
         this.tableType.set(tableType);
+    }
+
+    public String getTableSqlMode() {
+        return tableSqlMode.get();
+    }
+
+    public StringProperty tableSqlModeProperty() {
+        return tableSqlMode;
+    }
+
+    public void setTableSqlMode(int tableSqlMode) {
+        String sqlmode = "GBase";
+        if ((tableSqlMode & 16384) == 16384){
+            sqlmode = "Oracle";
+        } else if ((tableSqlMode & 65536) == 65536){
+            sqlmode = "MySQL";
+        }
+        this.tableSqlMode.set(sqlmode);
     }
 
     public int getTableId(){

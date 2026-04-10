@@ -174,12 +174,41 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      */
     private static String getName(String str){
-        String patternDelimIdent = "^[a-z_][a-z0-9_]*$";
-        if(Pattern.matches(patternDelimIdent,str)){
-            return str;
+        return getName(str,"GBase");
+    }
+
+    /**
+     * 根据SQL模式、参数判断是否需要加反引号或者双引号
+     * @param str
+     * @param sqlmode
+     * @return
+     */
+    private static String getName(String str, String sqlmode){
+        if ("MySQL".equals(sqlmode)){
+            return "`" + str + "`";
         } else {
-            return "\"" + str + "\"";
+            String patternDelimIdent = "^[a-z_][a-z0-9_]*$";
+            if(Pattern.matches(patternDelimIdent,str)){
+                return str;
+            } else {
+                return "\"" + str + "\"";
+            }
         }
+    }
+
+    /**
+     * 对于多数据类型，可使用此方法
+     * 16384 ： Oracle，65536 ： MySQL, 0 : GBase 
+     * @param flags
+     * @return
+     */
+    private static String getSqlModeFunc(int flags){
+        if ((flags % 16384) == 16384){
+            return "Oracle";
+        } else if ((flags % 65536) == 65536){
+            return "MySQL";
+        }
+        return "GBase";
     }
 
     /**
@@ -285,7 +314,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     @Deprecated
     private static int getLength(String coltype, int collength){
-        return getLength(coltype,collength,3);
+        return getLength(coltype,collength,30000);
     }
 
     /**
@@ -306,7 +335,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         else if("TEXT".equals(coltype) || "BYTE".equals(coltype) || "BLOB".equals(coltype) || "CLOB".equals(coltype)) { mycollen=2147483647; }
         // collength = (min_space * 256) + max_size （对于2.0及之前），collength = (min_space * 65536) + max_size（3.0及之后）
         else if("VARCHAR".equals(coltype) || "NVARCHAR".equals(coltype) || "VARCHAR2".equals(coltype) || "NVARCHAR2".equals(coltype)){
-            if (dbver == 3) {
+            if (dbver > 30000) {
                 if(collength > 0){
                     mycollen = collength%65536;
                 } else {
@@ -325,7 +354,7 @@ public final class GbaseDdlRepository implements DdlRepository {
     }
 
     /**
-     * 返回数据类型名称。除40、41需要使用扩展类型外，其它都可通过coltype,collength计算得到。
+     * 返回数据类型名称。除40、41需要使用扩展类型外，其它都可通过coltype,collength计算得到。默认sqlmode为GBase。
      * @param coltype
      * @param collength
      * @param extended_id
@@ -334,40 +363,101 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      */
     private static String getColTypeName(int coltype, int collength, int extended_id, int df, String extypename){
+        return getColTypeName(coltype, collength, extended_id, df, extypename, "GBase");
+    }
+
+    /**
+     * 返回数据类型名称。除40、41需要使用扩展类型外，其它都可通过coltype,collength计算得到。
+     * @param coltype
+     * @param collength
+     * @param extended_id
+     * @param df
+     * @param extypename
+     * @param sqlmode
+     * @return
+     */
+    private static String getColTypeName(int coltype, int collength, int extended_id, int df, String extypename, String sqlmode){
         String coltypeName = null;
         int mycoltype = coltype % 256;
-        if     (mycoltype == 0){ coltypeName = "CHAR"; }
-        else if(mycoltype == 1){ coltypeName = "SMALLINT"; }
-        else if(mycoltype == 2){ coltypeName = "INTEGER"; }
-        else if(mycoltype == 3){ coltypeName = "FLOAT"; }
-        else if(mycoltype == 4){ coltypeName = "SMALLFLOAT"; }
-        else if(mycoltype == 5){ coltypeName = "DECIMAL"; }
-        else if(mycoltype == 6){ coltypeName = "SERIAL"; }
-        else if(mycoltype == 7){ coltypeName = "DATE"; }
-        else if(mycoltype == 8){ coltypeName = "MONEY"; }
-        else if(mycoltype == 9){ coltypeName = "NULL"; }
-        else if(mycoltype == 10){ coltypeName = "DATETIME" + getDTColTypeName(collength); }
-        else if(mycoltype == 11){ coltypeName = "BYTE"; }
-        else if(mycoltype == 12){ coltypeName = "TEXT"; }
-        else if(mycoltype == 13){ coltypeName = "VARCHAR"; }
-        else if(mycoltype == 14){ coltypeName = "INTERVAL" + getDTColTypeName(collength); }
-        else if(mycoltype == 15){ coltypeName = "NCHAR"; }
-        else if(mycoltype == 16){ coltypeName = "NVARCHAR"; }
-        else if(mycoltype == 17){ coltypeName = "INT8"; }
-        else if(mycoltype == 18){ coltypeName = "SERIAL8"; }
-        else if(mycoltype == 19){ coltypeName = "SET(LVARCHAR)"; }
-        else if(mycoltype == 20){ coltypeName = "MULTISET(SENDRECEIVE)"; }
-        else if(mycoltype == 21){ coltypeName = "LIST"; }
-        else if(mycoltype == 22){ coltypeName = "ROW"; }
-        else if(mycoltype == 23){ coltypeName = "COLLECTION"; }
-        else if(mycoltype == 24){ coltypeName = "ROWREF"; }
-        else if(mycoltype == 40 || mycoltype == 41){ coltypeName = extypename.toUpperCase(); }
-        else if(mycoltype == 42){ coltypeName = "REFSERIAL8"; }
-        else if(mycoltype == 52){ coltypeName = "BIGINT"; }
-        else if(mycoltype == 53){ coltypeName = "BIGSERIAL"; }
-        else if(mycoltype == 63){ coltypeName = "VARCHAR2"; }
-        else if(mycoltype == 64){ coltypeName = "NVARCHAR2"; }
-        else if(mycoltype == 65){ coltypeName = "TIMESTAMP WITH TIME ZONE"; }
+        switch (mycoltype) {
+            case 0:
+                coltypeName = "CHAR";               break;
+            case 1:
+                coltypeName = "SMALLINT";           break;
+            case 2:
+                coltypeName = "INTEGER";            break;
+            case 3:
+                coltypeName = "FLOAT";              break;
+            case 4: 
+                coltypeName = "SMALLFLOAT";         break;
+            case 5:
+                coltypeName = "DECIMAL";            break;
+            case 6:
+                coltypeName = "SERIAL";             break;
+            case 7:
+                coltypeName = "DATE";               break;
+            case 8:
+                coltypeName = "MONEY";              break;
+            case 9:
+                coltypeName = "NULL";               break;
+            case 10:
+                if ("MySQL".equals(sqlmode)){
+                    coltypeName = "DATETIME";
+                } else {
+                    coltypeName = "DATETIME" + getDTColTypeName(collength);
+                }
+                break;
+            case 11:
+                coltypeName = "BYTE";               break;
+            case 12:
+                if ("MySQL".equals(sqlmode)){
+                    coltypeName = "LONGTEXT";
+                } else {
+                    coltypeName = "TEXT";
+                }
+                break;
+            case 13:    
+                coltypeName = "VARCHAR";            break;
+            case 14:
+                coltypeName = "INTERVAL" + getDTColTypeName(collength); break;
+            case 15:
+                coltypeName = "NCHAR";              break;
+            case 16:
+                coltypeName = "NVARCHAR";           break;
+            case 17:
+                coltypeName = "INT8";               break;
+            case 18:
+                coltypeName = "SERIAL8";            break;
+            case 19:
+                coltypeName = "SET(LVARCHAR)";      break;
+            case 20:
+                coltypeName = "MULTISET(SENDRECEIVE)"; break;
+            case 21:
+                coltypeName = "LIST";               break;
+            case 22:
+                coltypeName = "ROW";                break;
+            case 23:
+                coltypeName = "COLLECTION";         break;
+            case 24:
+                coltypeName = "ROWREF";             break;
+            case 40:
+            case 41:
+                coltypeName = extypename.toUpperCase(); break;
+            case 42:
+                coltypeName = "REFSERIAL8";         break;
+            case 52:
+                coltypeName = "BIGINT";             break;
+            case 53:
+                coltypeName = "BIGSERIAL";          break;
+            case 63:
+                coltypeName = "VARCHAR2";           break;
+            case 64:
+                coltypeName = "NVARCHAR2";          break;
+            case 65:
+                coltypeName = "TIMESTAMP WITH TIME ZONE"; break;
+            default:
+                break;
+        }
         return coltypeName;
     }
     
@@ -388,12 +478,11 @@ public final class GbaseDdlRepository implements DdlRepository {
                 );
                 """;     
         try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
-             ResultSet resultSet = preparedStatement.executeQuery()) {
+            ResultSet resultSet = preparedStatement.executeQuery()) {
             while (resultSet.next()){
                 commflags = resultSet.getInt("commflags");
             }
         }
-
         return commflags;
     }
 
@@ -408,7 +497,7 @@ public final class GbaseDdlRepository implements DdlRepository {
     private static Table getTableInfo(Connection connection, String tablename) throws SQLException {
         Table tableInfo = null;
         int commflags = getCommentFlags(connection);
-        int dbVersion = 3; // 默认数据库JDBC版本
+        int dbVersion = 30000; // 默认数据库JDBC版本
         // 考虑syscomments表是否存在，是否存在多行的问题，将tablecomm移出主表查询。
         String sql = """
                 select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype, 
@@ -427,6 +516,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             rowTableInfo.setNextExtSize(resultSet.getInt("nextextsize"));
             rowTableInfo.setTableTypeCode(trim(resultSet.getString("tabletype")));
             rowTableInfo.setFlags(resultSet.getInt("tableflags"));
+            rowTableInfo.setTableSqlMode(resultSet.getInt("tableflags"));
             return rowTableInfo;
         });
         if (! tables.isEmpty()) {
@@ -467,8 +557,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             }
         }
 
-        String jdbcVersion = connection.getMetaData().getDriverVersion();
-        dbVersion=Integer.parseInt(jdbcVersion.substring(0,1));
+        dbVersion=getDataBaseProductVersionNumber(connection);
         tableInfo.setDbVersion(dbVersion);
         return tableInfo;
     }
@@ -531,7 +620,11 @@ public final class GbaseDdlRepository implements DdlRepository {
             ColumnsInfo columnsInfo = new ColumnsInfo();
             columnsInfo.setColNo(resultSet.getInt("colno"));
             columnsInfo.setColName(resultSet.getString("colname"));
-            String coltypename = getColTypeName(resultSet.getInt("coltype"), resultSet.getInt("collength"), 0, 0, resultSet.getString("sxname"));
+            String coltypename = getColTypeName(resultSet.getInt("coltype"), 
+                                                resultSet.getInt("collength"), 0, 0, 
+                                                resultSet.getString("sxname"),
+                                                tableInfo.getTableSqlMode()
+                                            );
             columnsInfo.setColType(coltypename);
             columnsInfo.setColLength(resultSet.getInt("collength"));  
             columnsInfo.setColTypePS(resultSet.getInt("collength"), coltypename, tableInfo.getDbVersion());     
@@ -559,14 +652,18 @@ public final class GbaseDdlRepository implements DdlRepository {
                 columnsInfo.setIsAutoincrement(last.isIsAutoincrement());
                 arrayList.set(size - 1, columnsInfo); 
             } else {
-                // 增加注释
-                for(ColumnsCommInfo commInfo : columnsCommInfos){
-                    if (commInfo.getColName().equals(columnsInfo.getColName())){
-                        columnsInfo.setColComm(commInfo.getColComm());
-                        break;
-                    }
-                }
                 arrayList.add(columnsInfo);
+            }
+        }
+        // 增加注释信息
+        if (columnsCommInfos != null) {
+            for (ColumnsCommInfo columnsCommInfo : columnsCommInfos) {
+                if (arrayList.stream().anyMatch(colInfo -> colInfo.getColName().equals(columnsCommInfo.getColName()))) {
+                    arrayList.stream()
+                            .filter(colInfo -> colInfo.getColName().equals(columnsCommInfo.getColName()))
+                            .findFirst()
+                            .ifPresent(colInfo -> colInfo.setColComm(columnsCommInfo.getColComm()));
+                }
             }
         }
         return arrayList;
@@ -658,8 +755,8 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private static String getColTypeName(String coltype, int collength){
         String coltypename = coltype;
-        // 有最小字段长度，需处理
         if (coltype.startsWith("VARCHAR") || coltype.startsWith("NVARCHAR")) {
+            // 有最小字段长度，需处理
             if (collength/65536 > 0){
                 coltypename = coltypename + "(" + collength + "," + collength/65536 + ")";
             } else {
@@ -728,7 +825,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
-    private static ArrayList<PrimaryKeyInfo> getPrimaryKey(Connection connection, ArrayList<ColumnsInfo> columns, String tablename) throws SQLException {
+    private static ArrayList<PrimaryKeyInfo> getPrimaryKey(Connection connection, ArrayList<ColumnsInfo> columns, String tablename, String sqlmode) throws SQLException {
         // 去除虚拟字段产生的约束
         String sql = """
                 SELECT con.constrname,con.constrtype,cast(idx.indexkeys as lvarchar) as idxcols
@@ -742,7 +839,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return new ArrayList<>(runner.query(sql, List.of(tablename), resultSet -> {
             PrimaryKeyInfo primaryKeyInfo = new PrimaryKeyInfo();
-            primaryKeyInfo.setIdxCols(getIdxCols(connection, resultSet.getString("idxcols"), getColNameListByColumnsInfo(columns)));
+            primaryKeyInfo.setIdxCols(getIdxCols(connection, resultSet.getString("idxcols"), getColNameListByColumnsInfo(columns),sqlmode));
             primaryKeyInfo.setConstrName(resultSet.getString("constrname"));
             primaryKeyInfo.setConstrType(resultSet.getString("constrtype"));
             return primaryKeyInfo;
@@ -770,10 +867,10 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
-    private static ArrayList<Index> getIndexesInfo(Connection connection, ArrayList<ColumnsInfo> columns, String tablename) throws SQLException {
+    private static ArrayList<Index> getIndexesInfo(Connection connection, ArrayList<ColumnsInfo> columns, String tablename, String sqlmode) throws SQLException {
         // 去除虚拟字段产生的索引和约束、主键字段索引
         String sql = """
-                SELECT idx.idxname, idx.owner as idxowner, idx.idxtype, idx.clustered as idxcluster, idx.indexkeys::lvarchar as idxcols
+                SELECT idx.idxname, idx.owner as idxowner, idx.idxtype, idx.clustered as idxcluster, idx.indexkeys::lvarchar as idxcols, t.flags
                 FROM sysindices idx, systables t
                 WHERE idx.tabid = t.tabid
                 AND t.tabname = ?
@@ -786,7 +883,9 @@ public final class GbaseDdlRepository implements DdlRepository {
             indexInfo.setIndexOwner(trim(resultSet.getString("idxowner")));
             indexInfo.setIndexType(resultSet.getString("idxtype"));
             indexInfo.setIndexCluster(resultSet.getString("idxcluster"));
-            indexInfo.setIndexCols(getIdxCols(connection, resultSet.getString("idxcols"), getColNameListByColumnsInfo(columns)));
+            indexInfo.setIndexCols(getIdxCols(connection, resultSet.getString("idxcols"), getColNameListByColumnsInfo(columns),sqlmode));
+            indexInfo.setTableSqlMode(resultSet.getInt("flags"));
+            indexInfo.setTableName(tablename);
             return indexInfo;
         }));
     }
@@ -947,6 +1046,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             foreignKeyInfo.setPkIdxName(resultSet.getString("pkidxname"));
             foreignKeyInfo.setIsdisabled(("D".equals(resultSet.getString("state")))?true:false);
             foreignKeyInfo.setFlags(resultSet.getInt("flags"));
+            foreignKeyInfo.setForeignKeySqlMode(resultSet.getInt("flags"));
             return foreignKeyInfo;
         }));
     }
@@ -963,7 +1063,7 @@ public final class GbaseDdlRepository implements DdlRepository {
     public String printTable(Connection connection,String tablename) throws SQLException, ClassNotFoundException {
         String patternConstraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
         Table tableInfo = getTableInfo(connection,tablename);
-        String sqlmode = tableInfo.getTableSqlModeFunc();
+        String sqlmode = tableInfo.getTableSqlMode();
         int dbVersion = getDataBaseProductVersionNumber(connection);
         boolean displaySqlMode = displaySqlMode(dbVersion);
         StringBuilder ddl = new StringBuilder();
@@ -989,17 +1089,17 @@ public final class GbaseDdlRepository implements DdlRepository {
         if (tableInfo.getTableOwner()==null){
             return "";
         }
-        ddl.append(getName(tableInfo.getName())).append(" (\n");
+        ddl.append(getName(tableInfo.getName(),sqlmode)).append(" (\n");
 
         ArrayList<CheckInfo> checks = getCheck(connection,tablename);
         ArrayList<ColumnsInfo> columns = getColInfo(connection,tableInfo);
-        ArrayList<PrimaryKeyInfo> primaryKeys = getPrimaryKey(connection,columns,tablename);
-        ArrayList<Index> indexes = getIndexesInfo(connection,columns,tablename);
+        ArrayList<PrimaryKeyInfo> primaryKeys = getPrimaryKey(connection,columns,tablename,sqlmode);
+        ArrayList<Index> indexes = getIndexesInfo(connection,columns,tablename,sqlmode);
         ArrayList<FragmentInfo> tableFragments = getTableFragmentInfo(connection,tablename);
         ArrayList<String> triggers = getTriggerList(connection,tablename);
         ArrayList<ForeignKeyInfo> foreignKeys = getForeignKeyInfo(connection,tablename);
 
-        appendColumnsDefinition(ddl, columns);
+        appendColumnsDefinition(ddl, columns, sqlmode);
         appendCheckConstraints(ddl, checks, sqlmode, patternConstraint);
         appendPrimaryConstraints(ddl, primaryKeys, sqlmode, patternConstraint);
         ddl.append("\n) ");
@@ -1031,10 +1131,10 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @param ddl
      * @param columns
      */
-    private static void appendColumnsDefinition(StringBuilder ddl, ArrayList<ColumnsInfo> columns) {
+    private static void appendColumnsDefinition(StringBuilder ddl, ArrayList<ColumnsInfo> columns, String sqlmode) {
         for (int i = 0; i < columns.size(); i++) {
             ColumnsInfo column = columns.get(i);
-            ddl.append("  ").append(getName(column.getColName()));
+            ddl.append("  ").append(getName(column.getColName(),sqlmode));
             ddl.append(" ").append(getColTypeName(
                     column.getColType(),
                     column.getColLength()
@@ -1048,6 +1148,12 @@ public final class GbaseDdlRepository implements DdlRepository {
                         column.getColDefType(),
                         column.getColDef()
                 ));
+            }
+            // mysql模式下，comment在字段后面
+            if ("MySQL".equals(sqlmode)){
+                if (column.getColComm() != null){
+                    ddl.append(" COMMENT '").append(column.getColComm()).append("'");
+                }
             }
             if (i < columns.size() - 1) {
                 ddl.append(",\n");
@@ -1066,7 +1172,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         for (CheckInfo check : checks) {
             if ("Oracle".equalsIgnoreCase(sqlmode)) {
                 if (!Pattern.matches(patternConstraint, check.getConstrName())) {
-                    ddl.append(",\n  CONSTRAINT ").append(getName(check.getConstrName()));
+                    ddl.append(",\n  CONSTRAINT ").append(getName(check.getConstrName(),sqlmode));
                     ddl.append("  CHECK ").append(check.getCheckText());
                 } else {
                     ddl.append(",\n  CHECK ").append(check.getCheckText());
@@ -1074,7 +1180,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             } else {
                 ddl.append(",\n  CHECK ").append(check.getCheckText());
                 if (!Pattern.matches(patternConstraint, check.getConstrName())) {
-                    ddl.append(" CONSTRAINT ").append(getName(check.getConstrName()));
+                    ddl.append(" CONSTRAINT ").append(getName(check.getConstrName(),sqlmode));
                 }
             }
         }
@@ -1091,7 +1197,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         for (PrimaryKeyInfo primaryKey : primaryKeys) {
             if ("Oracle".equalsIgnoreCase(sqlmode)) {
                 if (!Pattern.matches(patternConstraint, primaryKey.getConstrName())) {
-                    ddl.append(",\n  CONSTRAINT ").append(getName(primaryKey.getConstrName()));
+                    ddl.append(",\n  CONSTRAINT ").append(getName(primaryKey.getConstrName(),sqlmode));
                     if ("P".equals(primaryKey.getConstrType())) {
                         ddl.append("  PRIMARY KEY(");
                     } else if ("U".equals(primaryKey.getConstrType())) {
@@ -1114,7 +1220,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
                 ddl.append(primaryKey.getIdxCols()).append(")");
                 if (!Pattern.matches(patternConstraint, primaryKey.getConstrName())) {
-                    ddl.append("  CONSTRAINT ").append(getName(primaryKey.getConstrName()));
+                    ddl.append("  CONSTRAINT ").append(getName(primaryKey.getConstrName(),sqlmode));
                 }
             }
         }
@@ -1188,6 +1294,25 @@ public final class GbaseDdlRepository implements DdlRepository {
     }
 
     /**
+     * 仅用于获取索引名称，mysql模式下索引名称为 表名$$索引名
+     * @param indexname
+     * @param sqlmode
+     * @return
+     */
+    private static String getIndexNameBySqlMode(String indexname, String sqlmode){
+        if ("MySQL".equals(sqlmode)){
+            String[] tmpstr = indexname.split("\\$\\$");
+            if (tmpstr.length > 1){
+                return tmpstr[1];
+            } else {
+                return tmpstr[0];
+            }
+        } else {
+            return indexname;
+        }
+    }
+
+    /**
      * 普通表定义
      * @param connection
      * @param ddl
@@ -1224,8 +1349,17 @@ public final class GbaseDdlRepository implements DdlRepository {
         } else {
             ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
         }
+        // 增加mysql模式下表的comment
+        if ("MySQL".equals(sqlmode) && tableInfo.getTableComm() != null){
+            ddl.append("COMMENT='").append(tableInfo.getTableComm()).append("' ");
+        }
         ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
-        ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
+        if ("MySQL".equals(sqlmode)){
+            // mysql模式下暂时不支持 lock mode row的写法
+            ddl.append(";\n");
+        } else {
+            ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
+        }
 
         for (Index index : indexes) {
             ddl.append("\nCREATE");
@@ -1237,8 +1371,8 @@ public final class GbaseDdlRepository implements DdlRepository {
                 ddl.append(" INDEX");
             }
             // 不再打印表owner及索引owner
-            ddl.append(" ").append(getName(index.getName())).append(" ON ");
-            ddl.append(getName(tableInfo.getName())).append("(").append(index.getIndexCols()).append(")");
+            ddl.append(" ").append(getName(getIndexNameBySqlMode(index.getName(), sqlmode),sqlmode)).append(" ON ");
+            ddl.append(getName(tableInfo.getName(),sqlmode)).append("(").append(index.getIndexCols()).append(")");
             ddl.append(buildFragmentString(getIndexFragmentInfo(connection, index.getName()))).append(";");
         }
         ddl.append("\n\n");
@@ -1250,44 +1384,49 @@ public final class GbaseDdlRepository implements DdlRepository {
                 ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname()));
                 ddl.append(" ADD ");
                 if (!Pattern.matches(patternConstraint, foreignKey.getFkName())) {
-                    ddl.append("CONSTRAINT ").append(getName(foreignKey.getFkName()));
+                    ddl.append("CONSTRAINT ").append(getName(foreignKey.getFkName(),sqlmode));
                 }
                 ddl.append(" FOREIGN KEY(");
             } else {
                 if(displaySqlMode(getDataBaseProductVersionNumber(connection))){
                     ddl.append("SET ENVIRONMENT SQLMODE 'GBase';\n");
                 }
-                ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname()));
+                ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname(),sqlmode));
                 ddl.append(" ADD CONSTRAINT FOREIGN KEY(");
             }
-            ddl.append(getIdxCols(foreignKey.getFkCols(), fkColumns)).append(") ");
+            ddl.append(getIdxCols(foreignKey.getFkCols(), fkColumns,sqlmode)).append(") ");
 
             ArrayList<String> pkColumns = getColNameListByTablename(connection, foreignKey.getPkTabname());
-            ddl.append("REFERENCES ").append(getName(foreignKey.getPkTabname()));
-            ddl.append("(").append(getIdxCols(foreignKey.getPkCols(), pkColumns)).append(")");
+            ddl.append("REFERENCES ").append(getName(foreignKey.getPkTabname(),sqlmode));
+            ddl.append("(").append(getIdxCols(foreignKey.getPkCols(), pkColumns,sqlmode)).append(")");
 
             if ("GBase".equals(foreignKey.getForeignKeyModeFunc())) {
                 if (!Pattern.matches(patternConstraint, foreignKey.getFkName())) {
-                    ddl.append(" CONSTRAINT ").append(getName(foreignKey.getFkName()));
+                    ddl.append(" CONSTRAINT ").append(getName(foreignKey.getFkName(),sqlmode));
                 }
             }
             ddl.append(";\n");
 
-            // Oracle模式也是这么写？？
+            // TODO: Oracle模式也是这么写？？
             if (foreignKey.isIsdisabled()){
-                ddl.append("SET CONSTRAINTS ").append(getName(foreignKey.getFkName())).append(" DISABLED;\n");
+                ddl.append("SET CONSTRAINTS ").append(getName(foreignKey.getFkName(),sqlmode)).append(" DISABLED;\n");
             }
         }
 
         if (tableInfo.getTableComm() != null) {
-            ddl.append("\nCOMMENT ON TABLE ").append(getName(tablename)).append(" IS '")
+            // mysql创建comment的语法不同
+            if ("Oracle".equals(sqlmode) || "GBase".equals(sqlmode) ){
+                ddl.append("\nCOMMENT ON TABLE ").append(getName(tablename,sqlmode)).append(" IS '")
                     .append(tableInfo.getTableComm()).append("';");
+            }
         }
         for (ColumnsInfo column : columns) {
             if (column.getColComm() != null) {
-                ddl.append("\nCOMMENT ON COLUMN ").append(getName(tablename)).append(".")
-                        .append(getName(column.getColName())).append(" IS '")
+                if ("Oracle".equals(sqlmode) || "GBase".equals(sqlmode) ){
+                    ddl.append("\nCOMMENT ON COLUMN ").append(getName(tablename,sqlmode)).append(".")
+                        .append(getName(column.getColName(),sqlmode)).append(" IS '")
                         .append(column.getColComm()).append("';");
+                }
             }
         }
 
@@ -1361,7 +1500,6 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private static String buildFragmentString(ArrayList<FragmentInfo> arrayList) {
         StringBuilder ddl = new StringBuilder();
-        ddl.append(" \nFRAGMENT BY ");
         String fragtype = "";
         String fragcolumn = "";         // for List and range, column
         String fraginterval = "";       // for range, interval
@@ -1422,7 +1560,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         } else if ("T".equals(fragtype)){               // 索引使用表的分片表达式
 
         } else if ("R".equals(fragtype)){
-            ddl.append("ROUND ROBIN \n");
+            ddl.append(" \nFRAGMENT BY ROUND ROBIN \n");
             for(int i=0;i<arrayList.size();i++){
                 ddl.append("PARTITION ").append(arrayList.get(i).getPartition()).append(" IN ").append(arrayList.get(i).getDbspace());
                 if (i<arrayList.size()-1){
@@ -1430,7 +1568,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
             }
         } else if ("E".equals(fragtype)){
-            ddl.append("EXPRESSION \n");
+            ddl.append(" \nFRAGMENT BY EXPRESSION \n");
             for(int i=0;i<arrayList.size();i++){
                 ddl.append("PARTITION ").append(arrayList.get(i).getPartition()).append(" ").append(arrayList.get(i).getExprtext());
                 ddl.append(" IN ").append(arrayList.get(i).getDbspace());
@@ -1439,7 +1577,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
             }
         } else if ("L".equals(fragtype)){
-            ddl.append("LIST(").append(fragcolumn).append(") \n");
+            ddl.append(" \nFRAGMENT BY LIST(").append(fragcolumn).append(") \n");
             for(int i=0;i<arrayList.size();i++){
                 if (arrayList.get(i).getEvalpos() < 0){
                     continue;
@@ -1451,7 +1589,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
             }
         } else if ("N".equals(fragtype)){
-            ddl.append("RANGE(").append(fragcolumn).append(") INTERVAL(").append(fraginterval).append(") \n");
+            ddl.append(" \nFRAGMENT BY RANGE(").append(fragcolumn).append(") INTERVAL(").append(fraginterval).append(") \n");
             if (numfragments > 0){
                 ddl.append("ROLLING (").append(numfragments).append(" FRAGMENTS) ").append(fragdetech).append(" \n");
             }
@@ -1476,7 +1614,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @param arrayList
      * @return
      */
-    private static String getIdxCols(Connection connection,String idxColsString,ArrayList<String> colnameList) throws SQLException {
+    private static String getIdxCols(Connection connection,String idxColsString,ArrayList<String> colnameList, String sqlmode) throws SQLException {
         // idxColsString: <-234>(1, '2') [1], -3 [1]
         // 索引字段（函数索引字段）以，为分隔符
         // 示例中：<-234>(1, '2', '4') [1] 表示 函数号-234（内置函数），对应的字段是1，-(负值，如有)表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
@@ -1501,7 +1639,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                         funcname = procName;
                     }
                 }
-                idxcols = idxcols + funcname + "(";
+                idxcols = idxcols + getName(funcname,sqlmode) + "(";
                 // 获取字段 及 排序方式 及多参函数参数
                 String tmpstr_func = tmpstr.substring(tmpstr.indexOf("(")+1,tmpstr.indexOf(")"));
                 int colno = 0;
@@ -1512,7 +1650,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                     colno = Integer.valueOf(tmpstr_func);
                 }
                 sortby = (colno<0)?" DESC,":",";
-                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1));
+                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode);
                 if ("".equals(funcparam)){
                     idxcols = idxcols + ")";
                 } else {
@@ -1522,7 +1660,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             } else {                                // 普通字段 -3 [1]
                 int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
                 sortby = (colno<0)?" DESC,":",";
-                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1)) + sortby;
+                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode) + sortby;
             }
         }
         if (idxcols.length() > 0){
@@ -1537,7 +1675,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @param colnameList
      * @return
      */
-    private static String getIdxCols(String idxColsString,ArrayList<String> colnameList) {
+    private static String getIdxCols(String idxColsString,ArrayList<String> colnameList, String sqlmode) {
         String idxcols = "";
         String sortby = ",";
         for (String cols : idxColsString.trim().split(",(?![^()]*+\\))")){
@@ -1545,7 +1683,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             // 普通字段 -3 [1]
             int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
             sortby = (colno<0)?" DESC,":",";
-            idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1)) + sortby;
+            idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode) + sortby;
         }
         if (idxcols.length() > 0){      // 去除最后的","
             idxcols = idxcols.substring(0,idxcols.length()-1);
@@ -1562,7 +1700,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
-    private static String getKeyCols(Connection connection, int tableId, String keyCols, ArrayList<TableWithColumn> tableColumnArrayList) throws SQLException {
+    private static String getKeyCols(Connection connection, int tableId, String keyCols, ArrayList<TableWithColumn> tableColumnArrayList, String sqlmode) throws SQLException {
         // keyCols: <-234>(1, '2') [1], -3 [1]
         StringBuilder keyList = new StringBuilder();
         for (String cols : keyCols.trim().split(",(?![^()]*+\\))")){      // 以逗号分割，但是不包含括号内的逗号的正则表达式            
@@ -1583,7 +1721,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                         funcname = procName;
                     }
                 }
-                keyList.append(funcname).append("(");
+                keyList.append(getName(funcname,sqlmode)).append("(");
                 // 获取字段 及 排序方式 及多参函数参数
                 String tmpstr_func = tmpstr.substring(tmpstr.indexOf("(")+1,tmpstr.indexOf(")"));
                 int colno = 0;
@@ -1595,7 +1733,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
                 for (TableWithColumn tableColumn : tableColumnArrayList){
                     if (tableId == tableColumn.getTableId() && Math.abs(colno) == tableColumn.getColumnNo()){
-                        keyList.append(getName(tableColumn.getColumnName()));
+                        keyList.append(getName(tableColumn.getColumnName(),sqlmode));
                         break;
                     }
                 }
@@ -1609,7 +1747,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
                 for (TableWithColumn tableColumn : tableColumnArrayList){
                     if (tableId == tableColumn.getTableId() && Math.abs(colno) == tableColumn.getColumnNo()){
-                        keyList.append(getName(tableColumn.getColumnName()));
+                        keyList.append(getName(tableColumn.getColumnName(),sqlmode));
                         keyList.append((colno<0)?" DESC,":",");
                         break;
                     }
@@ -1631,7 +1769,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private static Index getIndexInfo(Connection connection, String indexname, ArrayList<String> colnameList) throws SQLException {
         String sql = """
-                SELECT i.owner idxowner,i.idxname,t.owner as tabowner, t.tabname,i.idxtype,i.clustered as idxcluster,i.indexkeys::lvarchar as indexkeys
+                SELECT i.owner idxowner,i.idxname,t.owner as tabowner, t.tabname,i.idxtype,i.clustered as idxcluster,i.indexkeys::lvarchar as indexkeys, t.flags
                 FROM sysindices i,systables t
                 WHERE i.idxname = ?
                 AND i.tabid = t.tabid
@@ -1646,13 +1784,14 @@ public final class GbaseDdlRepository implements DdlRepository {
             row.setIndexType(resultSet.getString("idxtype"));
             row.setIndexCluster(resultSet.getString("idxcluster"));
             row.setIndexCols(resultSet.getString("indexkeys"));
+            row.setTableSqlMode(resultSet.getInt("flags"));
             return row;
         });
 
         if (indexInfo == null || indexInfo.getName() == null){
             return null;
         }
-        indexInfo.setIndexCols(getIdxCols(connection,indexInfo.getIndexCols(),colnameList));
+        indexInfo.setIndexCols(getIdxCols(connection,indexInfo.getIndexCols(),colnameList,indexInfo.getTableSqlMode()));
         return indexInfo;
     }
 
@@ -1719,9 +1858,9 @@ public final class GbaseDdlRepository implements DdlRepository {
             ddl.append(" INDEX");
         }
         // 索引名称  属主.索引名
-        ddl.append(" ").append(getName(indexInfo.getName())).append(" ON ");
+        ddl.append(" ").append(getName(indexInfo.getName(),indexInfo.getTableSqlMode())).append(" ON ");
         // 表名(索引字段（函数索引字段）列表)
-        ddl.append(getName(indexInfo.getTableName())).append("(").append(indexInfo.getIndexCols()).append(")");
+        ddl.append(getName(indexInfo.getTableName(),indexInfo.getTableSqlMode())).append("(").append(indexInfo.getIndexCols()).append(")");
         // 索引分片规则或者存储
         ddl.append(buildFragmentString(getIndexFragmentInfo(connection, indexname))).append(";");
         return ddl.toString();
@@ -1830,6 +1969,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             sequenceInfo.setCache(rs.getInt("cache"));
             sequenceInfo.setIsOrder(rs.getString("isorder"));
             sequenceInfo.setFlags(rs.getInt("flags"));
+            sequenceInfo.setSeqSqlMode(rs.getInt("flags"));
             return sequenceInfo;
         });
     }
@@ -1859,7 +1999,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         // owner, 不再增加owner
         // ddl.append("\"").append(sequenceInfo.getSeqOwner().trim()).append("\".");
         // seqname
-        ddl.append(getName(sequenceInfo.getName()));
+        ddl.append(getName(sequenceInfo.getName(),sqlmode));
         // start with
         if(sequenceInfo.getStartVal() > 0){
             ddl.append(" START WITH ").append(sequenceInfo.getStartVal());
@@ -1920,6 +2060,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             synonymInfo.setLOwner(rs.getString("lowner"));
             synonymInfo.setLTabName(rs.getString("ltabname"));
             synonymInfo.setFlags(rs.getInt("flags"));
+            synonymInfo.setSynonymSqlMode(rs.getInt("flags"));
             return synonymInfo;
         });
     }
@@ -1953,7 +2094,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         // owner 不再打印
         // ddl.append("SYNONYM \"").append(synonymInfo.getSynOwner().trim()).append("\".");
         // name
-        ddl.append("SYNONYM ").append(getName(synonymInfo.getName())).append(" FOR ");
+        ddl.append("SYNONYM ").append(getName(synonymInfo.getName(),sqlmode)).append(" FOR ");
         // 同义词指向remote
         if (synonymInfo.getRTabName() != null){      // 同义远程表
             // remote dbname
@@ -1970,13 +2111,13 @@ public final class GbaseDdlRepository implements DdlRepository {
                 ddl.append(":");
             }
             // remote table name
-            ddl.append(getName(synonymInfo.getRTabName()));
+            ddl.append(getName(synonymInfo.getRTabName(),sqlmode));
             // 同义词指向本库
         } else {
             // owner 不再打印
             // ddl.append("\"").append(synonymInfo.getLOwner().trim()).append("\".");
             // table name
-            ddl.append(getName(synonymInfo.getLTabName()));
+            ddl.append(getName(synonymInfo.getLTabName(),sqlmode));
         }
         return ddl.append(";").toString();
     }
@@ -2015,8 +2156,9 @@ public final class GbaseDdlRepository implements DdlRepository {
             return null;
         }
         View viewInfo = new View(viewname);
-        viewInfo.setViewBoday(viewBody.toString());
+        viewInfo.setViewBody(viewBody.toString());
         viewInfo.setFlags(flags);
+        viewInfo.setViewSqlMode(flags);
         return viewInfo;
     }
 
@@ -2041,7 +2183,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         if(displaySqlMode){
             ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
         }
-        ddl.append(viewInfo.getViewBoday());
+        ddl.append(viewInfo.getViewBody());
         return ddl.toString();
     }
 
@@ -2100,14 +2242,15 @@ public final class GbaseDdlRepository implements DdlRepository {
             List<String[]> rows = runner.query(sql, List.of(procname), rs -> new String[]{
                     rtrimascii0(rs.getString("procbody")),
                     String.valueOf(rs.getInt("procflags")),
-                    String.valueOf(rs.getInt("procid"))
+                    String.valueOf(rs.getInt("procid"))                   
             });
             for (String[] row : rows) {
                 if (procId > 0 && procId != Integer.parseInt(row[2])){
                     Procedure procedureInfo = new Procedure(procname);
-                    procedureInfo.setProcBoday(procBody.toString().trim());
+                    procedureInfo.setProcBody(procBody.toString().trim());
                     procedureInfo.setProcFlags(procFlags);
                     procedureInfo.setProcId(procId);
+                    procedureInfo.setProcSqlMode(procFlags);
                     procedureArrayList.add(procedureInfo);
                     procBody.setLength(0);
                     if (row[0] != null) {
@@ -2125,9 +2268,10 @@ public final class GbaseDdlRepository implements DdlRepository {
             }
             if (procId > 0){
                 Procedure procedureInfo = new Procedure(procname);
-                procedureInfo.setProcBoday(procBody.toString().trim());
+                procedureInfo.setProcBody(procBody.toString().trim());
                 procedureInfo.setProcFlags(procFlags);
                 procedureInfo.setProcId(procId);
+                procedureInfo.setProcSqlMode(procFlags);
                 procedureArrayList.add(procedureInfo);
             }
 
@@ -2155,9 +2299,10 @@ public final class GbaseDdlRepository implements DdlRepository {
                 procFlags = Integer.parseInt(row[1]);
                 procId = Integer.parseInt(row[2]);
                 Procedure procedureInfo = new Procedure(procname);
-                procedureInfo.setProcBoday(procBody.toString().trim());
+                procedureInfo.setProcBody(procBody.toString().trim());
                 procedureInfo.setProcFlags(procFlags);
                 procedureInfo.setProcId(procId);
+                procedureInfo.setProcSqlMode(procFlags);
                 procedureArrayList.add(procedureInfo);
             }               
         }
@@ -2191,7 +2336,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (displaySqlMode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
             }
-            ddl.append(procedure.getProcBoday());
+            ddl.append(procedure.getProcBody());
         }
         return ddl.toString();
     }
@@ -2288,7 +2433,11 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private String printDBAll_00_Header(String databasename,String productversion){
         StringBuilder ddl = new StringBuilder();
-        ddl.append("-- ### product version : ").append(productversion).append("\n\n");
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String datestr = formatter.format(new Date(System.currentTimeMillis()));
+        ddl.append("-- ### product version : ").append(productversion).append("\n");
+        ddl.append("-- ### export database : ").append(databasename).append("\n");
+        ddl.append("-- ### export datetime : ").append(datestr).append("\n\n");
         return ddl.toString();
     }
 
@@ -2336,7 +2485,8 @@ public final class GbaseDdlRepository implements DdlRepository {
                 if (resultSet.getInt("seqno") == 1){
                     Procedure procedureInfo = new Procedure(procname);
                     procedureInfo.setProcFlags(procflags);
-                    procedureInfo.setProcBoday(procbody);
+                    procedureInfo.setProcBody(procbody);
+                    procedureInfo.setProcSqlMode(procflags);
                     procedureInfoArrayList.add(procedureInfo);
                     procname = resultSet.getString("procname");
                     procflags = resultSet.getInt("procflags");
@@ -2349,7 +2499,8 @@ public final class GbaseDdlRepository implements DdlRepository {
         if (procname != null){
             Procedure procedureInfo = new Procedure(procname);
             procedureInfo.setProcFlags(procflags);
-            procedureInfo.setProcBoday(procbody);
+            procedureInfo.setProcBody(procbody);
+            procedureInfo.setProcSqlMode(procflags);
             procedureInfoArrayList.add(procedureInfo);
         }
         // 打印 函数和存储过程
@@ -2359,7 +2510,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (displaysqlmode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(procedureInfoArrayList.get(i).getProcSqlMode()).append("';\n");
             }
-            ddl.append(procedureInfoArrayList.get(i).getProcBoday()) ;
+            ddl.append(procedureInfoArrayList.get(i).getProcBody()) ;
             
             if ("Oracle".equals(procedureInfoArrayList.get(i).getProcSqlMode())){
                 ddl.append("\n/");
@@ -2385,8 +2536,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         StringBuilder ddl = new StringBuilder();
         ddl.append("-- ### START: output tables.\n");
         ArrayList<Table> tableInfoArrayList = new ArrayList<>();
-        String jdbcVersion = connection.getMetaData().getDriverVersion();
-        int dbversion = Integer.parseInt(jdbcVersion.substring(0,1));
+        int dbversion = getDataBaseProductVersionNumber(connection);
         // 所有表信息，去除物化视图 "mtab$_"
         String sqlstr = """
                 select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype,
@@ -2408,6 +2558,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 tableInfo.setNextExtSize(resultSet.getInt("nextextsize"));
                 tableInfo.setTableTypeCode(resultSet.getString("tabletype"));
                 tableInfo.setFlags(resultSet.getInt("tableflags"));
+                tableInfo.setTableSqlMode(resultSet.getInt("tableflags"));
                 tableInfo.setDbVersion(dbversion);
                 tableInfoArrayList.add(tableInfo);
             }
@@ -2463,6 +2614,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 synonymInfo.setLOwner(trim(resultSet.getString("lowner")));
                 synonymInfo.setLTabName(resultSet.getString("ltabname"));
                 synonymInfo.setFlags(resultSet.getInt("flags"));
+                synonymInfo.setSynonymSqlMode(resultSet.getInt("flags"));
                 synonymInfoArrayList.add(synonymInfo);
             }
         }
@@ -2476,7 +2628,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if ("P".equals(synonymInfoArrayList.get(i).getSynType())){   // S = Public synonym, P = Private synonym
                 ddl.append("PRIVATE ");
             }
-            ddl.append("SYNONYM ").append(getName(synonymInfoArrayList.get(i).getName())).append(" FOR ");
+            ddl.append("SYNONYM ").append(getName(synonymInfoArrayList.get(i).getName(),synonymInfoArrayList.get(i).getSynonymSqlMode())).append(" FOR ");
             // 同义词指向remote
             if (synonymInfoArrayList.get(i).getRTabName() != null){      // 同义远程表
                 // remote dbname
@@ -2486,10 +2638,10 @@ public final class GbaseDdlRepository implements DdlRepository {
                     ddl.append("@").append(trim(synonymInfoArrayList.get(i).getRServerName()));
                 }
                 ddl.append(("Oracle".equals(synonymInfoArrayList.get(i).getSynonymSqlMode()))?".":":");
-                ddl.append(getName(synonymInfoArrayList.get(i).getRTabName()));
+                ddl.append(getName(synonymInfoArrayList.get(i).getRTabName(),synonymInfoArrayList.get(i).getSynonymSqlMode()));
                 // 同义词指向本库
             } else {
-                ddl.append(getName(synonymInfoArrayList.get(i).getLTabName()));
+                ddl.append(getName(synonymInfoArrayList.get(i).getLTabName(),synonymInfoArrayList.get(i).getSynonymSqlMode()));
             }
             ddl.append(";\n\n");
             completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
@@ -2531,6 +2683,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 sequenceInfo.setCache(resultSet.getLong("cache"));
                 sequenceInfo.setIsOrder(resultSet.getString("isorder"));
                 sequenceInfo.setFlags(resultSet.getInt("flags"));
+                sequenceInfo.setSeqSqlMode(resultSet.getInt("flags"));
                 sequenceInfoArrayList.add(sequenceInfo);
             }
         }
@@ -2539,7 +2692,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (displaysqlmode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(sequenceInfoArrayList.get(i).getSequenceSqlMode()).append("';\n");
             }
-            ddl.append( "CREATE SEQUENCE ").append(getName(sequenceInfoArrayList.get(i).getName()));
+            ddl.append( "CREATE SEQUENCE ").append(getName(sequenceInfoArrayList.get(i).getName(),sequenceInfoArrayList.get(i).getSequenceSqlMode()));
             // start with
             if(sequenceInfoArrayList.get(i).getStartVal() > 0){
                 ddl.append(" START WITH ").append(sequenceInfoArrayList.get(i).getStartVal());
@@ -2607,8 +2760,9 @@ public final class GbaseDdlRepository implements DdlRepository {
             while (resultSet.next()){
                 if (resultSet.getInt("seqno") == 0){
                     View viewInfo = new View(viewname);
-                    viewInfo.setViewBoday(trim(viewtext));
+                    viewInfo.setViewBody(trim(viewtext));
                     viewInfo.setFlags(viewflags);
+                    viewInfo.setViewSqlMode(viewflags);
                     viewInfoArrayList.add(viewInfo);
                     viewname = resultSet.getString("viewname");
                     viewtext = resultSet.getString("viewtext");
@@ -2620,8 +2774,9 @@ public final class GbaseDdlRepository implements DdlRepository {
         }
         if (viewname != null){
             View viewInfo = new View(viewname);
-            viewInfo.setViewBoday(trim(viewtext));
+            viewInfo.setViewBody(trim(viewtext));
             viewInfo.setFlags(viewflags);
+            viewInfo.setViewSqlMode(viewflags);
             viewInfoArrayList.add(viewInfo);
         }
         for (int i=0;i<viewInfoArrayList.size();i++){
@@ -2629,7 +2784,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (displaysqlmode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(viewInfoArrayList.get(i).getViewSqlMode()).append("';\n");
             }
-            ddl.append(viewInfoArrayList.get(i).getViewBoday());
+            ddl.append(viewInfoArrayList.get(i).getViewBody());
             ddl.append("\n");
             completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
         }
@@ -2686,7 +2841,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         ArrayList<Index> indexesArrayList = new ArrayList<>();
         String sqlstr = """
             SELECT i.owner idxowner,i.idxname,t.owner as tabowner, t.tabid, t.tabname, t.tabtype,
-                i.idxtype,i.clustered as idxcluster,cast(i.indexkeys AS lvarchar) as indexkeys
+                i.idxtype,i.clustered as idxcluster,cast(i.indexkeys AS lvarchar) as indexkeys, t.flags
             FROM sysindices i,systables t
             WHERE i.tabid = t.tabid
             AND i.tabid > (SELECT tabid FROM systables WHERE tabname = ' VERSION')
@@ -2705,11 +2860,15 @@ public final class GbaseDdlRepository implements DdlRepository {
                 index.setIndexType(resultSet.getString("idxtype"));
                 index.setIndexCluster(resultSet.getString("idxcluster"));
                 index.setIndexCols(resultSet.getString("indexkeys"));
+                index.setTableSqlMode(resultSet.getInt("flags"));
                 indexesArrayList.add(index);
             }
         }
 
         for (int i=0; i<indexesArrayList.size();i++){
+            if(displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(indexesArrayList.get(i).getTableSqlMode()).append(("';\n"));
+            }
             if ("U".equals(indexesArrayList.get(i).getIdxtype())){
                 ddl.append("CREATE UNIQUE INDEX ");
             } else if ("C".equals(indexesArrayList.get(i).getIdxtype())){
@@ -2717,10 +2876,15 @@ public final class GbaseDdlRepository implements DdlRepository {
             } else {
                 ddl.append("CREATE INDEX ");
             }
-            ddl.append(getName(indexesArrayList.get(i).getName())).append(" ON ");
-            ddl.append(getName(indexesArrayList.get(i).getTableName())).append("(");
+            ddl.append(getName(getIndexNameBySqlMode(indexesArrayList.get(i).getName(), indexesArrayList.get(i).getTableSqlMode()),
+                    indexesArrayList.get(i).getTableSqlMode())).append(" ON ");
+            ddl.append(getName(indexesArrayList.get(i).getTableName(),indexesArrayList.get(i).getTableSqlMode())).append("(");
             // 索引字段列表
-            ddl.append(getKeyCols(connection, indexesArrayList.get(i).getTableId(), indexesArrayList.get(i).getCols(), tableColumnArrayList));
+            ddl.append(getKeyCols(connection, 
+                                indexesArrayList.get(i).getTableId(), 
+                                indexesArrayList.get(i).getCols(), 
+                                tableColumnArrayList,
+                                indexesArrayList.get(i).getTableSqlMode()));
 
             ddl.append(");\n");
             completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
@@ -2780,6 +2944,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                 foreignKeyInfo.setPkIdxName(resultSet.getString("pkidxname"));
                 foreignKeyInfo.setIsdisabled(("D".equals(resultSet.getString("state")))?true:false);
                 foreignKeyInfo.setFlags(resultSet.getInt("flags"));
+                foreignKeyInfo.setForeignKeySqlMode(resultSet.getInt("flags"));
                 foreignKeyInfoArrayList.add(foreignKeyInfo);
             }
         }
@@ -2802,7 +2967,8 @@ public final class GbaseDdlRepository implements DdlRepository {
             ddl.append(getKeyCols(connection,
                                     foreignKeyInfoArrayList.get(i).getFkTabid(),
                                     foreignKeyInfoArrayList.get(i).getFkCols(),
-                                    tableColumnArrayList
+                                    tableColumnArrayList,
+                                    foreignKeyInfoArrayList.get(i).getforeignKeySqlMode()
                                 ));
             
             ddl.append(") REFERENCES ").append(getName(foreignKeyInfoArrayList.get(i).getPkTabname())).append("(");
@@ -2810,7 +2976,8 @@ public final class GbaseDdlRepository implements DdlRepository {
             ddl.append(getKeyCols(connection,
                                     foreignKeyInfoArrayList.get(i).getPkTabid(),
                                     foreignKeyInfoArrayList.get(i).getPkCols(),
-                                    tableColumnArrayList
+                                    tableColumnArrayList,
+                                    foreignKeyInfoArrayList.get(i).getforeignKeySqlMode()
                                 ));
 
             ddl.append(")");
@@ -2920,9 +3087,10 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private String printDBAll_90_Comment(Connection connection,boolean displaysqlmode,long[] completed,LongConsumer progressCallback) throws SQLException {
         StringBuilder ddl = new StringBuilder();
-        ddl.append("-- ### START: output comment.\n");
+        ddl.append("-- ### START: output comment.\n");      
         int commflags = getCommentFlags(connection);
         String sqlstr = "";
+        log.info("commflags:" + commflags);
         if (commflags == 11){   // 含segno
             // 表
             sqlstr = """
@@ -2941,6 +3109,9 @@ public final class GbaseDdlRepository implements DdlRepository {
                 }
                 while (resultSet.next()){
                     if (resultSet.getInt("segno") == 0){
+                        if (displaysqlmode){
+                            ddl.append("SET ENVIRONMENT SQLMODE 'Oracle';\n");
+                        }
                         ddl.append("COMMENT ON TABLE ").append(tabname).append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
                         completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
                         tabname = resultSet.getString("tabname");
@@ -2974,6 +3145,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                     colcomm = resultSet.getString("comments");
                 }
                 while (resultSet.next()){
+                    // TODO：这里存在bug，某些版本中修改表结构，segno均会修改为0，导致错误。
                     if (resultSet.getInt("segno") == 0){
                         ddl.append("COMMENT ON COLUMN ").append(tabname).append(".").append(colname);
                         ddl.append(" IS '").append(trim(colcomm).replace("'","''")).append("';\n");
@@ -3034,6 +3206,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                                                    String databasename,
                                                    LongConsumer progressCallback) throws SQLException {
         // 顺序暂定：函数->存储过程->表（含主键、索引、约束）->同义词（等）-> 序列 -> 视图（可能有依赖关系，先后顺序）
+        // TODO: 需要增加自定义类型，自定义转换 等
         StringBuilder preDataDdl = new StringBuilder();
         StringBuilder postDataDdl = new StringBuilder();
         String preDatabase = getActiveDbname(connection);
@@ -3071,7 +3244,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             postDataDdl.append(printDBAll_70_ForeigenKey(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
             // 80，触发器
             postDataDdl.append(printDBAll_80_Trigger(connection,displaysqlmode,completed,progressCallback));
-            // 90，注释
+            // 90，注释，TODO: 由于MySQL模式的原因，该项考虑提前。
             postDataDdl.append(printDBAll_90_Comment(connection,displaysqlmode,completed,progressCallback));        
 
             return new DatabaseDdlParts(preDataDdl.toString(), postDataDdl.toString());
@@ -3288,7 +3461,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private static String buildTableSql(Connection connection, Table tableInfo, boolean displaysqlmode) throws SQLException {
         String parttern_constraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
-        String sqlmode = tableInfo.getTableSqlModeFunc();
+        String sqlmode = tableInfo.getTableSqlMode();
         StringBuilder ddl = new StringBuilder();
         if (displaysqlmode){
             ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
@@ -3301,16 +3474,16 @@ public final class GbaseDdlRepository implements DdlRepository {
         // external & raw
         ddl.append(tableInfo.getTableFlag()).append("TABLE ");
 
-        ddl.append(getName(tableInfo.getName())).append(" (\n");
+        ddl.append(getName(tableInfo.getName(),sqlmode)).append(" (\n");
 
         ArrayList<CheckInfo> checkInfoArrayList = getCheck(connection,tableInfo.getName());
         ArrayList<ColumnsInfo> columnsInfoArrayList = getColInfo(connection,tableInfo);
-        ArrayList<PrimaryKeyInfo> primaryKeyInfoArrayList = getPrimarykey(connection,columnsInfoArrayList,tableInfo.getName());
+        ArrayList<PrimaryKeyInfo> primaryKeyInfoArrayList = getPrimarykey(connection,columnsInfoArrayList,tableInfo.getName(),sqlmode);
 
         // 按顺序处理各个类型
         for (int i=0;i<columnsInfoArrayList.size();i++){
             // 字段名
-            ddl.append("  ").append(getName(columnsInfoArrayList.get(i).getColName()));
+            ddl.append("  ").append(getName(columnsInfoArrayList.get(i).getColName(),sqlmode));
             // 字段类型
             ddl.append(" ").append(getColTypeName(columnsInfoArrayList.get(i).getColType(),
                 columnsInfoArrayList.get(i).getColLength()));
@@ -3397,7 +3570,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
-    private static ArrayList<PrimaryKeyInfo> getPrimarykey(Connection connection,ArrayList<ColumnsInfo> arrayList,String tablename) throws SQLException {
+    private static ArrayList<PrimaryKeyInfo> getPrimarykey(Connection connection,ArrayList<ColumnsInfo> arrayList,String tablename, String sqlmode) throws SQLException {
         ArrayList<PrimaryKeyInfo> primaryKeyArrayList = new ArrayList<>();
         String sqlstr = """
             SELECT con.constrname,con.constrtype,idx.indexkeys::lvarchar as idxcols 
@@ -3413,7 +3586,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 while (resultSet.next()){
                     PrimaryKeyInfo primaryKeyInfo = new PrimaryKeyInfo();
-                    primaryKeyInfo.setIdxCols(getIdxCols(connection, resultSet.getString("idxcols"),getColNameListByColumnsInfo(arrayList)));
+                    primaryKeyInfo.setIdxCols(getIdxCols(connection, resultSet.getString("idxcols"),getColNameListByColumnsInfo(arrayList),sqlmode));
                     primaryKeyInfo.setConstrName(resultSet.getString("constrname"));
                     primaryKeyInfo.setConstrType(resultSet.getString("constrtype"));
                     primaryKeyArrayList.add(primaryKeyInfo);

@@ -7,28 +7,18 @@ import javafx.beans.property.StringProperty;
 
 public class View extends TreeData{
     //created by liaosnet
-    private StringProperty viewBoday = new SimpleStringProperty();
+    private StringProperty viewBody = new SimpleStringProperty();
     /*
      * 表标识(smallint两字节)：
      * 1, 最高位开始第一位是1时（位与16384值为16384时），SQLMODE=Oracle，
      */
     private IntegerProperty flags = new SimpleIntegerProperty();
-
-    /**
-     * 返回视图的数据库模式
-     * @return
-     */
-    public String getViewSqlMode(){
-        if ((this.flags.get() & 16384) == 16384) {
-            return "Oracle";
-        }
-        return "GBase";
-    }
+    private StringProperty viewSqlMode = new SimpleStringProperty();
 
     @Override
     public String toString(){
         return "ViewName: " + this.getName() + "\n" +
-                "ViewBody: " + this.viewBoday.get();
+                "ViewBody: " + this.viewBody.get();
     }
 
 
@@ -42,16 +32,34 @@ public class View extends TreeData{
         super(name);
     }
 
-    public String getViewBoday() {
-        return viewBoday.get();
+    public String getViewBody() {
+        return viewBody.get();
     }
 
-    public StringProperty viewBodayProperty() {
-        return viewBoday;
+    public StringProperty viewBodyProperty() {
+        return viewBody;
     }
 
-    public void setViewBoday(String viewBoday) {
-        this.viewBoday.set(viewBoday);
+    public void setViewBody(String viewBody) {
+        this.viewBody.set(viewBody);
+    }
+
+    public String getViewSqlMode() {
+        return viewSqlMode.get();
+    }
+
+    public StringProperty viewSqlModeProperty() {
+        return viewSqlMode;
+    }
+
+    public void setViewSqlMode(int viewSqlMode) {
+        String tmpstr = "GBase";
+        if ((viewSqlMode & 16384) == 16384) {
+            tmpstr = "Oracle";
+        } else if ((viewSqlMode & 65536) == 65536){
+            tmpstr = "MySQL";
+        }
+        this.viewSqlMode.set(tmpstr);
     }
 
     public int getFlags() {

@@ -160,7 +160,11 @@ public class ColumnsInfo {
         this.colDefType.set(colDefType);
     }
 
+    // 修复默认值current year to second的显示 2026-04-02
     public String getColDef() {
+        if (colDef.get() != null && colDef.get().startsWith("current")){
+            return colType.get().replace("DATETIME", "CURRENT");
+        }
         return colDef.get();
     }
 
@@ -213,32 +217,45 @@ public class ColumnsInfo {
     }
 
     /**
-     * 获取Precision。。  需补充及测试
+     * 获取Precision，改写成switch方式。。  需补充及测试
      * @param coltype
      * @param collength
      * @return
      */
     private static int getPrecision(String coltype, int collength, int dbver){
         int myp = 0;
-        if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)) { myp=collength/256; }
-        else if("FLOAT".equals(coltype) || "SMALLFLOAT".equals(coltype)) {  myp=2; }
-        else if("VARCHAR".equals(coltype) || "NVARCHAR".equals(coltype) || "VARCHAR2".equals(coltype) ||
-                "NVARCHAR".equals(coltype) || "LVARCHAR".equals(coltype)) { 
-            if (dbver == 3) {
-                if(collength > 0){
-                    myp = collength%65536;
+        switch (coltype) {
+            case "DECIMAL":
+            case "MONEY":
+                myp=collength/256;
+                break;
+            case "FLOAT":
+            case "SMALLFLOAT":
+                myp=2;
+            case "VARCHAR": 
+            case "NVARCHAR": 
+            case "VARCHAR2":
+            case "NVARCHAR2":
+            case "LVARCHAR":
+            case "RAW":
+                if (dbver > 30000) {
+                    if(collength > 0){
+                        myp = collength%65536;
+                    } else {
+                        myp = Long.valueOf((collength + 4294967296L) % 65536).intValue();
+                    }
                 } else {
-                    myp = Long.valueOf((collength + 4294967296L) % 65536).intValue();
+                    if(collength > 0){
+                        myp=collength%256;
+                    } else {
+                        myp = (collength + 65536) % 256;
+                    }
                 }
-            } else {
-                if(collength > 0){
-                    myp=collength%256;
-                } else {
-                    myp = (collength + 65536) % 256;
-                }
-            }
+                break;
+            default:
+                myp=collength;
+                break;
         }
-        else {myp=collength;}
         return myp;
     }
 }

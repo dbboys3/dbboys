@@ -27,6 +27,25 @@ public class ForeignKeyInfo {
      * 3，最高位开始第三位是1时（位与4096值为4096时），全局临时表；为0时则为默认的永久表
      */
     private IntegerProperty flags = new SimpleIntegerProperty();
+    private StringProperty foreignKeySqlMode = new SimpleStringProperty();
+
+    public String getforeignKeySqlMode() {
+        return foreignKeySqlMode.get();
+    }
+
+    public StringProperty foreignKeySqlModeProperty() {
+        return foreignKeySqlMode;
+    }
+
+    public void setForeignKeySqlMode(int foreignKeySqlMode) {
+        String tmpstr = "GBase";
+        if ((foreignKeySqlMode & 16384) == 16384) {
+            tmpstr = "Oracle";
+        } else if ((foreignKeySqlMode & 65536) == 65536){
+            tmpstr = "MySQL";
+        }
+        this.foreignKeySqlMode.set(tmpstr);
+    }
 
     public String getFkName() {
         return fkName.get();
@@ -189,10 +208,7 @@ public class ForeignKeyInfo {
      * @return
      */
     public String getForeignKeyModeFunc(){
-        if ((this.flags.get() & 16384) == 16384) {
-            return "Oracle";
-        }
-        return "GBase";
+        return this.foreignKeySqlMode.get();
     }
 
     @Override

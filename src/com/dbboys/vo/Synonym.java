@@ -22,16 +22,24 @@ public class Synonym extends TreeData{
      * 1, 最高位开始第一位是1时（位与16384值为16384时），SQLMODE=Oracle，
      */
     private IntegerProperty flags = new SimpleIntegerProperty();
+    private StringProperty synonymSqlMode = new SimpleStringProperty();
 
-    /**
-     * 返回同义词的数据库模式
-     * @return
-     */
-    public String getSynonymSqlMode(){
-        if ((this.flags.get() & 16384) == 16384) {
-            return "Oracle";
+    public String getSynonymSqlMode() {
+        return synonymSqlMode.get();
+    }
+
+    public StringProperty synonymSqlModeProperty() {
+        return synonymSqlMode;
+    }
+
+    public void setSynonymSqlMode(int synonymSqlMode) {
+        String tmpstr = "GBase";
+        if ((synonymSqlMode & 16384) == 16384) {
+            tmpstr = "Oracle";
+        } else if ((synonymSqlMode & 65536) == 65536){
+            tmpstr = "MySQL";
         }
-        return "GBase";
+        this.synonymSqlMode.set(tmpstr);
     }
 
     public String toString(){

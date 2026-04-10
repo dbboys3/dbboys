@@ -21,9 +21,10 @@ public class Sequence extends TreeData {
     private StringProperty isOrder = new SimpleStringProperty();   // 0 noorder, 1 order
     /*
      * 表标识(smallint两字节)：
-     * 1, 最高位开始第一位是1时（位与16384值为16384时），SQLMODE=Oracle
+     * 1, 最高位开始第一位是1时（位与16384值为16384时），SQLMODE=Oracle, MySQL无序列？
      */
     private IntegerProperty flags = new SimpleIntegerProperty();
+    private StringProperty seqSqlMode = new SimpleStringProperty();
 
     // created by L3
     private StringProperty database = new SimpleStringProperty();
@@ -38,15 +39,28 @@ public class Sequence extends TreeData {
      * 返回序列的数据库模式
      */
     public String getSequenceSqlMode() {
-        if ((this.flags.get() & 16384) == 16384) {
-            return "Oracle";
-        }
-        return "GBase";
+        return this.seqSqlMode.get();
     }
 
     @Override
     public String toString() {
         return "SeqName: " + this.getName() + "\n";
+    }
+
+    public String getSeqSqlMode() {
+        return seqSqlMode.get();
+    }
+
+    public StringProperty seqSqlModeProperty() {
+        return seqSqlMode;
+    }
+
+    public void setSeqSqlMode(int seqSqlMode) {
+        String tmpstr = "GBase";
+        if ((seqSqlMode & 16384) == 16384) {
+            tmpstr = "Oracle";
+        }
+        this.seqSqlMode.set(tmpstr);
     }
 
     public String getSeqOwner() {
