@@ -1,11 +1,13 @@
 package com.dbboys.ctrl;
 
+import com.dbboys.api.ConnectionService;
 import com.dbboys.api.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.i18n.I18n;
 import com.dbboys.impl.DatabasePlatforms;
 import com.dbboys.db.local.LocalDbRepository;
 import com.dbboys.util.*;
+import com.dbboys.vo.Connect;
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.UpdateResult;
 import javafx.application.Platform;
@@ -26,10 +28,12 @@ public class ResultSetEditHelper {
 
     private final ResultSetTabController ctrl;
     private final DatabasePlatformResolver platformResolver;
+    private final ConnectionService connectionService;
 
     public ResultSetEditHelper(ResultSetTabController ctrl) {
         this.ctrl = ctrl;
         this.platformResolver = resolvePlatformResolver();
+        this.connectionService = resolveConnectionService();
     }
 
     public void updateCellValue(int columnIndex,
@@ -136,11 +140,24 @@ public class ResultSetEditHelper {
             return null;
         }
         var repo = platformResolver.metadata(ctrl.sqlConnect);
-        List<String> primaryKeys = normalizeIdentifiers(repo.getPrimaryKeyColumns(ctrl.sqlConnect.getConn(), ctrl.resultFromTable));
-        List<String> tableColumns = normalizeIdentifiers(repo.getTableColumnNames(ctrl.sqlConnect.getConn(), ctrl.resultFromTable));
+        Connect metadataConnect = new Connect(ctrl.sqlConnect);
+        try (Connection metadataConn = connectionService.getConnectionWithSessionInit(metadataConnect)) {
+            return loadPrimaryKeyInfo(repo, metadataConn, sqlExe);
+        } catch (SQLException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SQLException("Load primary key metadata failed.", e);
+        }
+    }
+
+    private PrimaryKeyInfo loadPrimaryKeyInfo(com.dbboys.api.MetadataRepository repo,
+                                              Connection metadataConn,
+                                              String sqlExe) throws SQLException {
+        List<String> primaryKeys = normalizeIdentifiers(repo.getPrimaryKeyColumns(metadataConn, ctrl.resultFromTable));
+        List<String> tableColumns = normalizeIdentifiers(repo.getTableColumnNames(metadataConn, ctrl.resultFromTable));
         if (tableColumns.isEmpty()) {
             try {
-                ArrayList<ColumnsInfo> columns = repo.getColumns(ctrl.sqlConnect.getConn(), ctrl.resultFromTable);
+                ArrayList<ColumnsInfo> columns = repo.getColumns(metadataConn, ctrl.resultFromTable);
                 for (ColumnsInfo column : columns) {
                     tableColumns.add(normalizeIdentifier(column.getColName()));
                 }
@@ -212,6 +229,10 @@ public class ResultSetEditHelper {
         } catch (IllegalStateException e) {
             return DatabasePlatforms.createDefault();
         }
+    }
+
+    private static ConnectionService resolveConnectionService() {
+        return AppContext.get(ConnectionService.class);
     }
 
     private static List<String> normalizeIdentifiers(List<String> identifiers) {

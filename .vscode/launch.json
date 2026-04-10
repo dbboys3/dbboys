@@ -1,7 +1,13 @@
 {
   "version": "0.2.0",
   "configurations": [
-    
+    {
+      "type": "java",
+      "name": "OracleConnectProbe",
+      "request": "launch",
+      "mainClass": "com.dbboys.demo.OracleConnectProbe",
+      "projectName": "dbboys_5ddf3e84"
+    },
     {
       "type": "java",
       "name": "DefaultMenuItemDemo",
@@ -9,7 +15,6 @@
       "mainClass": "com.dbboys.demo.DefaultMenuItemDemo",
       "projectName": "dbboys_d2492530",
       "vmArgs": "--module-path \"D:\\Programs\\javafx-sdk-25.0.1\\lib\" --add-modules javafx.controls,javafx.fxml"
-
     },
     {
       "type": "java",
