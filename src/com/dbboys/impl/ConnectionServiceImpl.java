@@ -152,6 +152,8 @@ public class ConnectionServiceImpl implements ConnectionService {
             result.setSuccess(false);
             return result;
         }
+        String previousDatabase = connect.getCatalog();
+        String previousSessionDatabase = connect.getSessionCatalog();
         try {
             platformResolver.metadata(connect).changeDatabase(connect.getConn(), database.getName());
             applyTargetDatabase(dialect, connect, database, persistDefaultDatabase);
@@ -169,8 +171,6 @@ public class ConnectionServiceImpl implements ConnectionService {
                 result.setDisconnected(true);
             } else if (kind == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION) {
                 Connection oldConn = connect.getConn();
-                String previousDatabase = connect.getCatalog();
-                String previousSessionDatabase = connect.getSessionCatalog();
                 String previousProps = connect.getProps();
                 try {
                     applyTargetDatabase(dialect, connect, database, persistDefaultDatabase);
@@ -185,7 +185,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                     Connection newConn = sessionInitOnReconnect
                             ? getConnectionWithSessionInit(reconnectConnect)
                             : createConnection(reconnectConnect);
-                    connect.setConn(newConn);
+                    connect.setConnPreserveKeepAlive(newConn);
                     closeConnectionQuietly(oldConn);
                     if (persistDefaultDatabase) {
                         LocalDbRepository.updateConnect(connect);
@@ -193,13 +193,15 @@ public class ConnectionServiceImpl implements ConnectionService {
                     result.setSuccess(true);
                     result.setReconnected(true);
                 } catch (Exception ex) {
-                    connect.setConn(oldConn);
+                    connect.setConnPreserveKeepAlive(oldConn);
                     connect.setCatalog(previousDatabase);
                     connect.setSessionCatalog(previousSessionDatabase);
                     connect.setProps(previousProps);
+                    recoverFailedChangeDatabaseSession(connect, dialect, previousSessionDatabase, previousDatabase);
                     applyReconnectFailure(result, ex);
                 }
             } else {
+                recoverFailedChangeDatabaseSession(connect, dialect, previousSessionDatabase, previousDatabase);
                 result.setErrorCode(e.getErrorCode());
                 result.setErrorMessage(e.getMessage());
             }
@@ -394,6 +396,30 @@ public class ConnectionServiceImpl implements ConnectionService {
         return dialect.capability(ReconnectFallbackCapability.class)
                 .map(ReconnectFallbackCapability::reconnectFallbackDatabaseName)
                 .orElse(null);
+    }
+
+    private void recoverFailedChangeDatabaseSession(Connect connect,
+                                                    DatabasePlatform dialect,
+                                                    String previousSessionDatabase,
+                                                    String previousDatabase) {
+        if (connect == null || connect.getConn() == null || dialect == null) {
+            return;
+        }
+        String recoveryDatabase = previousSessionDatabase;
+        if (recoveryDatabase == null || recoveryDatabase.isBlank()) {
+            recoveryDatabase = previousDatabase;
+        }
+        if (recoveryDatabase == null || recoveryDatabase.isBlank()) {
+            recoveryDatabase = resolveReconnectFallbackDatabase(dialect);
+        }
+        if (recoveryDatabase == null || recoveryDatabase.isBlank()) {
+            return;
+        }
+        try {
+            platformResolver.metadata(connect).changeDatabase(connect.getConn(), recoveryDatabase);
+        } catch (Exception recoveryEx) {
+            log.warn("Recover session database after failed changeDatabase failed: {}", connect.getName(), recoveryEx);
+        }
     }
 
     private void applyReconnectFailure(ChangeDefaultDatabaseResult result, Exception ex) {

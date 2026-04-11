@@ -50,6 +50,7 @@ public class Connect extends TreeData{
     private StringProperty  drivermd5=new SimpleStringProperty();
     private StringProperty  dbversion=new SimpleStringProperty();
     private BooleanProperty readonly=new SimpleBooleanProperty();
+    private volatile boolean keepAliveEnabled;
     private volatile ScheduledFuture<?> keepAliveFuture;
     //每个连接一个顺序执行线程，对于目录树耗时的加载，顺序执行，避免同一个连接多个任务导致问题
     public ExecutorService executorService= Executors.newSingleThreadExecutor();
@@ -78,6 +79,7 @@ public class Connect extends TreeData{
         setDrivermd5(connect.getDrivermd5());
         setDbversion(connect.getDbversion());
         setReadonly(connect.getReadonly());
+        keepAliveEnabled = connect.keepAliveEnabled;
     }
 
     @Override
@@ -93,11 +95,13 @@ public class Connect extends TreeData{
         return conn;
     }
     public void setConn(Connection conn) {
-        cancelKeepAlive();
-        this.conn = conn;
-        if (conn != null) {
-            scheduleKeepAlive();
-        }
+        setConnInternal(conn, false, true);
+    }
+    public void setConnWithKeepAlive(Connection conn) {
+        setConnInternal(conn, true, true);
+    }
+    public void setConnPreserveKeepAlive(Connection conn) {
+        setConnInternal(conn, keepAliveEnabled, false);
     }
 
     public int getId() {
@@ -367,6 +371,17 @@ public class Connect extends TreeData{
         if (future != null) {
             future.cancel(false);
             keepAliveFuture = null;
+        }
+    }
+
+    private void setConnInternal(Connection conn, boolean enableKeepAlive, boolean updatePreference) {
+        cancelKeepAlive();
+        this.conn = conn;
+        if (updatePreference) {
+            keepAliveEnabled = enableKeepAlive;
+        }
+        if (this.conn != null && keepAliveEnabled) {
+            scheduleKeepAlive();
         }
     }
 

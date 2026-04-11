@@ -595,9 +595,12 @@ public class SqlTabController {
                 if (sqlConnect == null || sqlConnect == defaultConnect || sqlConnect.getConn() == null) {
                     return;
                 }
+                log.info("SQL panel keepalive test running: {}", sqlConnect.getName());
                 boolean alive = connectionService.testConn(sqlConnect);
                 if (!alive) {
                     log.warn("SQL panel keepalive test failed: {}", sqlConnect.getName());
+                } else {
+                    log.info("SQL panel keepalive test succeeded: {}", sqlConnect.getName());
                 }
             } catch (Exception e) {
                 log.warn("SQL panel keepalive check failed", e);
