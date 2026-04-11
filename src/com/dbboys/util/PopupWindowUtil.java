@@ -119,17 +119,28 @@ public class PopupWindowUtil {
     //初始化
     private static final StringBinding compatibilityTitleBinding = I18n.bind("main.menu.help.compatibility_list", "适配列表");
 
-    private static final List<String> COMPATIBILITY_FEATURE_LABELS = List.of(
-            "元数据列表",
-            "元数据详细信息",
-            "元数据变更",
-            "执行SQL",
-            "执行计划",
-            "导入导出",
-            "实例管理"
+    private static final List<CompatibilityFeatureDef> COMPATIBILITY_FEATURE_DEFS = List.of(
+            new CompatibilityFeatureDef("main.compatibility.feature.install", "安装"),
+            new CompatibilityFeatureDef("main.compatibility.feature.uninstall", "卸载"),
+            new CompatibilityFeatureDef("main.compatibility.feature.metadata_list", "元数据列表"),
+            new CompatibilityFeatureDef("main.compatibility.feature.metadata_detail", "元数据详细信息"),
+            new CompatibilityFeatureDef("main.compatibility.feature.metadata_change", "元数据变更"),
+            new CompatibilityFeatureDef("main.compatibility.feature.execute_sql", "执行SQL"),
+            new CompatibilityFeatureDef("main.compatibility.feature.execution_plan", "执行计划"),
+            new CompatibilityFeatureDef("main.compatibility.feature.import_export", "导入导出"),
+            new CompatibilityFeatureDef("main.compatibility.feature.instance_manager", "实例管理")
     );
+    private static final List<String> COMPATIBILITY_FEATURE_LABELS = COMPATIBILITY_FEATURE_DEFS.stream()
+            .map(CompatibilityFeatureDef::fallback)
+            .toList();
 
-    private record CompatibilityFeature(String label, boolean supported) {}
+    private record CompatibilityFeatureDef(String key, String fallback) {}
+
+    private record CompatibilityFeature(String key, String label, boolean supported) {
+        private CompatibilityFeature(String label, boolean supported) {
+            this(label, label, supported);
+        }
+    }
 
     private record CompatibilityRow(String dbType, String version, List<CompatibilityFeature> features) {}
 
@@ -380,10 +391,13 @@ public class PopupWindowUtil {
             ddlPopupStageStackPane.codeArea.replaceText("");
         });
 
-        compatibilityTableView.setItems(FXCollections.observableArrayList(buildCompatibilityRows()));
+        compatibilityTableView.setItems(FXCollections.observableArrayList(buildCompatibilityRowsI18n()));
         compatibilityTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        Label compatibilityPlaceholderLabel = new Label();
+        compatibilityPlaceholderLabel.textProperty().bind(I18n.bind("main.compatibility.empty", "暂无适配信息"));
         compatibilityTableView.setPlaceholder(new Label(I18n.t("main.compatibility.empty", "暂无适配信息")));
         compatibilityTableView.setFixedCellSize(58);
+        compatibilityTableView.setPlaceholder(compatibilityPlaceholderLabel);
         compatibilityTableView.setStyle("-fx-background-insets: 0;");
 
         TableColumn<CompatibilityRow, String> compatibilityTypeColumn = new TableColumn<>();
@@ -421,7 +435,8 @@ public class PopupWindowUtil {
                 pane.setPadding(new Insets(4, 0, 4, 0));
                 pane.prefWrapLengthProperty().bind(col.widthProperty().subtract(24));
                 for (CompatibilityFeature feature : item) {
-                    CheckBox checkBox = new CheckBox(feature.label());
+                    CheckBox checkBox = new CheckBox();
+                    checkBox.textProperty().bind(I18n.bind(feature.key(), feature.label()));
                     checkBox.setSelected(feature.supported());
                     checkBox.setDisable(true);
                     pane.getChildren().add(checkBox);
@@ -681,6 +696,51 @@ public class PopupWindowUtil {
         return dialog.showAndWait();
     }
 
+    private static List<CompatibilityRow> buildCompatibilityRowsI18n() {
+        return List.of(
+                new CompatibilityRow("GBASE 8S", "8.7 / 8.8", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
+                        "main.compatibility.feature.metadata_list",
+                        "main.compatibility.feature.metadata_detail",
+                        "main.compatibility.feature.metadata_change",
+                        "main.compatibility.feature.execute_sql",
+                        "main.compatibility.feature.execution_plan",
+                        "main.compatibility.feature.import_export",
+                        "main.compatibility.feature.instance_manager")),
+                new CompatibilityRow("INFORMIX", "12.1", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
+                        "main.compatibility.feature.metadata_list",
+                        "main.compatibility.feature.metadata_detail",
+                        "main.compatibility.feature.metadata_change",
+                        "main.compatibility.feature.execute_sql",
+                        "main.compatibility.feature.execution_plan",
+                        "main.compatibility.feature.import_export",
+                        "main.compatibility.feature.instance_manager")),
+                new CompatibilityRow("ORACLE", "19C", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.metadata_list",
+                        "main.compatibility.feature.metadata_detail",
+                        "main.compatibility.feature.metadata_change",
+                        "main.compatibility.feature.execute_sql",
+                        "main.compatibility.feature.execution_plan",
+                        "main.compatibility.feature.import_export"))
+        );
+    }
+
+    private static List<CompatibilityFeature> compatibilityFeaturesByKey(String... keys) {
+        List<CompatibilityFeature> features = new ArrayList<>();
+        List<String> supportedKeys = keys == null ? List.of() : List.of(keys);
+        for (CompatibilityFeatureDef featureDef : COMPATIBILITY_FEATURE_DEFS) {
+            features.add(new CompatibilityFeature(
+                    featureDef.key(),
+                    I18n.t(featureDef.key(), featureDef.fallback()),
+                    supportedKeys.contains(featureDef.key())
+            ));
+        }
+        return features;
+    }
+
     private static List<CompatibilityRow> buildCompatibilityRows() {
         return List.of(
                 new CompatibilityRow("GBASE 8S", "8.7 / 8.8", compatibilityFeatures(
@@ -695,8 +755,13 @@ public class PopupWindowUtil {
     private static List<CompatibilityFeature> compatibilityFeatures(String... labels) {
         List<CompatibilityFeature> features = new ArrayList<>();
         List<String> supportedLabels = labels == null ? List.of() : List.of(labels);
+        boolean supportsInstallLifecycle = supportedLabels.contains("瀹炰緥绠＄悊");
         for (String label : COMPATIBILITY_FEATURE_LABELS) {
-            features.add(new CompatibilityFeature(label, supportedLabels.contains(label)));
+            boolean supported = supportedLabels.contains(label);
+            if (("安装".equals(label) || "卸载".equals(label)) && supportsInstallLifecycle) {
+                supported = true;
+            }
+            features.add(new CompatibilityFeature(label, supported));
         }
         return features;
     }
