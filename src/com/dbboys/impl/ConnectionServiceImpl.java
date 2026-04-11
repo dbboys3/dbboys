@@ -226,7 +226,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
         String isolationLevel = connect.getPropByName(PROP_IFX_ISOLATION_LEVEL);
         if (isolationLevel == null || isolationLevel.trim().isEmpty()) {
-            applySupportedConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL, "5");
+            //applySupportedConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL, "5");
         }
     }
 

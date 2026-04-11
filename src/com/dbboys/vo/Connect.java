@@ -339,6 +339,7 @@ public class Connect extends TreeData{
                 if (conn == null || conn.isClosed()) {
                     return;
                 }
+                log.info("Connection keepalive test running: {}", getName());
                 DatabasePlatformResolver resolver = resolvePlatformResolver();
                 var platform = resolver.getPlatform(getDbtype());
                 if (platform == null) {
@@ -347,6 +348,8 @@ public class Connect extends TreeData{
                 boolean alive = platform.connection().testConnection(conn);
                 if (!alive) {
                     log.warn("Connection keepalive test failed: {}", getName());
+                } else {
+                    log.info("Connection keepalive test succeeded: {}", getName());
                 }
             } catch (Exception e) {
                 log.warn("Connection keepalive task failed: {}", getName(), e);
