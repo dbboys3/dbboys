@@ -96,8 +96,12 @@ public class PopupWindowUtil {
     private static Label ddlPopupStageLoadingLabel = new Label();
 
     //适配列表
-    private static final double COMPATIBILITY_POPUP_WIDTH = 920;
+    private static final double COMPATIBILITY_FEATURES_COLUMN_WIDTH = 2000;
+    /** 默认宽度需容纳功能列与其它两列最小宽度 */
+    private static final double COMPATIBILITY_POPUP_WIDTH = 800;
     private static final double COMPATIBILITY_POPUP_HEIGHT = 460;
+    /** 适配列表固定行高（相对原 58px 提高 20%） */
+    private static final double COMPATIBILITY_TABLE_FIXED_ROW_HEIGHT = 30;
     private static final Stage compatibilityPopupStage = new Stage();
     private static final CustomTableView<CompatibilityRow> compatibilityTableView = new CustomTableView<>();
     private static final StackPane compatibilityPopupStageStackPane = new StackPane(compatibilityTableView);
@@ -397,11 +401,10 @@ public class PopupWindowUtil {
         });
 
         compatibilityTableView.setItems(FXCollections.observableArrayList(buildCompatibilityRowsI18n()));
-        compatibilityTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         Label compatibilityPlaceholderLabel = new Label();
         compatibilityPlaceholderLabel.textProperty().bind(I18n.bind("main.compatibility.empty", "暂无适配信息"));
         compatibilityTableView.setPlaceholder(new Label(I18n.t("main.compatibility.empty", "暂无适配信息")));
-        compatibilityTableView.setFixedCellSize(58);
+        compatibilityTableView.setFixedCellSize(COMPATIBILITY_TABLE_FIXED_ROW_HEIGHT);
         compatibilityTableView.setPlaceholder(compatibilityPlaceholderLabel);
         compatibilityTableView.setStyle("-fx-background-insets: 0;");
 
@@ -422,7 +425,8 @@ public class PopupWindowUtil {
         TableColumn<CompatibilityRow, List<CompatibilityFeature>> compatibilityFeaturesColumn = new TableColumn<>();
         compatibilityFeaturesColumn.textProperty().bind(I18n.bind("main.compatibility.features", "已适配功能"));
         compatibilityFeaturesColumn.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue().features()));
-        compatibilityFeaturesColumn.setMinWidth(540);
+        compatibilityFeaturesColumn.setMinWidth(COMPATIBILITY_FEATURES_COLUMN_WIDTH);
+        compatibilityFeaturesColumn.setPrefWidth(COMPATIBILITY_FEATURES_COLUMN_WIDTH);
         compatibilityFeaturesColumn.setReorderable(false);
         compatibilityFeaturesColumn.setSortable(false);
         compatibilityFeaturesColumn.setCellFactory(col -> new TableCell<>() {
