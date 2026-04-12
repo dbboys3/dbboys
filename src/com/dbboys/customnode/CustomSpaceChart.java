@@ -24,7 +24,7 @@ import java.util.*;
 public class CustomSpaceChart extends BarChart<Number, String> {
 
     /** 水平条单行高度（Oracle / GBase / Informix 容量图统一）。 */
-    public static final int CAPACITY_BAR_ROW_HEIGHT_PX = 22;
+    public static final int CAPACITY_BAR_ROW_HEIGHT_PX = 15;
     /** 同一分类内多段条之间的间隙。 */
     public static final int CAPACITY_CHART_BAR_GAP = 6;
     /** 分类（每一行空间名）之间的间隙。 */
@@ -303,7 +303,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         updateXAxis(data);
         updateYAxis(data);
         series.getData().clear();
-        int barHeight = CAPACITY_BAR_ROW_HEIGHT_PX;
+        int barHeight = CAPACITY_BAR_ROW_HEIGHT_PX+CAPACITY_CHART_CATEGORY_GAP;
         int chartHeight = data.size() * barHeight + 52;
         setPrefHeight(chartHeight);
         setMinHeight(chartHeight);
