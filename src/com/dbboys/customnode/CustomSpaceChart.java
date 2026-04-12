@@ -1,6 +1,7 @@
 package com.dbboys.customnode;
 
 import com.dbboys.i18n.I18n;
+import com.dbboys.vo.Connect;
 import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.MenuItemUtil;
@@ -10,8 +11,6 @@ import javafx.scene.Node;
 import javafx.scene.chart.*;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Tooltip;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
@@ -23,7 +22,26 @@ import javafx.scene.transform.Scale;
 import java.util.*;
 
 public class CustomSpaceChart extends BarChart<Number, String> {
+
+    /** 水平条单行高度（Oracle / GBase / Informix 容量图统一）。 */
+    public static final int CAPACITY_BAR_ROW_HEIGHT_PX = 22;
+    /** 同一分类内多段条之间的间隙。 */
+    public static final int CAPACITY_CHART_BAR_GAP = 6;
+    /** 分类（每一行空间名）之间的间隙。 */
+    public static final int CAPACITY_CHART_CATEGORY_GAP = 8;
+
     private static final String INTERACTION_INSTALLED_KEY = "custom.spacechart.interaction.installed";
+
+    /** Oracle 用专用右键策略，其余（含 GBase / Informix）用库空间/数据文件维护菜单。 */
+    public static SpaceContextMenuPolicy menuPolicyFor(Connect connect) {
+        if (connect == null || connect.getDbtype() == null) {
+            return SpaceContextMenuPolicy.INFORMIX_LIKE;
+        }
+        if ("ORACLE".equalsIgnoreCase(connect.getDbtype().trim())) {
+            return SpaceContextMenuPolicy.ORACLE_READONLY;
+        }
+        return SpaceContextMenuPolicy.INFORMIX_LIKE;
+    }
 
     /* ===================== 数据模型 ===================== */
     public static class SpaceUsage {
@@ -94,7 +112,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
     private NumberAxis xAxis;
     private ColorMode colorMode = ColorMode.DBSPACE;
     private final SpaceContextMenuPolicy spaceContextMenuPolicy;
-    /** 非空时：灰色条图例与「总减已用」tooltip 用该 i18n（Oracle 为「可增长大小」）；空则沿用 space.legend / space.tooltip 默认键。 */
+    /** 非空时：灰色条图例与「总减已用」tooltip 用该 i18n（Oracle 为「已分配未使用」）；空则沿用 space.legend / space.tooltip 默认键。 */
     private final String unusedBarLabelKeyOverride;
     private final String unusedBarLabelFallbackOverride;
     private boolean menuItemsDisabled = false;  //用于外部控制菜单是否需要禁用，如connect是只读，需要禁用但显示
@@ -107,6 +125,26 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         void onExpandDatafile(SpaceUsage spaceUsage);
         void onUnExpandDatafile(SpaceUsage spaceUsage);
         void onUnlimitedSpaceSize(SpaceUsage spaceUsage);
+
+        /** Oracle 表空间图：创建新表空间（与 Informix 创建库空间分离）。 */
+        default void onOracleCreateTablespace(SpaceUsage spaceUsage) {
+        }
+
+        /** Oracle 表空间图：删除当前条对应表空间。 */
+        default void onOracleDropTablespace(SpaceUsage spaceUsage) {
+        }
+
+        /** Oracle 表空间图：为当前表空间增加数据文件。 */
+        default void onOracleAddDatafile(SpaceUsage spaceUsage) {
+        }
+
+        /** Oracle 数据文件图：启用或关闭自动扩展。 */
+        default void onOracleDatafileAutoextend(SpaceUsage spaceUsage, boolean enable) {
+        }
+
+        /** Oracle 数据文件图：从表空间删除该数据文件。 */
+        default void onOracleDatafileDrop(SpaceUsage spaceUsage) {
+        }
     }
 
     private ContextMenuListener contextMenuListener; // 外部设置的回调监听器
@@ -123,11 +161,17 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         TABLE      // 按总容量
     }
 
-    /** 容量图右键：Informix/GBase 可变空间；Oracle 仅字典查看，用复制等安全项。 */
+    /**
+     * 容量图右键策略：{@link #INFORMIX_LIKE} 为 Informix / GBase 等（库空间、数据文件增删与扩展）；
+     * {@link #ORACLE_READONLY} 为 Oracle（表空间/数据文件 DDL）。
+     */
     public enum SpaceContextMenuPolicy {
         INFORMIX_LIKE,
         ORACLE_READONLY
     }
+
+    private static final String ORACLE_MENU_KIND = "oracleMenuKind";
+    private static final String ORACLE_MENU_MUTATION = "mutation";
 
     /* ===================== 构造器 ===================== */
     public CustomSpaceChart(List<SpaceUsage> data, ColorMode colorMode) {
@@ -158,8 +202,8 @@ public class CustomSpaceChart extends BarChart<Number, String> {
             this.unusedBarLabelFallbackOverride = "";
         }
         setAnimated(false);
-        setBarGap(10);
-        setCategoryGap(10);
+        setBarGap(CAPACITY_CHART_BAR_GAP);
+        setCategoryGap(CAPACITY_CHART_CATEGORY_GAP);
         setLegendVisible(false);
 
         getData().add(series);
@@ -259,8 +303,8 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         updateXAxis(data);
         updateYAxis(data);
         series.getData().clear();
-        int barHeight = 22;
-        int chartHeight = data.size() * (barHeight) + 52;
+        int barHeight = CAPACITY_BAR_ROW_HEIGHT_PX;
+        int chartHeight = data.size() * barHeight + 52;
         setPrefHeight(chartHeight);
         setMinHeight(chartHeight);
 
@@ -293,57 +337,95 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         refreshAllBars(data);
     }
 
-    private static void copyPlainText(String text) {
-        if (text == null || text.isBlank()) {
-            return;
-        }
-        ClipboardContent content = new ClipboardContent();
-        content.putString(text);
-        Clipboard.getSystemClipboard().setContent(content);
-    }
-
-    /** Oracle：不提供 Informix 式增删改空间，仅复制字典中的名称/路径便于在 SQL 窗口中使用。 */
+    /** Oracle：表空间图为创建/删除表空间；数据文件图为自动扩展与删除数据文件。 */
     private void buildOracleReadonlySpaceMenu(ContextMenu contextMenu, SpaceUsage spaceUsage, boolean[] isMenuShowing) {
         switch (colorMode) {
             case DBSPACE -> {
-                CustomShortcutMenuItem copy = MenuItemUtil.createMenuItemI18n(
-                        "instance.space.oracle.menu.copy_tablespace",
-                        IconFactory.group(IconPaths.METADATA_COPY_ITEM, 0.55));
-                copy.setOnAction(e -> {
-                    copyPlainText(spaceUsage.getName());
+                CustomShortcutMenuItem createTs = MenuItemUtil.createMenuItemI18n(
+                        "instance.space.oracle.menu.create_tablespace",
+                        IconFactory.group(IconPaths.MARKDOWN_NEW_FOLDER_ITEM, 0.55));
+                createTs.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                createTs.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleCreateTablespace(spaceUsage);
+                    }
                     isMenuShowing[0] = false;
                 });
-                contextMenu.getItems().add(copy);
+                contextMenu.getItems().add(createTs);
+
+                CustomShortcutMenuItem addDf = MenuItemUtil.createMenuItemI18n(
+                        "instance.space.oracle.menu.add_datafile",
+                        IconFactory.group(IconPaths.MARKDOWN_NEW_FILE_ITEM, 0.55));
+                addDf.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                addDf.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleAddDatafile(spaceUsage);
+                    }
+                    isMenuShowing[0] = false;
+                });
+                contextMenu.getItems().add(addDf);
+
+                CustomShortcutMenuItem dropTs = MenuItemUtil.createMenuItemI18n(
+                        "instance.space.oracle.menu.drop_tablespace",
+                        IconFactory.group(IconPaths.METADATA_TRUNCATE_ITEM, 0.55, IconFactory.dangerColor()));
+                dropTs.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                if (com.dbboys.util.InstanceMutationUtil.isOracleProtectedTablespace(spaceUsage.getName())) {
+                    dropTs.setDisable(true);
+                }
+                dropTs.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleDropTablespace(spaceUsage);
+                    }
+                    isMenuShowing[0] = false;
+                });
+                contextMenu.getItems().add(dropTs);
             }
             case CHUNK -> {
-                CustomShortcutMenuItem copy = MenuItemUtil.createMenuItemI18n(
-                        "instance.space.oracle.menu.copy_datafile_path",
-                        IconFactory.group(IconPaths.METADATA_COPY_ITEM, 0.55));
-                copy.setOnAction(e -> {
-                    copyPlainText(spaceUsage.getName());
+                CustomShortcutMenuItem expandDf = MenuItemUtil.createMenuItemI18n(
+                        "space.menu.set_extendable",
+                        IconFactory.group(IconPaths.INSTANCE_SPACE_EXTENDABLE, 0.6));
+                expandDf.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                if (spaceUsage.getIsExtendable() > 0) {
+                    expandDf.setDisable(true);
+                }
+                expandDf.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleDatafileAutoextend(spaceUsage, true);
+                    }
                     isMenuShowing[0] = false;
                 });
-                contextMenu.getItems().add(copy);
+                CustomShortcutMenuItem unexpandDf = MenuItemUtil.createMenuItemI18n(
+                        "space.menu.set_unextendable",
+                        IconFactory.group(IconPaths.INSTANCE_SPACE_UNEXTENDABLE, 0.6));
+                unexpandDf.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                if (spaceUsage.getIsExtendable() <= 0) {
+                    unexpandDf.setDisable(true);
+                }
+                unexpandDf.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleDatafileAutoextend(spaceUsage, false);
+                    }
+                    isMenuShowing[0] = false;
+                });
+                CustomShortcutMenuItem dropDf = MenuItemUtil.createMenuItemI18n(
+                        "space.menu.drop_data_file",
+                        IconFactory.group(IconPaths.METADATA_TRUNCATE_ITEM, 0.55, IconFactory.dangerColor()));
+                dropDf.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
+                String tsFromLabel = com.dbboys.util.InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(
+                        spaceUsage.getLabel());
+                if (tsFromLabel != null
+                        && com.dbboys.util.InstanceMutationUtil.isOracleProtectedTablespace(tsFromLabel)) {
+                    dropDf.setDisable(true);
+                }
+                dropDf.setOnAction(e -> {
+                    if (contextMenuListener != null) {
+                        contextMenuListener.onOracleDatafileDrop(spaceUsage);
+                    }
+                    isMenuShowing[0] = false;
+                });
+                contextMenu.getItems().addAll(expandDf, unexpandDf, dropDf);
             }
-            case DATABASE -> {
-                CustomShortcutMenuItem copy = MenuItemUtil.createMenuItemI18n(
-                        "instance.space.oracle.menu.copy_schema",
-                        IconFactory.group(IconPaths.METADATA_COPY_ITEM, 0.55));
-                copy.setOnAction(e -> {
-                    copyPlainText(spaceUsage.getName());
-                    isMenuShowing[0] = false;
-                });
-                contextMenu.getItems().add(copy);
-            }
-            case TABLE -> {
-                CustomShortcutMenuItem copy = MenuItemUtil.createMenuItemI18n(
-                        "instance.space.oracle.menu.copy_segment_label",
-                        IconFactory.group(IconPaths.METADATA_COPY_ITEM, 0.55));
-                copy.setOnAction(e -> {
-                    copyPlainText(spaceUsage.getLabel());
-                    isMenuShowing[0] = false;
-                });
-                contextMenu.getItems().add(copy);
+            case DATABASE, TABLE -> {
             }
         }
     }
@@ -511,11 +593,16 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         bar.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
             if (e.getButton() == MouseButton.SECONDARY) {
                 e.consume(); // 消费事件，阻止冒泡到父组件
+                if (contextMenu.getItems().isEmpty()) {
+                    return;
+                }
                 // 在鼠标位置显示菜单
                 for (javafx.scene.control.MenuItem item : contextMenu.getItems()) {
                     boolean baseDisabled = Boolean.TRUE.equals(item.getProperties().get("baseDisabled"));
-                    boolean blockByReadonly = menuItemsDisabled
-                            && spaceContextMenuPolicy != SpaceContextMenuPolicy.ORACLE_READONLY;
+                    String oracleKind = (String) item.getProperties().get(ORACLE_MENU_KIND);
+                    boolean oracle = spaceContextMenuPolicy == SpaceContextMenuPolicy.ORACLE_READONLY;
+                    boolean isOracleMutation = oracle && ORACLE_MENU_MUTATION.equals(oracleKind);
+                    boolean blockByReadonly = menuItemsDisabled && (!oracle || isOracleMutation);
                     item.setDisable(blockByReadonly || baseDisabled);
                 }
                 contextMenu.show(bar, e.getScreenX(), e.getScreenY());
@@ -650,6 +737,10 @@ public class CustomSpaceChart extends BarChart<Number, String> {
             sb.append(kv(resolveUnusedTooltipI18nKey(), resolveUnusedTooltipFallback(),
                     String.format("%.2f GB", u.getUnused()))).append('\n');
             sb.append(kv("space.tooltip.extendable", "可扩展", u.getIsExtendable() > 0 ? yesText : noText));
+            if (u.getLimitSize() > 0) {
+                sb.append('\n').append("--------------------").append('\n');
+                sb.append(kv("space.tooltip.limit_size", "限制大小", String.format("%.2f GB", u.getLimitSize())));
+            }
             return sb.toString();
         }
 

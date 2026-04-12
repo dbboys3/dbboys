@@ -203,8 +203,8 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
                 "Schema Usage(GB)",
                 "instance.space.oracle.chart.table",
                 "Segment Usage TOP20(GB)",
-                "instance.space.oracle.unused_growable",
-                "可增长大小"
+                "instance.space.oracle.unused_allocated",
+                "已分配未使用"
         );
     }
 

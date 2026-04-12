@@ -36,13 +36,20 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.WindowEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -50,6 +57,9 @@ import java.util.regex.Pattern;
 
 public class CustomInstanceTab extends CustomTab {
     private static final Logger log = LogManager.getLogger(CustomInstanceTab.class);
+    /** 匹配数据文件名：前缀 + 两位数字 + .dbf（用于递增 test02、test03）。 */
+    private static final Pattern ORACLE_DATAFILE_BASENAME_SUFFIX = Pattern.compile(
+            "(?i)^(.+?)(\\d{2})\\.dbf$");
     private final AdminService adminService = new AdminService();
     private final ConnectionService connectionService = com.dbboys.app.AppContext.get(ConnectionService.class);
     private final DatabasePlatformResolver platformResolver = AppContext.get(DatabasePlatformResolver.class);
@@ -268,9 +278,7 @@ public class CustomInstanceTab extends CustomTab {
 
         //鍒濆鍖杝pacetab UI
         InstanceTabCapability.SpaceLabels spaceLabels = resolveSpaceLabels();
-        CustomSpaceChart.SpaceContextMenuPolicy spaceMenuPolicy = isOracleConnection()
-                ? CustomSpaceChart.SpaceContextMenuPolicy.ORACLE_READONLY
-                : CustomSpaceChart.SpaceContextMenuPolicy.INFORMIX_LIKE;
+        CustomSpaceChart.SpaceContextMenuPolicy spaceMenuPolicy = CustomSpaceChart.menuPolicyFor(connect);
         dbspaceChart = new CustomSpaceChart(
                 dbspaceChartList,
                 CustomSpaceChart.ColorMode.DBSPACE,
@@ -798,9 +806,605 @@ public class CustomInstanceTab extends CustomTab {
                 // 后续可补充更多刷新逻辑
             }
 
+            @Override
+            public void onOracleCreateTablespace(CustomSpaceChart.SpaceUsage spaceUsage) {
+                final String dirPrefix = resolveOracleDatafileDirectoryPrefixFromChunks();
 
+                ImageView loadingIv = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
+                Label runningLabel = new Label(I18n.t("instance.dialog.oracle.executing", "正在执行…"));
+                runningLabel.textProperty().bind(I18n.bind("instance.dialog.oracle.executing", "正在执行…"));
+                Button oracleDdlStopButton = new Button("");
+                oracleDdlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
+                oracleDdlStopButton.setFocusTraversable(false);
+                oracleDdlStopButton.getStyleClass().add("small");
+                Tooltip oracleDdlStopTip = new Tooltip();
+                oracleDdlStopTip.textProperty().bind(I18n.bind("popup.back_sql.stop.tooltip", "停止此任务"));
+                oracleDdlStopButton.setTooltip(oracleDdlStopTip);
+                HBox loadingRow = new HBox(8, loadingIv, runningLabel, oracleDdlStopButton);
+                loadingRow.setAlignment(Pos.CENTER);
+                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.setMaxHeight(20);
+                HBox overlayBar = new HBox(loadingRow);
+                overlayBar.setAlignment(Pos.CENTER);
+                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.setVisible(false);
 
+                final AtomicReference<Task<Void>> oracleDdlTaskHolder = new AtomicReference<>();
+                final AtomicReference<Statement> oracleDdlStatementHolder = new AtomicReference<>();
+                Runnable stopOracleDdl = () -> {
+                    Statement st = oracleDdlStatementHolder.get();
+                    if (st != null) {
+                        try {
+                            st.cancel();
+                        } catch (SQLException ignored) {
+                        }
+                    }
+                    Task<Void> t = oracleDdlTaskHolder.getAndSet(null);
+                    if (t != null) {
+                        t.cancel(false);
+                    }
+                    Platform.runLater(() -> {
+                        if (overlayBar.isVisible()) {
+                            overlayBar.setVisible(false);
+                            runningLabel.textProperty().unbind();
+                        }
+                    });
+                };
+                oracleDdlStopButton.setOnAction(e -> stopOracleDdl.run());
 
+                Label nameLbl = new Label(I18n.t("instance.dialog.oracle.ts_name", "表空间名"));
+                CustomUserTextField nameField = new CustomUserTextField();
+                nameField.setMinWidth(280);
+                Label pathLbl = new Label(I18n.t("instance.dialog.oracle.datafile_path", "数据文件全路径"));
+                CustomUserTextField pathField = new CustomUserTextField();
+                pathField.setMinWidth(360);
+                pathField.setPromptText(I18n.t("instance.dialog.file_path.prompt", "根据空间名称自动填充"));
+                if (!dirPrefix.isEmpty()) {
+                    pathField.setText(dirPrefix);
+                }
+                Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
+                CustomUserTextField sizeField = new CustomUserTextField();
+                sizeField.setMinWidth(120);
+                sizeField.setText("100");
+                sizeField.textProperty().addListener((obs, ov, nv) -> {
+                    if (nv != null && !nv.matches("\\d*")) {
+                        sizeField.setText(nv.replaceAll("\\D", ""));
+                    }
+                });
+                CheckBox autoExt = new CheckBox(I18n.t("instance.dialog.oracle.autoextend",
+                        "数据文件自动扩展（NEXT 10M MAXSIZE UNLIMITED）"));
+                autoExt.setSelected(true);
+
+                nameField.textProperty().addListener((obs, ov, nv) -> {
+                    if (nv == null) {
+                        return;
+                    }
+                    String noSpace = nv.replace(" ", "");
+                    if (!noSpace.equals(nv)) {
+                        nameField.setText(noSpace);
+                        return;
+                    }
+                    if (noSpace.isEmpty()) {
+                        pathField.setText(dirPrefix);
+                    } else {
+                        pathField.setText(dirPrefix + noSpace.toLowerCase(Locale.ROOT) + "01.dbf");
+                    }
+                });
+                pathField.textProperty().addListener((obs, ov, nv) -> {
+                    if (nv != null && nv.contains(" ")) {
+                        pathField.setText(nv.replace(" ", ""));
+                    }
+                });
+
+                GridPane grid = new GridPane();
+                grid.setHgap(10);
+                grid.setVgap(8);
+                grid.setPadding(new Insets(10));
+                int row = 0;
+                grid.add(nameLbl, 0, row);
+                grid.add(nameField, 1, row++);
+                grid.add(pathLbl, 0, row);
+                grid.add(pathField, 1, row++);
+                grid.add(sizeLbl, 0, row);
+                grid.add(sizeField, 1, row++);
+                grid.add(autoExt, 0, row, 2, 1);
+
+                StackPane root = new StackPane(grid, overlayBar);
+
+                ButtonType commitType = new ButtonType(
+                        I18n.t("instance.dialog.create", "创建"),
+                        ButtonBar.ButtonData.OK_DONE);
+                ButtonType cancelType = new ButtonType(
+                        I18n.t("common.cancel", "取消"),
+                        ButtonBar.ButtonData.CANCEL_CLOSE);
+                AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                        I18n.t("instance.dialog.oracle.create_ts.title", "创建 Oracle 表空间"),
+                        root,
+                        600,
+                        Region.USE_COMPUTED_SIZE,
+                        commitType,
+                        cancelType);
+                Button commitBtn = dialog.getButton(commitType);
+                Button cancelBtn = dialog.getButton(cancelType);
+                dialog.getStage().setOnCloseRequest((WindowEvent ev) -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopOracleDdl.run();
+                    }
+                });
+                cancelBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopOracleDdl.run();
+                    }
+                });
+                commitBtn.disableProperty().bind(overlayBar.visibleProperty());
+                commitBtn.addEventFilter(ActionEvent.ACTION, event -> {
+                    event.consume();
+                    String ts = nameField.getText().trim();
+                    String path = pathField.getText().trim();
+                    String sz = sizeField.getText().trim();
+                    if (ts.isEmpty()) {
+                        nameField.requestFocus();
+                        return;
+                    }
+                    if (path.isEmpty()) {
+                        pathField.requestFocus();
+                        return;
+                    }
+                    if (sz.isEmpty()) {
+                        sizeField.requestFocus();
+                        return;
+                    }
+                    long mb;
+                    try {
+                        mb = Long.parseLong(sz);
+                    } catch (NumberFormatException ex) {
+                        return;
+                    }
+                    if (mb <= 0) {
+                        sizeField.requestFocus();
+                        return;
+                    }
+                    long finalMb = mb;
+                    boolean autoextend = autoExt.isSelected();
+                    overlayBar.setVisible(true);
+                    Task<Void> task = new Task<>() {
+                        @Override
+                        protected Void call() throws Exception {
+                            InstanceMutationUtil.createOracleTablespace(
+                                    connect, ts, path, finalMb, autoextend, oracleDdlStatementHolder);
+                            return null;
+                        }
+                    };
+                    oracleDdlTaskHolder.set(task);
+                    task.setOnSucceeded(e1 -> Platform.runLater(() -> {
+                        oracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        cancelBtn.fire();
+                        NotificationUtil.showMainNotification(
+                                I18n.t("instance.notice.oracle_ts_created", "表空间已创建"));
+                        refreshButton.fire();
+                    }));
+                    task.setOnFailed(e1 -> Platform.runLater(() -> {
+                        oracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        Throwable ex = task.getException();
+                        if (task.isCancelled() || InstanceMutationUtil.isLikelyOracleStatementCancelled(ex)) {
+                            NotificationUtil.showMainNotification(
+                                    I18n.t("instance.notice.oracle_ddl_cancelled", "已中止执行"));
+                            return;
+                        }
+                        String msg = ex == null ? "" : ex.getMessage();
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), msg);
+                    }));
+                    AppExecutor.runTask(task);
+                });
+                dialog.showAndWait();
+            }
+
+            @Override
+            public void onOracleDropTablespace(CustomSpaceChart.SpaceUsage spaceUsage) {
+                String tsName = spaceUsage.getName();
+                if (InstanceMutationUtil.isOracleProtectedTablespace(tsName)) {
+                    AlertUtil.CustomAlert(
+                            I18n.t("common.error", "错误"),
+                            I18n.t("instance.error.oracle_ts_protected",
+                                    "不允许删除系统关键表空间（如 SYSTEM、SYSAUX、UNDO*、TEMP）。"));
+                    return;
+                }
+                CheckBox incl = new CheckBox(I18n.t(
+                        "instance.dialog.oracle.drop.including_files",
+                        "同时删除数据文件 (INCLUDING DATAFILES)"));
+                incl.setSelected(true);
+                Label warn = new Label(String.format(
+                        I18n.t("instance.dialog.oracle.drop.warning", "将删除表空间「%s」及其内容。此操作不可撤销。"),
+                        tsName));
+                warn.setWrapText(true);
+                VBox vb = new VBox(10, warn, incl);
+                vb.setPadding(new Insets(10));
+
+                ImageView loadingIv = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
+                Label runningLabel = new Label(I18n.t("instance.dialog.oracle.executing", "正在执行…"));
+                runningLabel.textProperty().bind(I18n.bind("instance.dialog.oracle.executing", "正在执行…"));
+                Button dropOracleDdlStopButton = new Button("");
+                dropOracleDdlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
+                dropOracleDdlStopButton.setFocusTraversable(false);
+                dropOracleDdlStopButton.getStyleClass().add("small");
+                Tooltip dropOracleDdlStopTip = new Tooltip();
+                dropOracleDdlStopTip.textProperty().bind(I18n.bind("popup.back_sql.stop.tooltip", "停止此任务"));
+                dropOracleDdlStopButton.setTooltip(dropOracleDdlStopTip);
+                HBox loadingRow = new HBox(8, loadingIv, runningLabel, dropOracleDdlStopButton);
+                loadingRow.setAlignment(Pos.CENTER);
+                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.setMaxHeight(20);
+                HBox overlayBar = new HBox(loadingRow);
+                overlayBar.setAlignment(Pos.CENTER);
+                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.setVisible(false);
+                StackPane root = new StackPane(vb, overlayBar);
+
+                final AtomicReference<Task<Void>> dropOracleDdlTaskHolder = new AtomicReference<>();
+                final AtomicReference<Statement> dropOracleDdlStatementHolder = new AtomicReference<>();
+                Runnable stopDropOracleDdl = () -> {
+                    Statement st = dropOracleDdlStatementHolder.get();
+                    if (st != null) {
+                        try {
+                            st.cancel();
+                        } catch (SQLException ignored) {
+                        }
+                    }
+                    Task<Void> t = dropOracleDdlTaskHolder.getAndSet(null);
+                    if (t != null) {
+                        t.cancel(false);
+                    }
+                    Platform.runLater(() -> {
+                        if (overlayBar.isVisible()) {
+                            overlayBar.setVisible(false);
+                            runningLabel.textProperty().unbind();
+                        }
+                    });
+                };
+                dropOracleDdlStopButton.setOnAction(e -> stopDropOracleDdl.run());
+
+                ButtonType delType = new ButtonType(
+                        I18n.t("instance.dialog.oracle.drop_button", "删除表空间"),
+                        ButtonBar.ButtonData.OK_DONE);
+                ButtonType cancelType = new ButtonType(
+                        I18n.t("common.cancel", "取消"),
+                        ButtonBar.ButtonData.CANCEL_CLOSE);
+                AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                        I18n.t("instance.dialog.oracle.drop_ts.title", "删除 Oracle 表空间"),
+                        root,
+                        460,
+                        Region.USE_COMPUTED_SIZE,
+                        delType,
+                        cancelType);
+                Button delBtn = dialog.getButton(delType);
+                Button cancelBtn = dialog.getButton(cancelType);
+                dialog.getStage().setOnCloseRequest((WindowEvent ev) -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopDropOracleDdl.run();
+                    }
+                });
+                cancelBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopDropOracleDdl.run();
+                    }
+                });
+                delBtn.disableProperty().bind(overlayBar.visibleProperty());
+                delBtn.addEventFilter(ActionEvent.ACTION, event -> {
+                    event.consume();
+                    boolean includingDatafiles = incl.isSelected();
+                    overlayBar.setVisible(true);
+                    Task<Void> task = new Task<>() {
+                        @Override
+                        protected Void call() throws Exception {
+                            InstanceMutationUtil.dropOracleTablespace(
+                                    connect, tsName, includingDatafiles, dropOracleDdlStatementHolder);
+                            return null;
+                        }
+                    };
+                    dropOracleDdlTaskHolder.set(task);
+                    task.setOnSucceeded(e1 -> Platform.runLater(() -> {
+                        dropOracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        cancelBtn.fire();
+                        NotificationUtil.showMainNotification(
+                                I18n.t("instance.notice.oracle_ts_dropped", "表空间已删除"));
+                        refreshButton.fire();
+                    }));
+                    task.setOnFailed(e1 -> Platform.runLater(() -> {
+                        dropOracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        Throwable ex = task.getException();
+                        if (task.isCancelled() || InstanceMutationUtil.isLikelyOracleStatementCancelled(ex)) {
+                            NotificationUtil.showMainNotification(
+                                    I18n.t("instance.notice.oracle_ddl_cancelled", "已中止执行"));
+                            return;
+                        }
+                        String msg = ex == null ? "" : ex.getMessage();
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), msg);
+                    }));
+                    AppExecutor.runTask(task);
+                });
+                dialog.showAndWait();
+            }
+
+            @Override
+            public void onOracleAddDatafile(CustomSpaceChart.SpaceUsage spaceUsage) {
+                final String tsName = spaceUsage.getName() == null ? "" : spaceUsage.getName().trim();
+                if (tsName.isEmpty()) {
+                    return;
+                }
+
+                ImageView loadingIv = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
+                Label runningLabel = new Label(I18n.t("instance.dialog.oracle.executing", "正在执行…"));
+                runningLabel.textProperty().bind(I18n.bind("instance.dialog.oracle.executing", "正在执行…"));
+                Button addOracleDdlStopButton = new Button("");
+                addOracleDdlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
+                addOracleDdlStopButton.setFocusTraversable(false);
+                addOracleDdlStopButton.getStyleClass().add("small");
+                Tooltip addOracleDdlStopTip = new Tooltip();
+                addOracleDdlStopTip.textProperty().bind(I18n.bind("popup.back_sql.stop.tooltip", "停止此任务"));
+                addOracleDdlStopButton.setTooltip(addOracleDdlStopTip);
+                HBox loadingRow = new HBox(8, loadingIv, runningLabel, addOracleDdlStopButton);
+                loadingRow.setAlignment(Pos.CENTER);
+                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.setMaxHeight(20);
+                HBox overlayBar = new HBox(loadingRow);
+                overlayBar.setAlignment(Pos.CENTER);
+                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.setVisible(false);
+
+                final AtomicReference<Task<Void>> addOracleDdlTaskHolder = new AtomicReference<>();
+                final AtomicReference<Statement> addOracleDdlStatementHolder = new AtomicReference<>();
+                Runnable stopAddOracleDdl = () -> {
+                    Statement st = addOracleDdlStatementHolder.get();
+                    if (st != null) {
+                        try {
+                            st.cancel();
+                        } catch (SQLException ignored) {
+                        }
+                    }
+                    Task<Void> t = addOracleDdlTaskHolder.getAndSet(null);
+                    if (t != null) {
+                        t.cancel(false);
+                    }
+                    Platform.runLater(() -> {
+                        if (overlayBar.isVisible()) {
+                            overlayBar.setVisible(false);
+                            runningLabel.textProperty().unbind();
+                        }
+                    });
+                };
+                addOracleDdlStopButton.setOnAction(e -> stopAddOracleDdl.run());
+
+                Label tsLbl = new Label(I18n.t("instance.dialog.oracle.add_datafile.ts_label", "表空间"));
+                CustomUserTextField tsField = new CustomUserTextField();
+                tsField.setText(tsName);
+                tsField.setEditable(false);
+                tsField.setMinWidth(280);
+                Label pathLbl = new Label(I18n.t("instance.dialog.oracle.datafile_path", "数据文件全路径"));
+                CustomUserTextField pathField = new CustomUserTextField();
+                pathField.setMinWidth(360);
+                pathField.setPromptText(I18n.t("instance.dialog.file_path.prompt", "根据空间名称自动填充"));
+                pathField.setText(suggestNextOracleDatafilePath(tsName));
+                Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
+                CustomUserTextField sizeField = new CustomUserTextField();
+                sizeField.setMinWidth(120);
+                sizeField.setText("100");
+                sizeField.textProperty().addListener((obs, ov, nv) -> {
+                    if (nv != null && !nv.matches("\\d*")) {
+                        sizeField.setText(nv.replaceAll("\\D", ""));
+                    }
+                });
+                CheckBox autoExt = new CheckBox(I18n.t("instance.dialog.oracle.autoextend",
+                        "数据文件自动扩展（NEXT 10M MAXSIZE UNLIMITED）"));
+                autoExt.setSelected(true);
+                pathField.textProperty().addListener((obs, ov, nv) -> {
+                    if (nv != null && nv.contains(" ")) {
+                        pathField.setText(nv.replace(" ", ""));
+                    }
+                });
+
+                GridPane grid = new GridPane();
+                grid.setHgap(10);
+                grid.setVgap(8);
+                grid.setPadding(new Insets(10));
+                int row = 0;
+                grid.add(tsLbl, 0, row);
+                grid.add(tsField, 1, row++);
+                grid.add(pathLbl, 0, row);
+                grid.add(pathField, 1, row++);
+                grid.add(sizeLbl, 0, row);
+                grid.add(sizeField, 1, row++);
+                grid.add(autoExt, 0, row, 2, 1);
+
+                StackPane root = new StackPane(grid, overlayBar);
+
+                ButtonType commitType = new ButtonType(
+                        I18n.t("instance.dialog.oracle.add_datafile.commit", "增加"),
+                        ButtonBar.ButtonData.OK_DONE);
+                ButtonType cancelType = new ButtonType(
+                        I18n.t("common.cancel", "取消"),
+                        ButtonBar.ButtonData.CANCEL_CLOSE);
+                AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                        I18n.t("instance.dialog.oracle.add_datafile.title", "为表空间增加数据文件"),
+                        root,
+                        600,
+                        Region.USE_COMPUTED_SIZE,
+                        commitType,
+                        cancelType);
+                Button commitBtn = dialog.getButton(commitType);
+                Button cancelBtn = dialog.getButton(cancelType);
+                dialog.getStage().setOnCloseRequest((WindowEvent ev) -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopAddOracleDdl.run();
+                    }
+                });
+                cancelBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+                    if (overlayBar.isVisible()) {
+                        ev.consume();
+                        stopAddOracleDdl.run();
+                    }
+                });
+                commitBtn.disableProperty().bind(overlayBar.visibleProperty());
+                commitBtn.addEventFilter(ActionEvent.ACTION, event -> {
+                    event.consume();
+                    String path = pathField.getText().trim();
+                    String sz = sizeField.getText().trim();
+                    if (path.isEmpty()) {
+                        pathField.requestFocus();
+                        return;
+                    }
+                    if (sz.isEmpty()) {
+                        sizeField.requestFocus();
+                        return;
+                    }
+                    long mb;
+                    try {
+                        mb = Long.parseLong(sz);
+                    } catch (NumberFormatException ex) {
+                        return;
+                    }
+                    if (mb <= 0) {
+                        sizeField.requestFocus();
+                        return;
+                    }
+                    long finalMb = mb;
+                    boolean autoextend = autoExt.isSelected();
+                    overlayBar.setVisible(true);
+                    Task<Void> task = new Task<>() {
+                        @Override
+                        protected Void call() throws Exception {
+                            InstanceMutationUtil.addOracleDatafile(
+                                    connect, tsName, path, finalMb, autoextend, addOracleDdlStatementHolder);
+                            return null;
+                        }
+                    };
+                    addOracleDdlTaskHolder.set(task);
+                    task.setOnSucceeded(e1 -> Platform.runLater(() -> {
+                        addOracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        cancelBtn.fire();
+                        NotificationUtil.showMainNotification(
+                                I18n.t("instance.notice.oracle_datafile_added", "数据文件已添加"));
+                        refreshButton.fire();
+                    }));
+                    task.setOnFailed(e1 -> Platform.runLater(() -> {
+                        addOracleDdlTaskHolder.set(null);
+                        overlayBar.setVisible(false);
+                        runningLabel.textProperty().unbind();
+                        Throwable ex = task.getException();
+                        if (task.isCancelled() || InstanceMutationUtil.isLikelyOracleStatementCancelled(ex)) {
+                            NotificationUtil.showMainNotification(
+                                    I18n.t("instance.notice.oracle_ddl_cancelled", "已中止执行"));
+                            return;
+                        }
+                        String msg = ex == null ? "" : ex.getMessage();
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"), msg);
+                    }));
+                    AppExecutor.runTask(task);
+                });
+                dialog.showAndWait();
+            }
+
+            @Override
+            public void onOracleDatafileAutoextend(CustomSpaceChart.SpaceUsage spaceUsage, boolean enable) {
+                String ts = InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(spaceUsage.getLabel());
+                if (ts == null || ts.isBlank()) {
+                    AlertUtil.CustomAlert(
+                            I18n.t("common.error", "错误"),
+                            I18n.t("instance.error.oracle_datafile_label", "无法解析数据文件所属表空间。"));
+                    return;
+                }
+                String path = spaceUsage.getName();
+                String title = enable
+                        ? I18n.t("instance.confirm.oracle.datafile_autoextend_on.title", "启用数据文件自动扩展")
+                        : I18n.t("instance.confirm.oracle.datafile_autoextend_off.title", "取消数据文件自动扩展");
+                String content = enable
+                        ? String.format(I18n.t(
+                                "instance.confirm.oracle.datafile_autoextend_on.content",
+                                "确定对数据文件「%s」启用自动扩展（NEXT 10M，MAXSIZE UNLIMITED）吗？"),
+                                path)
+                        : String.format(I18n.t(
+                                "instance.confirm.oracle.datafile_autoextend_off.content",
+                                "确定关闭数据文件「%s」的自动扩展吗？"),
+                                path);
+                if (!AlertUtil.CustomAlertConfirm(title, content)) {
+                    return;
+                }
+                Task<Void> task = new Task<>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        InstanceMutationUtil.setOracleDatafileAutoextend(connect, ts, path, enable, null);
+                        return null;
+                    }
+                };
+                task.setOnSucceeded(e -> {
+                    NotificationUtil.showMainNotification(enable
+                            ? I18n.t("instance.notice.oracle_datafile_autoextend_on", "已启用数据文件自动扩展")
+                            : I18n.t("instance.notice.oracle_datafile_autoextend_off", "已关闭数据文件自动扩展"));
+                    refreshButton.fire();
+                });
+                task.setOnFailed(e -> AlertUtil.CustomAlert(
+                        I18n.t("common.error", "错误"),
+                        task.getException() == null ? "" : task.getException().getMessage()));
+                AppExecutor.runTask(task);
+            }
+
+            @Override
+            public void onOracleDatafileDrop(CustomSpaceChart.SpaceUsage spaceUsage) {
+                String ts = InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(spaceUsage.getLabel());
+                if (ts == null || ts.isBlank()) {
+                    AlertUtil.CustomAlert(
+                            I18n.t("common.error", "错误"),
+                            I18n.t("instance.error.oracle_datafile_label", "无法解析数据文件所属表空间。"));
+                    return;
+                }
+                if (InstanceMutationUtil.isOracleProtectedTablespace(ts)) {
+                    AlertUtil.CustomAlert(
+                            I18n.t("common.error", "错误"),
+                            I18n.t("instance.error.oracle_datafile_drop_protected", "不允许在系统关键表空间上删除数据文件。"));
+                    return;
+                }
+                String path = spaceUsage.getName();
+                String title = I18n.t("instance.confirm.oracle.datafile_drop.title", "删除 Oracle 数据文件");
+                String content = String.format(
+                        I18n.t(
+                                "instance.confirm.oracle.datafile_drop.content",
+                                "确定从表空间「%2$s」中删除数据文件「%1$s」吗？须满足 Oracle 对该数据文件的删除条件。"),
+                        path,
+                        ts);
+                if (!AlertUtil.CustomAlertConfirm(title, content)) {
+                    return;
+                }
+                Task<Void> task = new Task<>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        InstanceMutationUtil.dropOracleDatafile(connect, ts, path, null);
+                        return null;
+                    }
+                };
+                task.setOnSucceeded(e -> {
+                    NotificationUtil.showMainNotification(
+                            String.format(I18n.t("instance.notice.oracle_datafile_dropped", "数据文件「%s」已删除"), path));
+                    refreshButton.fire();
+                });
+                task.setOnFailed(e -> AlertUtil.CustomAlert(
+                        I18n.t("common.error", "错误"),
+                        task.getException() == null ? "" : task.getException().getMessage()));
+                AppExecutor.runTask(task);
+            }
 
         };
 
@@ -1153,27 +1757,97 @@ public class CustomInstanceTab extends CustomTab {
         return platformResolver.capability(connect, InstanceTabCapability.class);
     }
 
-    private boolean isOracleConnection() {
-        return connect.getDbtype() != null && "ORACLE".equalsIgnoreCase(connect.getDbtype().trim());
+    /** 与 Informix/GBase 一致：从当前数据文件路径取目录前缀，供新建表空间默认路径。 */
+    private String resolveOracleDatafileDirectoryPrefixFromChunks() {
+        for (CustomSpaceChart.SpaceUsage u : chunkChartList) {
+            if (u == null || u.getName() == null || u.getName().isBlank()) {
+                continue;
+            }
+            String n = u.getName();
+            int slash = Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\'));
+            if (slash >= 0) {
+                return n.substring(0, slash + 1);
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 以该表空间下「列表中最后一个」数据文件所在目录与命名为参考，按 {@code 前缀 + 两位序号 + .dbf} 递增
+     * （如已有 test01.dbf 则建议 test02.dbf）；若无匹配命名则在该目录下用表空间名小写 + 序号。
+     */
+    private String suggestNextOracleDatafilePath(String tablespaceName) {
+        String dirPrefix = resolveOracleDatafileDirectoryPrefixFromChunks();
+        if (tablespaceName == null) {
+            return dirPrefix;
+        }
+        String ts = tablespaceName.replace(" ", "").trim();
+        if (ts.isEmpty()) {
+            return dirPrefix;
+        }
+        Set<String> existing = new HashSet<>();
+        List<String> pathsForTs = new ArrayList<>();
+        for (CustomSpaceChart.SpaceUsage u : chunkChartList) {
+            if (u == null || u.getName() == null || u.getName().isBlank()) {
+                continue;
+            }
+            String path = u.getName().trim();
+            existing.add(path);
+            String labelTs = InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(u.getLabel());
+            if (labelTs != null && labelTs.equalsIgnoreCase(ts)) {
+                pathsForTs.add(path);
+            }
+        }
+        int maxNum = -1;
+        String refDir = null;
+        String refNamePrefix = null;
+        for (String p : pathsForTs) {
+            int slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+            if (slash < 0) {
+                continue;
+            }
+            String basename = p.substring(slash + 1);
+            Matcher m = ORACLE_DATAFILE_BASENAME_SUFFIX.matcher(basename);
+            if (m.matches()) {
+                int n = Integer.parseInt(m.group(2), 10);
+                if (n > maxNum) {
+                    maxNum = n;
+                    refDir = p.substring(0, slash + 1);
+                    refNamePrefix = m.group(1);
+                }
+            }
+        }
+        if (refDir != null && refNamePrefix != null && maxNum >= 0) {
+            for (int next = maxNum + 1; next <= 999; next++) {
+                String candidate = refDir + refNamePrefix + String.format("%02d", next) + ".dbf";
+                if (!existing.contains(candidate)) {
+                    return candidate;
+                }
+            }
+            return refDir + refNamePrefix + "999.dbf";
+        }
+        String lastDir = dirPrefix;
+        if (!pathsForTs.isEmpty()) {
+            String lastPath = pathsForTs.get(pathsForTs.size() - 1);
+            int slash = Math.max(lastPath.lastIndexOf('/'), lastPath.lastIndexOf('\\'));
+            if (slash >= 0) {
+                lastDir = lastPath.substring(0, slash + 1);
+            }
+        }
+        String lowerTs = ts.toLowerCase(Locale.ROOT);
+        for (int i = 1; i <= 999; i++) {
+            String candidate = lastDir + lowerTs + String.format("%02d", i) + ".dbf";
+            if (!existing.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return lastDir + lowerTs + "999.dbf";
     }
 
     private InstanceTabCapability.SpaceLabels resolveSpaceLabels() {
         return resolveInstanceTabCapability()
                 .map(capability -> capability.spaceLabels(connect))
-                .orElseGet(() -> new InstanceTabCapability.SpaceLabels(
-                        "instance.space.type.legend",
-                        "[T] 临时空间   [S] 智能大对象空间   [B] 简单大对象空间   [L] 空间大小已限制   [*k] 空间页大小为*KB",
-                        "instance.space.chart.dbspace",
-                        "数据库空间使用情况图(GB)",
-                        "instance.space.chart.chunk",
-                        "数据文件使用情况图(GB)",
-                        "instance.space.chart.database",
-                        "数据库使用空间情况(GB)",
-                        "instance.space.chart.table",
-                        "表/索引空间使用情况图TOP20(GB)",
-                        "",
-                        ""
-                ));
+                .orElseGet(InstanceTabCapability::informixGbaseDefaultSpaceLabels);
     }
 
     private void bindSpaceLabel(Label label, String i18nKey, String fallback) {

@@ -17,14 +17,13 @@ import java.util.List;
 public final class OracleInstanceAdminRepository implements InstanceAdminRepository {
 
     private static final String MSG = "Oracle instance admin mutation is not implemented";
+    /** 表空间「总大小」= 数据文件当前已分配 {@code sum(df.bytes)}，与数据文件图一致；已用 = 已分配 − 空闲 extent。 */
     private static final String SQL_TABLESPACE_USAGE = """
             select
                 t.tablespace_name,
                 max(case when nvl(df.autoextensible, 'NO') = 'YES' then 1 else 0 end) as autoextendable,
-                round(nvl(max(m.tablespace_size * t.block_size / power(1024, 3)),
-                          sum(df.bytes) / power(1024, 3)), 2) as total_gb,
-                round(nvl(max(m.used_space * t.block_size / power(1024, 3)),
-                          (sum(df.bytes) - nvl(max(fs.free_bytes), 0)) / power(1024, 3)), 2) as used_gb,
+                round(nvl(sum(df.bytes), 0) / power(1024, 3), 2) as total_gb,
+                round((nvl(sum(df.bytes), 0) - nvl(max(fs.free_bytes), 0)) / power(1024, 3), 2) as used_gb,
                 count(df.file_id) as file_count,
                 round(sum(case when nvl(df.autoextensible, 'NO') = 'YES' and df.maxbytes > 0 then df.maxbytes else 0 end)
                       / power(1024, 3), 2) as limit_gb
@@ -37,19 +36,21 @@ public final class OracleInstanceAdminRepository implements InstanceAdminReposit
                 group by tablespace_name
             ) fs
               on fs.tablespace_name = t.tablespace_name
-            left join dba_tablespace_usage_metrics m
-              on m.tablespace_name = t.tablespace_name
             where t.contents <> 'UNDO'
             group by t.tablespace_name, t.block_size
             order by 4 desc, 3 desc, 1
             """;
+    /**
+     * 数据文件图「总容量」用当前已分配 {@code df.bytes}，与表空间图（metrics/sum(bytes)）口径一致。
+     * 自动扩展上限放在 {@code limit_gb}（tooltip「限制大小」）。
+     */
     private static final String SQL_DATAFILE_USAGE = """
             select
                 df.file_id,
                 df.file_name,
                 df.tablespace_name,
                 case when nvl(df.autoextensible, 'NO') = 'YES' then 1 else 0 end as autoextendable,
-                round((case when df.maxbytes > df.bytes then df.maxbytes else df.bytes end) / power(1024, 3), 2) as total_gb,
+                round(df.bytes / power(1024, 3), 2) as total_gb,
                 round((df.bytes - nvl(fs.free_bytes, 0)) / power(1024, 3), 2) as used_gb,
                 nvl(df.blocks, 0) as total_blocks,
                 nvl(df.blocks, 0) - nvl(fs.free_blocks, 0) as used_blocks,

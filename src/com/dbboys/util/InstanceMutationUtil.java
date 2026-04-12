@@ -8,8 +8,11 @@ import com.jcraft.jsch.Session;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class InstanceMutationUtil {
     private InstanceMutationUtil() {
@@ -241,5 +244,217 @@ public final class InstanceMutationUtil {
             return trimmed.toUpperCase();
         }
         return "'" + trimmed.replace("'", "''") + "'";
+    }
+
+    /**
+     * 不允许 DROP 的 Oracle 表空间（系统/撤销/常见临时名）。
+     */
+    public static boolean isOracleProtectedTablespace(String name) {
+        if (name == null || name.isBlank()) {
+            return true;
+        }
+        String u = name.trim().toUpperCase(Locale.ROOT);
+        if ("SYSTEM".equals(u) || "SYSAUX".equals(u)) {
+            return true;
+        }
+        if (u.startsWith("UNDO")) {
+            return true;
+        }
+        return "TEMP".equals(u);
+    }
+
+    private static void assertOracleTablespaceIdentifier(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            throw new IllegalArgumentException("Tablespace name is required");
+        }
+        String name = rawName.trim();
+        if (!name.matches("^[A-Za-z][A-Za-z0-9_$#]{0,127}$")) {
+            throw new IllegalArgumentException("Invalid tablespace name (use letters, digits, _, $, # only)");
+        }
+    }
+
+    private static void assertOracleDatafilePath(String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Datafile path is required");
+        }
+        if (path.contains(";") || path.contains("--") || path.contains("\n") || path.contains("\r")) {
+            throw new IllegalArgumentException("Invalid datafile path");
+        }
+    }
+
+    /**
+     * 若用户在执行期间调用了 {@link Statement#cancel()}，Oracle 常见为 ORA-01013。
+     */
+    public static boolean isLikelyOracleStatementCancelled(Throwable t) {
+        while (t != null) {
+            if (t instanceof SQLException sqlEx) {
+                if (sqlEx.getErrorCode() == 1013) {
+                    return true;
+                }
+                String msg = sqlEx.getMessage();
+                if (msg != null) {
+                    String u = msg.toUpperCase(Locale.ROOT);
+                    if (u.contains("ORA-01013") || u.contains("01013")) {
+                        return true;
+                    }
+                }
+            }
+            t = t.getCause();
+        }
+        return false;
+    }
+
+    /**
+     * @param cancellableStatement 非空时，在 {@code execute} 前设为当前 {@link Statement}，结束后清空，供 UI 调用 {@link Statement#cancel()}。
+     */
+    private static void executeOracleSpaceDdl(Connect connect, String sql,
+                                              AtomicReference<Statement> cancellableStatement) throws Exception {
+        ConnectionService connectionService = AppContext.get(ConnectionService.class);
+        Connection conn = connectionService.getConnectionWithSessionInit(connect);
+        try {
+            Statement stmt = conn.createStatement();
+            try {
+                if (cancellableStatement != null) {
+                    cancellableStatement.set(stmt);
+                }
+                stmt.execute(sql);
+                if (!conn.getAutoCommit()) {
+                    conn.commit();
+                }
+            } finally {
+                if (cancellableStatement != null) {
+                    cancellableStatement.compareAndSet(stmt, null);
+                }
+                try {
+                    stmt.close();
+                } catch (Exception ignored) {
+                }
+            }
+        } finally {
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * 创建永久表空间：一个数据文件，可选 AUTOEXTEND NEXT 10M MAXSIZE UNLIMITED。
+     */
+    public static void createOracleTablespace(Connect connect,
+                                              String tablespaceName,
+                                              String datafilePath,
+                                              long initialSizeMb,
+                                              boolean autoextendUnlimited,
+                                              AtomicReference<Statement> cancellableStatement) throws Exception {
+        assertOracleTablespaceIdentifier(tablespaceName);
+        assertOracleDatafilePath(datafilePath);
+        if (initialSizeMb <= 0 || initialSizeMb > 8388608) {
+            throw new IllegalArgumentException("Initial size (MB) must be between 1 and 8388608");
+        }
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
+        StringBuilder sql = new StringBuilder();
+        sql.append("CREATE TABLESPACE ").append(ts);
+        sql.append(" DATAFILE ").append(quotedPath);
+        sql.append(" SIZE ").append(initialSizeMb).append("M");
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+        }
+        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+    }
+
+    /**
+     * 删除表空间；{@code includingContentsAndDatafiles} 为 true 时追加 {@code INCLUDING CONTENTS AND DATAFILES}。
+     */
+    public static void dropOracleTablespace(Connect connect,
+                                          String tablespaceName,
+                                          boolean includingContentsAndDatafiles,
+                                          AtomicReference<Statement> cancellableStatement) throws Exception {
+        if (isOracleProtectedTablespace(tablespaceName)) {
+            throw new IllegalArgumentException("Refusing to drop a protected tablespace");
+        }
+        assertOracleTablespaceIdentifier(tablespaceName);
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        StringBuilder sql = new StringBuilder("DROP TABLESPACE ").append(ts).append(" INCLUDING CONTENTS");
+        if (includingContentsAndDatafiles) {
+            sql.append(" AND DATAFILES");
+        }
+        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+    }
+
+    /**
+     * 向已有表空间增加数据文件；可选与创建表空间一致的自动扩展子句。
+     */
+    public static void addOracleDatafile(Connect connect,
+                                         String tablespaceName,
+                                         String datafilePath,
+                                         long sizeMb,
+                                         boolean autoextendUnlimited,
+                                         AtomicReference<Statement> cancellableStatement) throws Exception {
+        assertOracleTablespaceIdentifier(tablespaceName);
+        assertOracleDatafilePath(datafilePath);
+        if (sizeMb <= 0 || sizeMb > 8388608) {
+            throw new IllegalArgumentException("Size (MB) must be between 1 and 8388608");
+        }
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
+        StringBuilder sql = new StringBuilder();
+        sql.append("ALTER TABLESPACE ").append(ts);
+        sql.append(" ADD DATAFILE ").append(quotedPath);
+        sql.append(" SIZE ").append(sizeMb).append("M");
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+        }
+        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+    }
+
+    /** 从 Oracle 数据文件图标签解析表空间名，格式为：{@code 文件全路径 [ TABLESPACE_NAME ]}。 */
+    public static String parseOracleTablespaceFromDatafileLabel(String label) {
+        if (label == null) {
+            return null;
+        }
+        int open = label.lastIndexOf(" [ ");
+        int close = label.lastIndexOf(" ]");
+        if (open < 0 || close <= open + 3) {
+            return null;
+        }
+        return label.substring(open + 3, close).trim();
+    }
+
+    /**
+     * 设置数据文件自动扩展。使用 {@code ALTER DATABASE DATAFILE}（{@code ALTER TABLESPACE ... DATAFILE ... AUTOEXTEND}
+     * 不是合法语法，会导致执行报错）。
+     */
+    public static void setOracleDatafileAutoextend(Connect connect,
+                                                   String tablespaceName,
+                                                   String datafilePath,
+                                                   boolean enable,
+                                                   AtomicReference<Statement> cancellableStatement) throws Exception {
+        assertOracleTablespaceIdentifier(tablespaceName);
+        assertOracleDatafilePath(datafilePath);
+        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
+        String sql = enable
+                ? "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
+                : "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND OFF";
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
+    }
+
+    /**
+     * 从表空间删除一个数据文件（{@code ALTER TABLESPACE ... DROP DATAFILE}）。
+     */
+    public static void dropOracleDatafile(Connect connect,
+                                        String tablespaceName,
+                                        String datafilePath,
+                                        AtomicReference<Statement> cancellableStatement) throws Exception {
+        if (isOracleProtectedTablespace(tablespaceName)) {
+            throw new IllegalArgumentException("Refusing to drop a datafile from a protected tablespace");
+        }
+        assertOracleTablespaceIdentifier(tablespaceName);
+        assertOracleDatafilePath(datafilePath);
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
+        String sql = "ALTER TABLESPACE " + ts + " DROP DATAFILE " + quotedPath;
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 }

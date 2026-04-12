@@ -152,20 +152,7 @@ public interface InstanceTabCapability {
     }
 
     default SpaceLabels spaceLabels(Connect connect) {
-        return new SpaceLabels(
-                "instance.space.type.legend",
-                "[T] 临时空间   [S] 智能大对象空间   [B] 简单大对象空间   [L] 空间大小已限制   [*k] 空间页大小为*KB",
-                "instance.space.chart.dbspace",
-                "数据库空间使用情况图(GB)",
-                "instance.space.chart.chunk",
-                "数据文件使用情况图(GB)",
-                "instance.space.chart.database",
-                "数据库使用空间情况(GB)",
-                "instance.space.chart.table",
-                "表/索引空间使用情况图TOP20(GB)",
-                "",
-                ""
-        );
+        return informixGbaseDefaultSpaceLabels();
     }
 
     record ConfigEntry(String name, String value) {
@@ -229,7 +216,7 @@ public interface InstanceTabCapability {
     }
 
     /**
-     * @param unusedBarLabelI18nKey 非空时：图例中灰色条与 tooltip 中「总减已用」一行均使用该 key（如 Oracle 用「可增长大小」）；
+     * @param unusedBarLabelI18nKey 非空时：图例中灰色条与 tooltip 中「总减已用」一行均使用该 key（如 Oracle 用「已分配未使用」）；
      *                              空串时使用通用 {@code space.legend.allocated_unused} / {@code space.tooltip.unused}。
      */
     record SpaceLabels(String legendI18nKey,
@@ -244,6 +231,26 @@ public interface InstanceTabCapability {
                        String tableTitle,
                        String unusedBarLabelI18nKey,
                        String unusedBarLabelFallback) {
+    }
+
+    /**
+     * Informix / GBase 8s 等共用的容量管理图标题与类型图例（与 Oracle 区分：无「已分配未使用」覆盖键）。
+     */
+    static SpaceLabels informixGbaseDefaultSpaceLabels() {
+        return new SpaceLabels(
+                "instance.space.type.legend",
+                "[T] 临时空间   [S] 智能大对象空间   [B] 简单大对象空间   [L] 空间大小已限制   [*k] 空间页大小为*KB",
+                "instance.space.chart.dbspace",
+                "数据库空间使用情况图(GB)",
+                "instance.space.chart.chunk",
+                "数据文件使用情况图(GB)",
+                "instance.space.chart.database",
+                "数据库使用空间情况(GB)",
+                "instance.space.chart.table",
+                "表/索引空间使用情况图TOP20(GB)",
+                "",
+                ""
+        );
     }
 
     static String extractInfoValue(String info, String key) {
