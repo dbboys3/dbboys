@@ -275,8 +275,13 @@ public class CustomSpaceChart extends BarChart<Number, String> {
     }
 
     private String colorForTable(SpaceUsage u) {
-        if (u.getUsedPages() >= 12000000) return COLOR_DANGER;
-        if (u.getUsedPages() >= 10000000) return COLOR_WARNING;
+        int p = u.getUsedPages();
+        if (spaceContextMenuPolicy == SpaceContextMenuPolicy.ORACLE_READONLY) {
+            if (p >= 100_000_000) return COLOR_DANGER;
+        } else {
+            if (p >= 12_000_000) return COLOR_DANGER;
+        }
+        if (p >= 10_000_000) return COLOR_WARNING;
         return COLOR_NORMAL;
     }
 
@@ -893,10 +898,13 @@ public class CustomSpaceChart extends BarChart<Number, String> {
             }
 
             case TABLE -> {
+                boolean oracle = spaceContextMenuPolicy == SpaceContextMenuPolicy.ORACLE_READONLY;
+                String dangerLegendKey = oracle ? "space.legend.page_ge_100m" : "space.legend.page_ge_12m";
+                String dangerLegendFb = oracle ? "使用页 ≥ 100,000,000" : "使用页 ≥ 12,000,000";
                 legend.getChildren().addAll(
                         createLegendItem(COLOR_NORMAL, "space.legend.page_lt_10m", "使用页 < 10,000,000"),
                         createLegendItem(COLOR_WARNING, "space.legend.page_ge_10m", "使用页 ≥ 10,000,000"),
-                        createLegendItem(COLOR_DANGER, "space.legend.page_ge_12m", "使用页 ≥ 12,000,000"),
+                        createLegendItem(COLOR_DANGER, dangerLegendKey, dangerLegendFb),
                         createLegendItem(COLOR_UNUSED, resolveUnusedLegendI18nKey(), resolveUnusedLegendFallback())
                 );
             }
