@@ -52,6 +52,8 @@ public class Connect extends TreeData{
     private BooleanProperty readonly=new SimpleBooleanProperty();
     private volatile boolean keepAliveEnabled;
     private volatile ScheduledFuture<?> keepAliveFuture;
+    /** 进程内首次读取 CONNECT_KEEPALIVE_SECONDS 后的快照；Long.MIN_VALUE 表示尚未读取。 */
+    private static volatile long keepAliveIntervalSecondsSnap = Long.MIN_VALUE;
     //每个连接一个顺序执行线程，对于目录树耗时的加载，顺序执行，避免同一个连接多个任务导致问题
     public ExecutorService executorService= Executors.newSingleThreadExecutor();
 
@@ -386,6 +388,20 @@ public class Connect extends TreeData{
     }
 
     private long resolveKeepAliveIntervalSeconds() {
+        long snap = keepAliveIntervalSecondsSnap;
+        if (snap != Long.MIN_VALUE) {
+            return snap;
+        }
+        synchronized (Connect.class) {
+            if (keepAliveIntervalSecondsSnap != Long.MIN_VALUE) {
+                return keepAliveIntervalSecondsSnap;
+            }
+            keepAliveIntervalSecondsSnap = readConnectKeepAliveIntervalSecondsFromConfig();
+            return keepAliveIntervalSecondsSnap;
+        }
+    }
+
+    private static long readConnectKeepAliveIntervalSecondsFromConfig() {
         String configured = ConfigManagerUtil.getProperty(
                 KEEPALIVE_INTERVAL_CONFIG_KEY,
                 String.valueOf(DEFAULT_KEEPALIVE_INTERVAL_SECONDS)
@@ -394,7 +410,8 @@ public class Connect extends TreeData{
             return DEFAULT_KEEPALIVE_INTERVAL_SECONDS;
         }
         try {
-            return Math.max(0L, Long.parseLong(configured.trim()));
+            long v = Long.parseLong(configured.trim());
+            return v <= 0 ? 0L : v;
         } catch (NumberFormatException e) {
             log.warn("Invalid {} value: {}", KEEPALIVE_INTERVAL_CONFIG_KEY, configured);
             return DEFAULT_KEEPALIVE_INTERVAL_SECONDS;

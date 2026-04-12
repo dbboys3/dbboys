@@ -44,6 +44,8 @@ public class SqlTabController {
     static final String SQL_EXECUTE_PROCESS_TASK_LABEL_KEY = "sqlExecuteProcessTaskLabel";
     private static final String SQL_PANEL_KEEPALIVE_INTERVAL_CONFIG_KEY = "CONNECT_KEEPALIVE_SECONDS";
     private static final int DEFAULT_SQL_PANEL_KEEPALIVE_INTERVAL_SECONDS = 180;
+    /** 与 Connect 一致：进程内首次读取 CONNECT_KEEPALIVE_SECONDS；Integer.MIN_VALUE 表示尚未读取。 */
+    private static volatile int sqlPanelKeepAliveSecondsSnap = Integer.MIN_VALUE;
 
     @FXML
     public Button sqlRunButton;
@@ -559,6 +561,20 @@ public class SqlTabController {
     }
 
     private int resolveSqlPanelKeepAliveIntervalSeconds() {
+        int snap = sqlPanelKeepAliveSecondsSnap;
+        if (snap != Integer.MIN_VALUE) {
+            return snap;
+        }
+        synchronized (SqlTabController.class) {
+            if (sqlPanelKeepAliveSecondsSnap != Integer.MIN_VALUE) {
+                return sqlPanelKeepAliveSecondsSnap;
+            }
+            sqlPanelKeepAliveSecondsSnap = readSqlPanelKeepAliveIntervalSecondsFromConfig();
+            return sqlPanelKeepAliveSecondsSnap;
+        }
+    }
+
+    private static int readSqlPanelKeepAliveIntervalSecondsFromConfig() {
         String configured = ConfigManagerUtil.getProperty(
                 SQL_PANEL_KEEPALIVE_INTERVAL_CONFIG_KEY,
                 String.valueOf(DEFAULT_SQL_PANEL_KEEPALIVE_INTERVAL_SECONDS)
@@ -567,7 +583,8 @@ public class SqlTabController {
             return DEFAULT_SQL_PANEL_KEEPALIVE_INTERVAL_SECONDS;
         }
         try {
-            return Math.max(0, Integer.parseInt(configured.trim()));
+            int v = Integer.parseInt(configured.trim());
+            return v <= 0 ? 0 : v;
         } catch (NumberFormatException e) {
             log.warn("Invalid {} value: {}", SQL_PANEL_KEEPALIVE_INTERVAL_CONFIG_KEY, configured);
             return DEFAULT_SQL_PANEL_KEEPALIVE_INTERVAL_SECONDS;
