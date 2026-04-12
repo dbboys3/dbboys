@@ -988,10 +988,6 @@ public class MainController {
                     ? snapshotAiConversationHistory()
                     : List.of();
             String prompt = buildAiPrompt(text, references, historySnapshot);
-            log.info("AI request prompt:\n{}", prompt);
-            System.out.println("=== AI request prompt begin ===");
-            System.out.println(prompt);
-            System.out.println("=== AI request prompt end ===");
             String reply = com.dbboys.util.AiApiUtil.chatStream(prompt, delta -> {
                 if (aiCancelled || delta == null || delta.isEmpty()) {
                     return;
