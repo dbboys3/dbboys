@@ -1382,11 +1382,14 @@ public class TreeContextMenuHandler {
                 //连接
                 else if(selectedItem.getValue() instanceof Connect){
                     Connect connect =(Connect)selectedItem.getValue();
+                    boolean hideOracleStartStopMenu = isOracleConnectForMenu(connect);
                     healthCheckItem.setDisable(!supportsHealthCheck(connect));
                     onlinelogItem.setDisable(!supportsOnlineLog(connect));
                     spaceManagerItem.setDisable(!supportsSpaceManager(connect));
                     onconfigItem.setDisable(!supportsConfigManagement(connect));
-                    instanceStopItem.setDisable(!supportsStartStop(connect));
+                    if (!hideOracleStartStopMenu) {
+                        instanceStopItem.setDisable(!supportsStartStop(connect));
+                    }
                     //treeview_menu.getItems().add(createConnectItem);
                     treeview_menu.getItems().add(sqlHisItem);
                     treeview_menu.getItems().add(separator1);
@@ -1406,7 +1409,9 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(onlinelogItem);
                     treeview_menu.getItems().add(spaceManagerItem);
                     treeview_menu.getItems().add(onconfigItem);
-                    treeview_menu.getItems().add(instanceStopItem);
+                    if (!hideOracleStartStopMenu) {
+                        treeview_menu.getItems().add(instanceStopItem);
+                    }
 
 
 
@@ -1931,6 +1936,14 @@ public class TreeContextMenuHandler {
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    /** Oracle 连接树右键不展示「实例启停」菜单项（与产品策略一致）。 */
+    private static boolean isOracleConnectForMenu(Connect connect) {
+        if (connect == null || connect.getDbtype() == null) {
+            return false;
+        }
+        return "ORACLE".equalsIgnoreCase(connect.getDbtype().trim());
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {

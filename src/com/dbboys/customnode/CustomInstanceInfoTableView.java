@@ -178,11 +178,16 @@ public class CustomInstanceInfoTableView extends CustomTableView {
         contextMenu.setOnShowing(event -> {
             Connect selectedConnect = getSelectedConnect();
             InstanceAdminRepository admin = resolveAdminRepository(selectedConnect);
+            boolean oracleConnect = selectedConnect != null
+                    && selectedConnect.getDbtype() != null
+                    && "ORACLE".equalsIgnoreCase(selectedConnect.getDbtype().trim());
             healthCheckItem.setDisable(selectedConnect == null || !admin.supportsHealthCheck(selectedConnect));
             onlineLogItem.setDisable(selectedConnect == null || !admin.supportsOnlineLog(selectedConnect));
             spaceManagerItem.setDisable(selectedConnect == null || !admin.supportsSpaceManager(selectedConnect));
             onconfigItem.setDisable(selectedConnect == null || !admin.supportsConfigManagement(selectedConnect));
-            instanceStartStopItem.setDisable(selectedConnect == null || !admin.supportsStartStop(selectedConnect));
+            instanceStartStopItem.setVisible(!oracleConnect);
+            instanceStartStopItem.setDisable(
+                    selectedConnect == null || oracleConnect || !admin.supportsStartStop(selectedConnect));
             copyItem.setDisable(getSelectionModel().getSelectedCells().isEmpty());
         });
 
