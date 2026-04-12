@@ -252,8 +252,8 @@ public class CustomInstanceTab extends CustomTab {
         configTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         configStackPane = new StackPane();
         configStackPane.getChildren().add(configTableView);
-        ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMaxWidth(30);
-        ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMinWidth(30);
+        ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMaxWidth(36);
+        ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMinWidth(36);
         configStackPane.setStyle("-fx-background-color:-color-bg-content;");
         Button configshotButton= new Button();
         configshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
