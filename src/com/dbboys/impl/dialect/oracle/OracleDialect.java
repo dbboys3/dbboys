@@ -1,6 +1,7 @@
 ﻿package com.dbboys.impl.dialect.oracle;
 
 import com.dbboys.api.ChangeDatabaseFailureKind;
+import com.dbboys.api.ConnectionService;
 import com.dbboys.api.ConnectionSupport;
 import com.dbboys.api.DatabasePlatform;
 import com.dbboys.api.DdlRepository;
@@ -8,6 +9,7 @@ import com.dbboys.api.InstanceAdminRepository;
 import com.dbboys.api.InstanceTabCapability;
 import com.dbboys.api.MetadataRepository;
 import com.dbboys.api.SqlexeRepository;
+import com.dbboys.app.AppContext;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.vo.Connect;
 import com.dbboys.vo.Catalog;
@@ -16,6 +18,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,12 +211,31 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
                 new CheckColumn("status", "instance.check.oracle.column.result", "结果", CheckColumnKind.STATUS, 100)
         );
 
-        Map<String, String> infoMap = parseOracleInfo(connect == null ? "" : connect.getInfo());
+        Map<String, String> infoMap = new LinkedHashMap<>(parseOracleInfo(connect == null ? "" : connect.getInfo()));
+        if (connect != null) {
+            try {
+                ConnectionService connectionService = AppContext.get(ConnectionService.class);
+                try (Connection jdbc = connectionService.getConnectionWithSessionInit(connect)) {
+                    collectOracleInspectionMetrics(jdbc).forEach((k, v) -> {
+                        if (v != null && !v.isBlank()) {
+                            infoMap.put(k.toLowerCase(java.util.Locale.ROOT), v.trim());
+                        }
+                    });
+                }
+            } catch (Exception ignored) {
+                // 未连接或连接失败时仅依赖已缓存的 connect.getInfo()
+            }
+        }
         String databaseRole = trimToEmpty(infoMap.get("database_role"));
         String expectedOpenMode = expectedOpenMode(databaseRole);
         String expectedInstanceStatus = expectedInstanceStatus(databaseRole);
         String expectedArchiveLog = expectedArchiveLog(databaseRole);
-        List<CheckRow> rows = List.of(
+        String logMode = trimToEmpty(infoMap.get("log_mode"));
+        String archDest = trimToEmpty(infoMap.get("arch_dest1"));
+        String archState = trimToEmpty(infoMap.get("arch_dest_state1"));
+        String archiveDestDisplay = formatArchiveDestDisplay(archDest, archState);
+
+        List<CheckRow> rows = new ArrayList<>(List.of(
                 buildOracleCheckRow("主机名",
                         "instance.check.oracle.item.host_name",
                         infoMap.get("host_name"),
@@ -294,7 +320,43 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
                         "应可获取",
                         "instance.check.oracle.expected.available",
                         evaluatePresent(infoMap.get("platform_name")))
-        );
+        ));
+        rows.add(buildOracleCheckRow("表空间最大使用率(%)",
+                "instance.check.oracle.item.ts_max_used_pct",
+                infoMap.get("ts_max_used_pct"),
+                "<90%",
+                "instance.check.oracle.expected.ts_max_lt_90",
+                evaluateOracleTsMaxUsedPct(infoMap.get("ts_max_used_pct"))));
+        rows.add(buildOracleCheckRow("会话连接数(当前/上限)",
+                "instance.check.oracle.item.sessions_usage",
+                infoMap.get("sess_usage"),
+                "<85%上限",
+                "instance.check.oracle.expected.sessions_lt_85",
+                evaluateOracleSessionsUsage(infoMap.get("sess_usage"))));
+        rows.add(buildOracleCheckRow("事务提交数(累计)",
+                "instance.check.oracle.item.user_commits",
+                infoMap.get("usr_commit_cnt"),
+                "应可读取统计",
+                "instance.check.oracle.expected.stat_readable",
+                evaluatePresent(infoMap.get("usr_commit_cnt"))));
+        rows.add(buildOracleCheckRow("数据文件检查点时间",
+                "instance.check.oracle.item.checkpoint",
+                infoMap.get("datafile_ckpt_time"),
+                "应可获取",
+                "instance.check.oracle.expected.ckpt_available",
+                evaluatePresent(infoMap.get("datafile_ckpt_time"))));
+        rows.add(buildOracleCheckRow("最近RMAN备份完成时间",
+                "instance.check.oracle.item.rman_backup",
+                infoMap.get("rman_backup_end"),
+                "建议7天内有备份",
+                "instance.check.oracle.expected.backup_within_days",
+                evaluateOracleBackupRecency(infoMap.get("rman_backup_end"))));
+        rows.add(buildOracleCheckRow("自动归档路径与状态",
+                "instance.check.oracle.item.archive_dest",
+                archiveDestDisplay,
+                "ARCHIVELOG时路径有效且启用",
+                "instance.check.oracle.expected.archive_dest_ok",
+                evaluateOracleArchiveDest(logMode, archDest, archState)));
         return new CheckTableModel(columns, rows);
     }
 
@@ -342,6 +404,7 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
 
         appendOptionalOracleSection(info, "Instance Information", connection, SQL_INSTANCE_INFO);
         appendOptionalOracleSection(info, "Database Information", connection, SQL_DATABASE_INFO);
+        appendOracleInspectionSnapshot(info, connection);
         appendOraclePrivilegeSection(info, detectOracleAdminPrivileges(connection, connect));
 
         connect.setInfo(info.toString());
@@ -691,6 +754,185 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     @Override
     public InstanceAdminRepository admin() {
         return instanceAdminRepository;
+    }
+
+    /** 建连时写入巡检用动态指标；打开巡检页时 {@link #buildCheckTable} 会再次实时查询覆盖。 */
+    private void appendOracleInspectionSnapshot(StringBuilder info, Connection connection) {
+        collectOracleInspectionMetrics(connection).forEach((key, value) -> appendInfoLine(info, key, value));
+    }
+
+    /**
+     * 巡检页与建连信息共用的指标采集；会话资源名在库中多为大写，故用 UPPER 比较。
+     */
+    private Map<String, String> collectOracleInspectionMetrics(Connection connection) {
+        LinkedHashMap<String, String> m = new LinkedHashMap<>();
+        String ts = firstNonBlank(
+                queryScalar(connection,
+                        "SELECT TO_CHAR(ROUND(MAX(used_percent), 2)) FROM dba_tablespace_usage_metrics"),
+                queryScalar(connection,
+                        "SELECT TO_CHAR(ROUND(MAX(used_percent), 2)) FROM cdb_tablespace_usage_metrics"));
+        putIfNonBlank(m, "ts_max_used_pct", ts);
+
+        putIfNonBlank(m, "sess_usage", queryScalar(connection,
+                "SELECT current_utilization || '/' || limit_value FROM v$resource_limit "
+                        + "WHERE UPPER(TRIM(resource_name)) = 'SESSIONS'"));
+
+        putIfNonBlank(m, "usr_commit_cnt", queryScalar(connection,
+                "SELECT value FROM v$sysstat WHERE LOWER(TRIM(name)) = 'user commits'"));
+
+        putIfNonBlank(m, "datafile_ckpt_time", queryScalar(connection,
+                "SELECT TO_CHAR(MAX(checkpoint_time), 'YYYY-MM-DD HH24:MI:SS') FROM v$datafile_header "
+                        + "WHERE checkpoint_time IS NOT NULL"));
+
+        putIfNonBlank(m, "rman_backup_end", queryScalar(connection,
+                "SELECT TO_CHAR(MAX(end_time), 'YYYY-MM-DD HH24:MI:SS') FROM v$rman_backup_job_details "
+                        + "WHERE UPPER(NVL(status, '')) LIKE 'COMPLETED%'"));
+
+        putIfNonBlank(m, "arch_dest1", firstNonBlank(
+                queryScalar(connection,
+                        "SELECT value FROM v$parameter WHERE LOWER(TRIM(name)) = 'log_archive_dest_1'"),
+                queryScalar(connection,
+                        "SELECT value FROM gv$parameter WHERE LOWER(TRIM(name)) = 'log_archive_dest_1' "
+                                + "AND inst_id = (SELECT instance_number FROM v$instance WHERE ROWNUM = 1)")));
+
+        putIfNonBlank(m, "arch_dest_state1", firstNonBlank(
+                queryScalar(connection,
+                        "SELECT value FROM v$parameter WHERE LOWER(TRIM(name)) = 'log_archive_dest_state_1'"),
+                queryScalar(connection,
+                        "SELECT value FROM gv$parameter WHERE LOWER(TRIM(name)) = 'log_archive_dest_state_1' "
+                                + "AND inst_id = (SELECT instance_number FROM v$instance WHERE ROWNUM = 1)")));
+        return m;
+    }
+
+    private static String queryScalar(Connection connection, String sql) {
+        if (connection == null || sql == null || sql.isBlank()) {
+            return null;
+        }
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                return rs.getString(1);
+            }
+        } catch (SQLException ignored) {
+            // 权限、PDB、版本差异
+        }
+        return null;
+    }
+
+    private static void putIfNonBlank(Map<String, String> m, String key, String value) {
+        if (value == null) {
+            return;
+        }
+        String t = value.trim();
+        if (t.isEmpty()) {
+            return;
+        }
+        m.put(key, t);
+    }
+
+    private static String firstNonBlank(String... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (String c : candidates) {
+            if (c != null && !c.trim().isEmpty()) {
+                return c.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String formatArchiveDestDisplay(String dest, String state) {
+        String d = trimToEmptyStatic(dest);
+        String s = trimToEmptyStatic(state);
+        if (d.isEmpty() && s.isEmpty()) {
+            return "";
+        }
+        if (s.isEmpty()) {
+            return d;
+        }
+        if (d.isEmpty()) {
+            return s;
+        }
+        return d + " | " + s;
+    }
+
+    private String evaluateOracleTsMaxUsedPct(String raw) {
+        String v = trimToEmpty(raw);
+        if (v.isEmpty()) {
+            return "2";
+        }
+        try {
+            double d = Double.parseDouble(v.replace(',', '.'));
+            return d >= 90.0 ? "1" : "0";
+        } catch (NumberFormatException e) {
+            return "2";
+        }
+    }
+
+    private String evaluateOracleSessionsUsage(String raw) {
+        String s = trimToEmpty(raw);
+        if (s.isEmpty()) {
+            return "2";
+        }
+        int slash = s.indexOf('/');
+        if (slash <= 0 || slash >= s.length() - 1) {
+            return "2";
+        }
+        try {
+            long cur = Long.parseLong(s.substring(0, slash).trim());
+            String maxPart = s.substring(slash + 1).trim();
+            if (maxPart.isEmpty()) {
+                return "2";
+            }
+            if ("UNLIMITED".equalsIgnoreCase(maxPart)) {
+                return "0";
+            }
+            long lim = Long.parseLong(maxPart);
+            if (lim <= 0) {
+                return "0";
+            }
+            return (cur * 100.0 / lim) >= 85.0 ? "1" : "0";
+        } catch (NumberFormatException e) {
+            return "2";
+        }
+    }
+
+    private String evaluateOracleBackupRecency(String raw) {
+        String s = trimToEmpty(raw);
+        if (s.isEmpty()) {
+            return "1";
+        }
+        try {
+            SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date d = fmt.parse(s);
+            long days = (System.currentTimeMillis() - d.getTime()) / 86400000L;
+            return days > 7 ? "1" : "0";
+        } catch (ParseException e) {
+            return "0";
+        }
+    }
+
+    private String evaluateOracleArchiveDest(String logMode, String dest, String state) {
+        String lm = trimToEmpty(logMode).toUpperCase(java.util.Locale.ROOT);
+        if (lm.isEmpty()) {
+            return "2";
+        }
+        if ("NOARCHIVELOG".equals(lm)) {
+            return "0";
+        }
+        if (!"ARCHIVELOG".equals(lm)) {
+            return "1";
+        }
+        String st = trimToEmpty(state).toUpperCase(java.util.Locale.ROOT);
+        if (st.contains("DEFER")) {
+            return "1";
+        }
+        String d = trimToEmpty(dest);
+        if (d.isEmpty() && (st.isEmpty() || st.contains("RESET"))) {
+            return "1";
+        }
+        return "0";
     }
 
     private void appendOptionalOracleSection(StringBuilder info,
