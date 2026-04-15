@@ -90,7 +90,7 @@ public final class InformixDdlRepository implements DdlRepository {
         String pattern = "\\d+\\.\\d+\\.[FUHT]C";
         Pattern r = Pattern.compile(pattern);
         String tmpversion = "12.10.FC4W1";
-        int version = 121000;                    // version 12.10
+        int version = 1210;                    // version 12.10
 
         // version_gbase 在 3.2.x及之后的版本中支持；
         // 3.5.1及之后支持sqlmode写法, informix不支持
@@ -106,8 +106,7 @@ public final class InformixDdlRepository implements DdlRepository {
         if (m.find()){
             tmpversion = m.group(0);
             String[] tmpsplit = tmpversion.split("\\.");
-            log.info("Informix version string: {}, version number: {}", tmpversion, version);
-            version = Integer.parseInt(tmpsplit[0]) * 10000 + Integer.parseInt(tmpsplit[1]) * 100;
+            version = Integer.parseInt(tmpsplit[0]) * 100 + Integer.parseInt(tmpsplit[1]);
         }
         return version;
     }

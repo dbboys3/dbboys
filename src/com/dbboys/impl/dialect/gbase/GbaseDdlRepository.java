@@ -401,10 +401,9 @@ public final class GbaseDdlRepository implements DdlRepository {
             case 9:
                 coltypeName = "NULL";               break;
             case 10:
-                if ("MySQL".equals(sqlmode)){
+                coltypeName = "DATETIME" + getDTColTypeName(collength);
+                if ("MySQL".equals(sqlmode) && "DATETIME YEAR TO SECOND".equals(coltypeName)){
                     coltypeName = "DATETIME";
-                } else {
-                    coltypeName = "DATETIME" + getDTColTypeName(collength);
                 }
                 break;
             case 11:
@@ -455,6 +454,14 @@ public final class GbaseDdlRepository implements DdlRepository {
                 coltypeName = "NVARCHAR2";          break;
             case 65:
                 coltypeName = "TIMESTAMP WITH TIME ZONE"; break;
+            case 66:
+                coltypeName = "BIGINT UNSIGNED";    break;
+            case 67:
+                coltypeName = "TINYINT";            break;
+            case 68:
+                coltypeName = "MEDIUMINT";          break;
+            case 69:
+                coltypeName = "BIT";                break;
             default:
                 break;
         }
@@ -770,6 +777,8 @@ public final class GbaseDdlRepository implements DdlRepository {
             }
         } else if ("LVARCHAR".equals(coltype) || "CHAR".equals(coltype) || "NCHAR".equals(coltype) || "RAW".equals(coltype)) {
             coltypename = coltypename + "(" + collength + ")";
+        } else if ("BIT".equals(coltype)){
+            coltypename = coltypename + "(" + collength/256 + ")";
         }
         return coltypename;
     }
@@ -826,14 +835,14 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @throws SQLException
      */
     private static ArrayList<PrimaryKeyInfo> getPrimaryKey(Connection connection, ArrayList<ColumnsInfo> columns, String tablename, String sqlmode) throws SQLException {
-        // 去除虚拟字段产生的约束
+        // 去除虚拟字段产生的约束，增加mysqlmode下K（key）,Q（unique key）的约束类型
         String sql = """
                 SELECT con.constrname,con.constrtype,cast(idx.indexkeys as lvarchar) as idxcols
                 FROM sysconstraints con, sysindices idx, systables t
                 WHERE con.idxname = idx.idxname
                 AND con.tabid = t.tabid
                 AND t.tabname = ?
-                AND con.constrtype in ('P','U')
+                AND con.constrtype in ('P','U','K','Q')
                 AND LEFT(con.constrname,1) != ' '
                 """;
         SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
@@ -908,13 +917,27 @@ public final class GbaseDdlRepository implements DdlRepository {
             }
         } else if ("L".equals(coldeftype)) {
             // INT..., DEC...,BIG...,SMALL
-            if ("SMALLINT".equals(coltype) || "INTEGER".equals(coltype) || "SERIAL".equals(coltype) || "SERIAL8".equals(coltype) ||
-                    "INT8".equals(coltype) || "BIGSERIAL".equals(coltype) || "BIGINT".equals(coltype) || "FLOAT".equals(coltype) ||
-                    "SMALLFLOAT".equals(coltype) || "MONEY".equals(coltype) || "DECIMAL".equals(coltype)) {
-                strdef = coldef;
-
-            } else {
-                strdef = "\'" + coldef.replace("'", "''") + "\'";
+            switch (coltype) {
+                case "SMALLINT":
+                case "INTEGER":
+                case "SERIAL": 
+                case "SERIAL8":
+                case "INT8":
+                case "BIGSERIAL":
+                case "BIGINT":
+                case "FLOAT":
+                case "SMALLFLOAT":
+                case "MONEY":
+                case "DECIMAL":
+                case "BIT":
+                case "TINYINT":
+                case "MEDIUMINT":
+                case "BIGINT UNSIGNED":
+                    strdef = coldef;
+                    break;           
+                default:
+                    strdef = "\'" + coldef.replace("'", "''") + "\'";
+                    break;
             }
         } else if ("N".equals(coldeftype)){
             strdef = "NULL";
@@ -1212,6 +1235,15 @@ public final class GbaseDdlRepository implements DdlRepository {
                     }
                     ddl.append(primaryKey.getIdxCols()).append(")");
                 }
+            } else if ("MySQL".equals(sqlmode)) {                   // mysql模式下，主键显示为P，唯一索引显示为K，普通索引显示为Q
+                if ("P".equals(primaryKey.getConstrType())) {
+                    ddl.append(",\n  PRIMARY KEY");
+                } else if ("K".equals(primaryKey.getConstrType())) {
+                    ddl.append(",\n  KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                } else if ("Q".equals(primaryKey.getConstrType())) {
+                    ddl.append(",\n  UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                }
+                ddl.append(" (").append(primaryKey.getIdxCols()).append(")");
             } else {
                 if ("P".equals(primaryKey.getConstrType())) {
                     ddl.append(",\n  PRIMARY KEY(");
@@ -1351,7 +1383,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         }
         // 增加mysql模式下表的comment
         if ("MySQL".equals(sqlmode) && tableInfo.getTableComm() != null){
-            ddl.append("COMMENT='").append(tableInfo.getTableComm()).append("' ");
+            ddl.append("COMMENT '").append(tableInfo.getTableComm()).append("' ");
         }
         ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
         if ("MySQL".equals(sqlmode)){

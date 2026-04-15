@@ -252,6 +252,9 @@ public class ColumnsInfo {
                     }
                 }
                 break;
+            case "BIT":
+                myp=collength/256;
+                break;
             default:
                 myp=collength;
                 break;
