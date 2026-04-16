@@ -240,7 +240,6 @@ public class ConnectionServiceImpl implements ConnectionService {
         DatabasePlatform dialect = platformResolver.requirePlatform(connect);
         try (Connection connection = getConnectionWithSessionInit(connect)) {
             String primaryInstance = dialect.populateConnectInfo(connection, connect);
-            populateNamedServerAddressInfo(connect, primaryInstance);
             if (connect.getDriver() != null && !connect.getDriver().isEmpty()) {
                 try {
                     connect.setDrivermd5(MD5Util.getMD5Checksum(
@@ -251,6 +250,13 @@ public class ConnectionServiceImpl implements ConnectionService {
             }
             return primaryInstance;
         }
+    }
+
+    @Override
+    public String refreshRuntimeConnectInfo(Connect connect) throws Exception {
+        String primaryInstance = setConnectInfo(connect);
+        populateNamedServerAddressInfo(connect, primaryInstance);
+        return primaryInstance;
     }
 
     private void populateNamedServerAddressInfo(Connect connect, String primaryInstance) {

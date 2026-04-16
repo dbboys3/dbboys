@@ -45,6 +45,8 @@ public interface ConnectionService {
 
     String setConnectInfo(Connect connect) throws Exception;
 
+    String refreshRuntimeConnectInfo(Connect connect) throws Exception;
+
     Boolean testConn(Connect connect);
 
     <T> T withMetaSession(Connect connect, Catalog database, SqlWork<T> action) throws Exception;

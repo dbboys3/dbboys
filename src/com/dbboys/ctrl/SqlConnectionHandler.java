@@ -102,6 +102,11 @@ public class SqlConnectionHandler {
                 ctrl.sqlConnect = newVal;
                 ctrl.sqlConnect.setConn(conn);
                 ctrl.currentResultSetTabController.sqlConnect = ctrl.sqlConnect;
+                try {
+                    connectionService.refreshRuntimeConnectInfo(ctrl.sqlConnect);
+                } catch (Exception e) {
+                    log.debug("Refresh runtime connect info failed", e);
+                }
 
                 refreshMetaTreeForConnect();
                 updateConnectIcon();
