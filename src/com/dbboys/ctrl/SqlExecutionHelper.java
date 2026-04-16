@@ -181,20 +181,25 @@ public class SqlExecutionHelper {
     }
 
     private void highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
-        String finalsqlExe = ctrl.sqlExe;
         int finalI = segment.getEndIndex();
+        // IMPORTANT: selection/highlight must be aligned with the editor text, not the executable SQL.
+        // ctrl.sqlExe is stripped of trailing ';' (and may be trimmed), so using its length here
+        // would shift the highlight range by 1 (or more). Use raw parsed statement text instead.
+        String rawStatement = sql == null ? null : sql.getSqlstr();
+        int rawStatementLength = rawStatement == null ? 0 : rawStatement.length();
+        int rawLeadingWhitespace = getWhitespaceLength(rawStatement);
         if (sql.getSqlRemainder() != null && !sql.getSqlRemainder().isEmpty()) {
             int remaindersize = sql.getSqlRemainder().length();
-            int sqllength = finalsqlExe.length();
-            int whitespacelength = getWhitespaceLength(finalsqlExe);
+            int sqllength = rawStatementLength;
+            int whitespacelength = rawLeadingWhitespace;
             if (!ctrl.isSqlRefresh) {
                 ctrl.selectRangeAndFollow(
                         ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize - sqllength + whitespacelength,
                         ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize);
             }
         } else {
-            int sqllength = finalsqlExe.length();
-            int whitespacelength = getWhitespaceLength(finalsqlExe);
+            int sqllength = rawStatementLength;
+            int whitespacelength = rawLeadingWhitespace;
             if (!ctrl.isSqlRefresh) {
                 ctrl.selectRangeAndFollow(
                         ctrl.sqlSelectionRange[0] + finalI + 1 - sqllength + whitespacelength,
