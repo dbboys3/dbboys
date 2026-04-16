@@ -13,6 +13,7 @@ import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -127,6 +128,9 @@ public class ResultSetTabController {
     ResultSetColumnBuilder columnBuilder;
     ResultSetFetchHelper fetchHelper;
     ResultSetEditHelper editHelper;
+    private final List<Labeled> boundLabels = new ArrayList<>();
+    private final List<Control> tooltipBoundControls = new ArrayList<>();
+    private ChangeListener<Boolean> placeholderVisibilityListener;
 
     public ResultSetTabController(Connect sqlConnect, StackPane sqlExecuteProcessStackPane) {
         this.sqlExecuteProcessStackPane = sqlExecuteProcessStackPane;
@@ -200,6 +204,7 @@ public class ResultSetTabController {
     }
 
     private void bindText(Labeled labeled, String key) {
+        boundLabels.add(labeled);
         labeled.textProperty().bind(I18n.bind(key));
     }
 
@@ -208,6 +213,7 @@ public class ResultSetTabController {
         tooltip.textProperty().bind(I18n.bind(key));
         tooltip.setShowDelay(Duration.millis(100));
         control.setTooltip(tooltip);
+        tooltipBoundControls.add(control);
     }
 
     private void ensureLastSqlTooltip() {
@@ -249,9 +255,9 @@ public class ResultSetTabController {
         runningPlaceholder.setPrefSize(0, 0);
         resultSetTableView.getStyleClass().add("resultset-table-view");
         resultSetTableView.setPlaceholder(sqlExecuteProcessStackPane.isVisible() ? runningPlaceholder : tableviewEmptyLabel);
-        sqlExecuteProcessStackPane.visibleProperty().addListener((obs, oldVal, running) ->
-                resultSetTableView.setPlaceholder(running ? runningPlaceholder : tableviewEmptyLabel)
-        );
+        placeholderVisibilityListener = (obs, oldVal, running) ->
+                resultSetTableView.setPlaceholder(running ? runningPlaceholder : tableviewEmptyLabel);
+        sqlExecuteProcessStackPane.visibleProperty().addListener(placeholderVisibilityListener);
         resultSetTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         resultSetTableView.getSelectionModel().setCellSelectionEnabled(true);
         resultSetTableView.prefWidthProperty().bind(resultSetVBox.widthProperty());
@@ -568,6 +574,54 @@ public class ResultSetTabController {
         }
         closeResultSet();
 
+    }
+
+    public void dispose() {
+        Runnable cleanup = () -> {
+            cancel();
+
+            resultSetEditableDisabledLabel.visibleProperty().unbind();
+            resultSetNextPageButton.disableProperty().unbind();
+            resultSetAllRowsButton.disableProperty().unbind();
+            lastSqlRefreshButton.disableProperty().unbind();
+            resultSetExportButton.disableProperty().unbind();
+            resultSetCountButton.disableProperty().unbind();
+
+            resultSetTableView.prefWidthProperty().unbind();
+            resultSetTableView.prefHeightProperty().unbind();
+
+            if (placeholderVisibilityListener != null) {
+                sqlExecuteProcessStackPane.visibleProperty().removeListener(placeholderVisibilityListener);
+                placeholderVisibilityListener = null;
+            }
+
+            for (Labeled labeled : boundLabels) {
+                labeled.textProperty().unbind();
+            }
+            boundLabels.clear();
+
+            for (Control control : tooltipBoundControls) {
+                Tooltip tooltip = control.getTooltip();
+                if (tooltip != null) {
+                    tooltip.textProperty().unbind();
+                }
+            }
+            tooltipBoundControls.clear();
+
+            resultSetTableView.getItems().clear();
+            resultSetTableView.getColumns().clear();
+            resultSetTableView.setPlaceholder(null);
+            sqlResultSetList.clear();
+            colList.clear();
+            resultTablePriNum.clear();
+            resultTableCols.clear();
+            sqlParamList.clear();
+        };
+        if (Platform.isFxApplicationThread()) {
+            cleanup.run();
+        } else {
+            Platform.runLater(cleanup);
+        }
     }
 
     private void closeQuietly(AutoCloseable resource, String resourceName) {

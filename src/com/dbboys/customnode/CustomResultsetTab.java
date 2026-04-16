@@ -36,7 +36,7 @@ public class CustomResultsetTab extends Tab {
         setStyle("-fx-pref-height: 18;");
         setClosable(true);
         //关闭窗口事件响应
-        setOnCloseRequest(event -> resultSetTabController.closeResultSet());
+        setOnCloseRequest(event -> resultSetTabController.dispose());
     }
 
 

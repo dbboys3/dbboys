@@ -414,7 +414,7 @@ public class SqlTabController {
                     }
                     sqlTask = executionHelper.createExecuteSqlTask();
                     closeResultSet();
-                    resultsetTabPane.getTabs().subList(1, resultsetTabPane.getTabs().size()).clear();
+                    disposeAdditionalResultSetTabs();
                     AppExecutor.runTask(sqlTask);
                     if (sqlSplitPane.getDividers().get(0).getPosition() > AppState.getSplit2Pos()) {
                         sqlSplitPane.getDividers().get(0).setPosition(AppState.getSplit2Pos());
@@ -440,7 +440,7 @@ public class SqlTabController {
                     }
                     sqlTask = executionHelper.createExplainTask();
                     closeResultSet();
-                    resultsetTabPane.getTabs().subList(1, resultsetTabPane.getTabs().size()).clear();
+                    disposeAdditionalResultSetTabs();
                     AppExecutor.runTask(sqlTask);
                     if (sqlSplitPane.getDividers().get(0).getPosition() > AppState.getSplit2Pos()) {
                         sqlSplitPane.getDividers().get(0).setPosition(AppState.getSplit2Pos());
@@ -494,15 +494,26 @@ public class SqlTabController {
         }
     }
 
+    void disposeAdditionalResultSetTabs() {
+        if (resultsetTabPane == null || resultsetTabPane.getTabs().size() <= 1) {
+            return;
+        }
+        List<Tab> tabsToRemove = new ArrayList<>(resultsetTabPane.getTabs().subList(1, resultsetTabPane.getTabs().size()));
+        for (Tab tab : tabsToRemove) {
+            if (tab instanceof CustomResultsetTab customTab) {
+                customTab.resultSetTabController.dispose();
+            }
+        }
+        resultsetTabPane.getTabs().removeAll(tabsToRemove);
+    }
+
     public void prepareForDatabaseSwitch() {
         closeResultSet();
         if (currentResultSetTabController != null) {
             currentResultSetTabController.init();
         }
         if (resultsetTabPane != null) {
-            if (resultsetTabPane.getTabs().size() > 1) {
-                resultsetTabPane.getTabs().subList(1, resultsetTabPane.getTabs().size()).clear();
-            }
+            disposeAdditionalResultSetTabs();
             resultsetTabPane.getSelectionModel().select(resultsetSummaryTab);
         }
         resultSetVBox.setVisible(true);
