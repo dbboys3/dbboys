@@ -94,7 +94,19 @@ public class SqlTabUiHelper {
             }
         });
         ctrl.resultSetVBox = loader.load();
+        ctrl.resultSuccessFilterButton = createResultFilterButton("#2E9E5B");
+        ctrl.resultFailureFilterButton = createResultFilterButton("#CC3D3D");
+        ctrl.resultSuccessFilterButton.setOnAction(event -> ctrl.toggleResultFilterSuccess());
+        ctrl.resultFailureFilterButton.setOnAction(event -> ctrl.toggleResultFilterFailure());
+        ctrl.resultFilterButtonBox = new HBox(8, ctrl.resultSuccessFilterButton, ctrl.resultFailureFilterButton);
+        ctrl.resultFilterButtonBox.setAlignment(Pos.BOTTOM_RIGHT);
+        ctrl.resultFilterButtonBox.setPickOnBounds(false);
+        ctrl.resultsetStackPane.getChildren().add(ctrl.resultFilterButtonBox);
+        StackPane.setAlignment(ctrl.resultFilterButtonBox, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(ctrl.resultFilterButtonBox, new Insets(0, 12, 10, 0));
+        ctrl.refreshResultFilterButtons();
         ctrl.resultsetStackPane.getChildren().add(ctrl.resultSetVBox);
+
         ctrl.currentResultSetTabController = loader.getController();
         ctrl.currentResultSetTabController.hiddenDisconnectedButton.setOnAction(event -> ctrl.connectionDisconnected());
 
@@ -106,6 +118,23 @@ public class SqlTabUiHelper {
             ctrl.isSqlRefresh = true;
             ctrl.sqlRunButton.fire();
         });
+    }
+
+    private Button createResultFilterButton(String backgroundColor) {
+        Button button = new Button();
+        button.setFocusTraversable(false);
+        button.setStyle(
+                "-fx-background-radius: 999;" +
+                        "-fx-border-radius: 999;" +
+                        "-fx-padding: 2 7 2 7;" +
+                        "-fx-font-size: 10px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-color: " + backgroundColor + ";" +
+                        "-fx-border-color: transparent;" +
+                        "-fx-border-width: 0;"
+        );
+        return button;
     }
 
     public void setupSplitPaneBehavior() {

@@ -105,7 +105,6 @@ public class SqlResultHandler {
         updateResult.setElapsedTime(I18n.t("sql.table.sample.elapsed"));
         updateResult.setAffectedRows(0);
         ctrl.resultsetTotalTableView.setItems(ctrl.filteredUpdateResults);
-        ctrl.setupResultFilterButtons();
         ctrl.applyUpdateResultFilter();
         ctrl.refreshResultFilterButtons();
     }

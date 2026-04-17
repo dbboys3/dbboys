@@ -21,8 +21,6 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -243,43 +241,6 @@ public class SqlTabController {
         });
     }
 
-    void setupResultFilterButtons() {
-        if (resultsetStackPane == null || resultFilterButtonBox != null) {
-            return;
-        }
-        resultSuccessFilterButton = createResultFilterButton("#2E9E5B");
-        resultFailureFilterButton = createResultFilterButton("#CC3D3D");
-
-        resultSuccessFilterButton.setOnAction(event -> toggleResultFilter(ResultFilterMode.SUCCESS));
-        resultFailureFilterButton.setOnAction(event -> toggleResultFilter(ResultFilterMode.FAILURE));
-
-        resultFilterButtonBox = new HBox(8, resultSuccessFilterButton, resultFailureFilterButton);
-        resultFilterButtonBox.setAlignment(Pos.BOTTOM_RIGHT);
-        resultFilterButtonBox.setPickOnBounds(false);
-
-        resultsetStackPane.getChildren().add(resultFilterButtonBox);
-        StackPane.setAlignment(resultFilterButtonBox, Pos.BOTTOM_RIGHT);
-        StackPane.setMargin(resultFilterButtonBox, new Insets(0, 12, 10, 0));
-        refreshResultFilterButtons();
-    }
-
-    private Button createResultFilterButton(String backgroundColor) {
-        Button button = new Button();
-        button.setFocusTraversable(false);
-        button.setStyle(
-                "-fx-background-radius: 999;" +
-                        "-fx-border-radius: 999;" +
-                        "-fx-padding: 4 12 4 12;" +
-                        "-fx-font-size: 11px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-text-fill: white;" +
-                        "-fx-background-color: " + backgroundColor + ";" +
-                        "-fx-border-color: transparent;" +
-                        "-fx-border-width: 0;"
-        );
-        return button;
-    }
-
     void applyUpdateResultFilter() {
         if (filteredUpdateResults == null) {
             return;
@@ -323,6 +284,14 @@ public class SqlTabController {
         refreshResultFilterButtons();
     }
 
+    void toggleResultFilterSuccess() {
+        toggleResultFilter(ResultFilterMode.SUCCESS);
+    }
+
+    void toggleResultFilterFailure() {
+        toggleResultFilter(ResultFilterMode.FAILURE);
+    }
+
     private boolean isSuccessResult(UpdateResult item) {
         return item != null
                 && item.getResult() != null
@@ -336,8 +305,8 @@ public class SqlTabController {
         button.setStyle(
                 "-fx-background-radius: 999;" +
                         "-fx-border-radius: 999;" +
-                        "-fx-padding: 4 12 4 12;" +
-                        "-fx-font-size: 11px;" +
+                        "-fx-padding: 2 7 2 7;" +
+                        "-fx-font-size: 10px;" +
                         "-fx-font-weight: bold;" +
                         "-fx-text-fill: white;" +
                         "-fx-background-color: " + background + ";" +
