@@ -105,6 +105,7 @@ public class SqlTabUiHelper {
         StackPane.setAlignment(ctrl.resultFilterButtonBox, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(ctrl.resultFilterButtonBox, new Insets(0, 12, 10, 0));
         ctrl.refreshResultFilterButtons();
+        I18n.localeProperty().addListener((obs, oldLocale, newLocale) -> ctrl.refreshResultFilterButtons());
         ctrl.resultsetStackPane.getChildren().add(ctrl.resultSetVBox);
 
         ctrl.currentResultSetTabController = loader.getController();
