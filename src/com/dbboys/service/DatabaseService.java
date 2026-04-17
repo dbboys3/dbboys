@@ -19,6 +19,9 @@ import javafx.concurrent.Task;
 import javafx.scene.control.Alert;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -265,7 +268,7 @@ public class DatabaseService implements MetaObjectService {
                 BackgroundSqlUtil.updateBackSqlUIOnStart();
 
                 try {
-                    String scriptText = stripLeadingBom(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+                    String scriptText = readSqlScript(file);
                     if (scriptText.isBlank()) {
                         throw new IOException(I18n.t("metadata.import_sql.error.empty_file", "SQL脚本为空：%s")
                                 .formatted(file.getName()));
@@ -299,9 +302,11 @@ public class DatabaseService implements MetaObjectService {
                 } catch (CancellationException e) {
                     throw e;
                 } catch (SQLException e) {
+                    logImportSqlError(connect, file, e);
                     BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
                     throw e;
                 } catch (Exception e) {
+                    logImportSqlError(connect, file, e);
                     String message = e.getMessage();
                     if (message == null || message.isBlank()) {
                         message = I18n.t("metadata.import_sql.error.unknown", "导入SQL脚本失败，请检查脚本内容或数据库连接");
@@ -342,7 +347,7 @@ public class DatabaseService implements MetaObjectService {
         }
 
         BackgroundSqlTask effectiveTask = backSqlTask == null ? new BackgroundSqlTask() : backSqlTask;
-        String scriptText = stripLeadingBom(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+        String scriptText = readSqlScript(file);
         if (scriptText.isBlank()) {
             throw new IOException(I18n.t("metadata.import_sql.error.empty_file", "SQL脚本为空：%s")
                     .formatted(file.getName()));
@@ -460,6 +465,57 @@ public class DatabaseService implements MetaObjectService {
         }
     }
 
+    private String readSqlScript(File file) throws IOException {
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        if (bytes.length == 0) {
+            return "";
+        }
+
+        Charset bomCharset = detectBomCharset(bytes);
+        if (bomCharset != null) {
+            if (!StandardCharsets.UTF_8.equals(bomCharset)) {
+                throw new IOException(I18n.t(
+                        "metadata.import_sql.error.not_utf8",
+                        "SQL脚本不是UTF-8编码，请先转为UTF-8后再导入：%s"
+                ).formatted(file.getName()));
+            }
+        }
+
+        try {
+            return decodeUtf8Script(bytes);
+        } catch (CharacterCodingException e) {
+            throw new IOException(I18n.t(
+                    "metadata.import_sql.error.not_utf8",
+                    "SQL脚本不是UTF-8编码，请先转为UTF-8后再导入：%s"
+            ).formatted(file.getName()), e);
+        }
+    }
+
+    private Charset detectBomCharset(byte[] bytes) {
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xEF
+                && (bytes[1] & 0xFF) == 0xBB
+                && (bytes[2] & 0xFF) == 0xBF) {
+            return StandardCharsets.UTF_8;
+        }
+        if (bytes.length >= 2
+                && (bytes[0] & 0xFF) == 0xFE
+                && (bytes[1] & 0xFF) == 0xFF) {
+            return StandardCharsets.UTF_16BE;
+        }
+        if (bytes.length >= 2
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xFE) {
+            return StandardCharsets.UTF_16LE;
+        }
+        return null;
+    }
+
+    private String decodeUtf8Script(byte[] bytes) throws CharacterCodingException {
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+        return stripLeadingBom(decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString());
+    }
+
     private String stripLeadingBom(String text) {
         if (text == null || text.isEmpty()) {
             return "";
@@ -495,6 +551,13 @@ public class DatabaseService implements MetaObjectService {
             current = current.getCause();
         }
         return false;
+    }
+
+    private void logImportSqlError(Connect connect, File file, Exception e) {
+        String connectName = connect == null ? "" : connect.getName();
+        String databaseName = connect == null ? "" : connect.getEffectiveCatalog();
+        String fileName = file == null ? "" : file.getAbsolutePath();
+        log.error("Import SQL script failed. connect={}, database={}, file={}", connectName, databaseName, fileName, e);
     }
 
     private void showImportError(String message) {
