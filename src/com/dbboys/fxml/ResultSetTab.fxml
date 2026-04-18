@@ -25,10 +25,10 @@
             </HBox>
             <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" style="-fx-background-color: -color-bg-default;">
                 <Label fx:id="resultSetLabelLeftBracket" />
-                    <StackPane>
-                        <Label visible="false" fx:id="resultSetEditableEnabledLabel" />
-                        <Label fx:id="resultSetEditableDisabledLabel" />
-                    </StackPane>
+                <Button fx:id="resultSetInsertRowButton" styleClass="small" focusTraversable="false" />
+                <Button fx:id="resultSetDeleteRowButton" styleClass="small" focusTraversable="false" />
+                <Button fx:id="resultSetSaveEditsButton" styleClass="small" focusTraversable="false" />
+                <Button fx:id="resultSetCancelEditsButton" styleClass="small" focusTraversable="false" />
                 <Label fx:id="resultSetLabelRightBracket" />
                 <Label fx:id="resultSetLabelPerTimePrefix" />
                 <CustomUserTextField fx:id="resultSetPerTimeTextField" text="200" style="-fx-pref-width: 50;-fx-padding: 0 0 0 4;-fx-font-size: 11" >

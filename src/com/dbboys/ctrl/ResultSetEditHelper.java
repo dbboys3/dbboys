@@ -11,6 +11,7 @@ import com.dbboys.vo.Connect;
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.UpdateResult;
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.ObservableList;
 import javafx.scene.control.*;
 import java.sql.*;
@@ -18,6 +19,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.logging.log4j.LogManager;
@@ -94,9 +96,9 @@ public class ResultSetEditHelper {
         updateResult.setAffectedRows(sqlAffect);
         updateResult.setDatabase(ctrl.sqlConnect.getEffectiveCatalog());
         updateResult.setUpdateSql(updateSql);
-        if (commitmode.getSelectionModel().getSelectedIndex() == 1) {
+        if (isManualCommitMode(commitmode)) {
             updateResult.setMark(String.format(I18n.t("resultset.mark.manual_edit", "手动提交，查询结果集编辑，参数[%s,%s]"), newValue, sqlParams));
-            sqlTransactionText.set(sqlTransactionText.get() + updateSql + "\n");
+            appendPendingTransactionSql(sqlTransactionText, updateSql + "\n");
             NotificationUtil.showMainNotification(I18n.t("resultset.notice.manual_commit_pending", "当前连接为手动提交，修改暂未提交，请点击提交或回滚！"));
         } else {
             updateResult.setMark(String.format(I18n.t("resultset.mark.auto_edit", "自动提交，查询结果集编辑，参数[%s,%s]"), newValue, sqlParams));
@@ -104,6 +106,157 @@ public class ResultSetEditHelper {
         LocalDbRepository.saveSqlHistory(updateResult);
         ctrl.sqlStatement.close();
         ctrl.sqlStatement = null;
+    }
+
+    /**
+     * INSERT for a new grid row (excluding ROWID pseudo-column from column list).
+     */
+    public void insertRow(ObservableList<String> row,
+                          SimpleStringProperty sqlTransactionText,
+                          ChoiceBox<?> commitmode) throws SQLException {
+        if (ctrl.resultFromTable == null || ctrl.resultFromTable.isBlank()) {
+            throw new SQLException(I18n.t("resultset.edit.no_table", "无法解析目标表，不能插入。"));
+        }
+        if (ctrl.resultTableCols == null || ctrl.resultTableCols.isEmpty()) {
+            throw new SQLException(I18n.t("resultset.edit.no_columns", "无法解析列，不能插入。"));
+        }
+        List<Integer> dataColIndices = new ArrayList<>();
+        List<String> insertColExprs = new ArrayList<>();
+        for (int i = 0; i < ctrl.resultTableCols.size(); i++) {
+            String raw = ctrl.resultTableCols.get(i);
+            String bare = oracleBareColumnNameForUpdate(raw);
+            if ("rowid".equalsIgnoreCase(bare != null ? bare.trim() : "")) {
+                continue;
+            }
+            insertColExprs.add(raw);
+            dataColIndices.add(i);
+        }
+        if (insertColExprs.isEmpty()) {
+            throw new SQLException(I18n.t("resultset.edit.insert_no_physical_cols", "没有可插入的物理列。"));
+        }
+        StringBuilder sql = new StringBuilder("insert into ");
+        sql.append(ctrl.resultFromTable).append(" (");
+        for (int j = 0; j < insertColExprs.size(); j++) {
+            if (j > 0) {
+                sql.append(", ");
+            }
+            sql.append(oracleBareColumnNameForUpdate(insertColExprs.get(j)));
+        }
+        sql.append(") values (");
+        for (int j = 0; j < insertColExprs.size(); j++) {
+            if (j > 0) {
+                sql.append(", ");
+            }
+            sql.append("?");
+        }
+        sql.append(")");
+        String insertSql = sql.toString();
+
+        ctrl.sqlStatement = ctrl.sqlConnect.getConn().prepareStatement(insertSql);
+        for (int j = 0; j < dataColIndices.size(); j++) {
+            int colIdx = dataColIndices.get(j);
+            String cell = row.get(colIdx + 1);
+            boolean isNull = cell == null || cell.isBlank() || "[NULL]".equals(cell);
+            ctrl.sqlStatement.setObject(j + 1, isNull ? null : cell);
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        long sqlBegin = System.currentTimeMillis();
+        int sqlAffect = ctrl.sqlStatement.executeUpdate();
+        long sqlFinish = System.currentTimeMillis();
+
+        UpdateResult updateResult = new UpdateResult();
+        updateResult.setConnectId(ctrl.sqlConnect.getId());
+        updateResult.setStartTime(sdf.format(sqlBegin));
+        updateResult.setEndTime(sdf.format(sqlFinish));
+        updateResult.setElapsedTime(String.format("%.3f", (sqlFinish - sqlBegin) / 1000.0) + " sec");
+        updateResult.setAffectedRows(sqlAffect);
+        updateResult.setDatabase(ctrl.sqlConnect.getEffectiveCatalog());
+        updateResult.setUpdateSql(insertSql);
+        if (isManualCommitMode(commitmode)) {
+            updateResult.setMark(I18n.t("resultset.mark.manual_insert", "手动提交，结果集插入行"));
+            appendPendingTransactionSql(sqlTransactionText, insertSql + "\n");
+            NotificationUtil.showMainNotification(I18n.t("resultset.notice.manual_commit_pending", "当前连接为手动提交，修改暂未提交，请点击提交或回滚！"));
+        } else {
+            updateResult.setMark(I18n.t("resultset.mark.auto_insert", "自动提交，结果集插入行"));
+        }
+        LocalDbRepository.saveSqlHistory(updateResult);
+        ctrl.sqlStatement.close();
+        ctrl.sqlStatement = null;
+    }
+
+    public void deleteRow(ObservableList<String> row,
+                          SimpleStringProperty sqlTransactionText,
+                          ChoiceBox<?> commitmode) throws SQLException {
+        if (ctrl.resultFromTable == null || ctrl.resultFromTable.isBlank()) {
+            throw new SQLException(I18n.t("resultset.edit.no_table", "无法解析目标表，不能删除。"));
+        }
+        if (ctrl.resultTablePriNum == null || ctrl.resultTablePriNum.isEmpty()) {
+            throw new SQLException(I18n.t("resultset.edit.delete_no_pk", "无主键或 ROWID，不能删除。"));
+        }
+        StringBuilder deleteSql = new StringBuilder("delete from ").append(ctrl.resultFromTable).append(" where 1=1 ");
+        for (Integer colnum : ctrl.resultTablePriNum) {
+            String rawWhereCol = ctrl.resultTableCols.get(colnum);
+            deleteSql.append(" and ").append(oracleBareColumnNameForUpdate(rawWhereCol)).append("=?");
+        }
+        String sqlStr = deleteSql.toString();
+
+        ctrl.sqlStatement = ctrl.sqlConnect.getConn().prepareStatement(sqlStr);
+        int prepareNum = 1;
+        StringBuilder sqlParams = new StringBuilder();
+        for (Integer colnum : ctrl.resultTablePriNum) {
+            Object pkVal = row.get(colnum + 1);
+            ctrl.sqlStatement.setObject(prepareNum++, pkVal == null || "[NULL]".equals(pkVal) ? null : pkVal);
+            if (sqlParams.length() > 0) {
+                sqlParams.append(",");
+            }
+            sqlParams.append(pkVal == null ? "null" : pkVal);
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        long sqlBegin = System.currentTimeMillis();
+        int sqlAffect = ctrl.sqlStatement.executeUpdate();
+        long sqlFinish = System.currentTimeMillis();
+
+        UpdateResult updateResult = new UpdateResult();
+        updateResult.setConnectId(ctrl.sqlConnect.getId());
+        updateResult.setStartTime(sdf.format(sqlBegin));
+        updateResult.setEndTime(sdf.format(sqlFinish));
+        updateResult.setElapsedTime(String.format("%.3f", (sqlFinish - sqlBegin) / 1000.0) + " sec");
+        updateResult.setAffectedRows(sqlAffect);
+        updateResult.setDatabase(ctrl.sqlConnect.getEffectiveCatalog());
+        updateResult.setUpdateSql(sqlStr);
+        if (isManualCommitMode(commitmode)) {
+            updateResult.setMark(String.format(I18n.t("resultset.mark.manual_delete", "手动提交，结果集删除行，参数[%s]"), sqlParams));
+            appendPendingTransactionSql(sqlTransactionText, sqlStr + "\n");
+            NotificationUtil.showMainNotification(I18n.t("resultset.notice.manual_commit_pending", "当前连接为手动提交，修改暂未提交，请点击提交或回滚！"));
+        } else {
+            updateResult.setMark(String.format(I18n.t("resultset.mark.auto_delete", "自动提交，结果集删除行，参数[%s]"), sqlParams));
+        }
+        LocalDbRepository.saveSqlHistory(updateResult);
+        ctrl.sqlStatement.close();
+        ctrl.sqlStatement = null;
+    }
+
+    /**
+     * One UPDATE per changed cell vs. snapshot (used when batching with「保存」).
+     */
+    public void flushRowUpdates(ObservableList<String> row,
+                                ObservableList<String> snapshot,
+                                SimpleStringProperty sqlTransactionText,
+                                ChoiceBox<?> commitmode) throws SQLException {
+        if (row == null || snapshot == null || row.size() != snapshot.size()) {
+            return;
+        }
+        for (int col = 1; col < row.size(); col++) {
+            String cur = row.get(col);
+            String orig = snapshot.get(col);
+            if (Objects.equals(cur, orig)) {
+                continue;
+            }
+            String newVal = (cur == null || "[NULL]".equals(cur)) ? "[NULL]" : cur;
+            updateCellValue(col, newVal, row, orig, sqlTransactionText, commitmode);
+        }
     }
 
     public boolean prepareParams(ParameterMetaData meta, Statement stmt) {
@@ -172,6 +325,7 @@ public class ResultSetEditHelper {
     public void applyPrimaryKeyInfo(PrimaryKeyInfo info) {
         if (info == null) {
             ctrl.resultSetTableView.setEditable(false);
+            ctrl.resultSetEditAllowed.set(false);
             return;
         }
         List<String> primaryKeys = info.primaryKeys;
@@ -202,11 +356,12 @@ public class ResultSetEditHelper {
         }
         if (!hasEditableKey) {
             ctrl.resultSetTableView.setEditable(false);
+            ctrl.resultSetEditAllowed.set(false);
         }
     }
 
     private void markPrimaryKeyColumn(int columnIndex, String labelText) {
-        ctrl.resultSetEditableEnabledLabel.setVisible(!ctrl.sqlConnect.getReadonly());
+        ctrl.resultSetEditAllowed.set(!ctrl.sqlConnect.getReadonly());
         ctrl.columnBuilder.markColumnKey(columnIndex, labelText);
         if (!ctrl.sqlConnect.getReadonly()) {
             ctrl.resultSetTableView.setEditable(true);
@@ -312,6 +467,20 @@ public class ResultSetEditHelper {
             }
         }
         return -1;
+    }
+
+    /** null 提交框视为自动提交（非手动）。 */
+    private static boolean isManualCommitMode(ChoiceBox<?> commitmode) {
+        return commitmode != null && commitmode.getSelectionModel().getSelectedIndex() == 1;
+    }
+
+    /** null 属性不追加（调用方可用占位 {@link SimpleStringProperty} 表示 ""）。 */
+    private static void appendPendingTransactionSql(SimpleStringProperty sqlTransactionText, String fragment) {
+        if (sqlTransactionText == null || fragment == null) {
+            return;
+        }
+        String cur = sqlTransactionText.get();
+        sqlTransactionText.set((cur == null ? "" : cur) + fragment);
     }
 
     private static String normalizeIdentifier(String identifier) {

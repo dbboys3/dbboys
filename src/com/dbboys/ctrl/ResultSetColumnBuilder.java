@@ -2,11 +2,10 @@ package com.dbboys.ctrl;
 
 import com.dbboys.customnode.CustomInfoCodeArea;
 import com.dbboys.customnode.CustomInfoStackPane;
-import com.dbboys.customnode.CustomTableCell;
+import com.dbboys.customnode.CustomLostFocusCommitTableCell;
 import com.dbboys.i18n.I18n;
 import com.dbboys.util.AlertUtil;
 import com.dbboys.util.CustomWindowFrameUtil;
-import com.dbboys.util.SqlErrorUtil;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
@@ -16,7 +15,6 @@ import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -55,6 +53,9 @@ public class ResultSetColumnBuilder {
             "-fx-border-radius: 2.4;" +
             "-fx-background-radius: 2.4;" +
             "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
+    /** Matches CSS in cupertino-dark.css: unsaved UPDATE cells use same success green as INSERT. */
+    private static final String CELL_PENDING_UPDATE_STYLE = "resultset-pending-update-cell";
+
     private static final String HEADER_ROWID_BADGE_STYLE =
             "-fx-font-size: 7.2px;" +
             "-fx-font-weight: bold;" +
@@ -75,6 +76,7 @@ public class ResultSetColumnBuilder {
                              boolean allowEdit,
                              SimpleStringProperty sqlTransactionText,
                              ChoiceBox<?> commitmode) throws SQLException {
+        ctrl.setEditCommitContext(sqlTransactionText, commitmode);
         ctrl.colList.clear();
         int columnCount = metaData.getColumnCount();
         double avgColWidth = (ctrl.resultSetTableView.getWidth() - 30) / columnCount;
@@ -89,10 +91,10 @@ public class ResultSetColumnBuilder {
             TableColumn<ObservableList<String>, Object> column = new TableColumn<>();
             if (isIntegralType(normalizedTypeName)) {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() ->
-                        data.getValue().get(columnIndex) == null ? null : Integer.parseInt(data.getValue().get(columnIndex))));
+                        parseIntegralCell(data.getValue().get(columnIndex))));
             } else if (isDecimalType(normalizedTypeName)) {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() ->
-                        data.getValue().get(columnIndex) == null ? null : Float.parseFloat(data.getValue().get(columnIndex))));
+                        parseDecimalCell(data.getValue().get(columnIndex))));
             } else {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() -> data.getValue().get(columnIndex)));
                 column.setComparator((str1, str2) -> {
@@ -103,7 +105,7 @@ public class ResultSetColumnBuilder {
                 });
             }
 
-            column.setCellFactory(col -> new CustomTableCell<ObservableList<String>, Object>() {
+            column.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, Object>() {
                 {
                     setOnMouseClicked(ev -> {
                         if (isLob && ev.getClickCount() == 1 && !isEmpty() && getItem() != null) {
@@ -115,8 +117,11 @@ public class ResultSetColumnBuilder {
 
                 @Override
                 protected void updateItem(Object item, boolean empty) {
+                    getStyleClass().remove(CELL_PENDING_UPDATE_STYLE);
                     super.updateItem(item, empty);
-                    if (empty) return;
+                    if (empty) {
+                        return;
+                    }
                     if (item == null) {
                         setText(ctrl.getNullLabel());
                         setTooltip(null);
@@ -125,6 +130,12 @@ public class ResultSetColumnBuilder {
                     } else {
                         setText(item.toString().replace("\n", "\u21B5"));
                         setTooltip(null);
+                    }
+                    if (getTableRow() != null && getTableRow().getItem() != null) {
+                        ObservableList<String> dataRow = (ObservableList<String>) getTableRow().getItem();
+                        if (ctrl.isPendingUpdatedDataCell(dataRow, columnIndex)) {
+                            getStyleClass().add(CELL_PENDING_UPDATE_STYLE);
+                        }
                     }
                 }
 
@@ -135,19 +146,18 @@ public class ResultSetColumnBuilder {
                     CustomInfoCodeArea customInfoCodeArea = new CustomInfoCodeArea();
                     CustomInfoStackPane customInfoStackPane = new CustomInfoStackPane(customInfoCodeArea);
                     customInfoCodeArea.setWrapText(false);
-                    customInfoCodeArea.setEditable(ctrl.resultSetEditableEnabledLabel.isVisible());
+                    customInfoCodeArea.setEditable(ctrl.getResultSetEditAllowed());
                     customInfoStackPane.codeAreaSnapshotButton.setVisible(false);
                     Button saveBtn = new Button();
                     saveBtn.textProperty().bind(I18n.bind("common.save", "保存"));
                     saveBtn.getStyleClass().add("accent");
                     VBox root = new VBox();
-                    if (ctrl.resultSetEditableEnabledLabel.isVisible()) {
+                    if (ctrl.getResultSetEditAllowed()) {
                         saveBtn.setOnAction(e -> {
                             try {
                                 ObservableList<String> row = getTableView().getItems().get(getIndex());
-                                ctrl.editHelper.updateCellValue(colIdx, customInfoCodeArea.getText(), row, row.get(colIdx), txText, cm);
-                                row.set(colIdx, customInfoCodeArea.getText());
-                                ctrl.resultSetTableView.refresh();
+                                String oldVal = row.get(colIdx);
+                                ctrl.applyLocalCellEdit(colIdx, row, oldVal, customInfoCodeArea.getText());
                                 lobDataPopupStage.close();
                             } catch (Exception ex) {
                                 log.error(ex.getMessage(), ex);
@@ -158,7 +168,7 @@ public class ResultSetColumnBuilder {
                     }
                     VBox.setVgrow(customInfoStackPane, Priority.ALWAYS);
                     root.getChildren().add(customInfoStackPane);
-                    if (ctrl.resultSetEditableEnabledLabel.isVisible()) {
+                    if (ctrl.getResultSetEditAllowed()) {
                         root.getChildren().add(saveBtn);
                     }
                     root.setPrefHeight(Double.MAX_VALUE);
@@ -347,39 +357,45 @@ public class ResultSetColumnBuilder {
         return typeName == null ? "" : typeName.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** Empty or blank strings (e.g. new insert row) must not go through parseInt — avoids binding errors. */
+    private static Integer parseIntegralCell(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(t);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static Float parseDecimalCell(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        try {
+            return Float.parseFloat(t);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private void bindEditableColumn(TableColumn<ObservableList<String>, Object> column,
                                     int columnIndex,
                                     SimpleStringProperty sqlTransactionText,
                                     ChoiceBox<?> commitmode) {
         column.setOnEditCommit(event -> {
             Object oldvalue = event.getOldValue();
-            Object colvalue = event.getNewValue().toString().replaceAll("\u21B5", "\n");
-            event.getRowValue().set(columnIndex, colvalue.toString());
-
-            try {
-                ctrl.editHelper.updateCellValue(columnIndex, colvalue.toString(), event.getRowValue(), oldvalue, sqlTransactionText, commitmode);
-            } catch (SQLException e) {
-                log.error("Result set cell update failed (table={}, columnIndex={}): [{}] {}",
-                        ctrl.resultFromTable, columnIndex, e.getErrorCode(), e.getMessage(), e);
-                Platform.runLater(() -> {
-                    event.getRowValue().set(columnIndex, oldvalue == null ? null : oldvalue.toString());
-                    event.getTableView().refresh();
-                    if (SqlErrorUtil.isDisconnectError(ctrl.sqlConnect, e)) {
-                        ctrl.hiddenDisconnectedButton.fire();
-                    } else {
-                        AlertUtil.CustomAlert("错误", "[" + e.getErrorCode() + "]" + e.getMessage());
-                    }
-                });
-            } finally {
-                try {
-                    if (ctrl.sqlStatement != null) {
-                        ctrl.sqlStatement.close();
-                    }
-                } catch (SQLException e) {
-                    log.error("Failed to close statement after result set cell update", e);
-                    throw new RuntimeException(e);
-                }
-            }
+            String colvalue = event.getNewValue().toString().replaceAll("\u21B5", "\n");
+            ctrl.applyLocalCellEdit(columnIndex, event.getRowValue(), oldvalue, colvalue);
         });
     }
 }

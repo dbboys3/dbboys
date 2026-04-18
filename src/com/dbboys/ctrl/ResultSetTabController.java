@@ -12,8 +12,12 @@ import com.dbboys.util.SqlErrorUtil;
 import com.dbboys.util.*;
 import com.dbboys.vo.Connect;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
+import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -23,7 +27,6 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
@@ -34,7 +37,13 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 public class ResultSetTabController {
     private static final Logger log = LogManager.getLogger(ResultSetTabController.class);
@@ -50,9 +59,32 @@ public class ResultSetTabController {
     @FXML
     public HBox resultSetButtonHBox;
     @FXML
-    public Label resultSetEditableEnabledLabel;
+    public Button resultSetInsertRowButton;
     @FXML
-    public Label resultSetEditableDisabledLabel;
+    public Button resultSetDeleteRowButton;
+    @FXML
+    public Button resultSetSaveEditsButton;
+    @FXML
+    public Button resultSetCancelEditsButton;
+
+    /** True when PK/rowid allow editing (and connection not read-only). */
+    public final BooleanProperty resultSetEditAllowed = new SimpleBooleanProperty(false);
+    private SimpleStringProperty editSqlTransactionText;
+    private ChoiceBox<?> editCommitMode;
+
+    /** New rows not yet persisted with「保存」. */
+    public final Set<ObservableList<String>> pendingInsertRows =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Existing rows with cell edits not yet saved. */
+    public final Set<ObservableList<String>> pendingUpdateRows =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Rows marked for DELETE on「保存」. */
+    public final Set<ObservableList<String>> pendingDeleteRows =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Snapshot before first edit (per row), for cancel / batch UPDATE. */
+    public final Map<ObservableList<String>, ObservableList<String>> originalRowSnapshots = new IdentityHashMap<>();
+    /** Existing rows: which data column indices (1-based) have unsaved edits; used for per-cell green highlight. */
+    public final Map<ObservableList<String>, Set<Integer>> pendingUpdatedCells = new IdentityHashMap<>();
     @FXML
     public Label resultSetLabelLeftBracket;
     @FXML
@@ -150,10 +182,26 @@ public class ResultSetTabController {
         setupTableView();
         setupPerTimeField();
         setupButtons();
+        setupResultSetEditToolbar();
+    }
+
+    public void setEditCommitContext(SimpleStringProperty tx, ChoiceBox<?> commitMode) {
+        editSqlTransactionText = tx;
+        editCommitMode = commitMode;
+    }
+
+    public boolean getResultSetEditAllowed() {
+        return resultSetEditAllowed.get();
     }
 
     private void bindUiState() {
-        resultSetEditableDisabledLabel.visibleProperty().bind(resultSetEditableEnabledLabel.visibleProperty().not());
+        var toolbarDisabled = Bindings.createBooleanBinding(
+                () -> !resultSetEditAllowed.get(),
+                resultSetEditAllowed);
+        resultSetInsertRowButton.disableProperty().bind(toolbarDisabled);
+        resultSetDeleteRowButton.disableProperty().bind(toolbarDisabled);
+        resultSetSaveEditsButton.disableProperty().bind(toolbarDisabled);
+        resultSetCancelEditsButton.disableProperty().bind(toolbarDisabled);
         resultSetNextPageButton.disableProperty().bind(sqlExecuteProcessStackPane.visibleProperty());
         resultSetAllRowsButton.disableProperty().bind(sqlExecuteProcessStackPane.visibleProperty());
         lastSqlRefreshButton.disableProperty().bind(sqlExecuteProcessStackPane.visibleProperty());
@@ -164,8 +212,10 @@ public class ResultSetTabController {
     private void initI18nBindings() {
         bindTooltip(lastSqlCopyButton, "resultset.tooltip.copy_sql");
         bindTooltip(lastSqlRefreshButton, "resultset.tooltip.refresh_sql");
-        bindTooltip(resultSetEditableEnabledLabel, "resultset.tooltip.editable_enabled");
-        bindTooltip(resultSetEditableDisabledLabel, "resultset.tooltip.editable_disabled");
+        bindTooltip(resultSetInsertRowButton, "resultset.tooltip.insert_row");
+        bindTooltip(resultSetDeleteRowButton, "resultset.tooltip.delete_row");
+        bindTooltip(resultSetSaveEditsButton, "resultset.tooltip.save_edits");
+        bindTooltip(resultSetCancelEditsButton, "resultset.tooltip.cancel_edits");
         bindTooltip(resultSetNextPageButton, "resultset.tooltip.next_page");
         bindTooltip(resultSetAllRowsButton, "resultset.tooltip.all_rows");
         bindTooltip(resultSetCountButton, "resultset.tooltip.count_rows");
@@ -195,8 +245,10 @@ public class ResultSetTabController {
     private void setupIcons() {
         lastSqlCopyButton.setGraphic(IconFactory.group(IconPaths.COPY, 0.6));
         lastSqlRefreshButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.6));
-        resultSetEditableEnabledLabel.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));
-        resultSetEditableDisabledLabel.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE_DISABLED, 0.45, Color.valueOf("#9f453c")));
+        resultSetInsertRowButton.setGraphic(IconFactory.group(IconPaths.MAIN_ADD_CONNECT, 0.55));
+        resultSetDeleteRowButton.setGraphic(IconFactory.group(IconPaths.TABLEINFO_DELETE_COLUMN, 0.55));
+        resultSetSaveEditsButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.55));
+        resultSetCancelEditsButton.setGraphic(IconFactory.group(IconPaths.TAB_CLOSE_MENU_ITEM, 0.45));
         resultSetNextPageButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_NEXT_PAGE, 0.6));
         resultSetAllRowsButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_ALL_ROWS, 0.5));
         resultSetCountButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_COUNT, 0.5));
@@ -268,6 +320,23 @@ public class ResultSetTabController {
             Platform.runLater(() -> resultSetTableView.getSelectionModel().clearSelection());
             return true;
         });
+        resultSetTableView.setRowFactory(tv -> {
+            TableRow<ObservableList<String>> row = new TableRow<>();
+            row.itemProperty().addListener((obs, oldItem, newItem) -> {
+                row.getStyleClass().removeAll(
+                        "resultset-pending-dml-row",
+                        "resultset-pending-delete-row");
+                if (newItem == null) {
+                    return;
+                }
+                if (pendingDeleteRows.contains(newItem)) {
+                    row.getStyleClass().add("resultset-pending-delete-row");
+                } else if (pendingInsertRows.contains(newItem)) {
+                    row.getStyleClass().add("resultset-pending-dml-row");
+                }
+            });
+            return row;
+        });
     }
 
     private void setupPerTimeField() {
@@ -321,6 +390,263 @@ public class ResultSetTabController {
         });
     }
 
+    private void setupResultSetEditToolbar() {
+        resultSetInsertRowButton.setOnAction(e -> insertResultSetRow());
+        resultSetDeleteRowButton.setOnAction(e -> deleteSelectedResultSetRows());
+        resultSetSaveEditsButton.setOnAction(e -> saveAllPendingDml());
+        resultSetCancelEditsButton.setOnAction(e -> cancelAllPendingDml());
+    }
+
+    private void stopResultSetCellEdit() {
+        resultSetTableView.edit(-1, null);
+    }
+
+    private void insertResultSetRow() {
+        if (!resultSetEditAllowed.get()) {
+            return;
+        }
+        int n = colList.size();
+        if (n <= 0) {
+            return;
+        }
+        ObservableList<ObservableList<String>> items = resultSetTableView.getItems();
+        int insertIndex;
+        ObservableList<String> template;
+        int anchor = minSelectedRowIndex();
+        if (items.isEmpty()) {
+            insertIndex = 0;
+            template = null;
+        } else if (anchor >= 0) {
+            insertIndex = anchor + 1;
+            template = (ObservableList<String>) items.get(anchor);
+        } else {
+            insertIndex = items.size();
+            template = (ObservableList<String>) items.get(items.size() - 1);
+        }
+        ObservableList<String> newRow = template == null ? newEmptyResultRow(n) : copyResultRow(template);
+        items.add(insertIndex, newRow);
+        pendingInsertRows.add(newRow);
+        resultSetTableView.getSelectionModel().clearSelection();
+        resultSetTableView.getSelectionModel().select(insertIndex);
+        resultSetTableView.refresh();
+        boolean appendedAsLastRow = insertIndex == items.size() - 1;
+        Platform.runLater(() -> {
+            if (appendedAsLastRow) {
+                resultSetTableView.scrollTo(insertIndex);
+            }
+            resultSetTableView.requestFocus();
+        });
+    }
+
+    /**
+     * Local cell edit only (no DB). Call before row data reflects new value for snapshot.
+     */
+    public void applyLocalCellEdit(int columnIndex, ObservableList<String> row, Object oldValue, String newCellText) {
+        if (!resultSetEditAllowed.get()) {
+            return;
+        }
+        String normalized = newCellText == null ? "" : newCellText.replaceAll("\u21B5", "\n");
+        if (isSameLocalCellValue(oldValue, normalized)) {
+            return;
+        }
+        if (pendingDeleteRows.contains(row)) {
+            pendingDeleteRows.remove(row);
+        }
+        if (!pendingInsertRows.contains(row) && !originalRowSnapshots.containsKey(row)) {
+            originalRowSnapshots.put(row, copyResultRow(row));
+        }
+        row.set(columnIndex, normalized);
+        if (!pendingInsertRows.contains(row)) {
+            pendingUpdateRows.add(row);
+            pendingUpdatedCells.computeIfAbsent(row, k -> new HashSet<>()).add(columnIndex);
+        }
+        resultSetTableView.refresh();
+    }
+
+    /** True if committed text equals the value before this edit (no pending DML / highlight). */
+    private static boolean isSameLocalCellValue(Object oldValue, String normalizedNew) {
+        String n = normalizedNew == null ? "" : normalizedNew;
+        if (oldValue == null) {
+            return n.isEmpty();
+        }
+        String o = oldValue.toString().replaceAll("\u21B5", "\n");
+        return o.equals(n);
+    }
+
+    /** Smallest selected row index, or -1 if nothing selected. */
+    private int minSelectedRowIndex() {
+        ObservableList<? extends TablePosition> cells = resultSetTableView.getSelectionModel().getSelectedCells();
+        if (cells == null || cells.isEmpty()) {
+            return -1;
+        }
+        int min = Integer.MAX_VALUE;
+        for (TablePosition<?, ?> p : cells) {
+            int r = p.getRow();
+            if (r >= 0 && r < min) {
+                min = r;
+            }
+        }
+        return min == Integer.MAX_VALUE ? -1 : min;
+    }
+
+    private static ObservableList<String> copyResultRow(ObservableList<String> source) {
+        ObservableList<String> copy = FXCollections.observableArrayList();
+        copy.addAll(source);
+        return copy;
+    }
+
+    private static ObservableList<String> newEmptyResultRow(int dataColumnCount) {
+        ObservableList<String> row = FXCollections.observableArrayList();
+        row.add(null);
+        for (int i = 0; i < dataColumnCount; i++) {
+            row.add("");
+        }
+        return row;
+    }
+
+    private void deleteSelectedResultSetRows() {
+        if (!resultSetEditAllowed.get()) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        ObservableList<TablePosition<ObservableList<String>, ?>> cells =
+                (ObservableList<TablePosition<ObservableList<String>, ?>>)
+                        (ObservableList<?>) resultSetTableView.getSelectionModel().getSelectedCells();
+        if (cells.isEmpty()) {
+            NotificationUtil.showMainNotification(I18n.t("resultset.edit.select_rows", "请先选中要删除的行。"));
+            return;
+        }
+        TreeSet<Integer> rowNums = new TreeSet<>(Collections.reverseOrder());
+        for (TablePosition<ObservableList<String>, ?> p : cells) {
+            rowNums.add(p.getRow());
+        }
+        List<ObservableList<String>> snapshot = new ArrayList<>();
+        for (int r : rowNums) {
+            if (r >= 0 && r < resultSetTableView.getItems().size()) {
+                ObservableList<String> row = (ObservableList<String>) resultSetTableView.getItems().get(r);
+                snapshot.add(row);
+            }
+        }
+        if (snapshot.isEmpty()) {
+            return;
+        }
+        for (ObservableList<String> row : snapshot) {
+            if (pendingInsertRows.contains(row)) {
+                resultSetTableView.getItems().remove(row);
+                pendingInsertRows.remove(row);
+                continue;
+            }
+            pendingUpdatedCells.remove(row);
+            pendingDeleteRows.add(row);
+        }
+        resultSetTableView.refresh();
+    }
+
+    private boolean hasPendingDml() {
+        return !pendingInsertRows.isEmpty() || !pendingUpdateRows.isEmpty() || !pendingDeleteRows.isEmpty();
+    }
+
+    private void clearAllPendingDmlState() {
+        pendingInsertRows.clear();
+        pendingUpdateRows.clear();
+        pendingDeleteRows.clear();
+        originalRowSnapshots.clear();
+        pendingUpdatedCells.clear();
+        resultSetTableView.refresh();
+    }
+
+    /** Whether this data cell should show the pending-update (success green, same as INSERT cells) highlight. */
+    public boolean isPendingUpdatedDataCell(ObservableList<String> row, int columnIndex) {
+        if (row == null || pendingDeleteRows.contains(row) || pendingInsertRows.contains(row)) {
+            return false;
+        }
+        Set<Integer> cols = pendingUpdatedCells.get(row);
+        return cols != null && cols.contains(columnIndex);
+    }
+
+    private void saveAllPendingDml() {
+        stopResultSetCellEdit();
+        if (!hasPendingDml()) {
+            NotificationUtil.showMainNotification(I18n.t("resultset.edit.nothing_to_save", "没有待保存的更改。"));
+            return;
+        }
+        SimpleStringProperty txForSave =
+                editSqlTransactionText != null ? editSqlTransactionText : new SimpleStringProperty("");
+        List<ObservableList<String>> deletes = new ArrayList<>(pendingDeleteRows);
+        List<ObservableList<String>> updates = new ArrayList<>(pendingUpdateRows);
+        List<ObservableList<String>> inserts = new ArrayList<>(pendingInsertRows);
+        Map<ObservableList<String>, ObservableList<String>> snapCopy = new IdentityHashMap<>();
+        for (ObservableList<String> r : updates) {
+            ObservableList<String> s = originalRowSnapshots.get(r);
+            if (s != null) {
+                snapCopy.put(r, copyResultRow(s));
+            }
+        }
+        Set<ObservableList<String>> deleteIdentity = Collections.newSetFromMap(new IdentityHashMap<>());
+        deleteIdentity.addAll(deletes);
+
+        AppExecutor.runAsync(() -> {
+            try {
+                for (ObservableList<String> row : deletes) {
+                    editHelper.deleteRow(row, txForSave, editCommitMode);
+                }
+                for (ObservableList<String> row : updates) {
+                    if (deleteIdentity.contains(row)) {
+                        continue;
+                    }
+                    ObservableList<String> snap = snapCopy.get(row);
+                    if (snap == null) {
+                        continue;
+                    }
+                    editHelper.flushRowUpdates(row, snap, txForSave, editCommitMode);
+                }
+                for (ObservableList<String> row : inserts) {
+                    if (deleteIdentity.contains(row)) {
+                        continue;
+                    }
+                    editHelper.insertRow(row, txForSave, editCommitMode);
+                }
+                Platform.runLater(() -> {
+                    for (ObservableList<String> row : deletes) {
+                        resultSetTableView.getItems().remove(row);
+                    }
+                    clearAllPendingDmlState();
+                });
+            } catch (SQLException ex) {
+                log.error(ex.getMessage(), ex);
+                Platform.runLater(() -> {
+                    if (SqlErrorUtil.isDisconnectError(sqlConnect, ex)) {
+                        hiddenDisconnectedButton.fire();
+                    } else {
+                        AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                                "[" + ex.getErrorCode() + "]" + ex.getMessage());
+                    }
+                });
+            }
+        });
+    }
+
+    private void cancelAllPendingDml() {
+        stopResultSetCellEdit();
+        List<Map.Entry<ObservableList<String>, ObservableList<String>>> snapEntries =
+                new ArrayList<>(originalRowSnapshots.entrySet());
+        for (Map.Entry<ObservableList<String>, ObservableList<String>> e : snapEntries) {
+            ObservableList<String> row = e.getKey();
+            ObservableList<String> snap = e.getValue();
+            if (!resultSetTableView.getItems().contains(row) || snap == null) {
+                continue;
+            }
+            for (int i = 0; i < row.size() && i < snap.size(); i++) {
+                row.set(i, snap.get(i));
+            }
+        }
+        List<ObservableList<String>> insertCopy = new ArrayList<>(pendingInsertRows);
+        for (ObservableList<String> row : insertCopy) {
+            resultSetTableView.getItems().remove(row);
+        }
+        clearAllPendingDmlState();
+    }
+
     private void finishFetch() {
         sqlExecuteProcessStackPane.setVisible(false);
         sqlFetchEndTime = System.currentTimeMillis();
@@ -340,7 +666,13 @@ public class ResultSetTabController {
         sqlFetchedTime = 0;
         sqlFetchedRows = 0;
         Platform.runLater(() -> {
-            resultSetEditableEnabledLabel.setVisible(false);
+            setEditCommitContext(null, null);
+            resultSetEditAllowed.set(false);
+            pendingInsertRows.clear();
+            pendingUpdateRows.clear();
+            pendingDeleteRows.clear();
+            originalRowSnapshots.clear();
+            pendingUpdatedCells.clear();
             resultSetTableView.setEditable(false);
             resultSetTableView.getColumns().setAll(resultSetTableView.getColumns().get(0));
             resultSetTableView.getItems().clear();
@@ -520,7 +852,10 @@ public class ResultSetTabController {
             @Override
             protected Void call() throws Exception {
                 if (resultFromTable == null || resultFromTable.isBlank()) {
-                    Platform.runLater(() -> resultSetTableView.setEditable(false));
+                    Platform.runLater(() -> {
+                        resultSetTableView.setEditable(false);
+                        resultSetEditAllowed.set(false);
+                    });
                     return null;
                 }
 
@@ -580,7 +915,10 @@ public class ResultSetTabController {
         Runnable cleanup = () -> {
             cancel();
 
-            resultSetEditableDisabledLabel.visibleProperty().unbind();
+            resultSetInsertRowButton.disableProperty().unbind();
+            resultSetDeleteRowButton.disableProperty().unbind();
+            resultSetSaveEditsButton.disableProperty().unbind();
+            resultSetCancelEditsButton.disableProperty().unbind();
             resultSetNextPageButton.disableProperty().unbind();
             resultSetAllRowsButton.disableProperty().unbind();
             lastSqlRefreshButton.disableProperty().unbind();
@@ -616,6 +954,11 @@ public class ResultSetTabController {
             resultTablePriNum.clear();
             resultTableCols.clear();
             sqlParamList.clear();
+            pendingInsertRows.clear();
+            pendingUpdateRows.clear();
+            pendingDeleteRows.clear();
+            originalRowSnapshots.clear();
+            pendingUpdatedCells.clear();
         };
         if (Platform.isFxApplicationThread()) {
             cleanup.run();

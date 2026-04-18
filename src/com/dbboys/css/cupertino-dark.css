@@ -1057,6 +1057,36 @@ Text {
   -color-header-bg: -color-bg-default;
   -color-header-fg: -color-fg-default;
 }
+
+/* SQL 结果集：INSERT / DELETE 只染单元格，行透明；绿/红更亮，悬停单元格再提亮 */
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row:filled,
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row:filled:hover {
+  -fx-background-color: transparent;
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell {
+  -fx-background-color: rgba(72, 232, 98, 0.34);
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:hover {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+}
+/* 待 UPDATE：与 INSERT 同系绿色 */
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell.resultset-pending-update-cell {
+  -fx-background-color: rgba(72, 232, 98, 0.34);
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell.resultset-pending-update-cell:hover {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row:filled,
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row:filled:hover {
+  -fx-background-color: transparent;
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell {
+  -fx-background-color: rgba(255, 92, 82, 0.36);
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:hover {
+  -fx-background-color: rgba(255, 130, 122, 0.52);
+}
+
 .table-view > .virtual-flow > .corner {
   -fx-background-color: -color-cell-border;
   -fx-opacity: 0.4;
