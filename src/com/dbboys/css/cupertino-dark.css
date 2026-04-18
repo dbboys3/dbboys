@@ -1086,6 +1086,22 @@ Text {
 .table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:hover {
   -fx-background-color: rgba(255, 130, 122, 0.52);
 }
+/* 新增 / 更新 / 删除 待保存格：选中时背景与悬停一致（覆盖通用 table 选中灰底） */
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:selected,
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:selected {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+  -fx-background-insets: 0;
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:selected,
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:selected {
+  -fx-background-color: rgba(255, 130, 122, 0.52);
+  -fx-background-insets: 0;
+}
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell.resultset-pending-update-cell:selected,
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell.resultset-pending-update-cell:selected {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+  -fx-background-insets: 0;
+}
 
 .table-view > .virtual-flow > .corner {
   -fx-background-color: -color-cell-border;
@@ -1300,6 +1316,20 @@ Text {
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:selected:focused {
   -fx-background-color: -color-cell-border, -color-cell-bg-selected-focused;
   -fx-background-insets: 0, 0 0 1 0;
+}
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-dml-row > .table-cell:selected:focused,
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-delete-row > .table-cell:selected:focused {
+  -fx-background-insets: 0;
+}
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-dml-row > .table-cell:selected:focused {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+}
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-delete-row > .table-cell:selected:focused {
+  -fx-background-color: rgba(255, 130, 122, 0.52);
+}
+.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell.resultset-pending-update-cell:selected:focused {
+  -fx-background-color: rgba(110, 248, 130, 0.52);
+  -fx-background-insets: 0;
 }
 .table-view .table-row-cell > .table-cell.table-column.align-left {
   -fx-alignment: BASELINE_LEFT;
