@@ -22,6 +22,8 @@
                                 },
     "css.validate":  false,
     "java.jdt.ls.vmargs":  "-Xms256m -Xmx2G",
+    "java.autobuild.enabled":  true,
+    "java.debug.settings.forceBuildBeforeLaunch":  true,
     "files.associations":  {
                                "*.css":  "css",
                                "*.fxcss":  "css"

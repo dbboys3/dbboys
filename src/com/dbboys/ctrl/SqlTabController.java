@@ -518,6 +518,10 @@ public class SqlTabController {
             if (isDefaultConnectSelected()) {
                 NotificationUtil.showMainNotification(I18n.t("sql.notice.select_connection"));
             } else {
+                if (!sqlEditCodeArea.ensureExecuteTargetSelected()) {
+                    NotificationUtil.showMainNotification(I18n.t("sql.notice.enter_explain_sql"));
+                    return;
+                }
                 sqlText = executionHelper.resolveSqlText(false);
                 if (sqlText.isEmpty()) {
                     NotificationUtil.showMainNotification(I18n.t("sql.notice.enter_explain_sql"));

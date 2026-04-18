@@ -389,10 +389,14 @@ public class CustomSqlEditCodeArea extends CodeArea {
         if (executeDisabledSupplier.getAsBoolean()) {
             return;
         }
-        if (getSelectedText().isEmpty() && !selectCurrentStatementAtCaret()) {
+        if (!ensureExecuteTargetSelected()) {
             return;
         }
         onExecuteRequest.run();
+    }
+
+    public boolean ensureExecuteTargetSelected() {
+        return !getSelectedText().isEmpty() || selectCurrentStatementAtCaret();
     }
 
     private boolean selectCurrentStatementAtCaret() {
