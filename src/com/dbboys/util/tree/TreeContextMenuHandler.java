@@ -359,10 +359,26 @@ public class TreeContextMenuHandler {
         });
 
         copyItem.setOnAction(event->{
-            TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+            ObservableList<TreeItem<TreeData>> selectedItems = treeView.getSelectionModel().getSelectedItems();
+            if (selectedItems == null || selectedItems.isEmpty()) {
+                return;
+            }
+            List<String> names = new ArrayList<>();
+            for (TreeItem<TreeData> item : selectedItems) {
+                if (item == null || item.getValue() == null) {
+                    continue;
+                }
+                String name = item.getValue().getName();
+                if (name != null && !name.isBlank()) {
+                    names.add(name);
+                }
+            }
+            if (names.isEmpty()) {
+                return;
+            }
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
-            content.putString(selectedItem.getValue().getName());
+            content.putString(String.join(System.lineSeparator(), names));
             clipboard.setContent(content);
         });
         packageDDLItem.setOnAction(event-> {
@@ -1273,6 +1289,7 @@ public class TreeContextMenuHandler {
                     updateStatisticsItem.setDisable(disableByReadOnlyOrSystem);
                     truncateItem.setDisable(disableByReadOnlyOrSystem || disableTruncateByExternal);
                     deleteItem.setDisable(disableByReadOnlyOrSystem);
+                    treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(updateStatisticsItem);
                     treeview_menu.getItems().add(truncateItem);
                     treeview_menu.getItems().add(deleteItem);
@@ -1290,8 +1307,14 @@ public class TreeContextMenuHandler {
                         }
                     }
                     deleteItem.setDisable(disableDelete);
+                    treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
+                    treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
+                    return;
+                }
+                if (selectedItems.size() > 1) {
+                    treeview_menu.getItems().add(copyItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                     return;
                 }
