@@ -396,6 +396,18 @@ public interface DatabasePlatform {
         return "DATABASE";
     }
 
+    default boolean showMetadataDescriptions() {
+        return true;
+    }
+
+    default boolean showMetadataWarnings() {
+        return true;
+    }
+
+    default boolean showMetadataTooltips() {
+        return true;
+    }
+
     default <T> Optional<T> capability(Class<T> type) {
         if (type == null || !type.isInstance(this)) {
             return Optional.empty();

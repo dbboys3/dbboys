@@ -109,6 +109,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         if (treeItem == null) {
             return;
         }
+        applyMetadataDecorationPolicy(treeItem);
         if(item instanceof Loading){
                 renderLoading();
             }else if(item instanceof Connecting){
@@ -244,7 +245,9 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 bindNameLabel(item);
                 descripLabel.textProperty().unbind();
                 descripLabel.setText("JOB");
-                bindTooltip(metadataCatalogTooltipLabelTight(), "JOB: ", job.nameProperty());
+                if (showMetadataTooltips(treeItem)) {
+                    bindTooltip(metadataCatalogTooltipLabelTight(), "JOB: ", job.nameProperty());
+                }
             }
             else if (item instanceof RecycleBinObject binObj) {
                 nodeIcon.setContent(IconPaths.TREECELL_SYNONYM);
@@ -254,7 +257,9 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 bindNameLabel(item);
                 descripLabel.textProperty().unbind();
                 descripLabel.setText("BIN");
-                bindTooltip(metadataCatalogTooltipLabelTight(), "RECYCLE: ", binObj.nameProperty());
+                if (showMetadataTooltips(treeItem)) {
+                    bindTooltip(metadataCatalogTooltipLabelTight(), "RECYCLE: ", binObj.nameProperty());
+                }
             }
             else if(item instanceof Synonym){
                 Synonym synonym=(Synonym)item;
@@ -500,6 +505,10 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 platform = TreeNavigator.resolvePlatform(treeItem);
             }
         } catch (Exception ignored) {
+        }
+        if (platform != null && !platform.showMetadataTooltips()) {
+            setTooltip(null);
+            return;
         }
         java.util.List<DatabasePlatform.TooltipFieldDef> fields = platform != null
                 ? platform.tooltipFields(type)
@@ -915,6 +924,42 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         tooltip.textProperty().unbind();
         tooltip.textProperty().bind(Bindings.concat(parts));
         setTooltip(tooltip);
+    }
+
+    private void applyMetadataDecorationPolicy(TreeItem<TreeData> treeItem) {
+        boolean showDescriptions = showMetadataDescriptions(treeItem);
+        descripLabel.setVisible(showDescriptions);
+        descripLabel.setManaged(showDescriptions);
+
+        boolean showWarnings = showMetadataWarnings(treeItem);
+        warnIconGroup.setVisible(showWarnings);
+        warnIconGroup.setManaged(showWarnings);
+    }
+
+    private boolean showMetadataDescriptions(TreeItem<TreeData> treeItem) {
+        DatabasePlatform platform = safeResolvePlatform(treeItem);
+        return platform == null || platform.showMetadataDescriptions();
+    }
+
+    private boolean showMetadataWarnings(TreeItem<TreeData> treeItem) {
+        DatabasePlatform platform = safeResolvePlatform(treeItem);
+        return platform == null || platform.showMetadataWarnings();
+    }
+
+    private boolean showMetadataTooltips(TreeItem<TreeData> treeItem) {
+        DatabasePlatform platform = safeResolvePlatform(treeItem);
+        return platform == null || platform.showMetadataTooltips();
+    }
+
+    private DatabasePlatform safeResolvePlatform(TreeItem<TreeData> treeItem) {
+        if (treeItem == null) {
+            return null;
+        }
+        try {
+            return TreeNavigator.resolvePlatform(treeItem);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void applyPrimaryIconStyle(SVGPath icon) {

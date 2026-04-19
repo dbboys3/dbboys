@@ -339,15 +339,21 @@ public class CreateConnectController {
                 connect.setPropByName(namedServerPropName, "");
             }
             connect.setIp(ipAddressTextField.getText());
-            connect.setPort(portTextField.getText());
+            connect.setPort(isGeneralJdbcDbType(connect.getDbtype()) ? "" : portTextField.getText());
             if (connectNameTextField.getText().isEmpty()) {
-                connect.setName("[" + connect.getIp() + "_" + connect.getPort() + "]");
+                if (isGeneralJdbcDbType(connect.getDbtype())) {
+                    connect.setName("[" + connect.getIp() + "]");
+                } else {
+                    connect.setName("[" + connect.getIp() + "_" + connect.getPort() + "]");
+                }
             } else {
                 connect.setName(connectNameTextField.getText());
             }
         }
 
-        if (isOracleDbType(connect.getDbtype())) {
+        if (isGeneralJdbcDbType(connect.getDbtype())) {
+            connect.setCatalog("");
+        } else if (isOracleDbType(connect.getDbtype())) {
             String serviceName = instanceNameTextField == null ? "" : instanceNameTextField.getText();
             if (serviceName == null || serviceName.isBlank()) {
                 connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
@@ -390,7 +396,7 @@ public class CreateConnectController {
                         ipAddressTextField.requestFocus();
                         return false;
                     }
-                    else if(portTextField.getText().isEmpty()){
+                    else if(!isGeneralJdbcDbType(dbTypeChoiceBox.getValue()) && portTextField.getText().isEmpty()){
                         //portTextField.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         portTextField.requestFocus();
                         return false;
@@ -690,10 +696,49 @@ public class CreateConnectController {
             instanceNameTextField.setText(databaseValue == null ? "" : databaseValue);
             instanceHBox.setVisible(false);
         }
+        refreshConnectionInputMode(dbType);
     }
 
     private boolean isOracleDbType(String dbType) {
         return "ORACLE".equalsIgnoreCase(dbType);
+    }
+
+    private boolean isGeneralJdbcDbType(String dbType) {
+        return "GENERAL JDBC".equalsIgnoreCase(dbType);
+    }
+
+    private void refreshConnectionInputMode(String dbType) {
+        boolean generalJdbc = isGeneralJdbcDbType(dbType);
+        if (ipAddressLabel != null) {
+            ipAddressLabel.setText(generalJdbc
+                    ? I18n.t("createconnect.label.jdbc_url", "JDBC URL")
+                    : I18n.t("createconnect.label.ip", "IP"));
+        }
+        if (ipAddressTextField != null) {
+            ipAddressTextField.setPromptText(generalJdbc
+                    ? I18n.t("createconnect.prompt.jdbc_url", "例如 jdbc:postgresql://127.0.0.1:5432/postgres")
+                    : I18n.t("createconnect.prompt.ip", "IP"));
+            ipAddressTextField.setPrefWidth(generalJdbc ? 315 : 200);
+        }
+        if (portLabel != null) {
+            portLabel.setVisible(!generalJdbc);
+            portLabel.setManaged(!generalJdbc);
+        }
+        if (portTextField != null) {
+            portTextField.setVisible(!generalJdbc);
+            portTextField.setManaged(!generalJdbc);
+            if (generalJdbc) {
+                portTextField.clear();
+            }
+        }
+        if (switchGroupOrIP != null) {
+            boolean showSwitch = !generalJdbc && supportsNamedServerConnection(resolvePlatformResolver().getPlatform(dbType));
+            switchGroupOrIP.setVisible(showSwitch);
+            switchGroupOrIP.setManaged(showSwitch);
+        }
+        if (generalJdbc && groupHbox != null) {
+            groupHbox.setVisible(false);
+        }
     }
 
     private void setConnectingVisible(boolean visible) {
