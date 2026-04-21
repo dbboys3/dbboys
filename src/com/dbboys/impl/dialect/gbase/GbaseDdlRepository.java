@@ -3217,7 +3217,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         for (Table tableInfo : tableInfoArrayList){
             int tabid = tableInfo.getTableId();
             if (tableCommentArray[tabid] != null){
-                tableInfo.setTableComm(tableCommentArray[tabid]);
+                tableInfo.setTableComm(tableCommentArray[tabid].replace("'", "''"));
             }
         }
 
@@ -3229,7 +3229,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             for (ColumnsCommInfo columnsCommInfo : columnsCommInfoList){
                 if (columnsInfo.getTabId() == columnsCommInfo.getTabId() 
                         && columnsInfo.getColNo() == columnsCommInfo.getColNo()){
-                    columnsInfo.setColComm(columnsCommInfo.getColComm());
+                    columnsInfo.setColComm(columnsCommInfo.getColComm().replace("'", "''"));
                     break;
                 }
             }
@@ -3258,7 +3258,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (tableInfo.getTableComm() != null){
                 commBuilder.append("COMMENT ON TABLE ").append(getName(tableInfo.getName(),tableInfo.getTableSqlMode()))
                 .append(" IS '")
-                .append(tableInfo.getTableComm().replace("'", "''")).append("';\n");
+                .append(tableInfo.getTableComm()).append("';\n");
             }
             if (displaysqlmode){
                 ddl.append("SET ENVIRONMENT SQLMODE '").append(tableInfo.getTableSqlMode()).append("';\n");
@@ -3294,12 +3294,12 @@ public final class GbaseDdlRepository implements DdlRepository {
                 // 注释处理（MySQL表定义内注释，Oracle和GBase表定义外注释）
                 if (columnsInfo.getColComm() != null){
                     if ("MySQL".equals(tableInfo.getTableSqlMode())){
-                        ddl.append(" COMMENT '").append(columnsInfo.getColComm().replace("'", "''")).append("'");
+                        ddl.append(" COMMENT '").append(columnsInfo.getColComm()).append("'");
                     } else {
                         commBuilder.append("COMMENT ON COLUMN ").append(getName(tableInfo.getName(),tableInfo.getTableSqlMode()))
                         .append(".").append(getName(columnsInfo.getColName(),tableInfo.getTableSqlMode()))
                         .append(" IS '")
-                        .append(columnsInfo.getColComm().replace("'", "''")).append("';\n");
+                        .append(columnsInfo.getColComm()).append("';\n");
                     }
                 }
                 if (j < currentTableColumnsInfoList.size() - 1){
@@ -3321,7 +3321,7 @@ public final class GbaseDdlRepository implements DdlRepository {
 
             // mysql 模式下表定义后追加表注释
             if ("MySQL".equals(tableInfo.getTableSqlMode()) && tableInfo.getTableComm() != null){
-                ddl.append("COMMENT '").append(tableInfo.getTableComm().replace("'", "''")).append("' ");
+                ddl.append("COMMENT '").append(tableInfo.getTableComm()).append("' ");
             }
             
             // E 外部表处理，不考虑maxrows，TODO：没处理外部数据类型对应
