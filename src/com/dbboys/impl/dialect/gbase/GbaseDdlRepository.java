@@ -3316,6 +3316,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             appendPrimaryConstraints(ddl, currentTablePrimaryKeyInfoList, tableInfo.getTableSqlMode(),patternConstraint);
 
             ddl.append("\n) ");
+            
             // E 外部表处理，不考虑maxrows，TODO：没处理外部数据类型对应
             if ("E".equals(tableInfo.getTableTypeCode())){
                 ArrayList<ExtTableInfo> extTableInfoByTabId = extTableInfoList.stream()
@@ -3335,13 +3336,21 @@ public final class GbaseDdlRepository implements DdlRepository {
                 } else {
                     ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
                 }
+
+                // mysql 模式下表定义后追加表注释
+                if ("MySQL".equals(tableInfo.getTableSqlMode()) && tableInfo.getTableComm() != null){
+                    ddl.append("COMMENT '").append(tableInfo.getTableComm().replace("'", "''")).append("' ");
+                }
                 // 区段大小及锁模式
                 ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
                 ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
             }
             
             // 追加输出单独的注释语句，oracle和gbase模式
-            ddl.append("\n").append(commBuilder.toString());
+            ddl.append("\n");
+            if ("Oracle".equals(tableInfo.getTableSqlMode()) || "GBase".equals(tableInfo.getTableSqlMode())){
+                ddl.append(commBuilder.toString()).append("\n");
+             }
             commBuilder.setLength(0);
             completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
         }
