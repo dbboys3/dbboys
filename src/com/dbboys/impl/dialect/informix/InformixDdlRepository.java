@@ -977,15 +977,16 @@ public final class InformixDdlRepository implements DdlRepository {
                     column.getColType(),
                     column.getColLength()
             ));
-            if (!column.isIsNullable()) {
-                ddl.append(" NOT NULL");
-            }
+            // 修改为先 default, 再not null
             if (column.getColDefType() != null) {
                 ddl.append(" DEFAULT ").append(getDefaults(
                         column.getColType(),
                         column.getColDefType(),
                         column.getColDef()
                 ));
+            }
+            if (!column.isIsNullable()) {
+                ddl.append(" NOT NULL");
             }
             // mysql模式下，comment在字段后面
             if ("MySQL".equals(sqlmode)){

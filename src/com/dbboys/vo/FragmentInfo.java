@@ -17,6 +17,7 @@ public class FragmentInfo {
     T = 基于表的分段存储策略
     H = 表是表层次结构内的子表
     */
+    private IntegerProperty tableId = new SimpleIntegerProperty();
     private StringProperty fragName = new SimpleStringProperty();
     private IntegerProperty colNo = new SimpleIntegerProperty();
     private StringProperty strategy = new SimpleStringProperty();
@@ -26,6 +27,16 @@ public class FragmentInfo {
     private StringProperty dbspace = new SimpleStringProperty();
     private StringProperty partition = new SimpleStringProperty();
 
+    public int getTableId() {
+        return tableId.get();
+    }
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+    public void setTableId(int tableId) {
+        this.tableId.set(tableId);
+    }
+    
     public String getFragName() {
         return fragName.get();
     }

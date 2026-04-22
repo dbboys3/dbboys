@@ -1,13 +1,26 @@
 package com.dbboys.vo;
 
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class ExtTableDfiles {
+    private IntegerProperty tableId = new SimpleIntegerProperty();
     private StringProperty tableName = new SimpleStringProperty();
     private StringProperty dataFile = new SimpleStringProperty();
     private StringProperty blobDir = new SimpleStringProperty();
     private StringProperty clobDir = new SimpleStringProperty();
+
+    public int getTableId() {
+        return tableId.get();
+    }
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+    public void setTableId(int tableId) {
+        this.tableId.set(tableId);
+    }
 
     public String getTableName() {
         return tableName.get();

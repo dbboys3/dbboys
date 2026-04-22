@@ -7,12 +7,14 @@ import javafx.beans.property.StringProperty;
 
 public class ColumnsCommInfo {
     private StringProperty tabName;     // 表名
+    private IntegerProperty tabId;      // 表ID
     private StringProperty colName;     // 字段名
     private IntegerProperty colNo;      // 字段序号
     private StringProperty colComm;     // 注释内容
 
     public ColumnsCommInfo() {
         this.tabName = new SimpleStringProperty();
+        this.tabId = new SimpleIntegerProperty();
         this.colName = new SimpleStringProperty();
         this.colNo = new SimpleIntegerProperty();
         this.colComm = new SimpleStringProperty();
@@ -28,6 +30,18 @@ public class ColumnsCommInfo {
 
     public void setTabName(String tabName) {
         this.tabName.set(tabName);
+    }
+
+    public int getTabId() {
+        return tabId.get();
+    }
+
+    public IntegerProperty tabIdProperty() {
+        return tabId;
+    }
+
+    public void setTabId(int tabId) {
+        this.tabId.set(tabId);
     }
 
     public String getColName() {

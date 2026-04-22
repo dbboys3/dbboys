@@ -6,6 +6,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class ExtTableInfo {
+    private IntegerProperty tableId = new SimpleIntegerProperty();
     private StringProperty tableName = new SimpleStringProperty();
     private StringProperty formatType = new SimpleStringProperty();         // FORMAT值，格式类型：D:定界符（delimited）（默认），F:固定长度（fixed），I:内部使用（informix/gbasedbt）
     private StringProperty codeSet = new SimpleStringProperty();            // ? 定界符类型 ?
@@ -17,6 +18,16 @@ public class ExtTableInfo {
     private StringProperty rejectFile = new SimpleStringProperty();         // REJECTFILE值，拒绝文件类型
     private IntegerProperty flags = new SimpleIntegerProperty();            // 0：Escape off; 2: Escape on; (默认) 4: DELUXE; 8: Express，可0/2 + 4/8
     private IntegerProperty numDfiles = new SimpleIntegerProperty();        // 指明外部存储定义
+
+    public int getTableId() {
+        return tableId.get();
+    }
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+    public void setTableId(int tableId) {
+        this.tableId.set(tableId);
+    }
 
     public String getTableName() {
         return tableName.get();

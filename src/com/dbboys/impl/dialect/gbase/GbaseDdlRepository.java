@@ -1,6 +1,9 @@
 package com.dbboys.impl.dialect.gbase;
 
 import com.dbboys.api.DdlRepository;
+import com.dbboys.api.DdlRepository.DatabaseDdlParts;
+
+import java.lang.reflect.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,6 +17,7 @@ import java.util.concurrent.CancellationException;
 import java.util.function.LongConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.dbboys.vo.ColumnsInfo;
 import com.dbboys.vo.CheckInfo;
@@ -31,9 +35,13 @@ import com.dbboys.vo.Table;
 import com.dbboys.vo.TableWithColumn;
 import com.dbboys.vo.Trigger;
 import com.dbboys.vo.View;
+
+import javafx.scene.control.Tab;
+
 import com.dbboys.db.SqlRunner;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.poi.ss.formula.functions.T;
 
 public final class GbaseDdlRepository implements DdlRepository {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 30;
@@ -202,6 +210,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @param flags
      * @return
      */
+    @Deprecated
     private static String getSqlModeFunc(int flags){
         if ((flags % 16384) == 16384){
             return "Oracle";
@@ -798,30 +807,54 @@ public final class GbaseDdlRepository implements DdlRepository {
     }
 
     /**
-     * 有精度和标度的数据类型需要处理
+     * 获取数据类型名称，默认数据库版本为30000
      * @param coltype
      * @param collength
      * @return
      */
     private static String getColTypeName(String coltype, int collength){
+        return getColTypeName(coltype, collength, 30000);
+    }
+
+    /**
+     * 有精度和标度的数据类型需要处理
+     * @param coltype
+     * @param collength
+     * @return
+     */
+    private static String getColTypeName(String coltype, int collength, int dbversion){
         String coltypename = coltype;
-        if (coltype.startsWith("VARCHAR") || coltype.startsWith("NVARCHAR")) {
-            // 有最小字段长度，需处理
-            if (collength/65536 > 0){
-                coltypename = coltypename + "(" + collength + "," + collength/65536 + ")";
-            } else {
+        switch (coltype) {
+            case "VARCHAR":
+            case "NVARCHAR":
+            case "VARCHAR2":
+            case "NVARCHAR2":
+                 // 有最小字段长度，需处理，是否需要考虑32K？
+                if (collength/65536 > 0){
+                    coltypename = coltypename + "(" + collength + "," + collength/65536 + ")";
+                } else {
+                    coltypename = coltypename + "(" + collength + ")";
+                }
+                break;
+            case "DECIMAL":
+            case "MONEY":
+                if (collength%256 == 255){
+                    coltypename = coltypename + "(" + collength/256 + ")";
+                } else {
+                    coltypename = coltypename + "(" + collength/256 + "," + collength%256 + ")";
+                }
+                break;
+            case "LVARCHAR":
+            case "CHAR":
+            case "NCHAR":
+            case "RAW":
                 coltypename = coltypename + "(" + collength + ")";
-            }
-        } else if ("DECIMAL".equals(coltype) || "MONEY".equals(coltype)){
-            if (collength%256 == 255){
+                break;
+            case "BIT":
                 coltypename = coltypename + "(" + collength/256 + ")";
-            } else {
-                coltypename = coltypename + "(" + collength/256 + "," + collength%256 + ")";
-            }
-        } else if ("LVARCHAR".equals(coltype) || "CHAR".equals(coltype) || "NCHAR".equals(coltype) || "RAW".equals(coltype)) {
-            coltypename = coltypename + "(" + collength + ")";
-        } else if ("BIT".equals(coltype)){
-            coltypename = coltypename + "(" + collength/256 + ")";
+                break;
+            default:
+                break;
         }
         return coltypename;
     }
@@ -979,7 +1012,11 @@ public final class GbaseDdlRepository implements DdlRepository {
                     strdef = coldef;
                     break;           
                 default:
-                    strdef = "\'" + coldef.replace("'", "''") + "\'";
+                    if (coldef != null) {
+                        strdef = "\'" + coldef.replace("'", "''") + "\'";
+                    } else {
+                        strdef = "NULL";
+                    }
                     break;
             }
         } else if ("N".equals(coldeftype)){
@@ -1170,6 +1207,11 @@ public final class GbaseDdlRepository implements DdlRepository {
         appendPrimaryConstraints(ddl, primaryKeys, sqlmode, patternConstraint);
         ddl.append("\n) ");
 
+        // 增加mysql模式下表的comment
+        if ("MySQL".equals(sqlmode) && tableInfo.getTableComm() != null){
+            ddl.append("COMMENT '").append(tableInfo.getTableComm()).append("' ");
+        }
+
         // E 外部表处理，不考虑maxrows，TODO：没处理外部数据类型对应
         if ("E".equals(tableInfo.getTableTypeCode())){
             appendExternalTableDefinition(connection, ddl, tableInfo);
@@ -1205,15 +1247,17 @@ public final class GbaseDdlRepository implements DdlRepository {
                     column.getColType(),
                     column.getColLength()
             ));
-            if (!column.isIsNullable()) {
-                ddl.append(" NOT NULL");
-            }
+            // 修改为先 default, 再not null
             if (column.getColDefType() != null) {
                 ddl.append(" DEFAULT ").append(getDefaults(
                         column.getColType(),
                         column.getColDefType(),
                         column.getColDef()
                 ));
+            }
+            // 非空约束
+            if (!column.isIsNullable()) {
+                ddl.append(" NOT NULL");
             }
             // mysql模式下，comment在字段后面
             if ("MySQL".equals(sqlmode)){
@@ -1424,10 +1468,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         } else {
             ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
         }
-        // 增加mysql模式下表的comment
-        if ("MySQL".equals(sqlmode) && tableInfo.getTableComm() != null){
-            ddl.append("COMMENT '").append(tableInfo.getTableComm()).append("' ");
-        }
+        
         ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
         if ("MySQL".equals(sqlmode)){
             // mysql模式下暂时不支持 lock mode row的写法
@@ -2449,7 +2490,6 @@ public final class GbaseDdlRepository implements DdlRepository {
             long indexCount = metadataRepository.getIndexCount(connection);
             long foreignKeyCount = countForeignKeyExportItems(runner);
             long triggerCount = metadataRepository.getTriggerCount(connection);
-            long commentCount = countCommentExportItems(connection, runner);
             long total = functionCount
                     + procedureCount
                     + tableCount
@@ -2458,10 +2498,9 @@ public final class GbaseDdlRepository implements DdlRepository {
                     + viewCount
                     + indexCount
                     + foreignKeyCount
-                    + triggerCount
-                    + commentCount;
+                    + triggerCount;
             log.info(
-                    "Database export object counts for {}: function={}, procedure={}, table={}, synonym={}, sequence={}, view={}, index={}, foreignKey={}, trigger={}, comment={}, total={}",
+                    "Database export object counts for {}: function={}, procedure={}, table={}, synonym={}, sequence={}, view={}, index={}, foreignKey={}, trigger={}, total={}",
                     databasename,
                     functionCount,
                     procedureCount,
@@ -2472,7 +2511,6 @@ public final class GbaseDdlRepository implements DdlRepository {
                     indexCount,
                     foreignKeyCount,
                     triggerCount,
-                    commentCount,
                     total
             );
             return total;
@@ -2598,8 +2636,529 @@ public final class GbaseDdlRepository implements DdlRepository {
     }
 
     /**
+     * 获取所有表注释信息，含segno和不含segno两种情况；comment原样，后续需要处理单引号问题。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private String[] getAllTableComment(Connection connection, int maxtabid, int commflags) throws SQLException {
+        String[] tableCommentArray = new String[maxtabid + 1];
+        ArrayList<Table> tableCommentList = new ArrayList<>();
+        String sqlstr = "";
+        if (commflags == 11){           // 含segno
+            sqlstr = """
+                SELECT t.tabname, t.tabid, c.segno, c.comments 
+                FROM syscomms c, systables t 
+                WHERE c.tabid = t.tabid 
+                ORDER BY t.tabid ASC, c.segno ASC;  
+                """;
+        } else if (commflags == 1){     // 不含segno
+            sqlstr = """
+                SELECT t.tabname, t.tabid, c.comments 
+                FROM syscomms c, systables t 
+                WHERE c.tabid = t.tabid 
+                ORDER BY t.tabid ASC;     
+                """;
+        }
+        // 获取所有数据库表的注释信息
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+                ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                Table tableComment = new Table(resultSet.getString("tabname"));
+                tableComment.setTableId(resultSet.getInt("tabid"));
+                tableComment.setTableComm(trim(resultSet.getString("comments")));
+                tableCommentList.add(tableComment);
+            }
+        }
+        // 将注释信息放入数组，数组下标为tabid，合并多行注释
+        int tabid = 0;
+        for (int i=0;i<tableCommentList.size();i++){
+            Table tableComment = tableCommentList.get(i);            
+            if (tableComment.getTableId() != tabid){
+                // 新表，直接放入结果数组            
+                tabid = tableComment.getTableId();
+                tableCommentArray[tabid] = tableComment.getTableComm();
+            } else {
+                // 同一表，进行注释合并
+                String oldComm = tableCommentArray[tabid];
+                tableCommentArray[tabid] = oldComm + tableComment.getTableComm();
+            }
+        }        
+        return tableCommentArray;
+    }
+
+    /**
+     * 获取所有表的列信息，去除物化视图 "mtab$_"。每行唯一。
+     * @param connection
+     * @param maxtabid
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<ColumnsInfo> getAllTableColumnsInfos(Connection connection, int dbversion) throws SQLException {
+        ArrayList<ColumnsInfo> columnsInfoUniqueList = new ArrayList<>();
+        ArrayList<ColumnsInfo> columnsInfoList = new ArrayList<>();
+        // 对于虚拟表，sysdefaultsexpr可能多行定义
+        String sqlstr = """
+                SELECT
+                   t.tabid tabid
+                  ,t.flags flags
+                  ,sc.colno colno
+                  ,sc.colname colname
+                  ,sc.coltype,sc.collength
+                  ,CASE WHEN bitand(sc.coltype,256) = 256 THEN 0 ELSE 1 END as isnullable
+                  ,CASE WHEN sc.colattr = 128 THEN 1 ELSE 0 END as ispk
+                  ,df.type as coldeftype
+                  ,CASE df.type
+                         WHEN 'L' THEN get_default_value(sc.coltype, sc.extended_id, sc.collength, df.default::lvarchar(256))::VARCHAR(254)
+                         WHEN 'C' THEN 'current year to second'::VARCHAR(254)
+                         WHEN 'S' THEN 'dbservername'::VARCHAR(254)
+                         WHEN 'U' THEN 'user'::VARCHAR(254)
+                         WHEN 'T' THEN 'today'::VARCHAR(254)
+                         WHEN 'E' THEN de.default::VARCHAR(254) || ' '
+                         ELSE          NULL::VARCHAR(254)
+                   END as coldef
+                  ,CASE WHEN mod(sc.coltype,256) in (6,18,53) THEN 1 ELSE 0 END as ISAUTOINCREMENT
+                  ,sx.name sxname
+                FROM systables t
+                LEFT JOIN syscolumns sc ON t.tabid = sc.tabid and bitand(sc.colattr,1) = 0
+                LEFT JOIN sysdefaults df ON (t.tabid = df.tabid AND sc.colno = df.colno)
+                LEFT JOIN sysdefaultsexpr de ON (t.tabid = de.tabid AND sc.colno = de.colno and de.type='T')
+                LEFT JOIN sysxtdtypes sx ON (sx.type in (sc.coltype,mod(sc.coltype,256)) AND sx.extended_id = sc.extended_id)
+                where t.tabid > (select tabid from systables where tabname = ' VERSION') 
+                and t.tabtype = 'T' 
+                and t.tabname not like 'mtab$\\_%' 
+                ORDER BY t.tabid ASC, sc.colno ASC;
+                """;
+        // 获取数据库查询结果集arraylist，需进行可能的多行合并
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                ColumnsInfo columnsInfo = new ColumnsInfo();
+                String sqlmode = getTableSqlModeByFlags(resultSet.getInt("flags"));
+                String coltypename = getColTypeName(resultSet.getInt("coltype"), 
+                                                        resultSet.getInt("collength"), 0, 0, 
+                                                        resultSet.getString("sxname"),
+                                                        sqlmode
+                                                    ); 
+                columnsInfo.setTabId(resultSet.getInt("tabid"));
+                columnsInfo.setColNo(resultSet.getInt("colno"));
+                columnsInfo.setColName(resultSet.getString("colname"));
+                columnsInfo.setColType(coltypename);
+                columnsInfo.setColLength(resultSet.getInt("collength"));  
+                columnsInfo.setColTypePS(resultSet.getInt("collength"), coltypename, dbversion); 
+                columnsInfo.setIsNullable((resultSet.getInt("isnullable") == 1));
+                columnsInfo.setIsPK((resultSet.getInt("ispk") == 1));
+                columnsInfo.setColDefType(resultSet.getString("coldeftype"));
+                // 可能存在多行默认值定义的情况，后续进行合并
+                columnsInfo.setColDef(trim(resultSet.getString("coldef")));
+                columnsInfo.setIsAutoincrement((resultSet.getInt("isautoincrement") == 1));
+                columnsInfoList.add(columnsInfo);
+            }
+        }
+        // 进行多行字段默认值的合并
+        for (ColumnsInfo columnsInfo : columnsInfoList){
+            int size = columnsInfoUniqueList.size();
+            if (size > 0 && (columnsInfoUniqueList.get(size - 1).getTabId() == columnsInfo.getTabId()) 
+                    && (columnsInfoUniqueList.get(size - 1).getColNo() == columnsInfo.getColNo())){
+                // 多行默认值定义，进行合并
+                ColumnsInfo lastColumnsInfo = columnsInfoUniqueList.get(size - 1);
+                lastColumnsInfo.setColDef(lastColumnsInfo.getColDef() + columnsInfo.getColDef());
+                columnsInfoUniqueList.set(size - 1, lastColumnsInfo);
+            } else {
+                columnsInfoUniqueList.add(columnsInfo);
+            }    
+        }
+        return columnsInfoUniqueList;
+    }
+
+    /**
+     * 根据flags获取表的sqlmode
+     * @param flags
+     * @return
+     */
+    private static String getTableSqlModeByFlags(int flags){
+        String sqlmode = "GBase";
+        if ((flags & 16384) == 16384){
+            sqlmode = "Oracle";
+        } else if ((flags & 65536) == 65536){
+            sqlmode = "MySQL";
+        }
+        return sqlmode;
+    }
+
+    /**
+     * 获取所有表的列注释信息。每行唯一。comment原样，后续需要处理单引号问题。
+     * @param connection
+     * @param maxtabid
+     * @param commflags
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<ColumnsCommInfo> getAllTableColumnsComments(Connection connection,int commflags) throws SQLException {
+        ArrayList<ColumnsCommInfo> columnsCommInfoUniqueList = new ArrayList<>(); 
+        ArrayList<ColumnsCommInfo> columnsCommInfoList = new ArrayList<>();         // 所有的字段注释信息。
+        String sqlstr = "";
+        if (commflags == 11){   // 含segno
+            sqlstr = """
+                select cc.tabid, c.colname,cc.colno,cc.comments,cc.segno 
+                from syscolcomms cc, systables t, syscolumns c 
+                where cc.tabid = t.tabid  
+                and t.tabid = c.tabid 
+                and cc.colno = c.colno  
+                order by cc.tabid asc, cc.colno asc, cc.segno asc;
+                """;
+        } else if (commflags == 1){ // 不含segno
+            sqlstr = """
+                select cc.tabid,c.colname,cc.colno,cc.comments 
+                from syscolcomms cc, systables t, syscolumns c 
+                where cc.tabid = t.tabid  
+                and t.tabid = c.tabid 
+                and cc.colno = c.colno  
+                order by cc.tabid asc, cc.colno asc;   
+                """;
+        }
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                ColumnsCommInfo columnsCommInfo = new ColumnsCommInfo();
+                columnsCommInfo.setTabId(resultSet.getInt("tabid"));
+                columnsCommInfo.setColName(resultSet.getString("colname"));
+                columnsCommInfo.setColNo(resultSet.getInt("colno"));
+                columnsCommInfo.setColComm(resultSet.getString("comments"));
+                columnsCommInfoList.add(columnsCommInfo);
+            }
+        }
+        // 合并到数组中，同时合并多行注释
+        for (ColumnsCommInfo columnsCommInfo : columnsCommInfoList){
+            int size = columnsCommInfoUniqueList.size();
+            if (size > 0 && (columnsCommInfoUniqueList.get(size - 1).getTabId() == columnsCommInfo.getTabId()) 
+                    && (columnsCommInfoUniqueList.get(size - 1).getColNo() == columnsCommInfo.getColNo())){
+                // 多行注释定义，进行合并
+                ColumnsCommInfo lastColumnsCommInfo = columnsCommInfoUniqueList.get(size - 1);
+                lastColumnsCommInfo.setColComm(lastColumnsCommInfo.getColComm() + columnsCommInfo.getColComm());
+                columnsCommInfoUniqueList.set(size - 1, lastColumnsCommInfo);
+            } else {
+                columnsCommInfoUniqueList.add(columnsCommInfo);
+            } 
+        }
+        return columnsCommInfoUniqueList;
+    }
+
+    /**
+     * 获取所有表的check约束信息。每行唯一。checktext原样。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<CheckInfo> getAllTableCheckInfos(Connection connection) throws SQLException {
+        ArrayList<CheckInfo> checkInfoUniqueList = new ArrayList<>();
+        ArrayList<CheckInfo> checkInfoList = new ArrayList<>();
+        String sqlstr = """
+                SELECT t.tabid, con.constrname, chk.seqno as checkseqno, chk.checktext as checktext
+                FROM sysconstraints con, syschecks chk, systables t
+                WHERE con.constrid = chk.constrid
+                AND con.tabid = t.tabid
+                AND con.constrtype = 'C'
+                AND chk.TYPE = 'T'
+                ORDER BY t.tabid asc,con.constrname asc, chk.seqno asc;
+                """;
+        // 有checkseqno的情况，需要进行合并
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                CheckInfo checkInfo = new CheckInfo();
+                checkInfo.setTableId(resultSet.getInt("tabid"));
+                checkInfo.setConstrName(resultSet.getString("constrname"));
+                checkInfo.setCheckText(resultSet.getString("checktext"));
+                checkInfoList.add(checkInfo);
+            }
+        }
+        // 进行多行check的合并
+        for (CheckInfo checkInfo : checkInfoList){
+            int size = checkInfoUniqueList.size();
+            if (size > 0 && (checkInfoUniqueList.get(size - 1).getTableId() == checkInfo.getTableId()) 
+                    && (checkInfoUniqueList.get(size - 1).getConstrName().equals(checkInfo.getConstrName()))){
+                // 多行check定义，进行合并
+                CheckInfo lastCheckInfo = checkInfoUniqueList.get(size - 1);
+                lastCheckInfo.setCheckText(lastCheckInfo.getCheckText() + checkInfo.getCheckText());
+                checkInfoUniqueList.set(size - 1, lastCheckInfo);
+            } else {
+                checkInfoUniqueList.add(checkInfo);
+            } 
+        }
+        return checkInfoUniqueList;
+    }
+
+    private String getIndexCols(Connection connection, String idxColsString, ArrayList<ColumnsInfo> columnsInfoList, String sqlmode) throws SQLException {
+        // idxColsString: <-234>(1, '2') [1], -3 [1]
+        // 索引字段（函数索引字段）以，为分隔符
+        // 示例中：<-234>(1, '2', '4') [1] 表示 函数号-234（内置函数），对应的字段是1，-(负值，如有)表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
+        StringBuilder idxCols = new StringBuilder();
+        String funcname = "";
+        String funcparam = "";
+        String sortby = ",";
+        String currcolname = "";
+        int currcolno = 0;
+        for (String cols : idxColsString.trim().split(",(?![^()]*+\\))")){      // 以逗号分割，但是不包含括号内的逗号的正则表达式
+            String tmpstr = cols.trim();
+            if (tmpstr.startsWith("<")){            // function index, 以"<"开头表示函数索引
+                // 通过函数序号获取函数名
+                int funcnum = Integer.valueOf(tmpstr.substring(1,tmpstr.indexOf(">")));
+                if (funcnum < 0) {      // 内部函数
+                    funcname = INNER_FUNC_NAME.get(funcnum);
+                } else {                // 自定义函数
+                    String sql = """
+                            select procname from sysprocedures where procid = ?
+                            """;
+                    SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
+                    String procName = runner.queryOne(sql, List.of(funcnum), resultSet -> resultSet.getString("procname"));
+                    if (procName != null) {
+                        funcname = procName;
+                    }
+                }
+                idxCols.append(getName(funcname,sqlmode)).append("(");
+                // 获取字段 及 排序方式 及多参函数参数
+                String tmpstr_func = tmpstr.substring(tmpstr.indexOf("(")+1,tmpstr.indexOf(")"));
+                if (tmpstr_func.indexOf(",") > 0){  // 多值参数，有其它参数
+                    currcolno = Integer.valueOf(tmpstr_func.substring(0,tmpstr_func.indexOf(",")));
+                    funcparam = tmpstr_func.substring(tmpstr_func.indexOf(",")+1).trim();
+                } else {                            // 单值
+                    currcolno = Integer.valueOf(tmpstr_func);
+                }
+                sortby = (currcolno<0)?" DESC,":",";
+                int colno = Math.abs(currcolno);
+                currcolname = columnsInfoList.stream()
+                        .filter(c -> c.getColNo() == colno)
+                        .map(ColumnsInfo::getColName)
+                        .findFirst()
+                        .orElse("");
+                idxCols.append(getName(currcolname,sqlmode));
+                if ("".equals(funcparam)){
+                    idxCols.append(")");
+                } else {
+                    idxCols.append(",").append(funcparam).append(")");
+                }
+                idxCols.append(sortby);
+            } else {                                // 普通字段 -3 [1]
+                currcolno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
+                sortby = (currcolno<0)?" DESC,":",";
+                int colno = Math.abs(currcolno);
+                currcolname = columnsInfoList.stream()
+                        .filter(c -> c.getColNo() == colno)
+                        .map(ColumnsInfo::getColName)
+                        .findFirst()
+                        .orElse("");
+                idxCols.append(getName(currcolname,sqlmode)).append(sortby);
+            }
+        }
+        if (idxCols.length() > 0){
+           idxCols.deleteCharAt(idxCols.length() - 1);
+        } 
+        return idxCols.toString();
+    }
+
+    /**
+     * 获取所有表的主键信息。每行唯一。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<PrimaryKeyInfo> getAllTablePrimaryKeyInfos(Connection connection, ArrayList<ColumnsInfo> columnsInfoList) throws SQLException {
+        ArrayList<PrimaryKeyInfo> primaryKeyInfoList = new ArrayList<>();
+        String sqlstr = """
+                SELECT t.tabid, t.flags, con.constrname,con.constrtype,idx.indexkeys::lvarchar as idxcols 
+                FROM sysconstraints con, sysindices idx, systables t 
+                WHERE con.idxname = idx.idxname 
+                AND con.tabid = t.tabid 
+                AND con.constrtype in ('P','U')
+                AND LEFT(con.constrname,1) != ' '
+                ORDER BY t.tabid ASC;
+                """;
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                PrimaryKeyInfo primaryKeyInfo = new PrimaryKeyInfo();
+                primaryKeyInfo.setTableId(resultSet.getInt("tabid"));
+                primaryKeyInfo.setConstrName(resultSet.getString("constrname"));
+                primaryKeyInfo.setConstrType(resultSet.getString("constrtype"));
+                // 这里需要将序号转换为列名。
+                String sqlmode = getTableSqlModeByFlags(resultSet.getInt("flags"));
+                primaryKeyInfo.setIdxCols(getIndexCols(connection, resultSet.getString("idxcols"), columnsInfoList, sqlmode));
+                primaryKeyInfoList.add(primaryKeyInfo);
+            }
+        }
+        return primaryKeyInfoList;
+    }
+
+    /**
+     * 获取所有表的分区信息。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<FragmentInfo> getAllTableFragmentInfos(Connection connection) throws SQLException {
+        ArrayList<FragmentInfo> fragmentInfoList = new ArrayList<>();
+        String sqlstr = """
+                SELECT tab.tabid, frag.colno, frag.strategy, frag.evalpos, frag.exprtext, frag.flags, frag.dbspace, frag.partition
+                FROM sysfragments frag, systables tab
+                WHERE frag.tabid = tab.tabid
+                AND frag.fragtype = 'T'
+                ORDER BY tab.tabid ASC,frag.evalpos ASC;
+                """;
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                FragmentInfo fragmentInfo = new FragmentInfo();
+                fragmentInfo.setTableId(resultSet.getInt("tabid"));
+                fragmentInfo.setColNo(resultSet.getInt("colno"));
+                fragmentInfo.setStrategy(resultSet.getString("strategy"));
+                fragmentInfo.setEvalpos(resultSet.getInt("evalpos"));
+                fragmentInfo.setExprtext(resultSet.getString("exprtext"));
+                fragmentInfo.setFlags(resultSet.getInt("flags"));
+                fragmentInfo.setDbspace(resultSet.getString("dbspace"));
+                fragmentInfo.setPartition(resultSet.getString("partition"));
+                fragmentInfoList.add(fragmentInfo);
+            }
+        }
+        return fragmentInfoList;
+    }
+
+    /**
+     * 获取所有表的外部表定义信息。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<ExtTableInfo> getAllExtTableInfos(Connection connection) throws SQLException {
+        ArrayList<ExtTableInfo> extTableInfoList = new ArrayList<>();
+        String sqlstr = """
+                SELECT t.tabid AS tabid, t.tabname as tablename, e.fmttype as formattype, e.codeset as codeset, e.recdelim as recorddelimiter,
+                e.flddelim as fielddelimiter, e.datefmt as dateformat, e.moneyfmt as moneyformat, e.maxerrors as maxerrors,
+                e.rejectfile as rejectfile, e.flags as flags, e.ndfiles as numdfiles
+                FROM systables t, sysexternal e
+                WHERE t.tabid = e.tabid
+                ORDER BY t.tabid ASC;
+                """;
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                ExtTableInfo extTableInfo = new ExtTableInfo();
+                extTableInfo.setTableId(resultSet.getInt("tabid"));
+                extTableInfo.setTableName(resultSet.getString("tablename"));
+                extTableInfo.setFormatType(resultSet.getString("formattype"));
+                extTableInfo.setCodeSet(resultSet.getString("codeset"));
+                extTableInfo.setRecordDelimiter(resultSet.getString("recorddelimiter"));
+                extTableInfo.setFieldDelimiter(resultSet.getString("fielddelimiter"));
+                extTableInfo.setDateFormat(resultSet.getString("dateformat"));
+                extTableInfo.setMoneyFormat(resultSet.getString("moneyformat"));
+                extTableInfo.setMaxErrors(resultSet.getInt("maxerrors"));
+                extTableInfo.setRejectFile(resultSet.getString("rejectfile"));
+                extTableInfo.setFlags(resultSet.getInt("flags"));
+                extTableInfo.setNumDfiles(resultSet.getInt("numdfiles"));
+                extTableInfoList.add(extTableInfo);
+            }
+        }
+        return extTableInfoList;
+    }
+
+    /**
+     * 获取所有表的外部表文件定义信息。
+     * @param connection
+     * @return
+     * @throws SQLException
+     */
+    private ArrayList<ExtTableDfiles> getAllExtTableDfiles(Connection connection) throws SQLException {
+        ArrayList<ExtTableDfiles> extTableDfilesList = new ArrayList<>();
+        String sqlstr = """
+                SELECT t.tabid AS tabid,t.tabname as tablename,e.dfentry as datafile, e.blobdir as blobdir, e.clobdir as clobdir
+                FROM systables t, sysextdfiles e
+                WHERE t.tabid = e.tabid
+                ORDER BY t.tabid ASC;
+                """;
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                ExtTableDfiles extTableDfiles = new ExtTableDfiles();
+                extTableDfiles.setTableId(resultSet.getInt("tabid"));
+                extTableDfiles.setTableName(resultSet.getString("tablename"));
+                extTableDfiles.setDataFile(resultSet.getString("datafile"));
+                extTableDfiles.setBlobDir(resultSet.getString("blobdir"));
+                extTableDfiles.setClobDir(resultSet.getString("clobdir"));
+                extTableDfilesList.add(extTableDfiles);
+            }
+        }
+        return extTableDfilesList;
+    }
+
+    /**
+     * 构建外部表定义字符串
+     * @param extTableInfoList
+     * @param extTableDfilesList
+     * @return
+     */
+    private String buildExtTableDefineString(ArrayList<ExtTableInfo> extTableInfoList, ArrayList<ExtTableDfiles> extTableDfilesList) {
+        StringBuilder ddl = new StringBuilder();
+        if (extTableInfoList.size() > 0){
+            ddl.append(";");
+            return ddl.toString();
+        }
+        ExtTableInfo extTableInfo = extTableInfoList.get(0);
+        ddl.append("\nUSING ( \n  DATAFILES(\n");
+        for (int i = 0; i < extTableInfo.getNumDfiles(); i++) {
+            ddl.append("    '").append(trim(extTableDfilesList.get(i).getDataFile()));
+            if (extTableDfilesList.get(i).getBlobDir() != null && !"".equals(trim(extTableDfilesList.get(i).getBlobDir()))) {
+                ddl.append(";BLOBDIR:").append(trim(extTableDfilesList.get(i).getBlobDir()));
+            }
+            if (extTableDfilesList.get(i).getClobDir() != null && !"".equals(trim(extTableDfilesList.get(i).getClobDir()))) {
+                ddl.append(";CLOBDIR:").append(trim(extTableDfilesList.get(i).getClobDir()));
+            }
+            if (i == (extTableInfo.getNumDfiles() - 1)) {
+                ddl.append("'\n  ),\n");
+            } else {
+                ddl.append("',\n");
+            }
+        }
+
+        if ("D".equals(extTableInfo.getFormatType())) {
+            ddl.append("  FORMAT 'DELIMITED',\n");
+        } else if ("F".equals(extTableInfo.getFormatType())) {
+            ddl.append("  FORMAT 'FIXED',\n");
+        } else if ("I".equals(extTableInfo.getFormatType())) {
+            ddl.append("  FORMAT 'GBASEDBT',\n");
+        }
+        if (extTableInfo.getFieldDelimiter() != null) {
+            ddl.append("  DELIMITER '").append(extTableInfo.getFieldDelimiter()).append("',\n");
+        }
+        if (extTableInfo.getRecordDelimiter() != null) {
+            ddl.append("  RECORDEND '").append(extTableInfo.getRecordDelimiter()).append("',\n");
+        }
+        if (extTableInfo.getDateFormat() != null) {
+            ddl.append("  DBDATE '").append(trim(extTableInfo.getDateFormat())).append("',\n");
+        }
+        if (extTableInfo.getMoneyFormat() != null) {
+            ddl.append("  DBMONEY '").append(trim(extTableInfo.getMoneyFormat())).append("',\n");
+        }
+        if (extTableInfo.getMaxErrors() != -1) {
+            ddl.append("  MAXERRORS ").append(extTableInfo.getMaxErrors()).append(",\n");
+        }
+        if (extTableInfo.getRejectFile() != null) {
+            ddl.append("  REJECTFILE '").append(trim(extTableInfo.getRejectFile())).append("',\n");
+        }
+        if ((extTableInfo.getFlags() & 4) == 4) {
+            ddl.append("  DELUXE,\n");
+        } else if ((extTableInfo.getFlags() & 8) == 8) {
+            ddl.append("  EXPRESS,\n");
+        }
+        if ((extTableInfo.getFlags() & 2) == 2) {
+            ddl.append("  ESCAPE ON\n);");
+        } else {
+            ddl.append("  ESCAPE OFF\n);");
+        }
+        return ddl.toString();
+    }
+    
+    /**
      * 输出printDatabase的表定义（含主键及约束，不含索引） 
-     * TODO: 表每次都查询一次syscolumns? 该成本太高！！
      * @param connection
      * @param displaysqlmode
      * @param completed
@@ -2608,12 +3167,25 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @throws SQLException
      */
     private String printDBAll_20_Table(Connection connection, boolean displaysqlmode,long[] completed,LongConsumer progressCallback) throws SQLException {
+        String patternConstraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
         StringBuilder ddl = new StringBuilder();
         ddl.append("-- ### START: output tables.\n");
-        ArrayList<Table> tableInfoArrayList = new ArrayList<>();
         int dbversion = getDataBaseProductVersionNumber(connection);
-        // 所有表信息，去除物化视图 "mtab$_"
+        int commflags = getCommentFlags(connection);
+        ArrayList<Table> tableInfoArrayList = new ArrayList<>();
+        int maxtabid = 0;
         String sqlstr = """
+                select max(tabid) as maxtabid from systables;
+                """;
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while(resultSet.next()){
+                maxtabid = resultSet.getInt("maxtabid");
+            }
+        }
+
+        // 所有表信息，去除物化视图 "mtab$_"，每行唯一。
+        sqlstr = """
                 select t.tabname,dbinfo('dbname') as tablecatalog, t.owner as tableowner,t.locklevel as locktype,
                 t.fextsize as firstextsize, t.nextsize as nextextsize, t.tabtype as tabletype,t.flags as tableflags, t.tabid 
                 from systables t 
@@ -2635,22 +3207,157 @@ public final class GbaseDdlRepository implements DdlRepository {
                 tableInfo.setFlags(resultSet.getInt("tableflags"));
                 tableInfo.setTableSqlMode(resultSet.getInt("tableflags"));
                 tableInfo.setDbVersion(dbversion);
+                tableInfo.setTableId(resultSet.getInt("tabid"));
                 tableInfoArrayList.add(tableInfo);
             }
         }
-        // TODO: 每个表调用一次查询，效率上似乎并不会高。
-        for(int i=0;i<tableInfoArrayList.size();i++){
-            // 输出信息中含 表主体（含约束、主键），外部表定义信息（如有），区段信息。
-            ddl.append("-- table : ").append(tableInfoArrayList.get(i).getTableOwner()).append(".").append(tableInfoArrayList.get(i).getName()).append("\n");
-            ddl.append(buildTableSql(connection,tableInfoArrayList.get(i),displaysqlmode));
-            if ("E".equals(tableInfoArrayList.get(i).getTableTypeCode())) {
-                ddl.append(buildExtTableSql(connection, tableInfoArrayList.get(i)));
-            } else {
-                ddl.append(buildTableSqlExtent(connection, tableInfoArrayList.get(i)));
+
+        // 合并表注释到表信息中
+        String[] tableCommentArray = getAllTableComment(connection,maxtabid,commflags);
+        for (Table tableInfo : tableInfoArrayList){
+            int tabid = tableInfo.getTableId();
+            if (tableCommentArray[tabid] != null){
+                tableInfo.setTableComm(tableCommentArray[tabid].replace("'", "''"));
             }
+        }
+
+        // 获取每个表的列信息。
+        ArrayList<ColumnsInfo> columnsInfoList = getAllTableColumnsInfos(connection, dbversion);
+        ArrayList<ColumnsCommInfo> columnsCommInfoList = getAllTableColumnsComments(connection, commflags);
+        // 合并列注释到列信息中
+        for (ColumnsInfo columnsInfo : columnsInfoList){
+            for (ColumnsCommInfo columnsCommInfo : columnsCommInfoList){
+                if (columnsInfo.getTabId() == columnsCommInfo.getTabId() 
+                        && columnsInfo.getColNo() == columnsCommInfo.getColNo()){
+                    columnsInfo.setColComm(columnsCommInfo.getColComm().replace("'", "''"));
+                    break;
+                }
+            }
+        }
+
+        // 表内check
+        ArrayList<CheckInfo> checkInfoList = getAllTableCheckInfos(connection);
+
+        // 表内主键
+        ArrayList<PrimaryKeyInfo> primaryKeyInfoList = getAllTablePrimaryKeyInfos(connection, columnsInfoList);
+
+        // 表分区信息
+        ArrayList<FragmentInfo> fragmentInfoList = getAllTableFragmentInfos(connection);
+
+        // 外部表定义信息
+        ArrayList<ExtTableInfo> extTableInfoList = getAllExtTableInfos(connection);
+        ArrayList<ExtTableDfiles> extTableDfilesList = getAllExtTableDfiles(connection);
+
+
+        // 开始生成表的DDL信息，表主体（含约束、主键），外部表定义信息（如有），区段信息。
+        StringBuilder commBuilder = new StringBuilder();
+        for (int i=0; i<tableInfoArrayList.size();i++){
+            Table tableInfo = tableInfoArrayList.get(i);
+            ddl.append("-- table : ").append(tableInfo.getTableOwner()).append(".").append(tableInfo.getName()).append("\n");
+            // 单独的表注释语句（for oracle and gbase mode）
+            if (tableInfo.getTableComm() != null){
+                commBuilder.append("COMMENT ON TABLE ").append(getName(tableInfo.getName(),tableInfo.getTableSqlMode()))
+                .append(" IS '")
+                .append(tableInfo.getTableComm()).append("';\n");
+            }
+            if (displaysqlmode){
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(tableInfo.getTableSqlMode()).append("';\n");
+            }
+            ddl.append("CREATE ");
+            // global temporary
+            if (! "".equals(tableInfo.getTableGlobalTemporary())){
+                ddl.append(tableInfo.getTableGlobalTemporary()).append(" ");
+            }
+            // external & raw
+            ddl.append(tableInfo.getTableFlag()).append("TABLE ");
+            ddl.append(getName(tableInfo.getName(),tableInfo.getTableSqlMode())).append(" (\n");
+
+            // 输出列定义。需从columnsInfoList中筛选出当前表的列信息，进行输出。
+            ArrayList<ColumnsInfo> currentTableColumnsInfoList = columnsInfoList.stream()
+                .filter(columnsInfo -> columnsInfo.getTabId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+
+            for (int j=0; j<currentTableColumnsInfoList.size();j++){
+                ColumnsInfo columnsInfo = currentTableColumnsInfoList.get(j);
+                // 字段名
+                ddl.append("  ").append(getName(columnsInfo.getColName(),tableInfo.getTableSqlMode()));
+                // 字段类型
+                ddl.append(" ").append(getColTypeName(columnsInfo.getColType(),columnsInfo.getColLength()));
+                // 默认值 
+                if (columnsInfo.getColDefType() != null){
+                    ddl.append(" DEFAULT ").append(getDefaults(columnsInfo.getColType(),
+                        columnsInfo.getColDefType(),columnsInfo.getColDef()));
+                }
+                // 非空
+                if (! columnsInfo.isIsNullable()){
+                    ddl.append(" NOT NULL");
+                }
+                // 注释处理（MySQL表定义内注释，Oracle和GBase表定义外注释）
+                if (columnsInfo.getColComm() != null){
+                    if ("MySQL".equals(tableInfo.getTableSqlMode())){
+                        ddl.append(" COMMENT '").append(columnsInfo.getColComm()).append("'");
+                    } else {
+                        commBuilder.append("COMMENT ON COLUMN ").append(getName(tableInfo.getName(),tableInfo.getTableSqlMode()))
+                        .append(".").append(getName(columnsInfo.getColName(),tableInfo.getTableSqlMode()))
+                        .append(" IS '")
+                        .append(columnsInfo.getColComm()).append("';\n");
+                    }
+                }
+                if (j < currentTableColumnsInfoList.size() - 1){
+                    ddl.append(",\n");
+                }
+            }
+
+            // 输出check约束定义。需从checkInfoList中筛选出当前表的check信息，进行输出。
+            ArrayList<CheckInfo> currentTableCheckInfoList = checkInfoList.stream()
+                .filter(checkInfo -> checkInfo.getTableId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+            appendCheckConstraints(ddl, currentTableCheckInfoList, tableInfo.getTableSqlMode(),patternConstraint);
+            
+            // 输出主键约束定义。需从primaryKeyInfoList中筛选出当前表的主键信息，进行输出。
+            ArrayList<PrimaryKeyInfo> currentTablePrimaryKeyInfoList = primaryKeyInfoList.stream()
+                .filter(primaryKeyInfo -> primaryKeyInfo.getTableId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+            appendPrimaryConstraints(ddl, currentTablePrimaryKeyInfoList, tableInfo.getTableSqlMode(),patternConstraint);
+
+            ddl.append("\n) ");
+
+            // mysql 模式下表定义后追加表注释
+            if ("MySQL".equals(tableInfo.getTableSqlMode()) && tableInfo.getTableComm() != null){
+                ddl.append("COMMENT '").append(tableInfo.getTableComm()).append("' ");
+            }
+            
+            // E 外部表处理，不考虑maxrows，TODO：没处理外部数据类型对应
+            if ("E".equals(tableInfo.getTableTypeCode())){
+                ArrayList<ExtTableInfo> extTableInfoByTabId = extTableInfoList.stream()
+                    .filter(extTable -> extTable.getTableId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+                ArrayList<ExtTableDfiles> extTableDfilesByTabId = extTableDfilesList.stream()
+                    .filter(extTableDfiles -> extTableDfiles.getTableId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+                buildExtTableDefineString(extTableInfoByTabId, extTableDfilesByTabId);
+            } else {        // T 普通表
+                ArrayList<FragmentInfo> fragmentInfo = fragmentInfoList.stream()
+                    .filter(fragment -> fragment.getTableId() == tableInfo.getTableId()).collect(Collectors.toCollection(ArrayList::new));
+                if (fragmentInfo.size() > 0){
+                    ddl.append(buildFragmentString(fragmentInfo));
+                }
+                // 全局临时表级别
+                if ("".equals(tableInfo.getTableGlobalTemporary())){
+                    ddl.append("\n");
+                } else {
+                    ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
+                }
+
+                // 区段大小及锁模式
+                ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
+                ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
+            }
+            
+            // 追加输出单独的注释语句，oracle和gbase模式
             ddl.append("\n");
+            if ("Oracle".equals(tableInfo.getTableSqlMode()) || "GBase".equals(tableInfo.getTableSqlMode())){
+                ddl.append(commBuilder.toString()).append("\n");
+             }
+            commBuilder.setLength(0);
             completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
         }
+
         ddl.append("-- ### FINISH: output tables.\n\n");
         return ddl.toString();
     }
@@ -3150,132 +3857,6 @@ public final class GbaseDdlRepository implements DdlRepository {
         return ddl.toString();
     }
 
-    /**
-     * 输出printDatabase的注释
-     * 得考虑注释功能对应的数据库版本，commflags。
-     * @param connection
-     * @param displaysqlmode
-     * @param completed
-     * @param progressCallback
-     * @return
-     * @throws SQLException
-     */
-    private String printDBAll_90_Comment(Connection connection,boolean displaysqlmode,long[] completed,LongConsumer progressCallback) throws SQLException {
-        StringBuilder ddl = new StringBuilder();
-        ddl.append("-- ### START: output comment.\n");      
-        int commflags = getCommentFlags(connection);
-        String sqlstr = "";
-        log.info("commflags:" + commflags);
-        if (commflags == 11){   // 含segno
-            // 表
-            sqlstr = """
-                SELECT t.tabname, c.segno, c.comments 
-                FROM syscomms c, systables t 
-                WHERE c.tabid = t.tabid 
-                ORDER BY t.tabid ASC, c.segno ASC;  
-                """;
-            String tabname = null;
-            String tabcomm = null;
-            try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
-                 ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()){
-                    tabname = resultSet.getString("tabname");
-                    tabcomm = resultSet.getString("comments");
-                }
-                while (resultSet.next()){
-                    if (resultSet.getInt("segno") == 0){
-                        if (displaysqlmode){
-                            ddl.append("SET ENVIRONMENT SQLMODE 'Oracle';\n");
-                        }
-                        ddl.append("COMMENT ON TABLE ").append(tabname).append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
-                        completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-                        tabname = resultSet.getString("tabname");
-                        tabcomm = resultSet.getString("comments");
-                    } else {
-                        tabcomm = tabcomm + resultSet.getString("comments");
-                    }
-                }
-            }
-            if (tabname != null){
-                ddl.append("COMMENT ON TABLE ").append(tabname).append(" IS '").append(trim(tabcomm).replace("'","''")).append("';\n");
-                completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-            }
-            // 字段
-            sqlstr = """
-                SELECT t.tabname,c.colname,cc.segno,cc.comments 
-                FROM syscolcomms cc, systables t, syscolumns c 
-                WHERE cc.tabid = t.tabid 
-                AND cc.tabid = c.tabid 
-                AND cc.colno = c.colno 
-                ORDER BY t.tabid ASC, c.colno ASC, cc.segno ASC;     
-                """;
-            tabname = null;
-            String colname = null;
-            String colcomm = null;
-            try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
-                 ResultSet resultSet = preparedStatement.executeQuery()) {
-                if (resultSet.next()){
-                    tabname = resultSet.getString("tabname");
-                    colname = resultSet.getString("colname");
-                    colcomm = resultSet.getString("comments");
-                }
-                while (resultSet.next()){
-                    // TODO：这里存在bug，某些版本中修改表结构，segno均会修改为0，导致错误。
-                    if (resultSet.getInt("segno") == 0){
-                        ddl.append("COMMENT ON COLUMN ").append(tabname).append(".").append(colname);
-                        ddl.append(" IS '").append(trim(colcomm).replace("'","''")).append("';\n");
-                        completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-                        tabname = resultSet.getString("tabname");
-                        colname = resultSet.getString("colname");
-                        colcomm = resultSet.getString("comments");
-                    } else {
-                        colcomm = colcomm + resultSet.getString("comments");
-                    }
-                }
-            }
-            if (tabname != null){
-                ddl.append("COMMENT ON COLUMN ").append(tabname).append(".").append(colname);
-                ddl.append(" IS '").append(trim(colcomm).replace("'","''")).append("';\n");
-                completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-            }
-        } else if (commflags == 1){ // 不含segno
-            // 表
-            sqlstr = """
-                SELECT t.tabname, c.comments 
-                FROM syscomms c, systables t 
-                WHERE c.tabid = t.tabid 
-                ORDER BY t.tabid ASC;     
-                """;
-            try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
-                 ResultSet resultSet = preparedStatement.executeQuery()) {
-                while(resultSet.next()){
-                    ddl.append("COMMENT ON TABLE ").append(resultSet.getString("tabname")).append(" IS '");
-                    ddl.append(trim(resultSet.getString("comments")).replace("'","''")).append("';\n");
-                    completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-                }
-            }
-            // 字段
-            sqlstr = """
-                SELECT t.tabname,c.colname,cc.comments 
-                FROM syscolcomms cc, systables t, syscolumns c 
-                WHERE cc.tabid = t.tabid 
-                AND cc.tabid = c.tabid 
-                AND cc.colno = c.colno 
-                ORDER BY t.tabid ASC, c.colno ASC; 
-                """;
-            try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
-                 ResultSet resultSet = preparedStatement.executeQuery()) {
-                while(resultSet.next()){
-                    ddl.append("COMMENT ON COLUMN ").append(resultSet.getString("tabname")).append(".").append(resultSet.getString("colname"));
-                    ddl.append(" IS '").append(trim(resultSet.getString("comments")).replace("'","''")).append("';\n");
-                    completed[0] = advanceDatabaseExportProgress(progressCallback, completed);
-                }
-            }
-        }
-        ddl.append("-- ### FINISH: output comment.\n\n");
-        return ddl.toString();
-    }
-
     @Override
     public DatabaseDdlParts exportDatabaseDdlParts(Connection connection,
                                                    String databasename,
@@ -3318,9 +3899,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             // 70，外键，需要字段列表
             postDataDdl.append(printDBAll_70_ForeigenKey(connection,tableColumnArrayList,displaysqlmode,completed,progressCallback));
             // 80，触发器
-            postDataDdl.append(printDBAll_80_Trigger(connection,displaysqlmode,completed,progressCallback));
-            // 90，注释，TODO: 由于MySQL模式的原因，该项考虑提前。
-            postDataDdl.append(printDBAll_90_Comment(connection,displaysqlmode,completed,progressCallback));        
+            postDataDdl.append(printDBAll_80_Trigger(connection,displaysqlmode,completed,progressCallback));     
 
             return new DatabaseDdlParts(preDataDdl.toString(), postDataDdl.toString());
         } catch (SQLException e) {
@@ -3378,32 +3957,6 @@ public final class GbaseDdlRepository implements DdlRepository {
                 """);
     }
 
-    private static long countCommentExportItems(Connection connection, SqlRunner runner) throws SQLException {
-        int commflags = getCommentFlags(connection);
-        if (commflags == 11) {
-            return queryCount(runner, """
-                    select count(*)
-                    from (
-                        select c.tabid
-                        from syscomms c
-                        group by c.tabid
-                    ) t;
-                    """) + queryCount(runner, """
-                    select count(*)
-                    from (
-                        select cc.tabid, cc.colno
-                        from syscolcomms cc
-                        group by cc.tabid, cc.colno
-                    ) t;
-                    """);
-        }
-        if (commflags == 1) {
-            return queryCount(runner, "select count(*) from syscomms;")
-                    + queryCount(runner, "select count(*) from syscolcomms;");
-        }
-        return 0;
-    }
-
     private static long advanceDatabaseExportProgress(LongConsumer progressCallback, long[] completed) {
         throwIfCancelled();
         long next = completed[0] + 1;
@@ -3427,6 +3980,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
+    @Deprecated
     private static String buildTableSqlExtent(Connection connection,Table tableInfo) throws SQLException {
         StringBuilder ddl = new StringBuilder();
         ArrayList<FragmentInfo> tableFragmentInfoArrayList = getTableFragmentInfo(connection,tableInfo.getName());
@@ -3455,6 +4009,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
+    @Deprecated
     private static String buildExtTableSql(Connection connection, Table tableInfo) throws SQLException {
         ExtTableInfo extTableInfo = getExtTableInfo(connection,tableInfo.getName());
         ArrayList<ExtTableDfiles> extTableDfilesArrayList = getExtTableDfiles(connection,tableInfo.getName());
@@ -3534,6 +4089,7 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      * @throws SQLException
      */
+    @Deprecated
     private static String buildTableSql(Connection connection, Table tableInfo, boolean displaysqlmode) throws SQLException {
         String parttern_constraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
         String sqlmode = tableInfo.getTableSqlMode();
@@ -3561,16 +4117,16 @@ public final class GbaseDdlRepository implements DdlRepository {
             ddl.append("  ").append(getName(columnsInfoArrayList.get(i).getColName(),sqlmode));
             // 字段类型
             ddl.append(" ").append(getColTypeName(columnsInfoArrayList.get(i).getColType(),
-                columnsInfoArrayList.get(i).getColLength()));
-            // 是否为 NOT NULL
-            if (! columnsInfoArrayList.get(i).isIsNullable()){
-                ddl.append(" NOT NULL");
-            }
+                columnsInfoArrayList.get(i).getColLength()));            
             // 默认值，依据ColDefType处理
             if (columnsInfoArrayList.get(i).getColDefType() != null){
                 ddl.append(" DEFAULT ").append(getDefaults(columnsInfoArrayList.get(i).getColType(),
                     columnsInfoArrayList.get(i).getColDefType(),
                     columnsInfoArrayList.get(i).getColDef()));
+            }
+            // 是否为 NOT NULL
+            if (! columnsInfoArrayList.get(i).isIsNullable()){
+                ddl.append(" NOT NULL");
             }
             // 非最后一个字段，后面加上 ,\n
             if (i<columnsInfoArrayList.size()-1){

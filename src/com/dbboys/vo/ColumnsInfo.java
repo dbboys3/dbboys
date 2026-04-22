@@ -8,6 +8,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class ColumnsInfo {
+    private IntegerProperty tabId;
     private IntegerProperty colNo;
     private StringProperty colName;
     private StringProperty colType;
@@ -22,6 +23,7 @@ public class ColumnsInfo {
     private BooleanProperty isAutoincrement;
 
     public ColumnsInfo() {
+        this.tabId = new SimpleIntegerProperty();
         this.colNo = new SimpleIntegerProperty();
         this.colName = new SimpleStringProperty();
         this.colType = new SimpleStringProperty();
@@ -34,6 +36,18 @@ public class ColumnsInfo {
         this.colDef = new SimpleStringProperty();
         this.colComm = new SimpleStringProperty();
         this.isAutoincrement = new SimpleBooleanProperty();
+    }
+
+    public int getTabId() {
+        return tabId.get();
+    }
+    
+    public IntegerProperty tabIdProperty() {
+        return tabId;
+    }
+
+    public void setTabId(int tabId) {
+        this.tabId.set(tabId);
     }
 
     public int getColNo() {

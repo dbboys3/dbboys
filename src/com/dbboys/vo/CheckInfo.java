@@ -1,11 +1,26 @@
 package com.dbboys.vo;
 
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class CheckInfo {
+    private IntegerProperty tableId = new SimpleIntegerProperty();      // 表ID
     private StringProperty constrName = new SimpleStringProperty();     // check约束名
     private StringProperty checkText = new SimpleStringProperty();      // check约束内容
+
+    public int getTableId() {
+        return tableId.get();
+    }
+
+    public IntegerProperty tableIdProperty() {
+        return tableId;
+    }
+
+    public void setTableId(int tableId) {
+        this.tableId.set(tableId);
+    }
 
     public String getConstrName() {
         return constrName.get();
