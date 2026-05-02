@@ -438,7 +438,13 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             graphicHbox.getChildren().addAll(nodeIconStackpane, nameLabel);
         }
         setGraphic(graphicHbox);
-        bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nIP ADDR: ", connect.ipProperty(), "\nPORT   : ", connect.portProperty(), "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+        if (connect.getDbtype() != null && "GENERAL JDBC".equalsIgnoreCase(connect.getDbtype().trim())) {
+            bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nURL    : ", connect.ipProperty(),
+                    "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+        } else {
+            bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nIP ADDR: ", connect.ipProperty(),
+                    "\nPORT   : ", connect.portProperty(), "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+        }
     }
 
     private void renderDatabase(Catalog database, TreeData item, TreeItem<TreeData> treeItem) {
