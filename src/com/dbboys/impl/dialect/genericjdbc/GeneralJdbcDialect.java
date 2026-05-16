@@ -85,7 +85,7 @@ public final class GeneralJdbcDialect implements DatabasePlatform, ConnectionSup
 
     @Override
     public String testConnectionSql() {
-        return "SELECT 1";
+        return "SELECT 1 from dual";
     }
 
     @Override
