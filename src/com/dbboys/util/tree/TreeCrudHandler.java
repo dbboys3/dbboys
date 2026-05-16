@@ -325,7 +325,11 @@ public class TreeCrudHandler {
             sql = "ALTER USER \"" + oldName + "\" RENAME TO \"" + newName + "\"";
         } else {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
-            if (renamePlatform != null) {
+            if (isMysqlPlatform(renamePlatform) && selectedItem.getValue() instanceof Index index) {
+                sql = "ALTER TABLE " + mysqlIdentifier(index.getTabname())
+                        + " RENAME INDEX " + mysqlIdentifier(oldName)
+                        + " TO " + mysqlIdentifier(newName);
+            } else if (renamePlatform != null) {
                 sql = renamePlatform.renameObjectSql(objectType, oldName, newName);
             } else {
                 sql = "rename " + objectType + " " + oldName + " to " + newName;
@@ -366,9 +370,14 @@ public class TreeCrudHandler {
         }
 
         DatabasePlatform dropPlatform = TreeNavigator.resolvePlatform(selectedItem);
-        String sql = dropPlatform != null
-                ? dropPlatform.dropObjectSql(objectType, selectedItem.getValue().getName())
-                : "drop " + objectType + " " + selectedItem.getValue().getName();
+        String sql;
+        if (isMysqlPlatform(dropPlatform) && selectedItem.getValue() instanceof Index index) {
+            sql = "DROP INDEX " + mysqlIdentifier(index.getName()) + " ON " + mysqlIdentifier(index.getTabname());
+        } else {
+            sql = dropPlatform != null
+                    ? dropPlatform.dropObjectSql(objectType, selectedItem.getValue().getName())
+                    : "drop " + objectType + " " + selectedItem.getValue().getName();
+        }
         Connect connect = buildObjectConnect(selectedItem, useSysmaster);
         service.deleteObject(connect, sql, () -> {
             TreeItem<TreeData> parent = selectedItem.getParent();
@@ -541,6 +550,34 @@ public class TreeCrudHandler {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    private static boolean isMysqlPlatform(DatabasePlatform platform) {
+        return platform != null && "MYSQL".equalsIgnoreCase(platform.getDbType());
+    }
+
+    private static String mysqlIdentifier(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return "";
+        }
+        String trimmed = name.trim();
+        String[] parts = trimmed.split("\\.");
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            String normalized = part.trim();
+            if (normalized.isEmpty()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(".");
+            }
+            if (normalized.startsWith("`") && normalized.endsWith("`")) {
+                builder.append(normalized);
+            } else {
+                builder.append("`").append(normalized.replace("`", "``")).append("`");
+            }
+        }
+        return builder.toString();
     }
 
     public static void toggleObjectEnabled(TreeItem<TreeData> selectedItem, boolean enabled) {

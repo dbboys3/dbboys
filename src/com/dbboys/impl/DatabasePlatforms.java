@@ -9,6 +9,7 @@ import com.dbboys.api.SqlexeRepository;
 import com.dbboys.impl.dialect.genericjdbc.GeneralJdbcDialect;
 import com.dbboys.impl.dialect.gbase.GbaseDialect;
 import com.dbboys.impl.dialect.informix.InformixDialect;
+import com.dbboys.impl.dialect.mysql.MysqlDialect;
 import com.dbboys.impl.dialect.oracle.OracleDialect;
 import com.dbboys.vo.Connect;
 
@@ -104,6 +105,7 @@ public final class DatabasePlatforms implements DatabasePlatformResolver {
         platforms.register(new GeneralJdbcDialect());
         platforms.register(new GbaseDialect());
         platforms.register(new InformixDialect());
+        platforms.register(new MysqlDialect());
         platforms.register(new OracleDialect());
         return platforms;
     }

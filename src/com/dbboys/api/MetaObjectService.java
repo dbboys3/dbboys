@@ -11,6 +11,7 @@ import com.dbboys.vo.UpdateResult;
 import javafx.concurrent.Task;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
@@ -87,7 +88,7 @@ public interface MetaObjectService {
                     String execSql = stripTrailingSemicolon(sql);
                     try (Statement stmt = conn.createStatement()) {
                         backSqlTask.setStmt(stmt);
-                        int affectRows = stmt.executeUpdate(execSql);
+                        int affectRows = executeMaintenanceSql(stmt, execSql);
                         updateResult.setAffectedRows(affectRows);
                     }
                     long endtime = System.currentTimeMillis();
@@ -170,7 +171,7 @@ public interface MetaObjectService {
 
                         try (Statement stmt = conn.createStatement()) {
                             backSqlTask.setStmt(stmt);
-                            int affectRows = stmt.executeUpdate(execSql);
+                            int affectRows = executeMaintenanceSql(stmt, execSql);
                             updateResult.setAffectedRows(affectRows);
                         } finally {
                             backSqlTask.setStmt(null);
@@ -213,6 +214,25 @@ public interface MetaObjectService {
             }
         });
         backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+    }
+
+    private static int executeMaintenanceSql(Statement stmt, String execSql) throws SQLException {
+        boolean hasResultSet = stmt.execute(execSql);
+        int affectedRows = stmt.getUpdateCount();
+        int lastAffectedRows = affectedRows >= 0 ? affectedRows : 0;
+        while (hasResultSet || affectedRows != -1) {
+            if (hasResultSet) {
+                try (ResultSet ignored = stmt.getResultSet()) {
+                    // Some maintenance statements, such as MySQL ANALYZE TABLE, return a result set.
+                }
+            }
+            hasResultSet = stmt.getMoreResults();
+            affectedRows = stmt.getUpdateCount();
+            if (affectedRows >= 0) {
+                lastAffectedRows = affectedRows;
+            }
+        }
+        return lastAffectedRows;
     }
 
     private static String stripTrailingSemicolon(String sql) {
