@@ -524,15 +524,30 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             return;
         }
         int maxLen = fields.stream().mapToInt(f -> f.label().length()).max().orElse(0);
-        java.util.List<Object> parts = new java.util.ArrayList<>();
-        for (int i = 0; i < fields.size(); i++) {
-            DatabasePlatform.TooltipFieldDef field = fields.get(i);
-            String padded = String.format("%-" + maxLen + "s", field.label());
-            if (i > 0) parts.add("\n");
-            parts.add(padded + ": ");
-            parts.add(resolveTooltipProperty(bean, field.propertyName()));
+        java.util.List<ObservableValue<?>> values = new java.util.ArrayList<>();
+        for (DatabasePlatform.TooltipFieldDef field : fields) {
+            values.add(resolveTooltipProperty(bean, field.propertyName()));
         }
-        bindTooltip(parts.toArray());
+        tooltip.textProperty().unbind();
+        tooltip.textProperty().bind(Bindings.createStringBinding(() -> {
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; i < fields.size(); i++) {
+                Object rawValue = values.get(i).getValue();
+                String value = rawValue == null ? "" : rawValue.toString().trim();
+                if (value.isEmpty()) {
+                    continue;
+                }
+                if (text.length() > 0) {
+                    text.append("\n");
+                }
+                DatabasePlatform.TooltipFieldDef field = fields.get(i);
+                text.append(String.format("%-" + maxLen + "s", field.label()))
+                        .append(": ")
+                        .append(value);
+            }
+            return text.toString();
+        }, values.toArray(ObservableValue[]::new)));
+        setTooltip(tooltip);
     }
 
     private static ObservableValue<?> resolveTooltipProperty(Object bean, String propertyName) {

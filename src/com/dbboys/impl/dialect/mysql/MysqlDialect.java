@@ -150,6 +150,11 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport {
     }
 
     @Override
+    public boolean supportsRenameDatabaseNode() {
+        return false;
+    }
+
+    @Override
     public String metadataTreeDragTableSelectSql(String qualifiedTable) {
         return DatabasePlatform.defaultMetadataTreeDragStarFromSql(qualifiedTable);
     }
@@ -168,6 +173,13 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport {
     }
 
     @Override
+    public String renameIndexSql(String indexName, String tableName, String newName) {
+        return "ALTER TABLE " + qualify(null, tableName)
+                + " RENAME INDEX " + quoteIdentifier(indexName)
+                + " TO " + quoteIdentifier(newName);
+    }
+
+    @Override
     public String dropObjectSql(String objectType, String objectName) {
         String type = normalizeObjectType(objectType);
         String identifier = "database".equals(type) ? quoteIdentifier(objectName) : qualify(null, objectName);
@@ -183,6 +195,11 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport {
     }
 
     @Override
+    public String dropIndexSql(String indexName, String tableName) {
+        return "DROP INDEX " + quoteIdentifier(indexName) + " ON " + qualify(null, tableName);
+    }
+
+    @Override
     public String truncateTableSql(String tableName) {
         String qualified = qualify(null, tableName);
         return qualified.isEmpty() ? null : "TRUNCATE TABLE " + qualified;
@@ -194,8 +211,18 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport {
     }
 
     @Override
+    public boolean supportsToggleIndex() {
+        return false;
+    }
+
+    @Override
     public String toggleTriggerSql(String triggerName, boolean enabled) {
         return null;
+    }
+
+    @Override
+    public boolean supportsToggleTrigger() {
+        return false;
     }
 
     @Override

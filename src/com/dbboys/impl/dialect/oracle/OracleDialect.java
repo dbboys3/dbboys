@@ -856,6 +856,11 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
+    public boolean supportsRenameDatabaseNode() {
+        return false;
+    }
+
+    @Override
     public String renameObjectSql(String objectType, String oldName, String newName) {
         return "ALTER " + objectType.toUpperCase() + " " + oldName + " RENAME TO " + newName;
     }

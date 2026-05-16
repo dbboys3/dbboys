@@ -27,11 +27,15 @@ public final class MysqlMetadataRepository implements MetadataRepository {
     public List<Catalog> getDatabases(Connection conn) throws SQLException {
         List<Catalog> databases = new ArrayList<>();
         String sql = """
-                select schema_name,
-                       default_character_set_name,
-                       default_collation_name
-                from information_schema.schemata
-                order by schema_name
+                select s.schema_name,
+                       s.default_character_set_name,
+                       s.default_collation_name,
+                       coalesce(sum(coalesce(t.data_length, 0) + coalesce(t.index_length, 0)), 0) as bytes
+                from information_schema.schemata s
+                left join information_schema.tables t on t.table_schema = s.schema_name
+                group by s.schema_name, s.default_character_set_name, s.default_collation_name
+                order by case when lower(s.schema_name) in ('information_schema', 'mysql', 'performance_schema', 'sys') then 0 else 1 end,
+                         s.schema_name
                 """;
         try (PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -43,7 +47,7 @@ public final class MysqlMetadataRepository implements MetadataRepository {
                 catalog.setDbLocale(blankToEmpty(rs.getString("default_character_set_name"))
                         + "/" + blankToEmpty(rs.getString("default_collation_name")));
                 catalog.setDbSpace("");
-                catalog.setDbSize("");
+                catalog.setDbSize(formatBytes(rs.getLong("bytes")));
                 catalog.setDbCreated("");
                 databases.add(catalog);
             }
@@ -59,7 +63,7 @@ public final class MysqlMetadataRepository implements MetadataRepository {
                 select s.schema_name,
                        s.default_character_set_name,
                        s.default_collation_name,
-                       coalesce(sum(t.data_length + t.index_length), 0) as bytes
+                       coalesce(sum(coalesce(t.data_length, 0) + coalesce(t.index_length, 0)), 0) as bytes
                 from information_schema.schemata s
                 left join information_schema.tables t on t.table_schema = s.schema_name
                 where s.schema_name = ?

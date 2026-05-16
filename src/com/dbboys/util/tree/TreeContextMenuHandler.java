@@ -1039,8 +1039,8 @@ public class TreeContextMenuHandler {
                 DatabasePlatform batchDropPlatform = TreeNavigator.resolvePlatform(firstItem);
                 List<String> sqlList = new ArrayList<>();
                 for (TreeItem<TreeData> item : selectedItems) {
-                    if (isMysqlPlatform(batchDropPlatform) && item.getValue() instanceof Index index) {
-                        sqlList.add("DROP INDEX " + mysqlIdentifier(index.getName()) + " ON " + mysqlIdentifier(index.getTabname()));
+                    if (batchDropPlatform != null && item.getValue() instanceof Index index) {
+                        sqlList.add(batchDropPlatform.dropIndexSql(index.getName(), index.getTabname()));
                     } else {
                         sqlList.add(batchDropPlatform != null
                                 ? batchDropPlatform.dropObjectSql(objectType, item.getValue().getName())
@@ -1526,7 +1526,7 @@ public class TreeContextMenuHandler {
                     }
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
-                    if (!isOraclePlatform(dbNodePlatform) && !isMysqlPlatform(dbNodePlatform)) {
+                    if (dbNodePlatform == null || dbNodePlatform.supportsRenameDatabaseNode()) {
                         treeview_menu.getItems().add(renameItem);
                     }
                     treeview_menu.getItems().add(deleteItem);
@@ -1617,8 +1617,8 @@ public class TreeContextMenuHandler {
                 //索引
                 else if(selectedItem.getValue() instanceof Index) {
                     DatabasePlatform indexPlatform = TreeNavigator.resolvePlatform(selectedItem);
-                    boolean mysqlIndex = isMysqlPlatform(indexPlatform);
-                    if (!mysqlIndex) {
+                    boolean canToggleIndex = indexPlatform == null || indexPlatform.supportsToggleIndex();
+                    if (canToggleIndex) {
                         treeview_menu.getItems().add(enableItem);
                         treeview_menu.getItems().add(disableItem);
                     }
@@ -1627,7 +1627,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
-                    if (!mysqlIndex) {
+                    if (canToggleIndex) {
                         if(((Index)selectedItem.getValue()).getIsdisabled()) {
                             disableItem.setDisable(true);
                         }else{
@@ -1635,7 +1635,7 @@ public class TreeContextMenuHandler {
                         }
                     }
                     if(selectedItem.getValue().getName().charAt(0)==' '){
-                        if (!mysqlIndex) {
+                        if (canToggleIndex) {
                             enableItem.setDisable(true);
                             disableItem.setDisable(true);
                         }
@@ -1672,8 +1672,8 @@ public class TreeContextMenuHandler {
                 //触发器
                 else if(selectedItem.getValue() instanceof Trigger) {
                     DatabasePlatform triggerPlatform = TreeNavigator.resolvePlatform(selectedItem);
-                    boolean mysqlTrigger = isMysqlPlatform(triggerPlatform);
-                    if (!mysqlTrigger) {
+                    boolean canToggleTrigger = triggerPlatform == null || triggerPlatform.supportsToggleTrigger();
+                    if (canToggleTrigger) {
                         treeview_menu.getItems().add(enableItem);
                         treeview_menu.getItems().add(disableItem);
                     }
@@ -1681,7 +1681,7 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
-                    if (!mysqlTrigger) {
+                    if (canToggleTrigger) {
                         if(((Trigger)selectedItem.getValue()).isIsdisabled()) {
                             disableItem.setDisable(true);
                         }else{
@@ -1730,37 +1730,6 @@ public class TreeContextMenuHandler {
             return false;
         }
         return expectedType.equalsIgnoreCase(tableTypeCode.trim());
-    }
-
-    private static boolean isMysqlPlatform(DatabasePlatform platform) {
-        return platform != null && "MYSQL".equalsIgnoreCase(platform.getDbType());
-    }
-
-    private static boolean isOraclePlatform(DatabasePlatform platform) {
-        return platform != null && "ORACLE".equalsIgnoreCase(platform.getDbType());
-    }
-
-    private static String mysqlIdentifier(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            return "";
-        }
-        String[] parts = name.trim().split("\\.");
-        StringBuilder builder = new StringBuilder();
-        for (String part : parts) {
-            String normalized = part.trim();
-            if (normalized.isEmpty()) {
-                continue;
-            }
-            if (!builder.isEmpty()) {
-                builder.append(".");
-            }
-            if (normalized.startsWith("`") && normalized.endsWith("`")) {
-                builder.append(normalized);
-            } else {
-                builder.append("`").append(normalized.replace("`", "``")).append("`");
-            }
-        }
-        return builder.toString();
     }
 
     private static void showCreateDatabaseDialog(TreeItem<TreeData> selectedItem) {

@@ -145,6 +145,10 @@ public interface DatabasePlatform {
         return true;
     }
 
+    default boolean supportsRenameDatabaseNode() {
+        return true;
+    }
+
     /**
      * When true, {@link com.dbboys.service.TableService#loadObjects} loads tables via
      * {@link MetadataRepository#getUserTables} first and uses the list size as the folder row count,
@@ -175,8 +179,16 @@ public interface DatabasePlatform {
         return "rename " + objectType + " " + oldName + " to " + newName;
     }
 
+    default String renameIndexSql(String indexName, String tableName, String newName) {
+        return renameObjectSql("index", indexName, newName);
+    }
+
     default String dropObjectSql(String objectType, String objectName) {
         return "drop " + objectType + " " + objectName;
+    }
+
+    default String dropIndexSql(String indexName, String tableName) {
+        return dropObjectSql("index", indexName);
     }
 
     default String truncateTableSql(String tableName) {
@@ -218,8 +230,16 @@ public interface DatabasePlatform {
         return "set indexes " + indexName + (enabled ? " enabled" : " disabled");
     }
 
+    default boolean supportsToggleIndex() {
+        return toggleIndexSql(null, true) != null;
+    }
+
     default String toggleTriggerSql(String triggerName, boolean enabled) {
         return "set triggers " + triggerName + (enabled ? " enabled" : " disabled");
+    }
+
+    default boolean supportsToggleTrigger() {
+        return toggleTriggerSql(null, true) != null;
     }
 
     default String gatherSchemaSql(String schemaName) {
