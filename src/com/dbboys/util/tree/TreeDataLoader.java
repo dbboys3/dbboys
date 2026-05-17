@@ -186,10 +186,12 @@ public class TreeDataLoader {
                                     DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
                                     List<String> items = objectList.getItems();
                                     int i = 0;
-                                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, p);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.TABLES);
+                                    if (p.supportsSystemTablesFolder()) {
+                                        ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, p);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.TABLES);
                                     objectFolder.setDescription(items.get(i++).toString());
                                     treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
                                     objectFolder = createObjectFolder(ObjectFolderKind.VIEWS);
@@ -198,12 +200,16 @@ public class TreeDataLoader {
                                     objectFolder = createObjectFolder(ObjectFolderKind.INDEXES);
                                     objectFolder.setDescription(items.get(i++).toString());
                                     treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.SEQUENCES);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.SYNONYMS);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    if (p.supportsSequencesFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.SEQUENCES);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    if (p.supportsSynonymsFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.SYNONYMS);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
                                     objectFolder = createObjectFolder(ObjectFolderKind.TRIGGERS);
                                     objectFolder.setDescription(items.get(i++).toString());
                                     treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));

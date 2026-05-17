@@ -180,10 +180,13 @@ public class DatabaseService implements MetaObjectService {
         objectList.setInfo(database);
 
         boolean filterType = repo.hasSysProcTypeColumn(conn);
+        var platform = platformResolver.requirePlatform(connect);
 
-        int sysCount = repo.getSystemTablesCount(conn);
-        String sysSize = repo.getSystemTablesSize(conn, databaseName);
-        result.add(sysSize == null ? (sysCount + "个") : (sysCount + "个/" + sysSize));
+        if (platform.supportsSystemTablesFolder()) {
+            int sysCount = repo.getSystemTablesCount(conn);
+            String sysSize = repo.getSystemTablesSize(conn, databaseName);
+            result.add(sysSize == null ? (sysCount + "个") : (sysCount + "个/" + sysSize));
+        }
 
         int tableCount = repo.getUserTablesCount(conn);
         String tableSize = repo.getUserTablesSize(conn, databaseName);
@@ -196,11 +199,13 @@ public class DatabaseService implements MetaObjectService {
         String indexSize = repo.getIndexSize(conn);
         result.add(indexSize == null ? (indexCount + "个") : (indexCount + "个/" + indexSize));
 
-        int seqCount = repo.getSequenceCount(conn);
-        result.add(seqCount + "个");
+        if (platform.supportsSequencesFolder()) {
+            result.add(repo.getSequenceCount(conn) + "个");
+        }
 
-        int synCount = repo.getSynonymCount(conn);
-        result.add(synCount + "个");
+        if (platform.supportsSynonymsFolder()) {
+            result.add(repo.getSynonymCount(conn) + "个");
+        }
 
         int triggerCount = repo.getTriggerCount(conn);
         result.add(triggerCount + "个");
@@ -211,7 +216,6 @@ public class DatabaseService implements MetaObjectService {
         int procCount = repo.getProcedureCount(conn, filterType);
         result.add(procCount + "个");
 
-        var platform = platformResolver.requirePlatform(connect);
         if (platform.supportsPackages()) {
             int pkgCount = repo.getPackageCount(conn);
             result.add(pkgCount + "个");

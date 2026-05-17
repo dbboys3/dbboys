@@ -322,6 +322,21 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
     }
 
     @Override
+    public boolean supportsSystemTablesFolder() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsSequencesFolder() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsSynonymsFolder() {
+        return false;
+    }
+
+    @Override
     public IconInfo iconInfo() {
         return new IconInfo(IconPaths.MYSQL_LOGO, 0.6, 0.6);
     }

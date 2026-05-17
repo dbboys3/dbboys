@@ -59,6 +59,21 @@ public interface DatabasePlatform {
         return false;
     }
 
+    /** When true, schema/database object tree shows a system tables/views folder. */
+    default boolean supportsSystemTablesFolder() {
+        return true;
+    }
+
+    /** When true, schema/database object tree shows a sequences folder. */
+    default boolean supportsSequencesFolder() {
+        return true;
+    }
+
+    /** When true, schema/database object tree shows a synonyms folder. */
+    default boolean supportsSynonymsFolder() {
+        return true;
+    }
+
     default List<String> getColumnTypes() {
         return List.of();
     }
