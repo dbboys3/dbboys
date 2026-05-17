@@ -90,19 +90,19 @@ public final class MysqlDdlRepository implements DdlRepository {
     @Override
     public String printFunction(Connection conn, String objectName) throws SQLException {
         String ddl = showCreate(conn, "SHOW CREATE FUNCTION " + qualifiedIdentifier(conn, objectName), "Create Function");
-        return delimiterBlock(ddl);
+        return withSemicolon(ddl);
     }
 
     @Override
     public String printProcedure(Connection conn, String objectName) throws SQLException {
         String ddl = showCreate(conn, "SHOW CREATE PROCEDURE " + qualifiedIdentifier(conn, objectName), "Create Procedure");
-        return delimiterBlock(ddl);
+        return withSemicolon(ddl);
     }
 
     @Override
     public String printTrigger(Connection conn, String objectName) throws SQLException {
         String ddl = showCreate(conn, "SHOW CREATE TRIGGER " + qualifiedIdentifier(conn, objectName), "SQL Original Statement");
-        return delimiterBlock(ddl);
+        return withSemicolon(ddl);
     }
 
     @Override
@@ -193,13 +193,6 @@ public final class MysqlDdlRepository implements DdlRepository {
             callback.accept(next);
         }
         return next;
-    }
-
-    private static String delimiterBlock(String ddl) {
-        if (ddl == null || ddl.isBlank() || "--".equals(ddl.trim())) {
-            return "--";
-        }
-        return "DELIMITER $$\n" + stripSemicolon(ddl) + "$$\nDELIMITER ;";
     }
 
     private static String withSemicolon(String ddl) {
