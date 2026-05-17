@@ -129,6 +129,34 @@ public interface DatabasePlatform {
         return "";
     }
 
+    default List<String> createDatabaseCharsetOptions() {
+        return List.of(
+                "ZH_CN.UTF8(推荐)",
+                "ZH_CN.GB18030-2000(兼容GBK)",
+                "EN_US.819(ISO8859-1)"
+        );
+    }
+
+    default String defaultCreateDatabaseCharsetOption() {
+        List<String> options = createDatabaseCharsetOptions();
+        return options.isEmpty() ? "" : options.get(0);
+    }
+
+    default boolean supportsCreateDatabaseStorageSpace() {
+        return true;
+    }
+
+    default String createDatabaseSql(String databaseName, String charsetOption, String storageSpace) {
+        String name = databaseName == null ? "" : databaseName.trim();
+        String dbspace = storageSpace == null ? "" : storageSpace.replaceAll("\\([^()]*\\)", "").trim();
+        StringBuilder sql = new StringBuilder("create database ").append(name);
+        if (!dbspace.isEmpty()) {
+            sql.append(" in ").append(dbspace);
+        }
+        sql.append(" with log");
+        return sql.toString();
+    }
+
     default String getSystemTableFolderI18nKey() {
         return "metadata.folder.system_table_view";
     }

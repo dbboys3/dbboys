@@ -1735,6 +1735,7 @@ public class TreeContextMenuHandler {
     }
 
     private static void showCreateDatabaseDialog(TreeItem<TreeData> selectedItem) {
+        DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
@@ -1768,6 +1769,10 @@ public class TreeContextMenuHandler {
                 I18n.t("metadata.dialog.create_database.charset.en", "EN_US.819(ISO8859-1)")
         );
         comboBox.setValue(I18n.t("metadata.dialog.create_database.charset.utf8", "ZH_CN.UTF8(推荐)"));
+        if (platform != null) {
+            comboBox.getItems().setAll(platform.createDatabaseCharsetOptions());
+            comboBox.setValue(platform.defaultCreateDatabaseCharsetOption());
+        }
         comboBox.setId("createDatabaseCharset");
         comboBox.setPrefWidth(240);
 
@@ -1775,31 +1780,38 @@ public class TreeContextMenuHandler {
         comboBox1.setId("createDatabaseDbspace");
         comboBox1.setPrefWidth(240);
 
-        ObservableList<String> dbspaceList = null;
-        try {
-            if(selectedItem==null){
-                log.info("selectitem is null");
+        boolean showStorageSpace = platform == null || platform.supportsCreateDatabaseStorageSpace();
+        ObservableList<String> dbspaceList = FXCollections.observableArrayList();
+        if (showStorageSpace) {
+            try {
+                if(selectedItem==null){
+                    log.info("selectitem is null");
+                }
+                else {
+                    log.info("selectitem is "+selectedItem.getValue().getName());
+                }
+                Connect connectForDb = (Connect) selectedItem.getParent().getValue();
+                dbspaceList = FXCollections.observableArrayList(TreeViewUtil.databaseService.getStorageSpacesForCreateDatabase(connectForDb));
+            }catch (SQLException e){
+                AppErrorHandler.handle(e);
             }
-            else {
-                log.info("selectitem is "+selectedItem.getValue().getName());
+            catch (Exception e) {
+                AppErrorHandler.handle(e);
             }
-            Connect connectForDb = (Connect) selectedItem.getParent().getValue();
-            dbspaceList = FXCollections.observableArrayList(TreeViewUtil.databaseService.getStorageSpacesForCreateDatabase(connectForDb));
-        }catch (SQLException e){
-            AppErrorHandler.handle(e);
+            comboBox1.setItems(dbspaceList);
+            if (!dbspaceList.isEmpty()) {
+                comboBox1.setValue(dbspaceList.get(0));
+            }
         }
-        catch (Exception e) {
-            AppErrorHandler.handle(e);
-        }
-        comboBox1.setItems(dbspaceList);
-        comboBox1.setValue(dbspaceList.get(0));
 
         grid.add(nameLabel, 0, 0);
         grid.add(textField, 1, 0);
         grid.add(charsetLabel, 0, 1);
         grid.add(comboBox, 1, 1);
-        grid.add(dbspaceLabel, 0, 2);
-        grid.add(comboBox1, 1, 2);
+        if (showStorageSpace) {
+            grid.add(dbspaceLabel, 0, 2);
+            grid.add(comboBox1, 1, 2);
+        }
 
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
@@ -1835,9 +1847,12 @@ public class TreeContextMenuHandler {
                     "DB_LOCALE",
                     dbLocale
             );
-            String sql = "create database " + textField.getText() + " in "
-                    + ((String) comboBox1.getValue()).replaceAll("\\([^()]*\\)", "")
-                    + " with log";
+            DatabasePlatform createPlatform = platform == null ? resolvePlatformResolver().requirePlatform(connect) : platform;
+            String sql = createPlatform.createDatabaseSql(
+                    textField.getText(),
+                    dbLocale,
+                    comboBox1.getValue()
+            );
             TreeViewUtil.databaseService.executeObjectSql(connect, sql, () -> {
                 NotificationUtil.showMainNotification(
                         I18n.t("backsql.notice.database_created", "数据库[%s]创建成功").formatted(textField.getText())
