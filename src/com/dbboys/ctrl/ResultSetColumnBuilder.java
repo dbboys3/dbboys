@@ -89,6 +89,14 @@ public class ResultSetColumnBuilder {
             final String colTypeNameFinal = normalizedTypeName;
             final String headerTypeFinal = buildDisplayType(metaData, j, normalizedTypeName);
             final boolean isLob = isLobType(normalizedTypeName);
+            String colName = metaData.getColumnLabel(j);
+            if (colName == null || colName.isBlank()) {
+                colName = metaData.getColumnName(j);
+            }
+            if (colName == null || colName.isBlank()) {
+                colName = "COLUMN_" + j;
+            }
+            boolean rowIdColumn = isRowIdKey(colName);
 
             TableColumn<ObservableList<String>, Object> column = new TableColumn<>();
             if (isIntegralType(normalizedTypeName)) {
@@ -187,18 +195,12 @@ public class ResultSetColumnBuilder {
                 }
             });
 
-            if (allowEdit && sqlTransactionText != null && commitmode != null) {
+            column.setEditable(!rowIdColumn);
+            if (allowEdit && !rowIdColumn && sqlTransactionText != null && commitmode != null) {
                 bindEditableColumn(column, columnIndex, isIntegralType(normalizedTypeName), isDecimalType(normalizedTypeName));
             }
             ctrl.colList.add(column);
 
-            String colName = metaData.getColumnLabel(j);
-            if (colName == null || colName.isBlank()) {
-                colName = metaData.getColumnName(j);
-            }
-            if (colName == null || colName.isBlank()) {
-                colName = "COLUMN_" + j;
-            }
             VBox headerBox = buildColumnHeader(column, colName, headerTypeFinal);
             double preferredWidth = Math.max(
                     Math.max(colName.length() * 15.0, headerTypeFinal.length() * 7.0 + 28),
@@ -230,6 +232,10 @@ public class ResultSetColumnBuilder {
             keyBadge.setStyle(resolveKeyBadgeStyle(keyText));
             keyBadge.setManaged(true);
             keyBadge.setVisible(true);
+        }
+        if (isRowIdKey(keyText)) {
+            column.setEditable(false);
+            column.setOnEditCommit(null);
         }
         updateHeaderTooltip(column, keyText);
     }
@@ -292,7 +298,11 @@ public class ResultSetColumnBuilder {
     }
 
     private String resolveKeyBadgeStyle(String keyText) {
-        return "ROWID".equalsIgnoreCase(keyText) ? HEADER_ROWID_BADGE_STYLE : HEADER_PRI_BADGE_STYLE;
+        return isRowIdKey(keyText) ? HEADER_ROWID_BADGE_STYLE : HEADER_PRI_BADGE_STYLE;
+    }
+
+    private boolean isRowIdKey(String keyText) {
+        return "ROWID".equalsIgnoreCase(keyText == null ? "" : keyText.trim());
     }
 
     private boolean isIntegralType(String typeName) {

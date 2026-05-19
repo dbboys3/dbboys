@@ -42,6 +42,9 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
         if (currentTime - lastClickTime < DOUBLE_CLICK_INTERVAL_MS) {
             // 如果两次点击间隔小于300ms，认为是双击
             super.startEdit();
+            if (!isEditing()) {
+                return;
+            }
             if (!getStyleClass().contains(STYLE_CLASS_EDITING)) {
                 getStyleClass().add(STYLE_CLASS_EDITING);
             }
