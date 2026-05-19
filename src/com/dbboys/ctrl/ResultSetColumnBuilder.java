@@ -21,6 +21,8 @@ import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.Locale;
@@ -186,7 +188,7 @@ public class ResultSetColumnBuilder {
             });
 
             if (allowEdit && sqlTransactionText != null && commitmode != null) {
-                bindEditableColumn(column, columnIndex, sqlTransactionText, commitmode);
+                bindEditableColumn(column, columnIndex, isIntegralType(normalizedTypeName), isDecimalType(normalizedTypeName));
             }
             ctrl.colList.add(column);
 
@@ -307,6 +309,7 @@ public class ResultSetColumnBuilder {
         return normalized.equals("float")
                 || normalized.equals("decimal")
                 || normalized.equals("numeric")
+                || normalized.equals("number")
                 || normalized.equals("double")
                 || normalized.equals("real");
     }
@@ -390,12 +393,41 @@ public class ResultSetColumnBuilder {
 
     private void bindEditableColumn(TableColumn<ObservableList<String>, Object> column,
                                     int columnIndex,
-                                    SimpleStringProperty sqlTransactionText,
-                                    ChoiceBox<?> commitmode) {
+                                    boolean integralColumn,
+                                    boolean decimalColumn) {
         column.setOnEditCommit(event -> {
-            Object oldvalue = event.getOldValue();
-            String colvalue = event.getNewValue().toString().replaceAll("\u21B5", "\n");
-            ctrl.applyLocalCellEdit(columnIndex, event.getRowValue(), oldvalue, colvalue);
+            ObservableList<String> row = event.getRowValue();
+            String oldValue = row == null ? null : row.get(columnIndex);
+            Object newValue = event.getNewValue();
+            String colValue = newValue == null ? null : newValue.toString().replaceAll("\u21B5", "\n");
+            if (!isValidNumericEdit(colValue, integralColumn, decimalColumn)) {
+                ctrl.resultSetTableView.refresh();
+                return;
+            }
+            ctrl.applyLocalCellEdit(columnIndex, row, oldValue, colValue);
         });
+    }
+
+    private boolean isValidNumericEdit(String value, boolean integralColumn, boolean decimalColumn) {
+        if (!integralColumn && !decimalColumn) {
+            return true;
+        }
+        if (value == null || ctrl.getNullLabel().equals(value)) {
+            return true;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        try {
+            if (integralColumn) {
+                new BigInteger(trimmed);
+            } else {
+                new BigDecimal(trimmed);
+            }
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 }

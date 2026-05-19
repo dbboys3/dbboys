@@ -444,7 +444,7 @@ public class ResultSetTabController {
      * Local cell edit only (no DB). Call before row data reflects new value for snapshot.
      */
     public void applyLocalCellEdit(int columnIndex, ObservableList<String> row, Object oldValue, String newCellText) {
-        if (!resultSetEditAllowed.get()) {
+        if (!resultSetEditAllowed.get() || row == null) {
             return;
         }
         String normalized = normalizeEditedCellValue(newCellText);
