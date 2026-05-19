@@ -5,12 +5,14 @@ import com.dbboys.ui.IconFactory;
 import com.dbboys.ui.IconPaths;
 import com.dbboys.util.MenuItemUtil;
 import javafx.application.Platform;
+import javafx.animation.PauseTransition;
 import javafx.scene.Cursor;
 import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.util.Duration;
 
 public class CustomTableCell<S, T> extends TableCell<S, T> {
     private static final String NEWLINE_SYMBOL = "\u21B5";
@@ -37,16 +39,10 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
         if (currentTime - lastClickTime < DOUBLE_CLICK_INTERVAL_MS) {
             // 如果两次点击间隔小于300ms，认为是双击
             super.startEdit();
-            if (textField == null) {
-                createTextField();
+            if (!getStyleClass().contains("table-cell-editing")) {
+                getStyleClass().add("table-cell-editing");
             }
-            Platform.runLater(() -> {
-                textField.positionCaret(textField.getText().length());
-            });
-            setText(null);
-            setGraphic(textField);
-            textField.setText(formatDisplayValue(getItem()));
-            textField.requestFocus();
+            beginTextFieldEditing(formatDisplayValue(getItem()));
         }
         lastClickTime = currentTime;
 
@@ -55,10 +51,17 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     @Override
     public void cancelEdit() {
+        getStyleClass().remove("table-cell-editing");
         super.cancelEdit();
 
         setText(formatDisplayValue(getItem()));
         setGraphic(null);
+    }
+
+    @Override
+    public void commitEdit(T newValue) {
+        getStyleClass().remove("table-cell-editing");
+        super.commitEdit(newValue);
     }
 
     @Override
@@ -71,12 +74,13 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
         } else if (item == null) {
             setText(getNullLabel());
             setStyle("-fx-text-fill: #ddd");
-        }else if (isEditing()) {
+        } else if (isEditing()) {
             if (textField != null) {
-                textField.setText(item.toString());
+                syncTextFieldWhileEditing(formatDisplayValue(item));
+            } else {
+                setText(null);
+                setGraphic(null);
             }
-            setText(null);
-            setGraphic(textField);
         }
         else{
             //text.setText(item.toString()); // 设置带换行符的内容
@@ -91,10 +95,64 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
 
 
+    private void beginTextFieldEditing(String editText) {
+        if (textField == null) {
+            createTextField();
+        }
+        String value = editText == null ? "" : editText;
+        textField.setText(value);
+        setText(null);
+        setGraphic(textField);
+        textField.requestFocus();
+        selectAllWithCaretAtEndAfterFocus(textField);
+    }
+
+    private void syncTextFieldWhileEditing(String editText) {
+        if (textField == null) {
+            return;
+        }
+        String value = editText == null ? "" : editText;
+        if (!value.equals(textField.getText())) {
+            textField.setText(value);
+        }
+        setText(null);
+        setGraphic(textField);
+    }
+
+    private static void selectAllWithCaretAtEndAfterFocus(TextField field) {
+        if (field == null) {
+            return;
+        }
+        Platform.runLater(() -> selectAllWithCaretAtEnd(field));
+        PauseTransition delay = new PauseTransition(Duration.millis(50));
+        delay.setOnFinished(event -> selectAllWithCaretAtEnd(field));
+        delay.play();
+    }
+
+    private static void selectAllWithCaretAtEnd(TextField field) {
+        if (field == null) {
+            return;
+        }
+        field.requestFocus();
+        String text = field.getText();
+        if (text == null || text.isEmpty()) {
+            field.positionCaret(0);
+            return;
+        }
+        field.selectRange(0, text.length());
+    }
+
     private void createTextField() {
         textField = new CustomUserTextField();
-        textField.setText(formatDisplayValue(getItem()));
-        textField.setStyle("-fx-background-color: #2871a8;-fx-border-width: 0;-fx-padding: 0;-fx-text-fill: white");
+        textField.setStyle(
+                "-fx-background-color: transparent;"
+                        + "-fx-background-insets: 0;"
+                        + "-fx-border-width: 0;"
+                        + "-fx-padding: 0;"
+                        + "-fx-text-fill: -color-fg-default;"
+                        + "-fx-highlight-fill: -color-accent-emphasis;"
+                        + "-fx-highlight-text-fill: -color-fg-emphasis;"
+        );
         textField.setOnAction(event -> {
             commitEdit((T) textField.getText());
         });

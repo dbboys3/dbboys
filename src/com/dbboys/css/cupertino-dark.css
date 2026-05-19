@@ -967,9 +967,29 @@ Text {
 .table-view{
   -fx-background-color: -color-bg-default;
 }
+/* 编辑单元格：单元格本身不着色，仅文本选区高亮 */
 .table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell .text-field-table-cell:focus-within {
-  -fx-background-insets: 0, 1, 2;
-  -fx-background-color: -color-bg-default, -color-accent-emphasis, -color-bg-default;
+  -fx-background-insets: 0;
+  -fx-background-color: transparent;
+}
+.table-view .table-row-cell > .table-cell .text-field {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0;
+  -fx-border-width: 0;
+  -fx-padding: 0;
+  -fx-text-fill: -color-fg-default;
+  -fx-highlight-fill: -color-accent-emphasis;
+  -fx-highlight-text-fill: -color-fg-emphasis;
+}
+.table-view .table-row-cell > .table-cell .text-field:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.table-view .table-cell.table-cell-editing,
+.table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell.table-cell-editing:selected:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
 }
 
 .list-view {
