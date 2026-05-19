@@ -972,7 +972,8 @@ Text {
   -fx-background-insets: 0;
   -fx-background-color: transparent;
 }
-.table-view .table-row-cell > .table-cell .text-field {
+.table-view .table-row-cell > .table-cell .text-field,
+.table-view .table-row-cell > .table-cell .custom-table-cell-editor {
   -fx-background-color: transparent;
   -fx-background-insets: 0;
   -fx-background-radius: 0;
@@ -990,6 +991,9 @@ Text {
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell.table-cell-editing:selected:focused {
   -fx-background-color: transparent;
   -fx-background-insets: 0;
+}
+.table-view .table-cell.custom-table-cell-null {
+  -fx-text-fill: #ddd;
 }
 
 .list-view {

@@ -18,6 +18,9 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
     private static final String NEWLINE_SYMBOL = "\u21B5";
     private static final int DOUBLE_CLICK_INTERVAL_MS = 300;
     private static final String NULL_FALLBACK = "[NULL]";
+    private static final String STYLE_CLASS_EDITING = "table-cell-editing";
+    private static final String STYLE_CLASS_NULL = "custom-table-cell-null";
+    private static final String STYLE_CLASS_EDITOR = "custom-table-cell-editor";
 
     private CustomUserTextField textField;
     //结果集拖动鼠标框选
@@ -39,8 +42,8 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
         if (currentTime - lastClickTime < DOUBLE_CLICK_INTERVAL_MS) {
             // 如果两次点击间隔小于300ms，认为是双击
             super.startEdit();
-            if (!getStyleClass().contains("table-cell-editing")) {
-                getStyleClass().add("table-cell-editing");
+            if (!getStyleClass().contains(STYLE_CLASS_EDITING)) {
+                getStyleClass().add(STYLE_CLASS_EDITING);
             }
             beginTextFieldEditing(formatDisplayValue(getItem()));
         }
@@ -51,7 +54,7 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     @Override
     public void cancelEdit() {
-        getStyleClass().remove("table-cell-editing");
+        getStyleClass().remove(STYLE_CLASS_EDITING);
         super.cancelEdit();
 
         setText(formatDisplayValue(getItem()));
@@ -60,7 +63,7 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     @Override
     public void commitEdit(T newValue) {
-        getStyleClass().remove("table-cell-editing");
+        getStyleClass().remove(STYLE_CLASS_EDITING);
         super.commitEdit(newValue);
     }
 
@@ -68,12 +71,12 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
     protected void updateItem(T item, boolean empty) {
         super.updateItem(item, empty);
         setText("");
-        setStyle("");
+        getStyleClass().remove(STYLE_CLASS_NULL);
         setTooltip(null);
         if (empty) {
         } else if (item == null) {
             setText(getNullLabel());
-            setStyle("-fx-text-fill: #ddd");
+            getStyleClass().add(STYLE_CLASS_NULL);
         } else if (isEditing()) {
             if (textField != null) {
                 syncTextFieldWhileEditing(formatDisplayValue(item));
@@ -144,15 +147,7 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     private void createTextField() {
         textField = new CustomUserTextField();
-        textField.setStyle(
-                "-fx-background-color: transparent;"
-                        + "-fx-background-insets: 0;"
-                        + "-fx-border-width: 0;"
-                        + "-fx-padding: 0;"
-                        + "-fx-text-fill: -color-fg-default;"
-                        + "-fx-highlight-fill: -color-accent-emphasis;"
-                        + "-fx-highlight-text-fill: -color-fg-emphasis;"
-        );
+        textField.getStyleClass().add(STYLE_CLASS_EDITOR);
         textField.setOnAction(event -> {
             commitEdit((T) textField.getText());
         });

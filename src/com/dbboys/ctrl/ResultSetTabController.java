@@ -447,7 +447,7 @@ public class ResultSetTabController {
         if (!resultSetEditAllowed.get()) {
             return;
         }
-        String normalized = newCellText == null ? "" : newCellText.replaceAll("\u21B5", "\n");
+        String normalized = normalizeEditedCellValue(newCellText);
         if (isSameLocalCellValue(oldValue, normalized)) {
             return;
         }
@@ -467,12 +467,19 @@ public class ResultSetTabController {
 
     /** True if committed text equals the value before this edit (no pending DML / highlight). */
     private static boolean isSameLocalCellValue(Object oldValue, String normalizedNew) {
-        String n = normalizedNew == null ? "" : normalizedNew;
         if (oldValue == null) {
-            return n.isEmpty();
+            return normalizedNew == null || normalizedNew.isEmpty();
         }
         String o = oldValue.toString().replaceAll("\u21B5", "\n");
-        return o.equals(n);
+        return o.equals(normalizedNew);
+    }
+
+    private String normalizeEditedCellValue(String newCellText) {
+        if (newCellText == null) {
+            return "";
+        }
+        String value = newCellText.replaceAll("\u21B5", "\n");
+        return getNullLabel().equals(value) ? null : value;
     }
 
     /** Smallest selected row index, or -1 if nothing selected. */
