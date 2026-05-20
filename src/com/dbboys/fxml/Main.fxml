@@ -83,6 +83,12 @@
                                     <CustomShortcutMenuItem fx:id="menuSettingsLanguageZhTw" mnemonicParsing="false" onAction="#setLanguageZhHant"/>
                                 </items>
                             </Menu>
+                            <Menu fx:id="menuSettingsTheme" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuSettingsThemeDark" mnemonicParsing="false" onAction="#setThemeDark"/>
+                                    <CustomShortcutMenuItem fx:id="menuSettingsThemeLight" mnemonicParsing="false" onAction="#setThemeLight"/>
+                                </items>
+                            </Menu>
                             <CustomShortcutMenuItem fx:id="menuSettingsReset" mnemonicParsing="false"  id="settingMenu" onAction="#initDB">
                             </CustomShortcutMenuItem>
                         </items>
@@ -103,13 +109,13 @@
             </MenuBar>
         </HBox>
         <!--
-        <HBox alignment="CENTER_LEFT" spacing="10" minHeight="26" style="-fx-background-color: linear-gradient(to bottom, #eee, #eee);-fx-border-width: 0.5 0 0 0;-fx-border-color: #aaa" >
-            <Label text="  | " style="-fx-text-fill: #bbb"></Label>
+        <HBox alignment="CENTER_LEFT" spacing="10" minHeight="26">
+            <Label text="  | "></Label>
             <Label text="[192.168.17.101_9088]">
             </Label>
         </HBox>
         -->
-        <SplitPane fx:id="mainSplitPane" style="-fx-border-width:0.5 0 0.5 0; -fx-border-color: -color-border-default;">
+        <SplitPane fx:id="mainSplitPane">
             <VBox alignment="TOP_LEFT" >
                 <StackPane prefHeight="2000">
                     <TabPane fx:id="treeviewTabPane" side="LEFT" minWidth="35" tabClosingPolicy="UNAVAILABLE">
@@ -118,17 +124,17 @@
                                 <HBox minHeight="30" alignment="CENTER_LEFT">
                                     <Button fx:id="create_connect"  focusTraversable="false"  onAction="#createConnectLeaf">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </Button>
-                                    <CustomUserTextField fx:id="connectSearchTextField" prefWidth="2000" style="-fx-padding: 1 1 1 3" >
+                                    <CustomUserTextField fx:id="connectSearchTextField" prefWidth="2000">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </CustomUserTextField>
                                     <Button fx:id="connectSearchButton"  focusTraversable="false" styleClass="small" disable="true">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </Button>
                                 </HBox>
@@ -141,25 +147,25 @@
                                     <StackPane fx:id="rebuildMarkdownIndexButton_stackpane">
                                     <Button fx:id="rebuildMarkdownIndexButton"  focusTraversable="false" styleClass="small" onAction="#rebuildMarkdownIndex">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </Button>
                                     </StackPane>
-                                    <CustomUserTextField fx:id="markdownSearchTextField" prefWidth="2000" style="-fx-padding: 1 1 1 3" >
+                                    <CustomUserTextField fx:id="markdownSearchTextField" prefWidth="2000">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </CustomUserTextField>
                                     <StackPane fx:id="markdownSearchIconStackPane" >
                                     <Button fx:id="markdownSearchButton"  focusTraversable="false" styleClass="small" disable="true">
                                         <tooltip>
-                                            <Tooltip style="-fx-font-size: 10"/>
+                                            <Tooltip/>
                                         </tooltip>
                                     </Button>
                                     </StackPane>
                                 </HBox>
                                 <!--
-                               <TreeView fx:id="knowledge_treeview" prefHeight="2000" style="-fx-border-width: 0.5 0 0 0;-fx-border-color: #aaa;"></TreeView>
+                               <TreeView fx:id="knowledge_treeview" prefHeight="2000"></TreeView>
                                    -->
                             </VBox>
                         </CustomTreeviewTab>
@@ -167,15 +173,15 @@
                             <VBox fx:id="aiTabVBox"  VBox.vgrow="ALWAYS">
                                 <StackPane VBox.vgrow="ALWAYS">
                                     <ScrollPane fx:id="aiChatScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS" >
-                                        <VBox fx:id="aiChatMessages" spacing="8" style="-fx-padding: 8"/>
+                                        <VBox fx:id="aiChatMessages" spacing="8"/>
                                     </ScrollPane>
                                     <Button fx:id="aiMemoryToggleButton" focusTraversable="false"
                                             StackPane.alignment="TOP_LEFT" translateX="6.0" translateY="6.0"/>
                                 </StackPane>
                                 <AnchorPane minHeight="90" prefHeight="90" maxHeight="90" VBox.vgrow="NEVER" pickOnBounds="false">
-                                    <CustomUserTextarea fx:id="aiInputField" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" style="-fx-padding: 6 44 34 6; -fx-font-size: 10px;" AnchorPane.topAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" />
+                                    <CustomUserTextarea fx:id="aiInputField" promptText="输入消息..." wrapText="true" prefRowCount="3" prefHeight="90" AnchorPane.topAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" />
                                     <HBox alignment="CENTER_LEFT" spacing="4" pickOnBounds="false" AnchorPane.leftAnchor="6.0" AnchorPane.bottomAnchor="6.0">
-                                        <ChoiceBox fx:id="aiModelChoiceBox" focusTraversable="false" prefWidth="162" style="-fx-font-size: 9px;"/>
+                                        <ChoiceBox fx:id="aiModelChoiceBox" focusTraversable="false" prefWidth="162"/>
                                         <Button fx:id="aiSettingsButton" styleClass="small" focusTraversable="false"/>
                                     </HBox>
                                     <Button fx:id="aiSendButton" text="发送" styleClass="small" onAction="#sendAiMessage" focusTraversable="false" AnchorPane.rightAnchor="6.0" AnchorPane.bottomAnchor="6.0"/>
@@ -185,19 +191,19 @@
                     </TabPane>
                 </StackPane>
             </VBox>
-            <StackPane style="-fx-min-width: 0;">
+            <StackPane fx:id="sqlTabStackPane">
                 <Label fx:id="doubleClickNewSqlLabel" ></Label>
                 <TabPane tabDragPolicy="REORDER" tabClosingPolicy="ALL_TABS" fx:id="sqlTabPane">
                 </TabPane>
             </StackPane>
         </SplitPane>
-        <HBox spacing="10" fx:id="statusHBox" style="-fx-font-size: 10" alignment="CENTER">
+        <HBox spacing="10" fx:id="statusHBox" alignment="CENTER">
             <Button fx:id="statusBackSqlStopButton" styleClass="small" focusTraversable="false" disable="true">
                 <tooltip>
                     <Tooltip/>
                 </tooltip>
             </Button>
-            <Label fx:id="statusBackSqlCountLabel" style="-fx-font-size: 7;-fx-opacity:0.5" translateY="0">
+            <Label fx:id="statusBackSqlCountLabel" translateY="0">
             </Label>
             <Button fx:id="statusBackSqlListButton" styleClass="small" focusTraversable="false">
                 <tooltip>
@@ -218,14 +224,11 @@
                         <CustomLabelTextField text="www.dbboys.com" prefWidth="90"></CustomLabelTextField>
                     </HBox>
                 </StackPane>
-                <StackPane fx:id="downloadStackPane" style="-fx-background-color: -color-bg-default">
+                <StackPane fx:id="downloadStackPane">
                 </StackPane>
             </StackPane>
         </HBox>
     </VBox>
-    <StackPane fx:id="noticePane" maxWidth="360" maxHeight="25" style="-fx-background-color: none;-fx-alignment: center" StackPane.alignment="CENTER" visible="false">
+    <StackPane fx:id="noticePane" maxWidth="360" maxHeight="25" StackPane.alignment="CENTER" visible="false">
     </StackPane>
 </StackPane>
-
-
-

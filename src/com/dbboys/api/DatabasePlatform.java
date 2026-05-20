@@ -59,26 +59,6 @@ public interface DatabasePlatform {
         return false;
     }
 
-    /** When true, schema/database object tree shows a system tables/views folder. */
-    default boolean supportsSystemTablesFolder() {
-        return true;
-    }
-
-    /** When true, schema/database object tree shows a sequences folder. */
-    default boolean supportsSequencesFolder() {
-        return true;
-    }
-
-    /** When true, schema/database object tree shows a synonyms folder. */
-    default boolean supportsSynonymsFolder() {
-        return true;
-    }
-
-    /** When true, table designer allows toggling AUTO_INCREMENT on columns (MySQL). */
-    default boolean supportsEditableAutoIncrement() {
-        return false;
-    }
-
     default List<String> getColumnTypes() {
         return List.of();
     }
@@ -149,44 +129,12 @@ public interface DatabasePlatform {
         return "";
     }
 
-    default List<String> createDatabaseCharsetOptions() {
-        return List.of(
-                "ZH_CN.UTF8(推荐)",
-                "ZH_CN.GB18030-2000(兼容GBK)",
-                "EN_US.819(ISO8859-1)"
-        );
-    }
-
-    default String defaultCreateDatabaseCharsetOption() {
-        List<String> options = createDatabaseCharsetOptions();
-        return options.isEmpty() ? "" : options.get(0);
-    }
-
-    default boolean supportsCreateDatabaseStorageSpace() {
-        return true;
-    }
-
-    default String createDatabaseSql(String databaseName, String charsetOption, String storageSpace) {
-        String name = databaseName == null ? "" : databaseName.trim();
-        String dbspace = storageSpace == null ? "" : storageSpace.replaceAll("\\([^()]*\\)", "").trim();
-        StringBuilder sql = new StringBuilder("create database ").append(name);
-        if (!dbspace.isEmpty()) {
-            sql.append(" in ").append(dbspace);
-        }
-        sql.append(" with log");
-        return sql.toString();
-    }
-
     default String getSystemTableFolderI18nKey() {
         return "metadata.folder.system_table_view";
     }
 
     default String getSystemTableFolderDefaultText() {
         return "系统表/视图";
-    }
-
-    default String getUserMetadataDatabaseName(Connect connect) {
-        return "sysuser";
     }
 
     default boolean supportsTableTypeModification() {
@@ -237,14 +185,6 @@ public interface DatabasePlatform {
 
     default String dropObjectSql(String objectType, String objectName) {
         return "drop " + objectType + " " + objectName;
-    }
-
-    default String createUserSql(String userName, String password) {
-        return "create user " + userName + " with password '" + escapeSqlString(password) + "'";
-    }
-
-    default String resetUserPasswordSql(String userName, String password) {
-        return "alter user " + userName + " modify password '" + escapeSqlString(password) + "'";
     }
 
     default String dropIndexSql(String indexName, String tableName) {
@@ -486,10 +426,6 @@ public interface DatabasePlatform {
 
     default boolean showMetadataTooltips() {
         return true;
-    }
-
-    static String escapeSqlString(String value) {
-        return value == null ? "" : value.replace("'", "''");
     }
 
     default <T> Optional<T> capability(Class<T> type) {

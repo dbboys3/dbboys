@@ -41,8 +41,8 @@ public class SqlTabUiHelper {
         ctrl.commitButtonTooltip.setShowDelay(Duration.millis(100));
         ctrl.transactionCommitButton.setTooltip(ctrl.commitButtonTooltip);
         ctrl.transactionRollbackButton.setTooltip(ctrl.commitButtonTooltip);
-        ctrl.transactionCommitButton.setStyle(buildAccentPillButtonStyle(SqlTabController.RESULT_SUCCESS_BUTTON_COLOR));
-        ctrl.transactionRollbackButton.setStyle(buildAccentPillButtonStyle(SqlTabController.RESULT_FAILURE_BUTTON_COLOR));
+        ctrl.transactionCommitButton.getStyleClass().addAll("accent-pill-button", "accent-pill-success");
+        ctrl.transactionRollbackButton.getStyleClass().addAll("accent-pill-button", "accent-pill-failure");
     }
 
     public void setupSqlTabIcons() {
@@ -128,22 +128,13 @@ public class SqlTabUiHelper {
         });
     }
 
-    static String buildAccentPillButtonStyle(String backgroundColor) {
-        return "-fx-background-radius: 999;" +
-                "-fx-border-radius: 999;" +
-                "-fx-padding: 2 6 2 6;" +
-                "-fx-font-size: 9px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-text-fill: white;" +
-                "-fx-background-color: " + backgroundColor + ";" +
-                "-fx-border-color: transparent;" +
-                "-fx-border-width: 0;";
-    }
-
     private Button createResultFilterButton(String backgroundColor) {
         Button button = new Button();
         button.setFocusTraversable(false);
-        button.setStyle(buildAccentPillButtonStyle(backgroundColor));
+        button.getStyleClass().add("accent-pill-button");
+        button.getStyleClass().add(SqlTabController.RESULT_SUCCESS_BUTTON_COLOR.equals(backgroundColor)
+                ? "accent-pill-success"
+                : "accent-pill-failure");
         return button;
     }
 

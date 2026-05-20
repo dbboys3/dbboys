@@ -22,11 +22,9 @@ public class CustomResultsetTableCell<S, T> extends CustomTableCell<S, T> {
                     String result = ((UpdateResult) getTableRow().getItem()).getResult();
                     String successPrefix = I18n.t("sql.exec.success");
                     if (!result.startsWith(successPrefix)) {
-                        //setStyle("-fx-text-fill: red");
                         getStyleClass().add("execute_result_error");
                 }
                 //else if (((UpdateResult) getTableRow().getItem()).getResult().substring(0, 4).equals("忽略执行")) {
-                    //setStyle("-fx-text-fill: #aaa");
                   //  getStyleClass().add("execute_result_ignore");
                 //}
 

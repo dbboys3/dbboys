@@ -121,7 +121,7 @@ public class RemoteUninstallerUtil {
         stopButton.setTooltip(stopTooltip);
         runningLabel=new Label("");
         HBox imageHBox = new HBox(imageView, runningLabel, stopButton);
-        imageHBox.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5");
+        imageHBox.getStyleClass().add("modal-progress-card");
         imageHBox.setAlignment(Pos.CENTER);
         imageHBox.setMaxHeight(15);
         //imageHBox.setMaxWidth(100);
@@ -129,7 +129,7 @@ public class RemoteUninstallerUtil {
         stopButton.getStyleClass().add("small");
         backgroundHBox = new HBox(imageHBox);
         backgroundHBox.setAlignment(Pos.CENTER);
-        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.30);-fx-background-radius: 2;");
+        backgroundHBox.getStyleClass().add("modal-progress-overlay");
         backgroundHBox.setVisible(false);
 
 
@@ -184,17 +184,14 @@ public class RemoteUninstallerUtil {
                 case 1:
                     if(hostField.getText().trim().isEmpty()){
                         event.consume();
-                        //ipaddr_textfield.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         hostField.requestFocus();
                     }
                     else if(portField.getText().trim().isEmpty()){
                         event.consume();
-                        //port_textfield.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         portField.requestFocus();
                     }
                     else if(passField.getText().trim().isEmpty()){
                         event.consume();
-                        // username_textfield.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         passField.requestFocus();
                     }else {
                         backgroundHBox.setVisible(true);
@@ -375,8 +372,8 @@ public class RemoteUninstallerUtil {
         Label desc=new Label();
         desc.textProperty().bind(I18n.bind("remote.uninstall.desc.title", "说明："));
         VBox vBox=new VBox(10);
-        vBox.setStyle("-fx-padding: 10 0 0 30");
-        grid.setStyle("-fx-padding: 10 0 10 0;");
+        vBox.getStyleClass().add("remote-dialog-root");
+        grid.getStyleClass().add("remote-dialog-grid");
         vBox.getChildren().addAll(descbefore,grid,desc);
         int descIndex = 0;
         for (String ignored : activeProvider.uninstallWizardDescriptionLines()) {

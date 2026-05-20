@@ -100,14 +100,14 @@ public class RemoteCheckEnvUtil {
         stopButton.setTooltip(stopTooltip);
         runningLabel=new Label("");
         HBox imageHBox = new HBox(imageView, runningLabel, stopButton);
-        imageHBox.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5");
+        imageHBox.getStyleClass().add("modal-progress-card");
         imageHBox.setAlignment(Pos.CENTER);
         imageHBox.setMaxHeight(15);
         stopButton.setFocusTraversable(false);
         stopButton.getStyleClass().add("small");
         backgroundHBox = new HBox(imageHBox);
         backgroundHBox.setAlignment(Pos.CENTER);
-        backgroundHBox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.30);-fx-background-radius: 2;");
+        backgroundHBox.getStyleClass().add("modal-progress-overlay");
         backgroundHBox.setVisible(false);
 
         previousBtn.disableProperty().bind(backgroundHBox.visibleProperty());
@@ -347,8 +347,8 @@ public class RemoteCheckEnvUtil {
         Label desc = new Label();
         desc.textProperty().bind(I18n.bind("remote.check.desc.only_linux_unix", "说明：安装环境检查仅用于Linux或Unix系统远程安装，不适用于Windows系统。"));
         VBox vBox = new VBox(10);
-        vBox.setStyle("-fx-padding: 10 0 0 30");
-        grid.setStyle("-fx-padding: 10 0 10 0;");
+        vBox.getStyleClass().add("remote-dialog-root");
+        grid.getStyleClass().add("remote-dialog-grid");
         vBox.getChildren().addAll(descbefore, grid, desc);
         StackPane stackPane = new StackPane(vBox);
 

@@ -56,7 +56,6 @@ public class CustomMarkdownTab extends CustomTab{
         markdown.getChildren().add(0,virtualizedScrollPane);
         virtualizedScrollPane.visibleProperty().bind(customGenericStyledArea.getParent().visibleProperty().not());
         Button editButton = new Button("");
-        //customMarkdownEditCodeArea.setStyle("-fx-font-family: system;");
 
 
         // 统一搜索面板（编辑可替换，预览仅查找）

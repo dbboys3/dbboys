@@ -23,7 +23,7 @@ public class CustomInstallStepHbox extends HBox {
         checkBox.setFocusTraversable(false);
         nameLabel.setPrefWidth(90);
         nameLabel.setText(name);
-        nameLabel.setStyle("-fx-font-weight: bold;-fx-font-size: 9");
+        nameLabel.getStyleClass().add("install-step-name");
         // 单击名称时同步勾选/反选（尊重禁用态）
         nameLabel.setOnMouseClicked(event -> {
             if (!checkBox.isDisabled()) {
@@ -31,7 +31,7 @@ public class CustomInstallStepHbox extends HBox {
             }
         });
         descLabel.setText(desc);
-        descLabel.setStyle("-fx-text-fill: #888;-fx-font-size: 9");
+        descLabel.getStyleClass().add("install-step-desc");
         getChildren().addAll( iconLabel,checkBox,nameLabel,descLabel);
         checkBox.getStyleClass().add("table-check-box");
         setAlignment(Pos.CENTER_LEFT);

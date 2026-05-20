@@ -8,8 +8,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 
 public final class IconFactory {
-    private static final String DEFAULT_ICON_STYLE = "-fx-fill: -color-button-default;";
-    private static final String DANGER_ICON_STYLE = "-fx-fill: -color-danger-7;";
+    private static final String DEFAULT_ICON_STYLE = "icon-button-default";
+    private static final String DANGER_ICON_STYLE = "icon-danger";
     private static final Color LEGACY_DARK_ICON_COLOR = Color.BLACK;
     private static final Color LEGACY_LIGHT_ICON_COLOR = Color.WHITE;
     private static final Color DANGER_ICON_COLOR = Color.valueOf("#9f453c");
@@ -67,7 +67,7 @@ public final class IconFactory {
 
     public static SVGPath createFixedColor(String path, double scaleX, double scaleY, Color color) {
         SVGPath icon = create(path, scaleX, scaleY, color);
-        icon.setStyle("-fx-fill: " + toCssColor(color) + ";");
+        icon.setFill(color);
         return icon;
     }
 
@@ -85,22 +85,17 @@ public final class IconFactory {
 
 
     public static void applyDefaultStyle(SVGPath icon) {
-        icon.setStyle(DEFAULT_ICON_STYLE);
+        icon.getStyleClass().remove(DANGER_ICON_STYLE);
+        if (!icon.getStyleClass().contains(DEFAULT_ICON_STYLE)) {
+            icon.getStyleClass().add(DEFAULT_ICON_STYLE);
+        }
     }
 
     public static void applyDangerStyle(SVGPath icon) {
-        icon.setStyle(DANGER_ICON_STYLE);
-    }
-
-    private static String toCssColor(Color color) {
-        int red = (int) Math.round(color.getRed() * 255);
-        int green = (int) Math.round(color.getGreen() * 255);
-        int blue = (int) Math.round(color.getBlue() * 255);
-        double opacity = color.getOpacity();
-        if (opacity >= 0.999) {
-            return String.format("#%02x%02x%02x", red, green, blue);
+        icon.getStyleClass().remove(DEFAULT_ICON_STYLE);
+        if (!icon.getStyleClass().contains(DANGER_ICON_STYLE)) {
+            icon.getStyleClass().add(DANGER_ICON_STYLE);
         }
-        return String.format("rgba(%d,%d,%d,%.3f)", red, green, blue, opacity);
     }
 
     private static void applySemanticStyle(SVGPath icon, Color color) {

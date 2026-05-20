@@ -33,7 +33,7 @@ public class CustomResultsetTab extends Tab {
         setContent(resultSetVBox);
         resultSetTabController=loader.getController();
         resultSetTabController.lastSqlRefreshButton.setVisible(false);
-        setStyle("-fx-pref-height: 18;");
+        getStyleClass().add("resultset-summary-tab");
         setClosable(true);
         //关闭窗口事件响应
         setOnCloseRequest(event -> resultSetTabController.dispose());

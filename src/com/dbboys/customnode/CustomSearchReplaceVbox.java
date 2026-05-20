@@ -89,7 +89,7 @@ public class CustomSearchReplaceVbox extends VBox {
         setMaxHeight(Region.USE_PREF_SIZE);
         setSpacing(ROW_GAP);
         setPadding(new Insets(PANEL_PADDING_TOP, PANEL_PADDING_RIGHT, PANEL_PADDING_BOTTOM, PANEL_PADDING_LEFT));
-        setStyle("-fx-background-color: -color-bg-default; -fx-border-color: -color-border-default; -fx-border-width: 0.5; -fx-background-radius: 6; -fx-border-radius: 6;");
+        getStyleClass().add("search-replace-panel");
         setPrefWidth(EDIT_PANEL_WIDTH);
         findField.promptTextProperty().bind(I18n.bind("searchreplace.find.prompt", "查找"));
         replaceField.promptTextProperty().bind(I18n.bind("searchreplace.replace.prompt", "替换"));
@@ -106,7 +106,7 @@ public class CustomSearchReplaceVbox extends VBox {
         tobottomBtn.setGraphic(IconFactory.group(IconPaths.SEARCH_REPLACE_TOGGLE_DOWN, 0.6, 0.6));
         tobottomBtn.getStyleClass().add("small");
         buttonPane.getChildren().add(tobottomBtn);
-        findField.setStyle("-fx-padding: 1 1 1 5");
+        findField.getStyleClass().add("search-replace-field");
         totopBtn.setFocusTraversable(false);
         totopBtn.setGraphic(IconFactory.group(IconPaths.SEARCH_REPLACE_TOGGLE_UP, 0.6, 0.6));
         totopBtn.getStyleClass().add("small");
@@ -148,7 +148,7 @@ public class CustomSearchReplaceVbox extends VBox {
         replaceBox.setFillHeight(false);
         Region replaceLeadSpacer = new Region();
         setFixedWidth(replaceLeadSpacer, MODE_COLUMN_WIDTH);
-        replaceField.setStyle("-fx-padding: 1 1 1 5");
+        replaceField.getStyleClass().add("search-replace-field");
         replaceField.prefWidthProperty().bind(findField.widthProperty());
         replaceField.maxWidthProperty().bind(findField.widthProperty());
         HBox.setHgrow(replaceField, Priority.ALWAYS);

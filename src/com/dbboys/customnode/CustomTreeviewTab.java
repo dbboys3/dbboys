@@ -23,25 +23,23 @@ import com.dbboys.ui.IconPaths;
 public class CustomTreeviewTab extends Tab {
     private static final Logger log = LogManager.getLogger(CustomTreeviewTab.class);
     private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#666");
-    private static final String ACTIVE_ICON_STYLE = "-fx-fill: -color-fg-default;";
 
     public ToggleButton titleToggle = new ToggleButton();
     public ContextMenu contextMenu=new ContextMenu();
     public SVGPath titleToggleIcon;
 
     public CustomTreeviewTab() {
-        setStyle("-fx-padding: 0;");
+        getStyleClass().add("treeview-tab");
         titleToggle.setRotate(-90);
         //header.setRotate(-90);
         //header.setSpacing(5);
-        //header.setStyle("-fx-background-color: red");
         
         // 默认灰色图标；移除 svg-icon 样式类，避免被全局 SVG 白色规则覆盖
         titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.6, DEFAULT_ICON_COLOR);
         titleToggle.setGraphic(new Group(titleToggleIcon));
         titleToggle.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
         // 仅图标，无背景无边框
-        titleToggle.setStyle("-fx-background-color: transparent; -fx-border-width: 0; -fx-border-color: transparent;");
+        titleToggle.getStyleClass().add("treeview-tab-toggle");
         titleToggle.setFocusTraversable(false);
         titleToggle.setTooltip(new Tooltip("数据库连接"));
         setText("TEST");
@@ -174,11 +172,11 @@ public class CustomTreeviewTab extends Tab {
 
     private void updateTitleToggleIconColor() {
         boolean active = titleToggle.isSelected() || titleToggle.isHover();
+        titleToggleIcon.getStyleClass().removeAll("icon-primary");
         if (active) {
-            titleToggleIcon.setStyle(ACTIVE_ICON_STYLE);
+            titleToggleIcon.getStyleClass().add("icon-primary");
             titleToggleIcon.setFill(null);
         } else {
-            titleToggleIcon.setStyle("");
             titleToggleIcon.setFill(DEFAULT_ICON_COLOR);
         }
     }

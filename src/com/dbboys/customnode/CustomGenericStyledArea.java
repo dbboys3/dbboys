@@ -75,8 +75,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             "mkv", "txt", "csv", "json", "xml", "iso", "tar", "gz", "tar.gz",
             "sh", "chm", "jar", "yml"
     );
-    public static final String LINK_STYLE = "-fx-fill:-color-accent-3; -fx-underline: true; -fx-cursor: hand;";
-    public static final String INVALID_LINK_STYLE = "-fx-fill: -color-danger-7; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
+    public static final String LINK_STYLE = "markdown-link";
+    public static final String INVALID_LINK_STYLE = "markdown-link-invalid";
     public static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
     public static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
     public int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
@@ -140,7 +140,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         // 使用集合来存储段落样式
         BiConsumer<TextFlow, String> paragraphStyler = (textFlow, style) -> {
             if (style != null && !style.isEmpty()) {
-                textFlow.setStyle(style); // 例如行间距
+                textFlow.getStyleClass().add(style);
             }
         };
         Function<StyledSegment<Either<String, Node>, String>, Node> nodeFactory = seg -> {
@@ -164,7 +164,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         String url=tmpUrl;
                         boolean isHttpLink = isHttpUrl(url);
                         String ext = getFileExtension(url);
-                        t.setStyle(LINK_STYLE);
+                        t.getStyleClass().add(LINK_STYLE);
 
 
                         applyLinkValidation(t, url, isHttpLink);
@@ -258,14 +258,10 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                          */
                     } else if (seg.getStyle().contains("code-inline")) {
-                        t.setStyle(
-                                "-fx-fill: -color-danger-7; " +
-                                        "-fx-font-family: 'SimSun'; "
-
-                        );
+                        t.getStyleClass().add("markdown-inline-code");
 
                     }else if (seg.getStyle().contains("bold")) {
-                        t.setStyle("-fx-font-family: system;-fx-font-weight: bold;-fx-fill: -color-danger-7");
+                        t.getStyleClass().add("markdown-bold");
                     }else if (seg.getStyle() != null) {
                         if (seg.getStyle().contains("title")) {
                             ContextMenu contextMenu = new ContextMenu();
@@ -275,7 +271,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                             // textArea.setWrapText(true);
                             customUserTextField.setEditable(false);
                             customUserTextField.setText(e.getLeft());
-                            customUserTextField.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;-fx-background-color:none;-fx-border-width: 0;-fx-effect:none");
+                            customUserTextField.getStyleClass().add("markdown-title-field");
                             customUserTextField.prefWidthProperty().bind(
                                     Bindings.subtract(AppState.getSqlTabPane().widthProperty(), 10)
                             );
@@ -308,17 +304,17 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                         }
                         if (seg.getStyle().contains("heading-1")) {
-                            t.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-padding: 10 0 5 0;");
+                            t.getStyleClass().add("markdown-heading-1");
                         } else if (seg.getStyle().contains("heading-2")) {
-                            t.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 8 0 4 0;");
+                            t.getStyleClass().add("markdown-heading-2");
                         } else if (seg.getStyle().contains("heading-3")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 6 0 3 0;");
+                            t.getStyleClass().add("markdown-heading-3");
                         } else if (seg.getStyle().contains("heading-4")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 4 0 2 0;");
+                            t.getStyleClass().add("markdown-heading-4");
                         } else if (seg.getStyle().contains("heading-5")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 2 0 1 0;");
+                            t.getStyleClass().add("markdown-heading-5");
                         } else if (seg.getStyle().contains("heading-6")) {
-                            t.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;  -fx-padding: 1 0 1 0;");
+                            t.getStyleClass().add("markdown-heading-6");
                         }
                     }
 
@@ -337,7 +333,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         getStyleClass().add("CustomGenericStyledArea");
         setEditable(false);
         setWrapText(true);
-        setStyle("-fx-font-family: system; -fx-font-size: 11px;");
+        getStyleClass().add("markdown-styled-area");
         setOnKeyPressed(event -> {
             if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
                 modifyItem.fire();
@@ -379,14 +375,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         codeArea.setWrapText(false);
         codeArea.setEditable(false);
         codeArea.setParagraphGraphicFactory(null);
-        codeArea.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: 4px;" +
-                        "-fx-border-color: -color-border-subtle;" +
-                        "-fx-border-radius: 4px;" +
-                        "-fx-padding: 3;" +
-                        "-fx-font-size: 10px;"
-        );
+        codeArea.getStyleClass().add("markdown-code-block");
         updateCodeBlockHeight(codeArea);
         bindCodeBlockWidth(codeArea);
         bindCodeBlockScroll(codeArea);
@@ -737,7 +726,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             append(Either.right(codeArea), "");
         }
         for(int i=0;i<getParagraphs().size();i++) {
-            setParagraphStyle(i, "-fx-line-spacing: 10px");
+            setParagraphStyle(i, "markdown-paragraph");
         }
     }
 
@@ -1062,7 +1051,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     private static void applyLinkValidation(Text textNode, String url, boolean isHttpLink) {
         if (!isHttpLink) {
             if (!new File(url).exists()) {
-                textNode.setStyle(INVALID_LINK_STYLE);
+                textNode.getStyleClass().remove(LINK_STYLE);
+                textNode.getStyleClass().add(INVALID_LINK_STYLE);
             }
             return;
         }
@@ -1076,7 +1066,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         Boolean cached = LINK_CHECK_CACHE.get(url);
         if (cached != null) {
             if (!cached) {
-                textNode.setStyle(INVALID_LINK_STYLE);
+                textNode.getStyleClass().remove(LINK_STYLE);
+                textNode.getStyleClass().add(INVALID_LINK_STYLE);
             }
             return;
         }
@@ -1105,7 +1096,10 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             }
 
             if (Boolean.FALSE.equals(valid)) {
-                Platform.runLater(() -> textNode.setStyle(INVALID_LINK_STYLE));
+                Platform.runLater(() -> {
+                    textNode.getStyleClass().remove(LINK_STYLE);
+                    textNode.getStyleClass().add(INVALID_LINK_STYLE);
+                });
             }
         });
     }

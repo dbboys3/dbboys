@@ -59,7 +59,7 @@
             </HBox>
         </StackPane>
     </HBox>
-    <SplitPane fx:id="sqlSplitPane" prefHeight="30000" style="-fx-background-color: none" orientation="VERTICAL">
+    <SplitPane fx:id="sqlSplitPane" prefHeight="30000" orientation="VERTICAL">
         <Pane fx:id="topPane">
             <StackPane fx:id="sqlEditStackPane" alignment="BOTTOM_LEFT">
                 <VirtualizedScrollPane fx:id="sqlEditScrollPane">
@@ -70,7 +70,7 @@
                 </VirtualizedScrollPane>
                 <HBox fx:id="transactionBox" maxHeight="15" maxWidth="160" alignment="CENTER_LEFT" visible="false">
                     <!--
-                    <Button fx:id="trans_warning_button"  focusTraversable="false" style="-fx-background-color: none;-fx-border-color: none" visible="false">
+                    <Button fx:id="trans_warning_button"  focusTraversable="false" visible="false">
                         <graphic>
                             <Group>
                                 <SVGPath content="M10.8906 3.0859 Q11.6562 2.6641 12.5156 2.8828 Q13.3906 3.0859 13.875 3.8047 L21.75 17.9609 Q21.9844 18.4922 22 19.0703 Q22.0312 19.6484 21.7344 20.1641 Q21.4531 20.6641 20.9688 20.9766 Q20.5 21.2734 19.9219 21.3359 L4.2188 21.3359 Q3.6406 21.3359 3.1406 21.0547 Q2.6406 20.7578 2.3281 20.2734 Q2.0156 19.7891 1.9844 19.2266 Q1.9688 18.6484 2.2031 18.1172 L10.0312 3.9453 Q10.3125 3.3828 10.8906 3.0859 ZM12 16.2891 Q11.4219 16.2891 11.1094 16.7891 Q10.7969 17.2891 11.1094 17.8047 Q11.4219 18.3047 12 18.3047 Q12.3906 18.3047 12.6719 18.0234 Q12.9531 17.7266 12.9531 17.3203 Q12.9531 16.9141 12.6719 16.6328 Q12.3906 16.3359 12 16.2891 ZM12 8.3203 Q11.6094 8.3203 11.3281 8.5703 Q11.0469 8.8047 10.9844 9.1797 L10.9844 14.4141 Q11.0469 14.8047 11.3281 15.0703 Q11.6094 15.3359 12 15.3359 Q12.3906 15.3359 12.6719 15.0703 Q12.9531 14.8047 13.0156 14.4141 L13.0156 9.1797 Q12.9531 8.8047 12.6719 8.5703 Q12.3906 8.3203 12 8.3203 Z" fill="#ff0000" scaleX="0.6" scaleY="0.6"/>
@@ -90,7 +90,7 @@
         <Pane fx:id="bottomPane">
             <StackPane fx:id="bottomPaneStackPane">
                 <TabPane fx:id="resultsetTabPane" tabClosingPolicy="ALL_TABS">
-                    <Tab fx:id="resultsetSummaryTab" closable="false" style="-fx-pref-height: 18;">
+                    <Tab fx:id="resultsetSummaryTab" closable="false">
                         <StackPane fx:id="resultsetStackPane">
                             <CustomTableView fx:id="resultsetTotalTableView">
                             </CustomTableView>

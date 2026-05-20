@@ -29,44 +29,17 @@ import java.util.Locale;
 
 public class ResultSetColumnBuilder {
     private static final Logger log = LogManager.getLogger(ResultSetColumnBuilder.class);
-    private static final double HEADER_BADGE_HORIZONTAL_INSET = 3.2;
     private static final String HEADER_KEY_BADGE = "resultset.header.keyBadge";
     private static final String HEADER_TOOLTIP = "resultset.header.tooltip";
     private static final String HEADER_NAME = "resultset.header.name";
     private static final String HEADER_TYPE = "resultset.header.type";
-    private static final String HEADER_NAME_STYLE =
-            "-fx-font-size: 11px;" +
-            "-fx-font-weight: bold;" +
-            "-fx-padding: 0 0 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
-    private static final String HEADER_TYPE_BADGE_STYLE =
-            "-fx-font-size: 7.2px;" +
-            "-fx-text-fill: #6f8498;" +
-            "-fx-border-color: #6f8498;" +
-            "-fx-border-width: 0.8;" +
-            "-fx-border-radius: 2.4;" +
-            "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
-    private static final String HEADER_PRI_BADGE_STYLE =
-            "-fx-font-size: 7.2px;" +
-            "-fx-font-weight: bold;" +
-            "-fx-text-fill: #9f453c;" +
-            "-fx-border-color: #9f453c;" +
-            "-fx-border-width: 0.8;" +
-            "-fx-border-radius: 2.4;" +
-            "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
+    private static final String HEADER_NAME_STYLE = "resultset-header-name";
+    private static final String HEADER_TYPE_BADGE_STYLE = "resultset-header-type-badge";
+    private static final String HEADER_PRI_BADGE_STYLE = "resultset-header-primary-badge";
     /** Matches CSS in cupertino-dark.css: unsaved UPDATE cells use same success green as INSERT. */
     private static final String CELL_PENDING_UPDATE_STYLE = "resultset-pending-update-cell";
 
-    private static final String HEADER_ROWID_BADGE_STYLE =
-            "-fx-font-size: 7.2px;" +
-            "-fx-font-weight: bold;" +
-            "-fx-text-fill: #8f6d1d;" +
-            "-fx-border-color: #8f6d1d;" +
-            "-fx-border-width: 0.8;" +
-            "-fx-border-radius: 2.4;" +
-            "-fx-background-radius: 2.4;" +
-            "-fx-padding: 0 " + HEADER_BADGE_HORIZONTAL_INSET + " 0 " + HEADER_BADGE_HORIZONTAL_INSET + ";";
+    private static final String HEADER_ROWID_BADGE_STYLE = "resultset-header-rowid-badge";
 
     private final ResultSetTabController ctrl;
 
@@ -229,7 +202,8 @@ public class ResultSetColumnBuilder {
         Object badgeValue = column.getProperties().get(HEADER_KEY_BADGE);
         if (badgeValue instanceof Label keyBadge) {
             keyBadge.setText(keyText);
-            keyBadge.setStyle(resolveKeyBadgeStyle(keyText));
+            keyBadge.getStyleClass().removeAll(HEADER_PRI_BADGE_STYLE, HEADER_ROWID_BADGE_STYLE);
+            keyBadge.getStyleClass().add(resolveKeyBadgeStyle(keyText));
             keyBadge.setManaged(true);
             keyBadge.setVisible(true);
         }
@@ -244,7 +218,7 @@ public class ResultSetColumnBuilder {
                                    String colName,
                                    String headerType) {
         Label nameLabel = new Label(colName);
-        nameLabel.setStyle(HEADER_NAME_STYLE);
+        nameLabel.getStyleClass().add(HEADER_NAME_STYLE);
         nameLabel.setMaxWidth(Double.MAX_VALUE);
         nameLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
 
@@ -274,7 +248,7 @@ public class ResultSetColumnBuilder {
 
     private Label createBadge(String text, String style, boolean visible) {
         Label badge = new Label(text);
-        badge.setStyle(style);
+        badge.getStyleClass().add(style);
         badge.setVisible(visible);
         badge.setManaged(visible);
         return badge;

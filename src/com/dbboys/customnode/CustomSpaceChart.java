@@ -14,8 +14,13 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.Region;
+import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Scale;
 
@@ -112,6 +117,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
     private NumberAxis xAxis;
     private ColorMode colorMode = ColorMode.DBSPACE;
     private final SpaceContextMenuPolicy spaceContextMenuPolicy;
+    private List<SpaceUsage> currentData = List.of();
     /** 非空时：灰色条图例与「总减已用」tooltip 用该 i18n（Oracle 为「已分配未使用」）；空则沿用 space.legend / space.tooltip 默认键。 */
     private final String unusedBarLabelKeyOverride;
     private final String unusedBarLabelFallbackOverride;
@@ -305,6 +311,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
 
     /* ===================== 渲染主入口 ===================== */
     public void render(List<SpaceUsage> data) {
+        currentData = List.copyOf(data);
         updateXAxis(data);
         updateYAxis(data);
         series.getData().clear();
@@ -336,10 +343,16 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         //设置柱子区域背景色
         Node plot = lookup(".chart-plot-background");
         if (plot != null) {
-            plot.setStyle("-fx-background-color: -color-bg-content;");
+            plot.getStyleClass().add("bg-content");
         }
         layout();
         refreshAllBars(data);
+    }
+
+    @Override
+    protected void layoutPlotChildren() {
+        super.layoutPlotChildren();
+        refreshBarStyles(currentData);
     }
 
     /** Oracle：表空间图为创建/删除表空间；数据文件图为自动扩展与删除数据文件。 */
@@ -458,7 +471,6 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                 );
                 timeline.play();
                 // 添加阴影
-               // bar.setStyle(bar.getStyle() + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 2, 0.1, 0, 0);");
             }
         });
 
@@ -473,7 +485,6 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                 );
                 timeline.play();
                 // 移除阴影
-                //bar.setStyle(bar.getStyle().replace("-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 2, 0.1, 0, 0);", ""));
             }
         });
 
@@ -590,7 +601,6 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                         )
                 );
                 timeline.play();
-                //bar.setStyle(bar.getStyle().replace("-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.8), 2, 0.1, 0.1, 0);", ""));
             }
         });
 
@@ -625,12 +635,15 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         String usedColor = resolveUsedColor(u);
 
 
-        bar.setStyle(String.format(
-                "-fx-background-color: linear-gradient(to right, %s 0%%, %s %.1f%%, %s %.1f%%, %s 100%%);" +
-                        "-fx-background-insets: 0; -fx-border-width: 0;",
-                usedColor, usedColor, ratio * 100,
-                COLOR_UNUSED, ratio * 100, COLOR_UNUSED
-        ));
+        if (!bar.getStyleClass().contains("space-chart-bar")) {
+            bar.getStyleClass().add("space-chart-bar");
+        }
+        applyBarBackground(bar,
+                stop(0, usedColor),
+                stop(ratio, usedColor),
+                stop(ratio, COLOR_UNUSED),
+                stop(1, COLOR_UNUSED)
+        );
 
         if(u.getMetaTotal()>0){ //如果是大对象空间，单独着色,getTotalPages()==0表示为数据库空间
             String usedColorData=COLOR_NORMAL;
@@ -659,20 +672,56 @@ public class CustomSpaceChart extends BarChart<Number, String> {
             double ratio3=(u.getTotal()-u.getMetaTotal()+u.getMetaUsed())/u.getTotal();
 
 
-            bar.setStyle(String.format(
-                    "-fx-background-color: linear-gradient(to right, %s 0%%, %s %.1f%%, " +
-                            "%s %.1f%%,%s %.1f%%," +
-                            "%s %.1f%%,%s %.1f%%," +
-                            "%s %.1f%%, %s 100%%);" +
-                            "-fx-background-insets: 0; -fx-border-width: 0;",
-                    usedColorData, usedColorData, ratio1 * 100,
-                    COLOR_UNUSED, ratio1 * 100, COLOR_UNUSED,ratio2 * 100,
-                    usedColorMeta, ratio2 * 100,usedColorMeta,ratio3 * 100,
-                    COLOR_UNUSED,ratio3 * 100,COLOR_UNUSED
-            ));
+            applyBarBackground(bar,
+                    stop(0, usedColorData),
+                    stop(ratio1, usedColorData),
+                    stop(ratio1, COLOR_UNUSED),
+                    stop(ratio2, COLOR_UNUSED),
+                    stop(ratio2, usedColorMeta),
+                    stop(ratio3, usedColorMeta),
+                    stop(ratio3, COLOR_UNUSED),
+                    stop(1, COLOR_UNUSED)
+            );
         }
         bar.setShape(new Rectangle(6, 6));
         bar.setScaleShape(true);
+    }
+
+    private void applyBarBackground(Region bar, javafx.scene.paint.Stop... stops) {
+        bar.setBackground(linearBarBackground(stops));
+        bar.setStyle("-fx-background-color: " + cssLinearBarBackground(stops)
+                + "; -fx-background-insets: 0; -fx-background-radius: 0;");
+    }
+
+    private Background linearBarBackground(javafx.scene.paint.Stop... stops) {
+        return new Background(new BackgroundFill(
+                new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE, stops),
+                CornerRadii.EMPTY,
+                javafx.geometry.Insets.EMPTY
+        ));
+    }
+
+    private String cssLinearBarBackground(javafx.scene.paint.Stop... stops) {
+        StringJoiner joiner = new StringJoiner(", ", "linear-gradient(to right, ", ")");
+        for (javafx.scene.paint.Stop stop : stops) {
+            joiner.add(toCssColor(stop.getColor()) + " " + Math.round(stop.getOffset() * 10000) / 100.0 + "%");
+        }
+        return joiner.toString();
+    }
+
+    private String toCssColor(Color color) {
+        int r = (int) Math.round(color.getRed() * 255);
+        int g = (int) Math.round(color.getGreen() * 255);
+        int b = (int) Math.round(color.getBlue() * 255);
+        double opacity = color.getOpacity();
+        if (opacity >= 1) {
+            return String.format("#%02x%02x%02x", r, g, b);
+        }
+        return "rgba(" + r + ", " + g + ", " + b + ", " + opacity + ")";
+    }
+
+    private javafx.scene.paint.Stop stop(double offset, String color) {
+        return new javafx.scene.paint.Stop(Math.max(0, Math.min(1, offset)), Color.web(color));
     }
 
     private Tooltip createTooltip(SpaceUsage u) {
@@ -797,6 +846,18 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         }
     }
 
+    private void refreshBarStyles(List<SpaceUsage> data) {
+        Map<String, SpaceUsage> map = new HashMap<>();
+        data.forEach(d -> map.put(d.getLabel(), d));
+
+        for (XYChart.Data<Number, String> d : series.getData()) {
+            SpaceUsage u = map.get(d.getYValue());
+            if (u != null && d.getNode() instanceof Region r) {
+                applyBarStyle(r, u);
+            }
+        }
+    }
+
     private void installBarFeatures(Region bar, SpaceUsage usage, Tooltip tooltip) {
         applyBarStyle(bar, usage);
         Tooltip.install(bar, tooltip);
@@ -860,15 +921,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
     }
     public Node createLegend() {
         HBox legend = new HBox(6);
-        legend.setStyle("""
-        -fx-alignment: CENTER;
-        -fx-padding: 6;
-        -fx-background-color: none;
-        -fx-border-color: none;
-        -fx-border-radius: 3;
-        -fx-background-radius: 3;
-        -fx-font-size: 9;
-        """);
+        legend.getStyleClass().add("space-chart-legend");
 
         switch (colorMode) {
 
@@ -920,7 +973,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
 
         javafx.scene.control.Label label = new javafx.scene.control.Label();
         label.textProperty().bind(I18n.bind(i18nKey, fallback));
-        label.setStyle("-fx-font-size: 9px;");
+        label.getStyleClass().add("space-chart-legend-label");
 
         javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(6, rect, label);
         box.setAlignment(javafx.geometry.Pos.CENTER_LEFT);

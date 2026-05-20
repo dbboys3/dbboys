@@ -317,18 +317,14 @@ public class SqlTabController {
         if (button == null) {
             return;
         }
-        button.setStyle(
-                "-fx-background-radius: 999;" +
-                        "-fx-border-radius: 999;" +
-                        "-fx-padding: 2 6 2 6;" +
-                        "-fx-font-size: 9px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-text-fill: white;" +
-                        "-fx-background-color: " + background + ";" +
-                        "-fx-border-color: " + (active ? "-color-fg-default" : "transparent") + ";" +
-                        "-fx-border-width: " + (active ? "1.5" : "0") + ";" +
-                        (active ? "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 8, 0.2, 0, 1);" : "")
-        );
+        button.getStyleClass().removeAll(
+                "accent-pill-success", "accent-pill-failure", "accent-pill-active");
+        button.getStyleClass().add(RESULT_SUCCESS_BUTTON_COLOR.equals(background)
+                ? "accent-pill-success"
+                : "accent-pill-failure");
+        if (active) {
+            button.getStyleClass().add("accent-pill-active");
+        }
     }
 
 
@@ -361,21 +357,14 @@ public class SqlTabController {
     }
 
     private void configureSqlExecuteProcessLabel(Label label) {
-        label.setStyle("-fx-text-fill: -color-fg-default; -fx-font-size: 10px;");
+        label.getStyleClass().add("sql-execute-process-label");
         label.setMinHeight(Region.USE_PREF_SIZE);
         label.setPrefHeight(Region.USE_COMPUTED_SIZE);
         label.setMaxHeight(Region.USE_PREF_SIZE);
     }
 
     private void setupSqlExecuteProcessPane() {
-        sqlExecuteProcessStackPane.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-border-color: -color-border-default;" +
-                        "-fx-border-width: 0.5;" +
-                        "-fx-background-radius: 7;" +
-                        "-fx-border-radius: 7;" +
-                        "-fx-padding: 3 8 3 8;"
-        );
+        sqlExecuteProcessStackPane.getStyleClass().add("sql-execute-process-pane");
         sqlExecuteProcessStackPane.setMinWidth(Region.USE_PREF_SIZE);
         sqlExecuteProcessStackPane.setPrefWidth(Region.USE_COMPUTED_SIZE);
         sqlExecuteProcessStackPane.setMaxWidth(Region.USE_PREF_SIZE);

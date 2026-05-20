@@ -155,7 +155,6 @@ class DownloadTaskWrapper {
 
         HBox buttonBox = new HBox(5, pauseStackPane, stopButton);
         buttonBox.setAlignment(Pos.CENTER);
-        //rootPane.setStyle("-fx-padding: 10; -fx-background-color: #f8f8f8;");
 
         pauseButton.setOnAction(e -> {
             pauseButton.setVisible(!pauseButton.isVisible());
@@ -359,7 +358,6 @@ class DownloadTaskWrapper {
                                     }
                                     NotificationUtil.showMainNotification(I18n.t("download.notice.completed", "下载已完成！"));
                                 }
-                                //rootPane.setStyle("-fx-background-color: #c8e6c9; -fx-padding: 10;");
                             });
                         }
                     }
@@ -1837,7 +1835,6 @@ public class DownloadManagerUtil {
 
 
 }
-
 
 
 

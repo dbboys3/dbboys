@@ -88,37 +88,20 @@ public class Main extends Application {
             bootLogo.setPreserveRatio(true);
 
             Label bootTitle = new Label("DBboys");
-            bootTitle.setStyle(
-                    "-fx-font-size: 20px;" +
-                    "-fx-font-weight: bold;" +
-                    "-fx-text-fill: -color-fg-default;"
-            );
+            bootTitle.getStyleClass().add("boot-title");
             Label bootSubtitle = new Label("Database Toolkit");
-            bootSubtitle.setStyle(
-                    "-fx-font-size: 11px;" +
-                    "-fx-text-fill: -color-fg-muted;"
-            );
+            bootSubtitle.getStyleClass().add("boot-subtitle");
             Label bootVersion = new Label(VERSION_NAME);
-            bootVersion.setStyle(
-                    "-fx-font-size: 10px;" +
-                    "-fx-text-fill: -color-fg-subtle;"
-            );
+            bootVersion.getStyleClass().add("boot-version");
 
             loadProgressBar.getStyleClass().remove("loadProgressBar");
+            loadProgressBar.getStyleClass().add("boot-progress-bar");
             loadProgressBar.setPrefWidth(260);
             loadProgressBar.setPrefHeight(6);
             loadProgressBar.setMaxWidth(Double.MAX_VALUE);
-            loadProgressBar.setStyle(
-                    "-fx-accent: -color-accent-emphasis;" +
-                    "-fx-control-inner-background: -color-bg-subtle;" +
-                    "-fx-background-color: transparent;"
-            );
 
             Label bootStatus = new Label("Loading workspace...");
-            bootStatus.setStyle(
-                    "-fx-font-size: 11px;" +
-                    "-fx-text-fill: -color-fg-muted;"
-            );
+            bootStatus.getStyleClass().add("boot-status");
 
             VBox textBox = new VBox(2, bootTitle, bootSubtitle, bootVersion);
             textBox.setAlignment(Pos.CENTER_LEFT);
@@ -128,18 +111,12 @@ public class Main extends Application {
 
             VBox loadCard = new VBox(16, headerBox, loadProgressBar, bootStatus);
             loadCard.setAlignment(Pos.CENTER_LEFT);
-            loadCard.setStyle(
-                    "-fx-background-color: -color-bg-default;" +
-                    "-fx-background-radius: 8;" +
-                    "-fx-border-color: -color-border-default;" +
-                    "-fx-border-radius: 8;" +
-                    "-fx-padding: 18 22 18 22;"
-            );
+            loadCard.getStyleClass().add("boot-card");
             loadCard.setPrefSize(320, 132);
             loadCard.setMaxSize(320, 132);
 
             StackPane loadStackpane = new StackPane(loadCard);
-            loadStackpane.setStyle("-fx-background-color: transparent; -fx-padding: 12;");
+            loadStackpane.getStyleClass().add("boot-root");
             Scene bootscene = new Scene(loadStackpane, 344, 156);
             bootscene.setFill(Color.TRANSPARENT);
             AppState.applyAppStylesheet(bootscene);
@@ -198,7 +175,6 @@ public class Main extends Application {
                 HBox.setMargin(logo, new Insets(0, 0, 0, 5));
                 titleBarLeft.getStyleClass().add("window-title-bar-left");
                 titleBarLeft.setAlignment(Pos.CENTER_LEFT);
-                titleBarLeft.setStyle("-fx-background-color: transparent;");
                 mainVBox.getChildren().remove(0);
 
                 // 自定义窗口标题栏不显示文字，仅显示左侧 logo + 菜单

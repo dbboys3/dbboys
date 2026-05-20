@@ -63,7 +63,7 @@ public class MarkdownUtil {
         treeView.setRoot(createNode(rootDir));
         treeView.setShowRoot(false);
         treeView.setCellFactory(param -> new CustomMarkdownTreeCell());
-        treeView.setStyle(" -fx-pref-height: 2000 ;");
+        treeView.getStyleClass().add("markdown-tree-view");
         if(!treeView.getRoot().getChildren().isEmpty())
         treeView.getSelectionModel().select(treeView.getRoot().getChildren().get(0));
         //treeView.getRoot().getChildren().forEach(child -> child.setExpanded(true));

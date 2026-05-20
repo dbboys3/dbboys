@@ -215,7 +215,8 @@ public class CustomTableInfoTab extends CustomTab {
                                 choiceBox.setMaxHeight(18);
                                 
                                 // 移除默认边框和背景，使其看起来更像普通文本
-                                choiceBox.setStyle(
+                                choiceBox.getStyleClass().add("table-choice-box");
+                                /*
                                     "-fx-background-color: transparent; " +
                                     "-fx-border-color: transparent; " +
                                     "-fx-background-insets: 0; " +
@@ -223,13 +224,12 @@ public class CustomTableInfoTab extends CustomTab {
                                     "-fx-padding: 0; " +
                                     "-fx-font-size: 9; " +
                                     "-fx-cell-size: 18; " // 设置下拉选项的高度
-                                );
+                                */
                                 choiceBox.setFocusTraversable(false);
                                 choiceBox.setDisable(readOnlyConnect);
                             
                                 
                                 // 添加CSS类，用于设置下拉列表的样式
-                                choiceBox.getStyleClass().add("table-choice-box");
                                 
                                 // 监听ChoiceBox的值变化，直接更新数据
                                 choiceBox.valueProperty().addListener((obs, oldValue, newValue) -> {
@@ -521,13 +521,13 @@ public class CustomTableInfoTab extends CustomTab {
         tableNameField.setPromptText(I18n.t("tableinfo.table_name", "表名"));
         tableNameField.setPrefWidth(220);
         tableNameField.setMinWidth(160);
-        tableNameField.setStyle("-fx-padding: 1 1 1 3");
+        tableNameField.getStyleClass().add("compact-search-field");
 
         tableCommentField = new CustomUserTextField();
         tableCommentField.setPromptText(I18n.t("tableinfo.table_comment", "表描述"));
         tableCommentField.setPrefWidth(380);
         tableCommentField.setMinWidth(220);
-        tableCommentField.setStyle("-fx-padding: 1 1 1 3");
+        tableCommentField.getStyleClass().add("compact-search-field");
 
         // 给每个 Tab 绑定「首次选中加载」逻辑
         bindLazyLoadToTab(colsTab, () -> loadColsTabContent(colsTab), () -> colsTabLoaded, (loaded) -> colsTabLoaded = loaded);
@@ -535,7 +535,7 @@ public class CustomTableInfoTab extends CustomTab {
         mainTabPane.getTabs().addAll(colsTab, ddlTab);
 
         
-        mainTabPane.setStyle("-fx-background-color: -color-bg-default;");
+        mainTabPane.getStyleClass().add("bg-default");
         StackPane  stackPane=new StackPane(mainTabPane, refreshButton);
         StackPane.setAlignment(refreshButton, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(refreshButton, new Insets(0, 15, 20, 0));
@@ -798,14 +798,14 @@ public class CustomTableInfoTab extends CustomTab {
             Label tableCommentLabel = new Label();
             tableCommentLabel.textProperty().bind(I18n.bind("tableinfo.table_comment", "表描述"));
             HBox tableInfoBox = new HBox(8, tableNameLabel, tableNameField, tableCommentLabel, tableCommentField);
-            tableInfoBox.setStyle("-fx-background-color: -color-bg-default;");
+            tableInfoBox.getStyleClass().add("bg-default");
             tableInfoBox.setAlignment(Pos.CENTER_LEFT);
             tableInfoBox.setPadding(new Insets(8, 10, 6, 10));
 
             colsStackPane = new StackPane(colsTableView, buttonBox);
             StackPane.setAlignment(buttonBox, Pos.BOTTOM_RIGHT);
             StackPane.setMargin(buttonBox, new Insets(0, 81, -4, 0));
-            colsStackPane.setStyle("-fx-background-color: -color-bg-default;");
+            colsStackPane.getStyleClass().add("bg-default");
 
             VBox colsRoot = new VBox(tableInfoBox, colsStackPane);
             VBox.setVgrow(colsStackPane, javafx.scene.layout.Priority.ALWAYS);

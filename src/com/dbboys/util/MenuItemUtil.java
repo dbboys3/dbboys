@@ -39,8 +39,7 @@ public class MenuItemUtil {
         Tooltip tooltip = new Tooltip(tooltipText);
         button.setTooltip(tooltip);
         button.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.4));
-        button.getStyleClass().add("small");
-        button.setStyle("-fx-padding: 1 3 1 3");
+        button.getStyleClass().addAll("small", "modify-button");
         button.setFocusTraversable(false);
         return button;
     }

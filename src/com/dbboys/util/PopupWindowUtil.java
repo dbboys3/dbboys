@@ -180,13 +180,12 @@ public class PopupWindowUtil {
         checkOutputPopupStage.titleProperty().bind(cmdOutputTitleBinding);
 
         //初始化通知面板
-        noticePane.setStyle("-fx-background-color: none;-fx-alignment: center");
+        noticePane.getStyleClass().add("notice-pane");
         noticePane.setMaxWidth(360);
         noticePane.setMaxHeight(25);
         noticePane.setVisible(false);
 
         //初始化sql历史记录表格
-        //sql_his_tableview.setStyle("");
         //sql_his_tableview.getStyleClass().clear();
         //sql_his_tableview.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/css/test.css").toExternalForm());
 
@@ -200,7 +199,7 @@ public class PopupWindowUtil {
         );
         sqlHistoryPopupStageScene = sqlHistoryFrame.scene;
         sqlHistoryPopupStage.titleProperty().bind(sqlHistoryTitleBinding);
-        sqlHistoryTableView.setStyle("-fx-background-insets: 0;");
+        sqlHistoryTableView.getStyleClass().add("edge-to-edge-table");
 
         //sql_his_tableview.getSelectionModel().setCellSelectionEnabled(true);
         //sql_his_tableview.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -375,7 +374,7 @@ public class PopupWindowUtil {
         sqlTaskTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         sqlTaskTableView.getSelectionModel().setCellSelectionEnabled(true);
         sqlTaskTableView.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        sqlTaskTableView.setStyle("-fx-background-insets: 0;");
+        sqlTaskTableView.getStyleClass().add("edge-to-edge-table");
 
         //初始化ddl显示面板
         CustomWindowFrameUtil.Frame ddlFrame = CustomWindowFrameUtil.createModalPopup(
@@ -406,7 +405,7 @@ public class PopupWindowUtil {
         compatibilityTableView.setPlaceholder(new Label(I18n.t("main.compatibility.empty", "暂无适配信息")));
         compatibilityTableView.setFixedCellSize(COMPATIBILITY_TABLE_FIXED_ROW_HEIGHT);
         compatibilityTableView.setPlaceholder(compatibilityPlaceholderLabel);
-        compatibilityTableView.setStyle("-fx-background-insets: 0;");
+        compatibilityTableView.getStyleClass().add("edge-to-edge-table");
 
         TableColumn<CompatibilityRow, String> compatibilityTypeColumn = new TableColumn<>();
         compatibilityTypeColumn.textProperty().bind(I18n.bind("main.compatibility.type", "数据库类型"));
@@ -591,7 +590,7 @@ public class PopupWindowUtil {
 
         VBox contentBox = new VBox(16, sqlPreviewPane, buttonBar);
         contentBox.setPadding(new Insets(16, 20, 18, 20));
-        contentBox.setStyle("-fx-background-color: -color-bg-default;");
+        contentBox.getStyleClass().add("bg-default");
         contentBox.setFillWidth(true);
         VBox.setVgrow(sqlPreviewPane, Priority.ALWAYS);
 

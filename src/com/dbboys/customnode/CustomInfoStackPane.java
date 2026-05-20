@@ -65,7 +65,7 @@ public class CustomInfoStackPane extends StackPane {
         notice_pane = noticePane;
         getChildren().add(codeAreaScrollPane);
 
-        noticePane.setStyle("-fx-background-color: none;-fx-alignment: center");
+        noticePane.getStyleClass().add("notice-pane");
         noticePane.setMaxWidth(NOTICE_MAX_WIDTH);
         noticePane.setMaxHeight(NOTICE_MAX_HEIGHT);
         noticePane.setVisible(false);
@@ -311,4 +311,3 @@ public class CustomInfoStackPane extends StackPane {
     }
 
 }
-

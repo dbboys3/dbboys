@@ -36,12 +36,7 @@ public class NotificationUtil {
         }
 
         Label label = new Label(text);
-        label.setStyle(
-                "-fx-background-color: rgba(58,58,60,0.9);" +
-                        "-fx-text-fill: white;" +
-                        "-fx-padding: 6px 9px;" +
-                        "-fx-background-radius: 5;"
-        );
+        label.getStyleClass().add("notification-label");
         label.setFont(Font.font(10));
         boolean hasPrevious = old != null;
         label.setOpacity(hasPrevious ? 1 : 0);

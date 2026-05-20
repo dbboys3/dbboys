@@ -37,7 +37,7 @@
             <HBox prefHeight="30" alignment="CENTER_LEFT">
                 <Label fx:id="driverLabel" text="%createconnect.label.driver" prefWidth="100">
                 </Label>
-                <ChoiceBox fx:id="driverChoiceBox" focusTraversable="false" styleClass="choice-box-with-border" style="-fx-pref-width: 282px;">
+                <ChoiceBox fx:id="driverChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
                 </ChoiceBox>
                 <Label text=" "></Label>
                 <Button fx:id="addDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#addDriverClicked" styleClass="custom-button-with-radius">
@@ -70,7 +70,7 @@
                     <HBox alignment="CENTER_LEFT" fx:id="instanceHBox" spacing="8">
                     </HBox>
                 </HBox>
-                <HBox fx:id="groupHbox" prefHeight="30" alignment="CENTER_LEFT" style="-fx-background-color: -color-bg-default" visible="false">
+                <HBox fx:id="groupHbox" prefHeight="30" alignment="CENTER_LEFT" visible="false">
                     <Label fx:id="groupLabel" text="%createconnect.label.group" prefWidth="100">
                     </Label>
                     <CustomUserTextField fx:id="groupTextField" text="db_group" promptText="%createconnect.prompt.group" prefWidth="200"></CustomUserTextField>
@@ -102,8 +102,8 @@
                 </CheckBox>
             </HBox>
         </VBox>
-            <HBox fx:id="connectingHBox" alignment="CENTER" style="-fx-background-color: rgba(0, 0, 0, 0.3);-fx-background-radius: 2;" visible="false">
-                <HBox maxWidth="100" maxHeight="15" style="-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5" alignment="CENTER">
+            <HBox fx:id="connectingHBox" alignment="CENTER" visible="false">
+                <HBox fx:id="connectingStatusBox" maxWidth="100" maxHeight="15" alignment="CENTER">
                 <ImageView fx:id="connectingLoadingImageView" fitHeight="12" fitWidth="12">
                 </ImageView>
                     <Label fx:id="connectingStatusLabel" text="%createconnect.status.connecting"></Label>

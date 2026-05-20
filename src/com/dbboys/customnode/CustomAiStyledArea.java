@@ -37,7 +37,7 @@ public class CustomAiStyledArea extends CustomGenericStyledArea {
         getStyleClass().add("CustomAiStyledArea");
         setEditable(false);
         setWrapText(true);
-        setStyle("-fx-font-family: system; -fx-font-size: 10px;");
+        getStyleClass().add("ai-styled-area");
         contextMenu.getItems().setAll(copyItem);
         setContextMenu(contextMenu);
         addEventFilter(ContextMenuEvent.CONTEXT_MENU_REQUESTED, event -> {

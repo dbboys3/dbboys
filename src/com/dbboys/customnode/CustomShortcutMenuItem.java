@@ -12,7 +12,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
 public class CustomShortcutMenuItem extends CustomMenuItem {
-    private static final String COMPACT_PADDING = "-fx-padding: 0;";
     private static final double DEFAULT_ROW_WIDTH = 200;
     private static final double DEFAULT_ICON_SLOT_WIDTH = 18;
     private static final double DEFAULT_ICON_TEXT_GAP = 2;  //文字与图标的间距
@@ -35,17 +34,17 @@ public class CustomShortcutMenuItem extends CustomMenuItem {
         HBox row = new HBox(0);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPrefWidth(DEFAULT_ROW_WIDTH);
-        row.setStyle(COMPACT_PADDING);
+        row.getStyleClass().add("shortcut-menu-row");
 
         iconSlot.setAlignment(Pos.CENTER_LEFT);
         iconSlot.setMinWidth(DEFAULT_ICON_SLOT_WIDTH);
         iconSlot.setPrefWidth(DEFAULT_ICON_SLOT_WIDTH);
         iconSlot.setMaxWidth(DEFAULT_ICON_SLOT_WIDTH);
-        iconSlot.setStyle(COMPACT_PADDING);
+        iconSlot.getStyleClass().add("shortcut-menu-row");
         HBox.setMargin(iconSlot, new Insets(0, DEFAULT_ICON_TEXT_GAP, 0, DEFAULT_ICON_LEFT_PADDING));
 
-        textLabel.setStyle("-fx-padding: 0;-fx-min-width: 120;-fx-text-fill: -color-fg-default;");
-        shortcutLabel.setStyle(COMPACT_PADDING + "-fx-text-fill: #888;");
+        textLabel.getStyleClass().add("shortcut-menu-text");
+        shortcutLabel.getStyleClass().add("shortcut-menu-shortcut");
         shortcutLabel.setTranslateX(SHORTCUT_NUDGE_RIGHT);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

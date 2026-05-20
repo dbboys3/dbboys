@@ -58,21 +58,13 @@ public class MainController {
     private static final double AI_INPUT_HEIGHT = 90;
     private static final int AI_HISTORY_TURNS = 3;
     /** 流式正文标签（与主题 token 一致） */
-    private static final String AI_STREAMING_LABEL_STYLE =
-            "-fx-text-fill: -color-fg-default; -fx-font-size: 10px; -fx-padding: 6 10 6 10;";
+    private static final String AI_STREAMING_LABEL_STYLE = "ai-streaming-label";
     /** 「正在思考」占位：弱化前景色，随明暗主题走 -color-fg-muted */
-    private static final String AI_THINKING_LABEL_STYLE =
-            "-fx-text-fill: -color-fg-muted; -fx-font-size: 10px; -fx-padding: 6 10 6 10;";
+    private static final String AI_THINKING_LABEL_STYLE = "ai-thinking-label";
     /** 记忆开关：关 — 与主题 surface 一致 */
-    private static final String AI_MEMORY_BTN_STYLE_OFF =
-            "-fx-background-color: -color-bg-subtle; -fx-background-radius: 6; "
-                    + "-fx-border-color: -color-border-default; -fx-border-radius: 6; -fx-border-width: 0.5; "
-                    + "-fx-text-fill: -color-fg-muted; -fx-font-size: 9px; -fx-padding: 3 8 3 8;";
+    private static final String AI_MEMORY_BTN_STYLE_OFF = "ai-memory-toggle-off";
     /** 记忆开关：开 — 使用主题强调色弱背景 */
-    private static final String AI_MEMORY_BTN_STYLE_ON =
-            "-fx-background-color: -color-accent-subtle; -fx-background-radius: 6; "
-                    + "-fx-border-color: -color-accent-muted; -fx-border-radius: 6; -fx-border-width: 0.5; "
-                    + "-fx-text-fill: -color-accent-fg; -fx-font-size: 9px; -fx-padding: 3 8 3 8;";
+    private static final String AI_MEMORY_BTN_STYLE_ON = "ai-memory-toggle-on";
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
             "doubao-seed-2-0-mini-260215",
             "deepseek-v4-pro",
@@ -151,7 +143,10 @@ public class MainController {
 
         private void startThinkingAnimation(String baseText) {
             stopThinkingAnimation();
-            streamingLabel.setStyle(AI_THINKING_LABEL_STYLE);
+            streamingLabel.getStyleClass().remove(AI_STREAMING_LABEL_STYLE);
+            if (!streamingLabel.getStyleClass().contains(AI_THINKING_LABEL_STYLE)) {
+                streamingLabel.getStyleClass().add(AI_THINKING_LABEL_STYLE);
+            }
             thinkingFade = new FadeTransition(Duration.millis(950), streamingLabel);
             thinkingFade.setFromValue(0.52);
             thinkingFade.setToValue(1.0);
@@ -179,7 +174,10 @@ public class MainController {
                 thinkingDotsTimeline = null;
             }
             streamingLabel.setOpacity(1.0);
-            streamingLabel.setStyle(AI_STREAMING_LABEL_STYLE);
+            streamingLabel.getStyleClass().remove(AI_THINKING_LABEL_STYLE);
+            if (!streamingLabel.getStyleClass().contains(AI_STREAMING_LABEL_STYLE)) {
+                streamingLabel.getStyleClass().add(AI_STREAMING_LABEL_STYLE);
+            }
         }
 
         private synchronized void appendRaw(String delta) {
@@ -234,6 +232,12 @@ public class MainController {
     private CustomShortcutMenuItem menuSettingsLanguageEn;
     @FXML
     private CustomShortcutMenuItem menuSettingsLanguageZhTw;
+    @FXML
+    private Menu menuSettingsTheme;
+    @FXML
+    private CustomShortcutMenuItem menuSettingsThemeDark;
+    @FXML
+    private CustomShortcutMenuItem menuSettingsThemeLight;
     @FXML
     private CustomShortcutMenuItem menuSettingsReset;
     @FXML
@@ -356,6 +360,7 @@ public class MainController {
         menuConfigInstallGbase.setGraphic(null);
         menuConfigUninstallGbase.setGraphic(null);
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
+        menuSettingsTheme.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_THEME, 0.68));
         menuSettingsReset.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_RESET, 0.6));
         menuHelpAbout.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_HELP, 0.6));
         menuHelpCompatibilityList.setGraphic(IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.45));
@@ -601,7 +606,7 @@ public class MainController {
 
         Label hintLabel = new Label(I18n.t("ai.dialog.api_key.hint") + "\n" + AiAuthUtil.getApiTokenStoragePath());
         hintLabel.setWrapText(true);
-        hintLabel.setStyle("-fx-font-size: 10px; -fx-opacity: 0.75;");
+        hintLabel.getStyleClass().add("ai-api-key-hint");
 
         VBox content = new VBox(8, promptLabel, keyField, hintLabel);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
@@ -647,7 +652,7 @@ public class MainController {
     }
 
     private void installSettingsMenuBehavior() {
-        installHoverHideMenuBehavior(menuSettings, "settingsMenuHoverFixInstalled", menuSettingsLanguage);
+        installHoverHideMenuBehavior(menuSettings, "settingsMenuHoverFixInstalled", menuSettingsLanguage, menuSettingsTheme);
     }
 
     private void installConfigMenuBehavior() {
@@ -759,6 +764,9 @@ public class MainController {
         bindText(menuSettingsLanguageZh, "main.menu.settings.language.zh");
         bindText(menuSettingsLanguageEn, "main.menu.settings.language.en");
         bindText(menuSettingsLanguageZhTw, "main.menu.settings.language.zh_tw");
+        bindText(menuSettingsTheme, "main.menu.settings.theme");
+        bindText(menuSettingsThemeDark, "main.menu.settings.theme.dark");
+        bindText(menuSettingsThemeLight, "main.menu.settings.theme.light");
         bindText(menuSettingsReset, "main.menu.settings.reset");
 
         bindText(menuHelp, "main.menu.help");
@@ -1212,7 +1220,8 @@ public class MainController {
             aiMemoryToggleButton.setTooltip(tooltip);
         }
         tooltip.setText(I18n.t(tooltipKey));
-        aiMemoryToggleButton.setStyle(aiMemoryEnabled ? AI_MEMORY_BTN_STYLE_ON : AI_MEMORY_BTN_STYLE_OFF);
+        aiMemoryToggleButton.getStyleClass().removeAll(AI_MEMORY_BTN_STYLE_ON, AI_MEMORY_BTN_STYLE_OFF);
+        aiMemoryToggleButton.getStyleClass().add(aiMemoryEnabled ? AI_MEMORY_BTN_STYLE_ON : AI_MEMORY_BTN_STYLE_OFF);
     }
 
     private void updateAiSendButtonText(boolean thinking) {
@@ -1262,11 +1271,7 @@ public class MainController {
         configureAiMessageArea(view.area);
         configureAiStreamingLabel(view.streamingLabel, bubble);
         bubble.getChildren().addAll(view.streamingLabel, view.area);
-        bubble.setStyle(
-                "-fx-background-color: -color-bg-content;" +
-                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
-                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
-        );
+        bubble.getStyleClass().add("ai-message-bubble");
         bubble.prefWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
         bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().subtract(24));
         view.area.prefWidthProperty().bind(bubble.widthProperty());
@@ -1280,18 +1285,15 @@ public class MainController {
 
     private void configureAiMessageArea(CustomAiStyledArea area) {
         area.setEditable(false);
-        area.setStyle(
-                area.getStyle() +
-                        ";-fx-padding: 6 10 6 10;" +
-                        "-fx-background-color: transparent;" +
-                        "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";"
-        );
+        area.getStyleClass().add("ai-message-area");
     }
 
     private void configureAiStreamingLabel(Label label, StackPane bubble) {
         label.setWrapText(true);
         label.setMaxWidth(Double.MAX_VALUE);
-        label.setStyle(AI_STREAMING_LABEL_STYLE);
+        if (!label.getStyleClass().contains(AI_STREAMING_LABEL_STYLE)) {
+            label.getStyleClass().add(AI_STREAMING_LABEL_STYLE);
+        }
         label.maxWidthProperty().bind(bubble.widthProperty().subtract(20));
         StackPane.setAlignment(label, Pos.CENTER_LEFT);
     }
@@ -1386,15 +1388,10 @@ public class MainController {
         Label messageLabel = new Label(text);
         messageLabel.setWrapText(true);
         messageLabel.setMaxWidth(Double.MAX_VALUE);
-        messageLabel.setStyle("-fx-text-fill: -color-fg-emphasis; -fx-font-size: 10px;");
+        messageLabel.getStyleClass().add("ai-user-message-label");
 
         StackPane bubble = new StackPane(messageLabel);
-        bubble.setStyle(
-                "-fx-background-color: -color-accent-emphasis;" +
-                "-fx-background-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
-                "-fx-border-radius: " + MESSAGE_BUBBLE_RADIUS + ";" +
-                "-fx-padding: 6 10 6 10;"
-        );
+        bubble.getStyleClass().add("ai-user-message-bubble");
         bubble.maxWidthProperty().bind(aiChatMessages.widthProperty().multiply(USER_BUBBLE_MAX_WIDTH_RATIO));
         messageLabel.maxWidthProperty().bind(bubble.maxWidthProperty().subtract(20));
         HBox messageRow = createMessageRow(bubble, () -> text, Pos.CENTER_RIGHT, Pos.CENTER_RIGHT);
@@ -1540,6 +1537,19 @@ public class MainController {
     private void applyLanguage(Locale locale, String noticeKey) {
         I18n.setLocale(locale);
         ConfigManagerUtil.setProperty("UI_LANG", locale.toLanguageTag());
+        NotificationUtil.showMainNotification(I18n.t(noticeKey));
+    }
+
+    public void setThemeDark() {
+        applyTheme(AppState.THEME_DARK, "main.notice.theme_switched.dark");
+    }
+
+    public void setThemeLight() {
+        applyTheme(AppState.THEME_LIGHT, "main.notice.theme_switched.light");
+    }
+
+    private void applyTheme(String theme, String noticeKey) {
+        AppState.setCurrentTheme(theme);
         NotificationUtil.showMainNotification(I18n.t(noticeKey));
     }
 

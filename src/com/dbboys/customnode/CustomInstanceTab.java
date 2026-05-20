@@ -145,7 +145,7 @@ public class CustomInstanceTab extends CustomTab {
                 instanceNameText,
                 I18n.localeProperty()
         ));
-        instanceInfoLabel.setStyle("-fx-font-size:9");
+        instanceInfoLabel.getStyleClass().add("instance-info-label");
 
         if(connect.getReadonly()){
             instanceInfoLabel.setGraphic(IconFactory.group(IconPaths.SQL_READONLY, 0.45, IconFactory.dangerColor()));
@@ -181,7 +181,7 @@ public class CustomInstanceTab extends CustomTab {
         checkStackPane.getChildren().add(checkTableView);
         ((TableColumn<?, ?>) checkTableView.getColumns().get(0)).setMaxWidth(30);
         ((TableColumn<?, ?>) checkTableView.getColumns().get(0)).setMinWidth(30);
-        checkStackPane.setStyle("-fx-background-color: -color-bg-content;");
+        checkStackPane.getStyleClass().add("bg-content");
         Button checkshotButton= new Button();
         checkshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
         checkshotButton.setFocusTraversable(false);
@@ -264,7 +264,7 @@ public class CustomInstanceTab extends CustomTab {
         configStackPane.getChildren().add(configTableView);
         ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMaxWidth(36);
         ((TableColumn<?, ?>) configTableView.getColumns().get(0)).setMinWidth(36);
-        configStackPane.setStyle("-fx-background-color:-color-bg-content;");
+        configStackPane.getStyleClass().add("bg-content");
         Button configshotButton= new Button();
         configshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
         configshotButton.setFocusTraversable(false);
@@ -290,7 +290,7 @@ public class CustomInstanceTab extends CustomTab {
         bindSpaceLabel(spaceType, spaceLabels.legendI18nKey(), spaceLabels.legendText());
         spaceType.setVisible(spaceLabels.legendText() != null && !spaceLabels.legendText().isBlank());
         spaceType.setManaged(spaceType.isVisible());
-        spaceType.setStyle("-fx-font-size: 9;-fx-padding: 0 0 5 0");
+        spaceType.getStyleClass().add("instance-space-type");
         Label dbspaceTitleLabel = new Label();
         bindSpaceLabel(dbspaceTitleLabel, spaceLabels.dbspaceTitleI18nKey(), spaceLabels.dbspaceTitle());
         VBox dbspaceChartVbox = new VBox(dbspaceChart,dbspaceChartLegend,spaceType,dbspaceTitleLabel);
@@ -330,13 +330,13 @@ public class CustomInstanceTab extends CustomTab {
         tabChartVbox.setAlignment(Pos.CENTER);
         VBox charts=new VBox(50,dbspaceChartVbox,chunkChartVbox,databaseChartVbox,tabChartVbox);
         charts.setAlignment(Pos.CENTER);
-        charts.setStyle("-fx-background-color: -color-bg-content;");
+        charts.getStyleClass().add("bg-content");
         ScrollPane scrollPane = new ScrollPane(charts);
         dbspaceStackPane=new StackPane(scrollPane);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
-        scrollPane.setStyle("-fx-padding: 0;-fx-background-color:-color-bg-content;");
-        dbspaceStackPane.setStyle("-fx-background-color: -color-bg-content;");
+        scrollPane.getStyleClass().add("instance-chart-scroll-pane");
+        dbspaceStackPane.getStyleClass().add("bg-content");
         dbspaceStackPane.setAlignment(Pos.CENTER);
         Button spaceshotButton= new Button();
         spaceshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
@@ -358,7 +358,7 @@ public class CustomInstanceTab extends CustomTab {
                 processStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
                 Label runningLabel=new Label(I18n.t("instance.dialog.init.progress", " 正在初始化...0.00%"));
                 HBox imageHBox = new HBox(imageView, runningLabel, processStopButton);
-                imageHBox.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 0 0 5");
+                imageHBox.getStyleClass().add("modal-progress-card");
                 imageHBox.setAlignment(Pos.CENTER);
                 imageHBox.setMaxHeight(15);
                 //imageHBox.setMaxWidth(100);
@@ -366,7 +366,7 @@ public class CustomInstanceTab extends CustomTab {
                 processStopButton.getStyleClass().add("small");
                 HBox backgroupHbox=new HBox(imageHBox);
                 backgroupHbox.setAlignment(Pos.CENTER);
-                backgroupHbox.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);-fx-background-radius: 2;");
+                backgroupHbox.getStyleClass().add("modal-progress-overlay");
                 backgroupHbox.setVisible(false);
 
                 ButtonType commitButtonType = new ButtonType(
@@ -822,11 +822,11 @@ public class CustomInstanceTab extends CustomTab {
                 oracleDdlStopButton.setTooltip(oracleDdlStopTip);
                 HBox loadingRow = new HBox(8, loadingIv, runningLabel, oracleDdlStopButton);
                 loadingRow.setAlignment(Pos.CENTER);
-                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.getStyleClass().add("modal-progress-card-padded");
                 loadingRow.setMaxHeight(20);
                 HBox overlayBar = new HBox(loadingRow);
                 overlayBar.setAlignment(Pos.CENTER);
-                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.getStyleClass().add("modal-progress-overlay-strong");
                 overlayBar.setVisible(false);
 
                 final AtomicReference<Task<Void>> oracleDdlTaskHolder = new AtomicReference<>();
@@ -1038,11 +1038,11 @@ public class CustomInstanceTab extends CustomTab {
                 dropOracleDdlStopButton.setTooltip(dropOracleDdlStopTip);
                 HBox loadingRow = new HBox(8, loadingIv, runningLabel, dropOracleDdlStopButton);
                 loadingRow.setAlignment(Pos.CENTER);
-                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.getStyleClass().add("modal-progress-card-padded");
                 loadingRow.setMaxHeight(20);
                 HBox overlayBar = new HBox(loadingRow);
                 overlayBar.setAlignment(Pos.CENTER);
-                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.getStyleClass().add("modal-progress-overlay-strong");
                 overlayBar.setVisible(false);
                 StackPane root = new StackPane(vb, overlayBar);
 
@@ -1156,11 +1156,11 @@ public class CustomInstanceTab extends CustomTab {
                 addOracleDdlStopButton.setTooltip(addOracleDdlStopTip);
                 HBox loadingRow = new HBox(8, loadingIv, runningLabel, addOracleDdlStopButton);
                 loadingRow.setAlignment(Pos.CENTER);
-                loadingRow.setStyle("-fx-background-color: rgb(58, 58, 60);-fx-background-radius: 2;-fx-padding: 0 5 0 5");
+                loadingRow.getStyleClass().add("modal-progress-card-padded");
                 loadingRow.setMaxHeight(20);
                 HBox overlayBar = new HBox(loadingRow);
                 overlayBar.setAlignment(Pos.CENTER);
-                overlayBar.setStyle("-fx-background-color: rgba(0, 0, 0, 0.35);-fx-background-radius: 2");
+                overlayBar.getStyleClass().add("modal-progress-overlay-strong");
                 overlayBar.setVisible(false);
 
                 final AtomicReference<Task<Void>> addOracleDdlTaskHolder = new AtomicReference<>();
@@ -1566,7 +1566,7 @@ public class CustomInstanceTab extends CustomTab {
         }
         // 实例信息子 tab 不需要右键菜单
         mainTabPane.setContextMenu(null);
-        mainTabPane.setStyle("-fx-background-color: -color-bg-content;");
+        mainTabPane.getStyleClass().add("bg-content");
         StackPane  stackPane=new StackPane(mainTabPane,refreshButton,instanceInfoLabel);
         StackPane.setAlignment(refreshButton,Pos.BOTTOM_RIGHT);
         StackPane.setAlignment(instanceInfoLabel,Pos.BOTTOM_RIGHT);

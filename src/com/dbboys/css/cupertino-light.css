@@ -1,0 +1,137 @@
+.root {
+  -color-base-0: rgb(242, 242, 247);
+  -color-base-1: rgb(229, 229, 234);
+  -color-base-2: rgb(209, 209, 214);
+  -color-base-3: rgb(199, 199, 204);
+  -color-base-4: rgb(174, 174, 178);
+  -color-base-5: rgb(142, 142, 147);
+  -color-base-6: #636366;
+  -color-base-7: #48484a;
+  -color-base-8: #3a3a3c;
+  -color-base-9: #2c2c2e;
+  -color-accent-0: #bfdeff;
+  -color-accent-1: #99caff;
+  -color-accent-2: #73b6ff;
+  -color-accent-3: #4da2ff;
+  -color-accent-4: #268eff;
+  -color-accent-5: rgb(0, 122, 255);
+  -color-accent-6: #0068d9;
+  -color-accent-7: #0055b3;
+  -color-accent-8: #00438c;
+  -color-accent-9: #003166;
+  -color-success-0: #c7f0cd;
+  -color-success-1: #a5e7af;
+  -color-success-2: #83de91;
+  -color-success-3: #62d573;
+  -color-success-4: #40cc55;
+  -color-success-5: rgb(30, 195, 55);
+  -color-success-6: #1aa62f;
+  -color-success-7: #158927;
+  -color-success-8: #116b1e;
+  -color-success-9: #0c4e16;
+  -color-warning-0: #ffe5bf;
+  -color-warning-1: #ffd599;
+  -color-warning-2: #ffc573;
+  -color-warning-3: #ffb54d;
+  -color-warning-4: #ffa526;
+  -color-warning-5: rgb(255, 149, 0);
+  -color-warning-6: #d97f00;
+  -color-warning-7: #b36800;
+  -color-warning-8: #8c5200;
+  -color-warning-9: #663c00;
+  -color-danger-0: #ffcecb;
+  -color-danger-1: #ffb1ac;
+  -color-danger-2: #ff938d;
+  -color-danger-3: #ff766e;
+  -color-danger-4: #ff584f;
+  -color-danger-5: rgb(255, 59, 48);
+  -color-danger-6: #d93229;
+  -color-danger-7: #b32922;
+  -color-danger-8: #8c201a;
+  -color-danger-9: #661813;
+  -color-fg-default: rgb(26, 26, 28);
+  -color-fg-muted: #636366;
+  -color-fg-subtle: rgb(138, 138, 142);
+  -color-bg-default: rgb(255, 255, 255);
+  -color-bg-overlay: rgb(255, 255, 255);
+  -color-bg-subtle: rgb(242, 242, 247);
+  -color-bg-inset: rgb(248, 248, 250);
+  -color-bg-content: rgb(255, 255, 255);
+  -color-border-default: rgb(209, 209, 214);
+  -color-border-muted: rgb(199, 199, 204);
+  -color-border-subtle: rgb(229, 229, 234);
+  -color-shadow-default: rgba(0, 0, 0, 0.18);
+  -color-neutral-emphasis-plus: #48484a;
+  -color-neutral-emphasis: #636366;
+  -color-neutral-muted: rgb(210, 210, 212);
+  -color-neutral-subtle: rgb(244, 244, 244);
+  -color-accent-fg: rgb(0, 122, 255);
+  -color-accent-emphasis: rgb(0, 122, 255);
+  -color-accent-muted: rgb(153, 202, 255);
+  -color-accent-subtle: rgb(230, 242, 255);
+  -color-warning-fg: rgb(255, 149, 0);
+  -color-warning-emphasis: #d97f00;
+  -color-warning-muted: rgb(255, 213, 153);
+  -color-warning-subtle: rgb(255, 244, 230);
+  -color-success-fg: #1aa62f;
+  -color-success-emphasis: rgb(30, 195, 55);
+  -color-success-muted: rgb(165, 231, 175);
+  -color-success-subtle: rgb(233, 249, 235);
+  -color-danger-fg: rgb(255, 59, 48);
+  -color-danger-emphasis: rgb(255, 59, 48);
+  -color-danger-muted: rgb(255, 177, 172);
+  -color-danger-subtle: rgb(255, 226, 224);
+  -color-button-default: #074675;
+  -color-hover-bg: -color-accent-subtle;
+  -color-window-button-fg: #074675;
+  -color-window-button-hover-fg: #0055b3;
+  -color-window-button-hover-bg: -color-accent-subtle;
+  -color-window-button-pressed-bg: #d7ecff;
+  -color-window-close-hover-bg: -color-danger-subtle;
+  -color-window-close-hover-fg: -color-danger-8;
+  -color-window-close-pressed-bg: -color-danger-muted;
+  -color-window-close-pressed-fg: -color-danger-9;
+  -color-app-subtle-fg: #636366;
+  -color-app-inactive-fg: #636366;
+  -color-table-null-fg: -color-fg-subtle;
+  -color-side-tab-border: -color-border-default;
+  -color-code-text: -color-fg-default;
+  -color-code-keyword: #005cc5;
+  -color-code-function: #6f42c1;
+  -color-code-number: #116329;
+  -color-code-string: #a31515;
+  -color-code-comment: #6a737d;
+  -color-code-punctuation: -color-fg-default;
+  -color-code-error: -color-danger-fg;
+  -color-code-bracket-highlight: #8f6d1d;
+  -color-code-bracket-highlight-bg: -color-warning-subtle;
+  -color-code-current-line-bg: -color-accent-subtle;
+  -color-code-selection-bg: #b3d7ff;
+  -color-selection-bg: -color-window-button-hover-bg;
+  -color-selection-fg: -color-fg-default;
+  -color-accent-pill-active-shadow: rgba(0,0,0,0.18);
+  -color-resultset-pending-success-bg: rgba(30, 195, 55, 0.18);
+  -color-resultset-pending-success-bg-strong: rgba(30, 195, 55, 0.28);
+  -color-resultset-pending-danger-bg: rgba(255, 59, 48, 0.16);
+  -color-resultset-pending-danger-bg-strong: rgba(255, 59, 48, 0.26);
+  -color-modal-pane-overlay-bg: rgba(0, 0, 0, 0.08);
+  -color-modal-progress-overlay: rgba(0, 0, 0, 0.18);
+  -color-modal-progress-overlay-strong: rgba(0, 0, 0, 0.24);
+  -color-modal-progress-card-bg: rgba(58, 58, 60, 0.9);
+}
+
+.button .font-icon,
+.button .ikonli-font-icon,
+.menu-button .font-icon,
+.menu-button .ikonli-font-icon,
+.split-menu-button .font-icon,
+.split-menu-button .ikonli-font-icon,
+.toggle-button .font-icon,
+.toggle-button .ikonli-font-icon {
+  -fx-icon-color: -color-button-default;
+  -fx-fill: -color-button-default;
+}
+
+.icon-button-default {
+  -fx-fill: -color-button-default;
+}

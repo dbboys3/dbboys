@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class CustomSqlEditCodeArea extends CodeArea {
@@ -36,7 +35,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private static final int MAX_FONT_SIZE = 40;
     private static final int FONT_SIZE_STEP = 1;
     private static final String SQL_EDITOR_FONT_SIZE_KEY = "SQL_EDITOR_FONT_SIZE";
-    private static final Pattern FONT_SIZE_STYLE_PATTERN = Pattern.compile("(?i)-fx-font-size\\s*:\\s*[^;]+;?");
+    private static final String SQL_EDITOR_FONT_SIZE_CLASS_PREFIX = "sql-editor-font-size-";
     private static int sharedFontSize = loadConfiguredFontSize();
 
     private final int[] sqlEditCodeAreaCursorPosition = {-1, -1};
@@ -270,21 +269,10 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     private void applyEditorFontSize(int size) {
-        String fontSizeStyle = "-fx-font-size: " + size + "px;";
-        String currentStyle = getStyle();
-        if (currentStyle == null || currentStyle.isBlank()) {
-            setStyle(fontSizeStyle);
-            return;
+        for (int candidate = MIN_FONT_SIZE; candidate <= MAX_FONT_SIZE; candidate++) {
+            getStyleClass().remove(SQL_EDITOR_FONT_SIZE_CLASS_PREFIX + candidate);
         }
-
-        Matcher matcher = FONT_SIZE_STYLE_PATTERN.matcher(currentStyle);
-        if (matcher.find()) {
-            setStyle(matcher.replaceAll(Matcher.quoteReplacement(fontSizeStyle)));
-            return;
-        }
-
-        String separator = currentStyle.endsWith(";") ? "" : ";";
-        setStyle(currentStyle + separator + fontSizeStyle);
+        getStyleClass().add(SQL_EDITOR_FONT_SIZE_CLASS_PREFIX + size);
     }
 
     public void setOnSaveRequest(Runnable onSaveRequest) {

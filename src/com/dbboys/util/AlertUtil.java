@@ -28,16 +28,6 @@ public final class AlertUtil {
     private static final double CONTENT_BOTTOM = 10;
     private static final double CONTENT_LEFT = 10;
     private static final Insets CONTENT_PADDING = new Insets(CONTENT_TOP, CONTENT_RIGHT, CONTENT_BOTTOM, CONTENT_LEFT);
-    private static final String ALERT_TITLE_STYLE =
-            "-fx-background-color: -color-bg-default;" +
-            "-fx-padding: 0 0 0 6;" +
-            "-fx-min-height: 28;" +
-            "-fx-pref-height: 28;" +
-            "-fx-alignment: center-left;";
-    private static final String ALERT_BODY_STYLE =
-            "-fx-background-color: -color-bg-default;" +
-            "-fx-padding: 16 20 18 20;" +
-            "-fx-spacing: 16;";
 
     private AlertUtil() {
     }
@@ -79,7 +69,7 @@ public final class AlertUtil {
         double textWidth = getTextContentWidth(DIALOG_WIDTH);
         label.setPrefWidth(textWidth);
         label.setMaxWidth(textWidth);
-        label.setStyle("-fx-text-fill: -color-fg-default;");
+        label.getStyleClass().add("alert-message-label");
         return createContentDialog(title, label, DIALOG_WIDTH, Region.USE_COMPUTED_SIZE, buttonTypes).showAndWait();
     }
 
@@ -122,7 +112,7 @@ public final class AlertUtil {
 
         VBox body = new VBox(content, buttonBar);
         body.setPadding(CONTENT_PADDING);
-        body.setStyle(ALERT_BODY_STYLE);
+        body.getStyleClass().add("alert-body");
         body.setFillWidth(true);
         VBox.setVgrow(content, Priority.ALWAYS);
         prepareContent(content, width, autoHeight);
@@ -138,12 +128,7 @@ public final class AlertUtil {
         );
 
         frame.root.setMinWidth(width);
-        frame.root.setStyle(
-                "-fx-background-color: -color-bg-default;" +
-                "-fx-border-color: -color-fg-default;" +
-                "-fx-border-width: 0.5;" +
-                "-fx-padding: 0;"
-        );
+        frame.root.getStyleClass().add("alert-root");
         if (autoHeight) {
             body.setMinHeight(Region.USE_PREF_SIZE);
             body.setPrefHeight(Region.USE_COMPUTED_SIZE);
@@ -153,7 +138,7 @@ public final class AlertUtil {
             frame.root.setMaxHeight(Region.USE_PREF_SIZE);
         }
 
-        frame.titleBar.setStyle(ALERT_TITLE_STYLE);
+        frame.titleBar.getStyleClass().add("alert-title-bar");
         frame.closeButton.setOnAction(event -> {
             resultRef.set(cancelButtonType != null ? cancelButtonType : defaultButtonType);
             stage.close();

@@ -43,11 +43,11 @@ import java.util.regex.Pattern;
 
 public class CustomTreeCell extends TreeCell<TreeData> {
     private static final String DRAG_PAYLOAD = "DATABASEOBJECTDRAG";
-    private static final String CONNECTED_TEXT_STYLE = "-fx-fill: -color-fg-default;";
-    private static final String DISCONNECTED_TEXT_STYLE = "-fx-text-fill:#666;";
-    private static final String PRIMARY_ICON_STYLE = "-fx-fill: -color-fg-default;";
-    private static final String WARN_ICON_STYLE = "-fx-fill: -color-danger-7;";
-    private static final String INACTIVE_ICON_STYLE = "-fx-fill: #666;";
+    private static final String CONNECTED_TEXT_STYLE = "tree-cell-name-connected";
+    private static final String DISCONNECTED_TEXT_STYLE = "tree-cell-name-disconnected";
+    private static final String PRIMARY_ICON_STYLE = "icon-primary";
+    private static final String WARN_ICON_STYLE = "icon-warn";
+    private static final String INACTIVE_ICON_STYLE = "icon-inactive";
     private static final Pattern COUNT_INFO_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[个個](?:\\s*/\\s*(.+))?\\s*$");
     private static final double ICON_SLOT_SIZE = 16.0;
 
@@ -83,7 +83,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         graphicHbox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(spacer, Priority.ALWAYS);
         tooltip.setShowDelay(Duration.millis(100));
-        descripLabel.setStyle("-fx-alignment: CENTER-RIGHT; -fx-text-fill:#aaa;-fx-font-family:'Courier New';");
+        descripLabel.getStyleClass().add("tree-cell-description");
 
         warnIcon.setContent(IconPaths.CHECK_WARN);
         warnIcon.setScaleX(0.4);
@@ -620,8 +620,8 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setGraphic(null);
         textProperty().unbind();
         setText(null);
-        setStyle(null);
-        nameLabel.setStyle("");
+        getStyleClass().removeAll(CONNECTED_TEXT_STYLE, DISCONNECTED_TEXT_STYLE);
+        nameLabel.getStyleClass().removeAll(CONNECTED_TEXT_STYLE, DISCONNECTED_TEXT_STYLE);
         descripLabel.textProperty().unbind();
         applyPrimaryIconStyle(nodeIcon);
         applyWarnIconStyle(lockIcon);
@@ -1022,25 +1022,40 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     }
 
     private void applyPrimaryIconStyle(SVGPath icon) {
-        icon.setStyle(PRIMARY_ICON_STYLE);
+        icon.getStyleClass().removeAll(WARN_ICON_STYLE, INACTIVE_ICON_STYLE);
+        if (!icon.getStyleClass().contains(PRIMARY_ICON_STYLE)) {
+            icon.getStyleClass().add(PRIMARY_ICON_STYLE);
+        }
     }
 
     private void applyWarnIconStyle(SVGPath icon) {
-        icon.setStyle(WARN_ICON_STYLE);
+        icon.getStyleClass().removeAll(PRIMARY_ICON_STYLE, INACTIVE_ICON_STYLE);
+        if (!icon.getStyleClass().contains(WARN_ICON_STYLE)) {
+            icon.getStyleClass().add(WARN_ICON_STYLE);
+        }
     }
 
     private void applyInactiveIconStyle(SVGPath icon) {
-        icon.setStyle(INACTIVE_ICON_STYLE);
+        icon.getStyleClass().removeAll(PRIMARY_ICON_STYLE, WARN_ICON_STYLE);
+        if (!icon.getStyleClass().contains(INACTIVE_ICON_STYLE)) {
+            icon.getStyleClass().add(INACTIVE_ICON_STYLE);
+        }
     }
 
     private void applyConnectedVisualStyle() {
-        nameLabel.setStyle(CONNECTED_TEXT_STYLE);
+        nameLabel.getStyleClass().remove(DISCONNECTED_TEXT_STYLE);
+        if (!nameLabel.getStyleClass().contains(CONNECTED_TEXT_STYLE)) {
+            nameLabel.getStyleClass().add(CONNECTED_TEXT_STYLE);
+        }
         applyPrimaryIconStyle(nodeIcon);
         applyWarnIconStyle(lockIcon);
     }
 
     private void applyDisconnectedVisualStyle() {
-        nameLabel.setStyle(DISCONNECTED_TEXT_STYLE);
+        nameLabel.getStyleClass().remove(CONNECTED_TEXT_STYLE);
+        if (!nameLabel.getStyleClass().contains(DISCONNECTED_TEXT_STYLE)) {
+            nameLabel.getStyleClass().add(DISCONNECTED_TEXT_STYLE);
+        }
         applyInactiveIconStyle(nodeIcon);
         applyInactiveIconStyle(lockIcon);
     }

@@ -410,23 +410,19 @@ public class CreateConnectController {
             }else 
                 {
                     if(ipAddressTextField.getText().isEmpty()){
-                        //ipAddressTextField.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         ipAddressTextField.requestFocus();
                         return false;
                     }
                     else if(!isGeneralJdbcDbType(dbTypeChoiceBox.getValue()) && portTextField.getText().isEmpty()){
-                        //portTextField.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                         portTextField.requestFocus();
                         return false;
                     }
                 }
             if(usernameTextField.getText().isEmpty()){
-                // usernameTextField.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                 usernameTextField.requestFocus();
                 return false;
             }
             else if(passwordTextField.getText().isEmpty()){
-                //passwordTextField.setStyle("-fx-border-color: #ff0000;-fx-border-radius: 3");
                 passwordTextField.requestFocus();
                 return false;
             }

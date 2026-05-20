@@ -11,7 +11,7 @@
 <?import com.dbboys.customnode.CustomInfoStackPane?>
 <?import com.dbboys.customnode.CustomTableView?>
 <VBox fx:id="resultSetVBox"  fx:controller="com.dbboys.ctrl.ResultSetTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
-    <HBox alignment="CENTER_LEFT" style="-fx-background-color: #1c1c1e;">
+    <HBox fx:id="lastSqlBar" alignment="CENTER_LEFT">
         <Button fx:id="lastSqlCopyButton" styleClass="small" focusTraversable="false" />
         <CustomLabelTextField fx:id="lastSqlTextField" text="" focusTraversable="false" />
         <Region HBox.hgrow="ALWAYS"></Region>
@@ -19,11 +19,11 @@
     </HBox>
     <StackPane>
         <VBox>
-            <HBox style="-fx-background-color: #1c1c1e;">
+            <HBox fx:id="resultSetTableBox">
                 <CustomTableView fx:id="resultSetTableView">
                 </CustomTableView>
             </HBox>
-            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" style="-fx-background-color: -color-bg-default;">
+            <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT">
                 <Label fx:id="resultSetLabelLeftBracket" />
                 <Button fx:id="resultSetInsertRowButton" styleClass="small" focusTraversable="false" />
                 <Button fx:id="resultSetDeleteRowButton" styleClass="small" focusTraversable="false" />
@@ -31,7 +31,7 @@
                 <Button fx:id="resultSetCancelEditsButton" styleClass="small" focusTraversable="false" />
                 <Label fx:id="resultSetLabelRightBracket" />
                 <Label fx:id="resultSetLabelPerTimePrefix" />
-                <CustomUserTextField fx:id="resultSetPerTimeTextField" text="200" style="-fx-pref-width: 50;-fx-padding: 0 0 0 4;-fx-font-size: 11" >
+                <CustomUserTextField fx:id="resultSetPerTimeTextField" text="200">
                 </CustomUserTextField>
 
                 <Label fx:id="resultSetLabelBetweenNext" />

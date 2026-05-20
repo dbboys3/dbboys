@@ -20,7 +20,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -33,56 +32,9 @@ import java.util.List;
 public final class CustomWindowFrameUtil {
     private static final String MAXIMIZED_KEY = "customWindowMaximized";
     private static final String RESIZE_HANDLES_KEY = "customWindowResizeHandles";
-    private static final String TITLE_BG = "-color-bg-default";
-    private static final String BODY_BG = "-color-bg-default";
-    private static final String BORDER_COLOR = "-color-fg-default";
-    private static final String TITLE_STYLE =
-            "-fx-background-color: " + TITLE_BG + ";" +
-            "-fx-padding: 0 0 0 6;" +
-            "-fx-min-height: 28;" +
-            "-fx-pref-height: 28;" +
-            "-fx-alignment: center-left;";
-    private static final String ROOT_STYLE =
-            "-fx-background-color: " + BODY_BG + ";" +
-            "-fx-padding: 0;";
-    private static final String POPUP_FRAME_STYLE =
-            "-fx-border-color: " + BORDER_COLOR + ";" +
-            "-fx-border-width: 0.5;" +
-            "-fx-padding: 0;";
-    private static final String CONTENT_STYLE =
-            "-fx-background-color: " + BODY_BG + ";";
-    private static final String DIALOG_TITLE_BORDER_STYLE =
-            "-fx-border-width: 0.5 0.5 0 0.5;" +
-            "-fx-border-color: " + BORDER_COLOR + ";";
-    private static final String CLOSE_STYLE =
-            "-fx-background-color: transparent;" +
-            "-fx-text-fill: white;" +
-            "-fx-border-width: 0;" +
-            "-fx-background-radius: 0;" +
-            "-fx-padding: 0 12 0 12;" +
-            "-fx-min-height: 28;" +
-            "-fx-pref-height: 28;";
-    private static final String WINDOW_BUTTON_STYLE =
-            "-fx-background-color: transparent;" +
-            "-fx-border-width: 0;" +
-            "-fx-background-radius: 0;" +
-            "-fx-padding: 0 12 0 12;" +
-            "-fx-min-height: 28;" +
-            "-fx-pref-height: 28;";
     private static final double RESIZE_MARGIN = 5;
 
     private CustomWindowFrameUtil() {
-    }
-
-    private static String toCssColor(Color color) {
-        int red = (int) Math.round(color.getRed() * 255);
-        int green = (int) Math.round(color.getGreen() * 255);
-        int blue = (int) Math.round(color.getBlue() * 255);
-        double opacity = color.getOpacity();
-        if (opacity >= 0.999) {
-            return String.format("#%02x%02x%02x", red, green, blue);
-        }
-        return String.format("rgba(%d,%d,%d,%.3f)", red, green, blue, opacity);
     }
 
     public static Frame create(Stage stage,
@@ -169,20 +121,13 @@ public final class CustomWindowFrameUtil {
         Label titleLabel = new Label();
         titleLabel.textProperty().bind(titleBinding);
         titleLabel.setMaxHeight(Double.MAX_VALUE);
-        titleLabel.setStyle(
-                "-fx-text-fill: -color-fg-default;" +
-                "-fx-font-weight: bold;" +
-                "-fx-alignment: center-left;"
-        );
+        titleLabel.getStyleClass().add("window-title-label");
 
         Button minButton = createWindowButton(IconPaths.WINDOW_MINIMIZE, 0.45);
         Button maxButton = createWindowButton(IconPaths.WINDOW_MAXIMIZE, 0.55);
         Button closeButton = new Button("✕");
         closeButton.setFocusTraversable(false);
-        closeButton.setStyle(CLOSE_STYLE);
-        closeButton.setOnMouseEntered(event ->
-                closeButton.setStyle(CLOSE_STYLE + "-fx-background-color: " + toCssColor(IconFactory.stopColor()) + ";"));
-        closeButton.setOnMouseExited(event -> closeButton.setStyle(CLOSE_STYLE));
+        closeButton.getStyleClass().add("window-close-button");
 
         HBox titleBar = new HBox(titleLabel, dragRegion);
         if (titleBarLeft != null) {
@@ -202,14 +147,17 @@ public final class CustomWindowFrameUtil {
         }
         titleBar.getChildren().add(closeButton);
         titleBar.setAlignment(Pos.CENTER_LEFT);
-        titleBar.setStyle(TITLE_STYLE + resolveTitleStyle(mainWindow, content));
+        titleBar.getStyleClass().add("window-title-bar");
+        if (!mainWindow && content instanceof javafx.scene.control.DialogPane) {
+            titleBar.getStyleClass().add("window-dialog-title-bar");
+        }
 
         BorderPane pane = new BorderPane(content);
         pane.setTop(titleBar);
-        pane.setStyle(CONTENT_STYLE);
+        pane.getStyleClass().add("window-content-pane");
 
         StackPane root = new StackPane(pane);
-        root.setStyle(mainWindow ? ROOT_STYLE : POPUP_FRAME_STYLE);
+        root.getStyleClass().add(mainWindow ? "window-root" : "window-popup-frame");
         root.setPrefSize(width, height);
         root.setMinSize(200, 100);
 
@@ -232,13 +180,6 @@ public final class CustomWindowFrameUtil {
         return titleBarLeft != null && showMinButton && showMaxButton;
     }
 
-    private static String resolveTitleStyle(boolean mainWindow, Node content) {
-        if (mainWindow || !(content instanceof javafx.scene.control.DialogPane)) {
-            return "";
-        }
-        return DIALOG_TITLE_BORDER_STYLE;
-    }
-
     private static void applyPopupChoiceBoxStyle(Node node) {
         if (node instanceof ChoiceBox<?> choiceBox
                 && !choiceBox.getStyleClass().contains("choice-box-with-border")) {
@@ -254,11 +195,8 @@ public final class CustomWindowFrameUtil {
     private static Button createWindowButton(String iconPath, double scale) {
         Button button = new Button();
         button.setFocusTraversable(false);
-        button.setStyle(WINDOW_BUTTON_STYLE);
+        button.getStyleClass().add("window-button");
         button.setGraphic(IconFactory.group(iconPath, scale));
-        button.setOnMouseEntered(event ->
-                button.setStyle(WINDOW_BUTTON_STYLE + "-fx-background-color: #314150;"));
-        button.setOnMouseExited(event -> button.setStyle(WINDOW_BUTTON_STYLE));
         return button;
     }
 
@@ -449,7 +387,7 @@ public final class CustomWindowFrameUtil {
                                              ResizeDirection direction) {
         Region handle = new Region();
         handle.setManaged(false);
-        handle.setStyle("-fx-background-color: transparent;");
+        handle.getStyleClass().add("resize-handle");
         handle.setCursor(Cursor.DEFAULT);
         final DragResizeState[] dragState = new DragResizeState[]{new DragResizeState()};
         handle.addEventHandler(MouseEvent.MOUSE_ENTERED, event -> {

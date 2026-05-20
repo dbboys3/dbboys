@@ -19,7 +19,10 @@ import javafx.stage.Window;
 import com.dbboys.customnode.CustomShortcutMenuItem;
 import com.dbboys.customnode.CustomTreeviewTab;
 import com.dbboys.customnode.CustomUserTextField;
+import com.dbboys.util.ConfigManagerUtil;
 import com.dbboys.vo.TreeData;
+
+import java.util.List;
 
 public final class AppState {
     private static final ObjectProperty<MainController> mainController = new SimpleObjectProperty<>();
@@ -31,15 +34,49 @@ public final class AppState {
     private static final ObjectProperty<ProgressBar> loadProgressBar = new SimpleObjectProperty<>(new ProgressBar(0.1));
     private static Connect lastInstallConnect;
 
-    private static final String APP_STYLESHEET =
+    public static final String THEME_DARK = "dark";
+    public static final String THEME_LIGHT = "light";
+    private static final String UI_THEME_KEY = "UI_THEME";
+    private static final String DARK_STYLESHEET =
             AppState.class.getResource("/com/dbboys/css/cupertino-dark.css").toExternalForm();
+    private static final String COMMON_STYLESHEET =
+            AppState.class.getResource("/com/dbboys/css/cupertino-common.css").toExternalForm();
+    private static final String LIGHT_STYLESHEET =
+            AppState.class.getResource("/com/dbboys/css/cupertino-light.css").toExternalForm();
 
     private AppState() {}
 
-    public static String getAppStylesheet() { return APP_STYLESHEET; }
+    @Deprecated
+    public static String getAppStylesheet() {
+        return getCurrentThemeStylesheet();
+    }
+
+    public static List<String> getAppStylesheets() {
+        return List.of(COMMON_STYLESHEET, getCurrentThemeStylesheet());
+    }
+
+    public static String getCurrentTheme() {
+        String theme = ConfigManagerUtil.getProperty(UI_THEME_KEY, THEME_DARK);
+        return THEME_LIGHT.equalsIgnoreCase(theme) ? THEME_LIGHT : THEME_DARK;
+    }
+
+    public static void setCurrentTheme(String theme) {
+        ConfigManagerUtil.setProperty(UI_THEME_KEY, THEME_LIGHT.equalsIgnoreCase(theme) ? THEME_LIGHT : THEME_DARK);
+        applyAppStylesheet(getScene());
+    }
+
+    private static String getCurrentThemeStylesheet() {
+        return THEME_LIGHT.equals(getCurrentTheme()) ? LIGHT_STYLESHEET : DARK_STYLESHEET;
+    }
 
     public static void applyAppStylesheet(Scene s) {
-        if (s != null) s.getStylesheets().add(APP_STYLESHEET);
+        if (s == null) {
+            return;
+        }
+        s.getStylesheets().remove(DARK_STYLESHEET);
+        s.getStylesheets().remove(COMMON_STYLESHEET);
+        s.getStylesheets().remove(LIGHT_STYLESHEET);
+        s.getStylesheets().addAll(getAppStylesheets());
     }
 
     public static void applyAppStylesheet(javafx.scene.control.Alert alert) {

@@ -981,7 +981,7 @@ public class TreeCrudHandler {
 
         Label messageLabel = new Label(I18n.t("metadata.menu.ddl.loading.message", "正在导出DDL..."));
         messageLabel.setWrapText(true);
-        messageLabel.setStyle("-fx-text-fill: -color-fg-default;");
+        messageLabel.getStyleClass().add("alert-message-label");
         ddlTask.messageProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !newVal.isBlank()) {
                 messageLabel.setText(newVal);

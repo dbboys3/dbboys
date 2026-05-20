@@ -1880,15 +1880,15 @@ public class MarkdownSearchUtil {
                 highlightPattern,
                 Font.font("System", FontWeight.BOLD, 10),
                 null,
-                "-fx-fill: -color-danger-7;");
+                "markdown-search-match");
         if (item.title != null && !item.title.isBlank()) {
             flow.getChildren().add(new Text("\n"));
             appendHighlightedText(flow,
                     item.title,
                     highlightPattern,
                     Font.font("System", FontWeight.SEMI_BOLD, 9),
-                    "-fx-fill: #5f6672;",
-                    "-fx-fill: -color-danger-7;");
+                    "markdown-search-title",
+                    "markdown-search-match");
         }
 
         flow.getChildren().add(new Text("\n"));
@@ -1909,8 +1909,8 @@ public class MarkdownSearchUtil {
                 limitedSnippet.toString(),
                 highlightPattern,
                 Font.font("System", FontWeight.NORMAL, 8),
-                "-fx-fill: #8a8f98;",
-                "-fx-fill: -color-danger-7;");
+                "markdown-search-snippet",
+                "markdown-search-match");
 
         return flow;
     }
@@ -1940,7 +1940,7 @@ public class MarkdownSearchUtil {
             Text text = new Text(source);
             text.setFont(font);
             if (normalStyle != null && !normalStyle.isBlank()) {
-                text.setStyle(normalStyle);
+                text.getStyleClass().add(normalStyle);
             }
             flow.getChildren().add(text);
             return;
@@ -1953,14 +1953,14 @@ public class MarkdownSearchUtil {
                 Text normal = new Text(source.substring(last, matcher.start()));
                 normal.setFont(font);
                 if (normalStyle != null && !normalStyle.isBlank()) {
-                    normal.setStyle(normalStyle);
+                    normal.getStyleClass().add(normalStyle);
                 }
                 flow.getChildren().add(normal);
             }
             Text match = new Text(source.substring(matcher.start(), matcher.end()));
             match.setFont(font);
             if (matchStyle != null && !matchStyle.isBlank()) {
-                match.setStyle(matchStyle);
+                match.getStyleClass().add(matchStyle);
             }
             flow.getChildren().add(match);
             last = matcher.end();
@@ -1969,7 +1969,7 @@ public class MarkdownSearchUtil {
             Text tail = new Text(source.substring(last));
             tail.setFont(font);
             if (normalStyle != null && !normalStyle.isBlank()) {
-                tail.setStyle(normalStyle);
+                tail.getStyleClass().add(normalStyle);
             }
             flow.getChildren().add(tail);
         }
@@ -2086,7 +2086,7 @@ public class MarkdownSearchUtil {
                 resultList.setItems(FXCollections.observableArrayList(results));
                 resultList.getSelectionModel().select(null);//避免第一个被选中显示背景色
                 resultList.setPrefHeight(mainStage.getHeight()-80);
-                resultList.setStyle("-fx-border-color: -color-fg-default;-fx-border-width: 0.5;-fx-background-color: -color-bg-default;-fx-border-radius: 5");
+                resultList.getStyleClass().add("search-result-popup-list");
                 //这个设置可以避免出现search_result_popup在第一次搜索“配置”时靠顶显示
                 searchResultPopup.setAutoFix(false);
                 if(resultList.getItems().size()>0){
