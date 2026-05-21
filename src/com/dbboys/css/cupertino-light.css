@@ -82,8 +82,9 @@
   -color-danger-muted: rgb(255, 177, 172);
   -color-danger-subtle: rgb(255, 226, 224);
   -color-button-default: #074675;
+  -color-button-bg-hover: #d7ecff;
   -color-hover-bg: -color-accent-subtle;
-  -color-custom-button-hover-bg: #d7ecff;
+  -color-custom-button-hover-bg: -color-button-bg-hover;
   -color-menu-bar-hover-bg: #d7ecff;
   -color-window-button-fg: #074675;
   -color-window-button-hover-fg: #0055b3;

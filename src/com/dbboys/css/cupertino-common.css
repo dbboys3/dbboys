@@ -50,7 +50,8 @@
   -color-context-focused-label-fg: -color-fg-emphasis;
   -color-context-checked-label-fg: -color-fg-emphasis;
   -color-tree-disclosure-hover-bg: -color-base-5;
-  -color-custom-button-hover-bg: -color-hover-bg;
+  -color-button-bg-hover: -color-hover-bg;
+  -color-custom-button-hover-bg: -color-button-bg-hover;
   -color-menu-bar-hover-bg: -color-base-7;
   -color-accent-pill-success-bg: #2E9E5B;
   -color-accent-pill-failure-bg: #CC3D3D;
@@ -364,7 +365,6 @@ Text {
   -color-button-bg: -color-bg-default;
   -color-button-fg: -color-fg-default;
   -color-button-border: -color-border-default;
-  -color-button-bg-hover: -color-base-7;
   -color-button-fg-hover: -color-button-fg;
   -color-button-border-hover: -color-button-border;
   -color-button-bg-focused: -color-button-bg;
@@ -459,7 +459,6 @@ Text {
 .button.button-outlined {
   -color-button-bg: -color-bg-default;
   -color-button-fg: -color-fg-default;
-  -color-button-bg-hover: -color-base-6;
   -color-button-fg-hover: -color-button-fg;
 }
 .button:default, .button.accent {
@@ -553,12 +552,11 @@ Text {
   -fx-underline: true;
 }
 .button.small {
-  -color-button-bg-hover: -color-custom-button-hover-bg;
-  -color-button-bg-focused: -color-custom-button-hover-bg;
-  -color-button-bg-pressed: -color-custom-button-hover-bg;
-  -color-button-border-hover: -color-custom-button-hover-bg;
-  -color-button-border-focused: -color-custom-button-hover-bg;
-  -color-button-border-pressed: -color-custom-button-hover-bg;
+  -color-button-bg-focused: -color-button-bg-hover;
+  -color-button-bg-pressed: -color-button-bg-hover;
+  -color-button-border-hover: -color-button-bg-hover;
+  -color-button-border-focused: -color-button-bg-hover;
+  -color-button-border-pressed: -color-button-bg-hover;
   -fx-padding: 2px 4px 2px 4px;
   -fx-font-size: 0.8em;
 }
@@ -568,7 +566,7 @@ Text {
 .small:armed,
 .small:focused:armed,
 .small:pressed {
-  -fx-background-color: -color-custom-button-hover-bg;
+  -fx-background-color: -color-button-bg-hover;
 }
 .button.large {
   -fx-padding: 8.4px 16.8px 8.4px 16.8px;
@@ -1944,7 +1942,7 @@ Text {
   -fx-text-fill: -color-context-focused-label-fg;
 }
 .menu-item:focused > .right-container > .arrow {
-  -fx-background-color: -color-fg-emphasis;
+  -fx-background-color: -color-fg-muted;
 }
 .menu-item:focused .font-icon, .menu-item:focused .ikonli-font-icon {
   -fx-icon-color: -color-fg-emphasis;
@@ -1972,7 +1970,7 @@ Text {
   -fx-text-fill: -color-fg-emphasis;
 }
 .context-menu.treeview-context-menu .menu-item:hover > .right-container > .arrow {
-  -fx-background-color: -color-fg-emphasis;
+  -fx-background-color: -color-fg-muted;
 }
 .context-menu.treeview-context-menu .menu-item:hover .font-icon,
 .context-menu.treeview-context-menu .menu-item:hover .ikonli-font-icon {
@@ -2104,7 +2102,6 @@ Text {
   -color-button-bg: -color-bg-default;
   -color-button-fg: -color-fg-default;
   -color-button-border: -color-border-default;
-  -color-button-bg-hover: -color-base-6;
   -color-button-fg-hover: -color-button-fg;
   -color-button-border-hover: -color-button-border;
   -color-button-bg-focused: -color-button-bg;
@@ -2278,7 +2275,6 @@ Text {
 .split-menu-button.button-outlined {
   -color-button-bg: -color-bg-default;
   -color-button-fg: -color-fg-default;
-  -color-button-bg-hover: -color-base-6;
   -color-button-fg-hover: -color-button-fg;
 }
 .menu-button.accent,
@@ -3022,7 +3018,6 @@ Text {
   -color-button-bg: -color-bg-default;
   -color-button-fg: -color-fg-default;
   -color-button-border: -color-border-default;
-  -color-button-bg-hover: -color-base-6;
   -color-button-fg-hover: -color-button-fg;
   -color-button-border-hover: -color-button-border;
   -color-button-bg-focused: -color-button-bg;
@@ -5354,7 +5349,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .tool-bar > .container > .menu-button,
 .tool-bar > .container > .split-menu-button {
   -color-button-bg: -color-bg-subtle;
-  -color-button-bg-hover: -color-base-6;
   -color-button-border-hover: -color-accent-muted;
   -color-button-border-focused: -color-accent-muted;
   -fx-background-insets: 0;
@@ -6277,12 +6271,11 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 /* SQL 工具栏等仅图标按钮：固定占位，hover 不改透明度/内边距，避免晃动 */
 .custom-button {
-  -color-button-bg-hover: -color-custom-button-hover-bg;
-  -color-button-bg-focused: -color-custom-button-hover-bg;
-  -color-button-bg-pressed: -color-custom-button-hover-bg;
-  -color-button-border-hover: -color-custom-button-hover-bg;
-  -color-button-border-focused: -color-custom-button-hover-bg;
-  -color-button-border-pressed: -color-custom-button-hover-bg;
+  -color-button-bg-focused: -color-button-bg-hover;
+  -color-button-bg-pressed: -color-button-bg-hover;
+  -color-button-border-hover: -color-button-bg-hover;
+  -color-button-border-focused: -color-button-bg-hover;
+  -color-button-border-pressed: -color-button-bg-hover;
   -fx-content-display: graphic-only;
   -fx-padding: 4px;
   -fx-background-color: transparent;
@@ -6300,7 +6293,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .custom-button:focused:armed,
 .custom-button:pressed {
   -fx-opacity: 1;
-  -fx-background-color: -color-custom-button-hover-bg;
+  -fx-background-color: -color-button-bg-hover;
   -fx-background-insets: 0;
   -fx-effect: none;
 }
