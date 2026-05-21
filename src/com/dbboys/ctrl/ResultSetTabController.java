@@ -61,6 +61,8 @@ public class ResultSetTabController {
     @FXML
     public HBox resultSetButtonHBox;
     @FXML
+    public Button resultSetEditHelpButton;
+    @FXML
     public Button resultSetInsertRowButton;
     @FXML
     public Button resultSetDeleteRowButton;
@@ -216,6 +218,7 @@ public class ResultSetTabController {
     private void initI18nBindings() {
         bindTooltip(lastSqlCopyButton, "resultset.tooltip.copy_sql");
         bindTooltip(lastSqlRefreshButton, "resultset.tooltip.refresh_sql");
+        bindTooltip(resultSetEditHelpButton, "resultset.tooltip.edit_help");
         bindTooltip(resultSetInsertRowButton, "resultset.tooltip.insert_row");
         bindTooltip(resultSetDeleteRowButton, "resultset.tooltip.delete_row");
         bindTooltip(resultSetSaveEditsButton, "resultset.tooltip.save_edits");
@@ -250,6 +253,7 @@ public class ResultSetTabController {
     private void setupIcons() {
         lastSqlCopyButton.setGraphic(IconFactory.group(IconPaths.COPY, 0.6));
         lastSqlRefreshButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.6));
+        resultSetEditHelpButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDIT_HELP, 0.48));
         resultSetInsertRowButton.setGraphic(semanticIcon(IconPaths.TABLEINFO_ADD_COLUMN, 0.55, "icon-success"));
         resultSetDeleteRowButton.setGraphic(semanticIcon(IconPaths.TABLEINFO_DELETE_COLUMN, 0.55, "icon-danger"));
         resultSetSaveEditsButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.495));

@@ -26,6 +26,7 @@
             <HBox fx:id="resultSetButtonHBox" minHeight="20" alignment="CENTER_LEFT" spacing="4">
                 <Label fx:id="resultSetLabelLeftBracket" visible="false" managed="false" />
                 <Separator orientation="VERTICAL" styleClass="resultset-toolbar-separator" />
+                <Button fx:id="resultSetEditHelpButton" styleClass="small" focusTraversable="false" />
                 <Button fx:id="resultSetInsertRowButton" styleClass="small" focusTraversable="false" />
                 <Button fx:id="resultSetDeleteRowButton" styleClass="small" focusTraversable="false" />
                 <Button fx:id="resultSetSaveEditsButton" styleClass="small" focusTraversable="false" />
