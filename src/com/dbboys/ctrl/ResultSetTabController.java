@@ -255,7 +255,7 @@ public class ResultSetTabController {
         lastSqlRefreshButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.6));
         resultSetEditHelpButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDIT_HELP, 0.48));
         resultSetInsertRowButton.setGraphic(semanticIcon(IconPaths.TABLEINFO_ADD_COLUMN, 0.55, "icon-success"));
-        resultSetDeleteRowButton.setGraphic(semanticIcon(IconPaths.TABLEINFO_DELETE_COLUMN, 0.55, "icon-danger"));
+        resultSetDeleteRowButton.setGraphic(semanticIcon(IconPaths.TABLEINFO_DELETE_COLUMN, 0.55, "icon-resultset-delete"));
         resultSetSaveEditsButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.495));
         resultSetCancelEditsButton.setGraphic(semanticIcon(IconPaths.TAB_CLOSE_MENU_ITEM, 0.45, "icon-danger"));
         resultSetNextPageButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_NEXT_PAGE, 0.6));

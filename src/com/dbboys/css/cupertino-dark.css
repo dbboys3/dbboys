@@ -119,6 +119,7 @@
   -color-resultset-pending-success-bg-strong: rgba(110, 248, 130, 0.52);
   -color-resultset-pending-danger-bg: rgba(255, 92, 82, 0.36);
   -color-resultset-pending-danger-bg-strong: rgba(255, 130, 122, 0.52);
+  -color-resultset-delete-icon-fg: -color-danger-fg;
   -color-modal-pane-overlay-bg: rgba(255, 255, 255, 0.2);
   -color-modal-progress-overlay: rgba(0, 0, 0, 0.3);
   -color-modal-progress-overlay-strong: rgba(0, 0, 0, 0.35);

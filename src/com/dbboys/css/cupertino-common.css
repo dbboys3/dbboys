@@ -6114,6 +6114,10 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-fill: -color-danger-fg;
 }
 
+.icon-resultset-delete {
+  -fx-fill: -color-resultset-delete-icon-fg;
+}
+
 .tree-cell-description {
   -fx-alignment: CENTER-RIGHT;
   -fx-text-fill: -color-app-subtle-fg;
