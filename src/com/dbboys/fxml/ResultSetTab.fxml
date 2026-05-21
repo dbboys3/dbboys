@@ -50,11 +50,13 @@
                 <Label fx:id="resultSetTotalRowsLabel">?</Label>
                 <Label fx:id="resultSetLabelTotalSuffix" />
                 <Separator orientation="VERTICAL" styleClass="resultset-toolbar-separator" />
+                <Button fx:id="resultSetExportButton" styleClass="small" focusTraversable="false" />
+                <Region HBox.hgrow="ALWAYS" />
+                <Separator orientation="VERTICAL" styleClass="resultset-toolbar-separator" />
                 <Label fx:id="resultSetLabelTimePrefix" />
                 <Label fx:id="sqlUsedTimeLabel">?</Label>
                 <Label fx:id="resultSetLabelTimeSuffix" />
                 <Separator orientation="VERTICAL" styleClass="resultset-toolbar-separator" />
-                <Button fx:id="resultSetExportButton" styleClass="small" focusTraversable="false" />
                 <Label fx:id="resultSetLabelEnd" visible="false" managed="false" />
             </HBox>
         </VBox>
