@@ -729,14 +729,14 @@ public final class DamengMetadataRepository implements MetadataRepository {
             select count(*)
             from all_objects
             where owner = ?
-              and object_type = 'TYPE'
+              and object_type in ('TYPE', 'CLASS')
             """;
 
     private static final String SQL_TYPES = """
             select object_name as type_name, owner, object_type as typecode
             from all_objects
             where owner = ?
-              and object_type = 'TYPE'
+              and object_type in ('TYPE', 'CLASS')
             order by object_name
             """;
 

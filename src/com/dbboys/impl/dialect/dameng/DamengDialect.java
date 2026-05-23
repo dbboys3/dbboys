@@ -232,17 +232,17 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport 
 
     @Override
     public boolean supportsObjectQueuesFolder() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean supportsSchedulerJobsFolder() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean supportsRecycleBinFolder() {
-        return true;
+        return false;
     }
 
     @Override
