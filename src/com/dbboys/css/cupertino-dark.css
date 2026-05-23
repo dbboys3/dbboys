@@ -124,8 +124,8 @@
   -color-modal-progress-overlay: rgba(0, 0, 0, 0.3);
   -color-modal-progress-overlay-strong: rgba(0, 0, 0, 0.35);
   -color-modal-progress-card-bg: rgb(58, 58, 60);
-  -color-modal-progress-stop-icon: -color-danger-3;
-  -color-modal-progress-stop-icon-hover: -color-danger-2;
+  -color-modal-progress-stop-icon: -color-danger-fg;
+  -color-modal-progress-stop-icon-hover: -color-danger-5;
   -color-install-step-current-icon: -color-accent-fg;
   -fx-background-radius: inherit;
   -fx-background-insets: inherit;

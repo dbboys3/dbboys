@@ -264,8 +264,10 @@ public class SqlConnectionHandler {
 
             if (!newValue.equals(oldValue) && !newValue.equals(ctrl.defaultDatabase)) {
                 boolean switchedExistingDatabase = oldValue != null && !oldValue.equals(ctrl.defaultDatabase);
+                boolean changedFromPlaceholderToDifferentDatabase = oldValue == ctrl.defaultDatabase
+                        && !isCurrentSessionDatabase(newValue);
                 ConnectionService.ChangeDefaultDatabaseResult result = null;
-                if (switchedExistingDatabase) {
+                if (switchedExistingDatabase || changedFromPlaceholderToDifferentDatabase) {
                     ctrl.prepareForDatabaseSwitch();
                     result = sqlexeService.activeDatabase(ctrl.sqlConnect, newValue, ctrl);
                 }
@@ -277,7 +279,7 @@ public class SqlConnectionHandler {
                     });
                 } else if (result == null || result.isSuccess()) {
                     ctrl.updateSqlModeChoicebox(sqlexeService.getSqlMode(ctrl.sqlConnect, ctrl.sqlConnect.getConn()));
-                    if (switchedExistingDatabase) {
+                    if (switchedExistingDatabase || changedFromPlaceholderToDifferentDatabase) {
                         applyCommitModeAfterDatabaseSwitch(newValue, result != null && result.isReconnected());
                     } else if (ctrl.sqlCommitModeChoiceBox.getSelectionModel().getSelectedIndex() == 1) {
                         tryApplyManualCommitMode();
@@ -295,6 +297,14 @@ public class SqlConnectionHandler {
                 }
             }
         });
+    }
+
+    private boolean isCurrentSessionDatabase(Catalog database) {
+        if (database == null || database.getName() == null || database.getName().isBlank()) {
+            return false;
+        }
+        String sessionDb = ctrl.sqlConnect == null ? null : ctrl.sqlConnect.getSessionCatalog();
+        return sessionDb != null && !sessionDb.isBlank() && database.getName().equalsIgnoreCase(sessionDb);
     }
 
     private void applyCommitModeAfterDatabaseSwitch(Catalog database, boolean reconnected) {

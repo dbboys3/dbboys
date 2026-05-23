@@ -53,7 +53,10 @@ public class PopupWindowUtil {
     @Deprecated public static Stage about_pupupstage = aboutPopupStage;
     public static Label aboutPopupStageLabel = new Label(Main.VERSION.getVersion());
     @Deprecated public static Label about_pupupstage_label = aboutPopupStageLabel;
-    public static StackPane aboutPopupStageStackPane = new StackPane(aboutPopupStageLabel);
+    private static final Label aboutProductLabel = new Label("DBboys");
+    private static final Label aboutPoweredByLabel = new Label("Powered by OpenJFX 25.0.3");
+    private static final VBox aboutPopupContent = new VBox(10);
+    public static StackPane aboutPopupStageStackPane = new StackPane(aboutPopupContent);
     @Deprecated public static StackPane about_pupupstage_stackpane = aboutPopupStageStackPane;
     private static Scene aboutPopupStageScene = new Scene(aboutPopupStageStackPane, 400, 300);
     private static Image aboutPopupStageIcon = new Image(IconPaths.MAIN_LOGO);
@@ -156,6 +159,21 @@ public class PopupWindowUtil {
     static {
         //关于弹出面板
         aboutPopupStageStackPane.setAlignment(Pos.CENTER);
+        ImageView aboutLogo = new ImageView(aboutPopupStageIcon);
+        aboutLogo.setFitWidth(56);
+        aboutLogo.setFitHeight(56);
+        aboutLogo.setPreserveRatio(true);
+        aboutProductLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        aboutPopupStageLabel.setStyle("-fx-font-size: 13px;");
+        aboutPoweredByLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.72;");
+        aboutPopupContent.setAlignment(Pos.CENTER);
+        aboutPopupContent.setPadding(new Insets(18));
+        aboutPopupContent.getChildren().setAll(
+                aboutLogo,
+                aboutProductLabel,
+                aboutPopupStageLabel,
+                aboutPoweredByLabel
+        );
         CustomWindowFrameUtil.Frame aboutFrame = CustomWindowFrameUtil.createModalPopup(
                 aboutPopupStage,
                 aboutTitleBinding,
@@ -748,7 +766,9 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_log",
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection")),
-                new CompatibilityRow("MYSQL", "8.0", compatibilityFeaturesByKey(
+                new CompatibilityRow("MYSQL", "5.7 / 8.0", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.metadata_detail",
                         "main.compatibility.feature.metadata_change",

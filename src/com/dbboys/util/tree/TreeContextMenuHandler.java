@@ -144,6 +144,9 @@ public class TreeContextMenuHandler {
                 IconFactory.group(IconPaths.METADATA_ONCONFIG_ITEM, 0.55, 0.55));
         CustomShortcutMenuItem instanceStopItem = MenuItemUtil.createMenuItemI18n("metadata.menu.instance_start_stop",
                 IconFactory.groupFixedColor(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, 0.65, IconFactory.stopColor()));
+        Menu instanceManagementMenu = new Menu();
+        instanceManagementMenu.textProperty().bind(I18n.bind("metadata.menu.instance_management", "实例管理"));
+        instanceManagementMenu.setGraphic(IconFactory.group(IconPaths.METADATA_CONNECT_INFO_ITEM, 0.55, 0.55));
 
         Menu ddlMenu = new Menu();
         ddlMenu.textProperty().bind(I18n.bind("metadata.menu.ddl.title", "查看DDL"));
@@ -198,28 +201,42 @@ public class TreeContextMenuHandler {
             if (now && exportMenu.isShowing()) exportMenu.hide();
             if (now && importMenu.isShowing()) importMenu.hide();
             if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
+            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
         });
         exportMenu.showingProperty().addListener((obs, was, now) -> {
             if (now && ddlMenu.isShowing()) ddlMenu.hide();
             if (now && importMenu.isShowing()) importMenu.hide();
             if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
+            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
         });
         importMenu.showingProperty().addListener((obs, was, now) -> {
             if (now && ddlMenu.isShowing()) ddlMenu.hide();
             if (now && exportMenu.isShowing()) exportMenu.hide();
             if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
+            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
         });
         exportDdlMenu.showingProperty().addListener((obs, was, now) -> {
             if (now && ddlMenu.isShowing()) ddlMenu.hide();
             if (now && importMenu.isShowing()) importMenu.hide();
             if (now && exportMenu.isShowing()) exportMenu.hide();
+            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
+        });
+        instanceManagementMenu.showingProperty().addListener((obs, was, now) -> {
+            if (now && ddlMenu.isShowing()) ddlMenu.hide();
+            if (now && exportMenu.isShowing()) exportMenu.hide();
+            if (now && importMenu.isShowing()) importMenu.hide();
+            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
         });
 
         treeview_menu.skinProperty().addListener((obs, oldSkin, newSkin) -> {
             if (newSkin == null) return;
             Node skinRoot = newSkin.getNode();
             skinRoot.addEventFilter(MouseEvent.MOUSE_ENTERED_TARGET, event -> {
-                if (!ddlMenu.isShowing() && !exportMenu.isShowing() && !importMenu.isShowing() && !exportDdlMenu.isShowing()) return;
+                if (!ddlMenu.isShowing()
+                        && !exportMenu.isShowing()
+                        && !importMenu.isShowing()
+                        && !exportDdlMenu.isShowing()
+                        && !instanceManagementMenu.isShowing()) return;
                 Node target = (Node) event.getTarget();
                 while (target != null && target != skinRoot) {
                     if (target.getStyleClass().contains("menu-item")) {
@@ -228,6 +245,7 @@ public class TreeContextMenuHandler {
                             if (exportMenu.isShowing()) exportMenu.hide();
                             if (importMenu.isShowing()) importMenu.hide();
                             if (exportDdlMenu.isShowing()) exportDdlMenu.hide();
+                            if (instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
                         }
                         return;
                     }
@@ -1458,14 +1476,17 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(deleteItem);
                     if (!hideInstanceManagementMenu) {
                         treeview_menu.getItems().add(separator2);
-                        treeview_menu.getItems().add(TreeViewUtil.connectInfoItem);
-                        treeview_menu.getItems().add(healthCheckItem);
-                        treeview_menu.getItems().add(onlinelogItem);
-                        treeview_menu.getItems().add(spaceManagerItem);
-                        treeview_menu.getItems().add(onconfigItem);
+                        instanceManagementMenu.getItems().setAll(
+                                TreeViewUtil.connectInfoItem,
+                                healthCheckItem,
+                                onlinelogItem,
+                                spaceManagerItem,
+                                onconfigItem
+                        );
                         if (!hideStartStopMenu) {
-                            treeview_menu.getItems().add(instanceStopItem);
+                            instanceManagementMenu.getItems().add(instanceStopItem);
                         }
+                        treeview_menu.getItems().add(instanceManagementMenu);
                     }
 
 
