@@ -47,7 +47,6 @@ public final class DamengDdlRepository implements DdlRepository {
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'TABLE' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'VIEW' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'SYNONYM' AND secondary = 'N')
-            + (SELECT COUNT(*) FROM all_queues WHERE owner = ?)
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'FUNCTION' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'PROCEDURE' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'PACKAGE' AND secondary = 'N')
@@ -852,7 +851,7 @@ public final class DamengDdlRepository implements DdlRepository {
         String schema = databaseName != null ? databaseName.toUpperCase() : currentSchema(conn).toUpperCase();
         SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
         List<Object> binds = new ArrayList<>();
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < 11; i++) {
             binds.add(schema);
         }
         Long count = runner.queryOne(SQL_EXPORT_ITEM_COUNT_SPLIT, binds, rs -> Long.valueOf(rs.getLong(1)));
@@ -880,7 +879,6 @@ public final class DamengDdlRepository implements DdlRepository {
 
         completed = appendObjectsDdl(conn, pre, schema, "VIEW", "Views", completed, progressCallback);
         completed = appendObjectsDdl(conn, pre, schema, "SYNONYM", "Synonyms", completed, progressCallback);
-        completed = appendQueuesDdl(conn, pre, schema, completed, progressCallback);
         completed = appendObjectsDdl(conn, pre, schema, "FUNCTION", "Functions", completed, progressCallback);
         completed = appendObjectsDdl(conn, pre, schema, "PROCEDURE", "Procedures", completed, progressCallback);
         completed = appendPackagesDdl(conn, pre, schema, completed, progressCallback);

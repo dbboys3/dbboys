@@ -616,7 +616,7 @@ public final class DamengMetadataRepository implements MetadataRepository {
                 t.owner,
                 t.trigger_name,
                 t.table_name,
-                trim(t.trigger_type || ' ' || t.triggering_event) as trigger_type,
+                '' as trigger_type,
                 t.status
             from all_triggers t
             where t.owner = ?
@@ -628,7 +628,7 @@ public final class DamengMetadataRepository implements MetadataRepository {
                 t.owner,
                 t.trigger_name,
                 t.table_name,
-                trim(t.trigger_type || ' ' || t.triggering_event) as trigger_type,
+                '' as trigger_type,
                 t.status
             from all_triggers t
             where upper(t.owner) = upper(?)
