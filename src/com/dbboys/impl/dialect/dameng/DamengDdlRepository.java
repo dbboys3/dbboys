@@ -611,10 +611,23 @@ public final class DamengDdlRepository implements DdlRepository {
         return sb.toString();
     }
 
+    /** Dameng {@code GET_DDL} object types differ from Oracle ({@code PKG_SPEC} vs {@code PACKAGE_SPEC}). */
+    private static String mapDamengGetDdlObjectType(String objectType) {
+        if (objectType == null) {
+            return null;
+        }
+        return switch (objectType) {
+            case "PACKAGE_SPEC" -> "PKG_SPEC";
+            case "PACKAGE_BODY" -> "PKG_BODY";
+            default -> objectType;
+        };
+    }
+
     private String getDdl(Connection conn, String objectType, String objectName, String schema) throws SQLException {
+        String damengObjectType = mapDamengGetDdlObjectType(objectType);
         String sql = "SELECT DBMS_METADATA.GET_DDL(?, ?, ?) FROM dual";
         SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        String ddl = runner.queryOne(sql, List.of(objectType, objectName, schema), rs -> readDdlClob(rs, 1));
+        String ddl = runner.queryOne(sql, List.of(damengObjectType, objectName, schema), rs -> readDdlClob(rs, 1));
         if (ddl != null) {
             ddl = ddl.trim();
         } else {
