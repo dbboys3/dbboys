@@ -75,8 +75,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             "mkv", "txt", "csv", "json", "xml", "iso", "tar", "gz", "tar.gz",
             "sh", "chm", "jar", "yml"
     );
-    public static final String LINK_STYLE = "markdown-link";
-    public static final String INVALID_LINK_STYLE = "markdown-link-invalid";
+    public static final String LINK_STYLE = "-fx-fill:-color-accent-3; -fx-underline: true; -fx-cursor: hand;";
+    public static final String INVALID_LINK_STYLE = "-fx-fill: -color-danger-7; -fx-underline: true;-fx-cursor: hand;-fx-strikethrough: true";
     public static final ConcurrentMap<String, Boolean> LINK_CHECK_CACHE = new ConcurrentHashMap<>();
     public static final Set<String> LINK_CHECK_IN_FLIGHT = ConcurrentHashMap.newKeySet();
     public int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
@@ -140,7 +140,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         // 使用集合来存储段落样式
         BiConsumer<TextFlow, String> paragraphStyler = (textFlow, style) -> {
             if (style != null && !style.isEmpty()) {
-                textFlow.getStyleClass().add(style);
+                textFlow.setStyle(style); // 例如行间距
             }
         };
         Function<StyledSegment<Either<String, Node>, String>, Node> nodeFactory = seg -> {
@@ -164,7 +164,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         String url=tmpUrl;
                         boolean isHttpLink = isHttpUrl(url);
                         String ext = getFileExtension(url);
-                        t.getStyleClass().add(LINK_STYLE);
+                        t.setStyle(LINK_STYLE);
 
 
                         applyLinkValidation(t, url, isHttpLink);
@@ -258,10 +258,11 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                          */
                     } else if (seg.getStyle().contains("code-inline")) {
-                        t.getStyleClass().add("markdown-inline-code");
+                        t.getStyleClass().add("markdown-inline-code"
+                        );
 
                     }else if (seg.getStyle().contains("bold")) {
-                        t.getStyleClass().add("markdown-bold");
+                        t.getStyleClass().add(".markdown-bold");
                     }else if (seg.getStyle() != null) {
                         if (seg.getStyle().contains("title")) {
                             ContextMenu contextMenu = new ContextMenu();
@@ -334,6 +335,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         setEditable(false);
         setWrapText(true);
         getStyleClass().add("markdown-styled-area");
+    
         setOnKeyPressed(event -> {
             if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
                 modifyItem.fire();
@@ -376,6 +378,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         codeArea.setEditable(false);
         codeArea.setParagraphGraphicFactory(null);
         codeArea.getStyleClass().add("markdown-code-block");
+ 
         updateCodeBlockHeight(codeArea);
         bindCodeBlockWidth(codeArea);
         bindCodeBlockScroll(codeArea);
@@ -726,7 +729,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             append(Either.right(codeArea), "");
         }
         for(int i=0;i<getParagraphs().size();i++) {
-            setParagraphStyle(i, "markdown-paragraph");
+            setParagraphStyle(i, "-fx-line-spacing: 10px");
         }
     }
 
@@ -1051,8 +1054,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     private static void applyLinkValidation(Text textNode, String url, boolean isHttpLink) {
         if (!isHttpLink) {
             if (!new File(url).exists()) {
-                textNode.getStyleClass().remove(LINK_STYLE);
-                textNode.getStyleClass().add(INVALID_LINK_STYLE);
+                textNode.setStyle(INVALID_LINK_STYLE);
             }
             return;
         }
@@ -1066,8 +1068,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
         Boolean cached = LINK_CHECK_CACHE.get(url);
         if (cached != null) {
             if (!cached) {
-                textNode.getStyleClass().remove(LINK_STYLE);
-                textNode.getStyleClass().add(INVALID_LINK_STYLE);
+                textNode.setStyle(INVALID_LINK_STYLE);
             }
             return;
         }
@@ -1096,10 +1097,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             }
 
             if (Boolean.FALSE.equals(valid)) {
-                Platform.runLater(() -> {
-                    textNode.getStyleClass().remove(LINK_STYLE);
-                    textNode.getStyleClass().add(INVALID_LINK_STYLE);
-                });
+                Platform.runLater(() -> textNode.setStyle(INVALID_LINK_STYLE));
             }
         });
     }
