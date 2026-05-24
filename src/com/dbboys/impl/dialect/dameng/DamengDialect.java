@@ -118,7 +118,8 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport 
         appendInfoLine(info, "driver_name", metaData.getDriverName());
         appendInfoLine(info, "driver_version", metaData.getDriverVersion());
         appendInfoLine(info, "current_schema", currentSchema(connection));
-        connect.setDbversion(trimToEmpty(metaData.getDatabaseProductName()) + " " + trimToEmpty(metaData.getDatabaseProductVersion()));
+        // 达梦兼容 Oracle 模式下 getDatabaseProductName() 返回 Oracle，强制显示 DM 前缀
+        connect.setDbversion("DM " + trimToEmpty(metaData.getDatabaseProductVersion()));
         connect.setInfo(info.toString());
         return "";
     }
