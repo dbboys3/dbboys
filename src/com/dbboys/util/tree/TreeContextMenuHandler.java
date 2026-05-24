@@ -895,6 +895,14 @@ public class TreeContextMenuHandler {
             }
             else if(treeData instanceof SysTable||treeData instanceof Table){
                     TreeViewUtil.tableService.updateStatisticsForTable(connect, treeData.getName(), platform, schemaName, ()->{
+                        selectedItem.getValue().setRunning(true);
+                        TreeViewUtil.tableService.refreshTableMeta(
+                                TreeNavigator.getMetaConnect(selectedItem),
+                                TreeNavigator.getCurrentDatabase(selectedItem),
+                                selectedItem.getValue().getName(),
+                                selectedItem::setValue,
+                                () -> selectedItem.getValue().setRunning(false)
+                        );
                         NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
                     });
                     
