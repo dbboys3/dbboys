@@ -1130,57 +1130,13 @@ public final class DamengDdlRepository implements DdlRepository {
 
     private long appendQueuesDdl(Connection conn, StringBuilder ddl, String schema,
                                  long completed, LongConsumer progressCallback) throws SQLException {
-        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        List<String> names = runner.query(SQL_QUEUE_NAMES, List.of(schema), rs -> rs.getString("name"));
-        if (names.isEmpty()) {
-            return completed;
-        }
-        ddl.append("-- ### Queues (").append(names.size()).append(")\n\n");
-        for (String name : names) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Export cancelled");
-            }
-            String objDdl = getDdlSafe(conn, "AQ_QUEUE", name, schema);
-            if (!objDdl.isEmpty()) {
-                ddl.append(objDdl);
-                if (!objDdl.endsWith(";")) {
-                    ddl.append("\n;");
-                }
-                ddl.append("\n\n");
-            }
-            completed++;
-            if (progressCallback != null) {
-                progressCallback.accept(completed);
-            }
-        }
-        //ddl.append("-- ### FINISH: Queues\n\n");
+        // Dameng does not support queue export
         return completed;
     }
 
     private long appendSchedulerJobsDdl(Connection conn, StringBuilder ddl, String schema,
                                         long completed, LongConsumer progressCallback) throws SQLException {
-        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        List<String> names = runner.query(SQL_SCHEDULER_JOB_NAMES, List.of(schema), rs -> rs.getString("job_name"));
-        if (names.isEmpty()) {
-            return completed;
-        }
-
-        ddl.append("-- ### Scheduler Jobs (").append(names.size()).append(")\n\n");
-        for (String name : names) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Export cancelled");
-            }
-            String objDdl = withTrailingSqlPlusSlash(getDdlSafe(conn, "PROCOBJ", name, schema));
-            if (!objDdl.isEmpty()) {
-                ddl.append(objDdl);
-                ddl.append("\n\n");
-            }
-            completed++;
-            if (progressCallback != null) {
-                progressCallback.accept(completed);
-            }
-        }
-        ddl.append("-- ### FINISH: Scheduler Jobs\n\n");
+        // Dameng does not support scheduler job export
         return completed;
     }
 
