@@ -3862,7 +3862,7 @@ Text {
   -fx-background-color:-color-bg-default;
   -fx-background-insets: 0;
   -fx-border-color: -color-fg-default;
-  -fx-border-width: 0 0.5 0.5 0.5;
+  -fx-border-width: 0 1px 1px 1px;
   -fx-border-radius: 0;
   -fx-background-radius: 0;
   -fx-padding: 0;
@@ -5442,7 +5442,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-font-weight: normal;
   -fx-padding: 3px 6px 3px 6px;
   -fx-font-family: "Courier New";
-  -fx-border-width: 0.5px;
+  -fx-border-width: 1px;
   -fx-border-color: -color-fg-default;
   -fx-border-radius: 3px;
 }
@@ -5803,11 +5803,11 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 .window-popup-frame {
   -fx-border-color: -color-fg-default;
-  -fx-border-width: 0.5;
+  -fx-border-width: 1px;
 }
 
 .window-dialog-title-bar {
-  -fx-border-width: 0.5 0.5 0 0.5;
+  -fx-border-width: 1px 1px 0 1px;
   -fx-border-color: -color-fg-default;
 }
 
@@ -6202,7 +6202,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .search-replace-panel {
   -fx-background-color: -color-bg-default;
   -fx-border-color: -color-border-default;
-  -fx-border-width: 0.5;
+  -fx-border-width: 1px;
   -fx-background-radius: 6;
   -fx-border-radius: 6;
 }
@@ -6405,7 +6405,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .sql-execute-process-pane {
   -fx-background-color: -color-bg-subtle;
   -fx-border-color: -color-border-default;
-  -fx-border-width: 0.5;
+  -fx-border-width: 1px;
   -fx-background-radius: 7;
   -fx-border-radius: 7;
   -fx-padding: 3 8 3 8;
@@ -6458,7 +6458,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .alert-root {
   -fx-background-color: -color-bg-default;
   -fx-border-color: -color-fg-default;
-  -fx-border-width: 0.5;
+  -fx-border-width: 1px;
   -fx-padding: 0;
 }
 
@@ -6483,7 +6483,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 .search-result-popup-list {
   -fx-border-color: -color-fg-default;
-  -fx-border-width: 0.5;
+  -fx-border-width: 1px;
   -fx-background-color: -color-bg-default;
   -fx-border-radius: 5;
 }
