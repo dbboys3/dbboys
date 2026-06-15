@@ -6546,3 +6546,12 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .tree-cell-drag-over {
   -fx-background-color: -color-hover-bg;
 }
+
+/* 连接属性表格 - 自定义属性行 */
+.table-row-cell.custom-prop-row {
+  -fx-background-color: -color-accent-subtle;
+}
+
+.table-cell.custom-prop-row {
+  -fx-text-fill: -color-accent-fg;
+}

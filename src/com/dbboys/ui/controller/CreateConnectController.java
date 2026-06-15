@@ -895,14 +895,46 @@ public class CreateConnectController {
         tableView.setSortPolicy((param) -> false);//禁用排序
 
         TableColumn<ObservableList<String>, Object> nameColumn = new TableColumn<ObservableList<String>, Object>(I18n.t("createconnect.table.prop_name"));
-        nameColumn.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, Object>());
+        nameColumn.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, Object>() {
+            @Override
+            public void startEdit() {
+                TableRow<ObservableList<String>> tableRow = getTableRow();
+                if (tableRow == null || tableRow.getItem() == null) {
+                    return;
+                }
+                ObservableList<String> row = tableRow.getItem();
+                if (row.size() <= 0 || !"true".equals(row.get(0))) {
+                    return;
+                }
+                super.startEdit();
+            }
+
+            @Override
+            public void updateItem(Object item, boolean empty) {
+                super.updateItem(item, empty);
+                updateCustomPropStyle(this, empty);
+            }
+        });
         nameColumn.setCellValueFactory(data -> Bindings.createObjectBinding(() -> data.getValue().get(1)));
         nameColumn.setReorderable(false); // 禁用拖动
-        nameColumn.setEditable(false);
-        nameColumn.setReorderable(false);
+        nameColumn.setEditable(true);
         nameColumn.setPrefWidth(220);
+        nameColumn.setOnEditCommit(event -> {
+            ObservableList<String> rowData = event.getRowValue();
+            Object newValue = event.getNewValue();
+            if (rowData.size() > 1 && newValue != null) {
+                rowData.set(1, newValue.toString());
+            }
+            tableView.refresh();
+        });
         TableColumn<ObservableList<String>, Object> valueColumn = new TableColumn<ObservableList<String>, Object>(I18n.t("createconnect.table.prop_value"));
-        valueColumn.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, Object>());
+        valueColumn.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, Object>() {
+            @Override
+            public void updateItem(Object item, boolean empty) {
+                super.updateItem(item, empty);
+                updateCustomPropStyle(this, empty);
+            }
+        });
         valueColumn.setCellValueFactory(data -> Bindings.createObjectBinding(() -> data.getValue().get(2)));
         valueColumn.setReorderable(false); // 禁用拖动
         valueColumn.setEditable(true);
@@ -925,12 +957,67 @@ public class CreateConnectController {
         tableView.getColumns().addAll(nameColumn, valueColumn);
         tableView.setItems(datalist);
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tableView.setRowFactory(tv -> {
+            TableRow<ObservableList<String>> row = new TableRow<>();
+            row.itemProperty().addListener((obs, oldItem, newItem) -> {
+                boolean isCustom = newItem != null && newItem.size() > 0 && "true".equals(newItem.get(0));
+                if (isCustom) {
+                    if (!row.getStyleClass().contains("custom-prop-row")) {
+                        row.getStyleClass().add("custom-prop-row");
+                    }
+                } else {
+                    row.getStyleClass().remove("custom-prop-row");
+                }
+            });
+            return row;
+        });
         VBox contentBox = new VBox();
         contentBox.setId("modifyProps");
         contentBox.setAlignment(Pos.TOP_LEFT);
         contentBox.getChildren().add(tableView);
         VBox.setVgrow(tableView, Priority.ALWAYS);
         tableView.setMaxHeight(Double.MAX_VALUE);
+
+        HBox addButtonBar = new HBox();
+        addButtonBar.setAlignment(Pos.CENTER_LEFT);
+        addButtonBar.setSpacing(6);
+        addButtonBar.setPadding(new javafx.geometry.Insets(6, 0, 0, 0));
+        Button addPropButton = new Button(I18n.t("createconnect.button.add_prop"));
+        addPropButton.getStyleClass().add("small");
+        addPropButton.setOnAction(event -> {
+            ObservableList<String> newRow = FXCollections.observableArrayList();
+            newRow.add("true");
+            newRow.add("");
+            newRow.add("");
+            datalist.add(newRow);
+            int newRowIndex = datalist.size() - 1;
+            javafx.application.Platform.runLater(() -> {
+                tableView.getSelectionModel().clearAndSelect(newRowIndex);
+                tableView.scrollTo(newRowIndex);
+                tableView.edit(newRowIndex, nameColumn);
+            });
+        });
+
+        Button delPropButton = new Button(I18n.t("createconnect.button.del_prop"));
+        delPropButton.getStyleClass().add("small");
+        delPropButton.setOnAction(event -> {
+            ObservableList<String> selectedRow = tableView.getSelectionModel().getSelectedItem();
+            if (selectedRow == null) {
+                return;
+            }
+            int selectedIndex = tableView.getSelectionModel().getSelectedIndex();
+            datalist.remove(selectedRow);
+            tableView.refresh();
+            javafx.application.Platform.runLater(() -> {
+                // 选中删除后的相邻行
+                if (datalist.size() > 0) {
+                    int selectIdx = Math.min(selectedIndex, datalist.size() - 1);
+                    tableView.getSelectionModel().clearAndSelect(selectIdx);
+                }
+            });
+        });
+        addButtonBar.getChildren().addAll(addPropButton, delPropButton);
+        contentBox.getChildren().add(addButtonBar);
 
         ButtonType buttonTypeReset = new ButtonType(
                 I18n.t("createconnect.button.reset", "重置"),
@@ -965,28 +1052,67 @@ public class CreateConnectController {
         }
         jsonArray.clear();
         for (ObservableList<String> row :lastdata) {
+            String propName = row.get(1);
+            // 丢弃名称为空的属性（用户添加但未填写的自定义属性）
+            if (propName == null || propName.isBlank()) {
+                continue;
+            }
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("propName", row.get(1));
+            jsonObject.put("propName", propName);
             jsonObject.put("propValue", row.get(2));
             jsonArray.put(jsonObject);
         }
         props=jsonArray.toString();
     }
 
+    private static void updateCustomPropStyle(javafx.scene.control.TableCell<?, ?> cell, boolean empty) {
+        if (empty) {
+            cell.getStyleClass().remove("custom-prop-row");
+            return;
+        }
+        TableRow<?> tableRow = cell.getTableRow();
+        if (tableRow == null || tableRow.getItem() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        ObservableList<String> rowData = (ObservableList<String>) tableRow.getItem();
+        boolean isCustom = rowData.size() > 0 && "true".equals(rowData.get(0));
+        if (isCustom) {
+            if (!cell.getStyleClass().contains("custom-prop-row")) {
+                cell.getStyleClass().add("custom-prop-row");
+            }
+        } else {
+            cell.getStyleClass().remove("custom-prop-row");
+        }
+    }
+
     private ObservableList<ObservableList<String>> buildDriverPropRows(String propsJson) {
         JSONArray jsonArray = new JSONArray(
                 propsJson == null || propsJson.isBlank() ? defaultConnectionPropsFor(dbTypeChoiceBox.getValue()) : propsJson
         );
+        Set<String> defaultPropNames = buildDefaultPropNameSet();
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
         for (int i = 0; i < jsonArray.length(); i++) {
             JSONObject jsonObject = jsonArray.getJSONObject(i);
+            String propName = jsonObject.getString("propName");
             ObservableList<String> row = FXCollections.observableArrayList();
-            row.add(null);
-            row.add(jsonObject.getString("propName"));
+            boolean isCustom = !defaultPropNames.contains(propName);
+            row.add(isCustom ? "true" : null);
+            row.add(propName);
             row.add(jsonObject.getString("propValue"));
             rows.add(row);
         }
         return rows;
+    }
+
+    /** Returns the set of property names from the current dialect's defaultConnectionProps. */
+    private Set<String> buildDefaultPropNameSet() {
+        Set<String> names = new java.util.HashSet<>();
+        JSONArray defaults = new JSONArray(defaultConnectionPropsFor(dbTypeChoiceBox.getValue()));
+        for (int i = 0; i < defaults.length(); i++) {
+            names.add(defaults.getJSONObject(i).getString("propName"));
+        }
+        return names;
     }
 
     private ObservableList<ObservableList<String>> copyDriverPropRows(List<ObservableList<String>> sourceRows) {
