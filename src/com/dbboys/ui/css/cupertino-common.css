@@ -5450,6 +5450,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-border-width: 1px;
   -fx-border-color: -color-chart-8;
   -fx-border-radius: 3px;
+  -fx-effect: dropshadow(three-pass-box, -color-shadow-default, 2px, 0.3, 0, 1);
 }
 
 #自定义区�?############################################################################

@@ -107,7 +107,7 @@
   -color-badge-type-border: rgba(0, 94, 196, 0.78);
   -color-badge-primary-border: rgba(179, 41, 34, 0.78);
   -color-badge-rowid-border: rgba(179, 104, 0, 0.78);
-  -color-dialog-title-fg: -color-accent-7;
+  -color-dialog-title-fg: -color-fg-default;
   -color-table-header-fg: -color-accent-7;
   -color-sql-header-icon-connected: -color-accent-7;
   -color-sql-header-icon-disconnected: -color-base-5;
@@ -142,3 +142,4 @@
   -color-modal-progress-stop-icon-hover: -color-danger-5;
   -color-install-step-current-icon: -color-accent-4;
 }
+
