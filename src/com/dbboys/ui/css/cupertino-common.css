@@ -1003,7 +1003,7 @@ Text {
   -fx-border-width: 0;
 }
 .list-view.striped .list-cell:filled:odd {
-  -fx-background-color: -color-cell-bg-odd;
+  -fx-background-color: -color-cell-bg;
 }
 
 .list-view.search-result-list {
@@ -1261,7 +1261,7 @@ Text {
   -fx-background-insets: 0;
 }
 .table-view.striped .table-row-cell:filled:odd {
-  -fx-background-color: -color-cell-bg-odd;
+  -fx-background-color: -color-cell-bg;
 }
 .table-view.no-header > .column-header-background {
   -fx-max-height: 0;
@@ -1275,10 +1275,10 @@ Text {
   -fx-cell-size: 22px;
 }
 .table-view .table-row-cell:filled:odd {
-  -fx-background-color: -color-cell-bg-odd;
+  -fx-background-color: -color-cell-bg;
 }
 .table-view .table-row-cell:filled:even {
-  -fx-background-color: -color-cell-bg;
+  -fx-background-color: -color-cell-bg-odd;
 }
 .table-view .table-row-cell:empty {
   -fx-background-color: transparent;
@@ -1585,7 +1585,7 @@ Text {
   -fx-background-insets: 0, 0 0 0.5 0;
 }
 .tree-table-view.striped .tree-table-row-cell:filled:odd {
-  -fx-background-color: -color-cell-border, -color-cell-bg-odd;
+  -fx-background-color: -color-cell-border, -color-cell-bg;
 }
 .tree-table-view.no-header > .column-header-background {
   -fx-max-height: 0;
