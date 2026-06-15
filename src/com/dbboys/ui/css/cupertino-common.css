@@ -966,7 +966,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-default;
+  -color-cell-border: -color-border-subtle;
   -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
   -fx-border-width: 1px;
@@ -1033,12 +1033,12 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-default;
+  -color-cell-border: -color-border-subtle;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0.5px;
+  -fx-border-width: 1px 0 0 1px;
   -fx-border-radius: 0;
   -color-header-bg: -color-bg-default;
   -color-header-fg: -color-table-header-fg;
@@ -1188,7 +1188,7 @@ Text {
   -fx-padding: 0;
   -fx-font-weight: bold;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0.5 0.5 0;
+  -fx-border-width: 0 1px 1px 0;
 }
 .table-view > .column-header-background .column-header .label {
   -fx-text-fill: -color-header-fg;
@@ -1217,11 +1217,11 @@ Text {
 .table-view > .column-header-background > .filler {
   -fx-background-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 0.5px 0;
+  -fx-border-width: 0 0 1px 0;
 }
 .table-view > .column-header-background > .show-hide-columns-button {
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 0.5px 0;
+  -fx-border-width: 0 0 1px 0;
   -fx-cursor: hand;
 }
 .table-view > .column-header-background > .show-hide-columns-button > .show-hide-column-image {
@@ -1244,8 +1244,8 @@ Text {
   -fx-font-size: 1em;
 }
 .table-view.bordered .table-row-cell > .table-cell {
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0 0.5px 0.5px 0;
+  -fx-border-color: -color-border-subtle;
+  -fx-border-width: 0 1px 1px 0;
 }
 .table-view.bordered .table-row-cell > .table-cell:empty {
   -fx-border-color: transparent;
@@ -1291,8 +1291,8 @@ Text {
   -fx-padding: 0 0.5em 0 0.5em;
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
-  -fx-border-width: 0 0.5px 0 0;
-  -fx-border-color: -color-border-default;
+  -fx-border-width: 0 1px 1px 0;
+  -fx-border-color: -color-border-subtle;
 }
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:focused {
   -fx-background-color: -color-cell-bg;
@@ -1333,8 +1333,8 @@ Text {
 
 .table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell:last-visible,
 .tree-table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell > .tree-table-cell:last-visible {
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0 0.5px 0.5px 0;
+  -fx-border-color: -color-border-subtle;
+  -fx-border-width: 0 1px 1px 0;
 }
 
 .table-view .table-row-cell > .table-cell.check-box-table-cell,
@@ -1361,7 +1361,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-default;
+  -color-cell-border: -color-border-subtle;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
@@ -1474,10 +1474,10 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-default;
+  -color-cell-border: -color-border-subtle;
   -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0.5px;
+  -fx-border-width: 1px 0 0 1px;
   -fx-border-radius: 0;
   -color-header-bg: -color-bg-default;
   -color-header-fg: -color-table-header-fg;
@@ -1507,7 +1507,7 @@ Text {
   -fx-padding: 0;
   -fx-font-weight: bold;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0.5px 0.5px 0;
+  -fx-border-width: 0 1px 1px 0;
 }
 .tree-table-view > .column-header-background .column-header .label {
   -fx-text-fill: -color-header-fg;
@@ -1536,11 +1536,11 @@ Text {
 .tree-table-view > .column-header-background > .filler {
   -fx-background-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 0.5px 0;
+  -fx-border-width: 0 0 1px 0;
 }
 .tree-table-view > .column-header-background > .show-hide-columns-button {
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 0.5px 0;
+  -fx-border-width: 0 0 1px 0;
   -fx-cursor: hand;
 }
 .tree-table-view > .column-header-background > .show-hide-columns-button > .show-hide-column-image {
@@ -1563,8 +1563,8 @@ Text {
   -fx-font-size: 1.25em;
 }
 .tree-table-view.bordered .tree-table-row-cell > .tree-table-cell {
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0.5px 0.5px 0;
+  -fx-border-color: -color-border-subtle;
+  -fx-border-width: 0 1px 1px 0;
 }
 .tree-table-view.bordered .tree-table-row-cell > .tree-table-cell:empty {
   -fx-border-color: transparent;
@@ -1611,8 +1611,8 @@ Text {
   -fx-padding: 0 0.5em 0 0.5em;
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0 0.5px 0.5px 0;
+  -fx-border-color: -color-border-subtle;
+  -fx-border-width: 0 1px 1px 0;
 }
 .tree-table-view .tree-table-row-cell > .tree-table-cell.table-column.align-left {
   -fx-alignment: BASELINE_LEFT;
