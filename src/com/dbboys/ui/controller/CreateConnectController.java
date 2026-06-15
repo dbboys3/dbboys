@@ -207,7 +207,10 @@ public class CreateConnectController {
             refreshDriverPropertyButton(newValue);
         });
         if (!dbtypelist.isEmpty()) {
-            dbTypeChoiceBox.getSelectionModel().select(0);
+            dbTypeChoiceBox.getSelectionModel().select("MYSQL");
+            if (dbTypeChoiceBox.getSelectionModel().getSelectedIndex() < 0) {
+                dbTypeChoiceBox.getSelectionModel().select(0);
+            }
         }
 
         Connect installTemplate = AppState.getLastInstallConnect();
