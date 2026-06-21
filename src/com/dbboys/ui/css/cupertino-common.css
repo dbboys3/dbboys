@@ -34,6 +34,7 @@
   -color-button-danger: -color-danger-7;
   -color-app-result-bg: -color-bg-default;
   -color-app-muted-fg: #888;
+  -color-table-border: -color-border-subtle;
   -color-badge-type: #6f8498;
   -color-badge-primary: #9f453c;
   -color-badge-rowid: #8f6d1d;
@@ -966,7 +967,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-subtle;
+  -color-cell-border: -color-table-border;
   -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
   -fx-border-width: 1px;
@@ -1033,7 +1034,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-subtle;
+  -color-cell-border: -color-table-border;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
@@ -1244,7 +1245,7 @@ Text {
   -fx-font-size: 1em;
 }
 .table-view.bordered .table-row-cell > .table-cell {
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-width: 0 1px 1px 0;
 }
 .table-view.bordered .table-row-cell > .table-cell:empty {
@@ -1292,7 +1293,7 @@ Text {
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
   -fx-border-width: 0 1px 1px 0;
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
 }
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:focused {
   -fx-background-color: -color-cell-bg;
@@ -1333,7 +1334,7 @@ Text {
 
 .table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell:last-visible,
 .tree-table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell > .tree-table-cell:last-visible {
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-width: 0 1px 1px 0;
 }
 
@@ -1361,7 +1362,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-subtle;
+  -color-cell-border: -color-table-border;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
@@ -1474,7 +1475,7 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-border-subtle;
+  -color-cell-border: -color-table-border;
   -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
   -fx-border-width: 1px 0 0 1px;
@@ -1563,7 +1564,7 @@ Text {
   -fx-font-size: 1.25em;
 }
 .tree-table-view.bordered .tree-table-row-cell > .tree-table-cell {
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-width: 0 1px 1px 0;
 }
 .tree-table-view.bordered .tree-table-row-cell > .tree-table-cell:empty {
@@ -1611,7 +1612,7 @@ Text {
   -fx-padding: 0 0.5em 0 0.5em;
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-width: 0 1px 1px 0;
 }
 .tree-table-view .tree-table-row-cell > .tree-table-cell.table-column.align-left {
@@ -2004,7 +2005,7 @@ Text {
   -fx-text-fill: -color-base-5;
   -fx-background-insets: 0;
   -fx-background-radius: 4px;
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-radius: 4px;
   -fx-border-width: 0.3px;
   -fx-effect: none;
@@ -5915,7 +5916,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .markdown-code-block {
   -fx-background-color: -color-bg-subtle;
   -fx-background-radius: 4px;
-  -fx-border-color: -color-border-subtle;
+  -fx-border-color: -color-cell-border;
   -fx-border-radius: 4px;
   -fx-padding: 3;
   -fx-font-size: 10px;

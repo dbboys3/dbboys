@@ -65,6 +65,7 @@
   -color-border-default: rgb(40, 40, 42);
   -color-border-muted: rgb(58, 58, 60);
   -color-border-subtle: rgb(49, 49, 52);
+  -color-table-border: -color-border-subtle;
   -color-shadow-default: rgb(0, 0, 0);
   -color-neutral-emphasis-plus: rgb(142, 142, 147);
   -color-neutral-emphasis: rgb(142, 142, 147);
