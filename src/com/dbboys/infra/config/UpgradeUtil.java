@@ -215,27 +215,40 @@ public class UpgradeUtil {
 
     private static void restartExecutable() {
         try {
-            // 获取当前运行程序所在目录
             String currentDir = new File(System.getProperty("user.dir")).getAbsolutePath();
+            boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
 
-            // 你的 exe 文件名（根据实际情况修改）
-            String exeName = "dbboys.exe";
-
-            // 构造 exe 路径
-            File exeFile = new File(currentDir, exeName);
-
-            if (!exeFile.exists()) {
-                AlertUtil.CustomAlert(
-                        I18n.t("upgrade.error.restart.title", "重启错误"),
-                        I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
-                );
-                return;
+            // 在当前路径查找启动器并构造启动命令
+            ProcessBuilder pb;
+            if (isWindows) {
+                File exeFile = new File(currentDir, "dbboys.exe");
+                if (!exeFile.exists()) {
+                    AlertUtil.CustomAlert(
+                            I18n.t("upgrade.error.restart.title", "重启错误"),
+                            I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
+                    );
+                    return;
+                }
+                pb = new ProcessBuilder(exeFile.getAbsolutePath());
+            } else {
+                File startSh = new File(currentDir, "start.sh");
+                if (startSh.exists()) {
+                    pb = new ProcessBuilder("bash", startSh.getAbsolutePath());
+                } else {
+                    File linuxBin = new File(currentDir, "bin/dbboys");
+                    if (linuxBin.exists()) {
+                        pb = new ProcessBuilder(linuxBin.getAbsolutePath());
+                    } else {
+                        AlertUtil.CustomAlert(
+                                I18n.t("upgrade.error.restart.title", "重启错误"),
+                                I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
+                        );
+                        return;
+                    }
+                }
             }
 
-            // 启动新的进程
-            new ProcessBuilder(exeFile.getAbsolutePath()).start();
-
-            // 退出当前程序
+            pb.start();
             Platform.exit();
             System.exit(0);
 

@@ -19,7 +19,7 @@ echo Source compilation completed.
 :: Copy runtime resources to bin
 xcopy /e /h /y /q "src\com\dbboys\ui\fxml\*" "bin\com\dbboys\ui\fxml\"
 xcopy /e /h /y /q "src\com\dbboys\ui\css\*" "bin\com\dbboys\ui\css\"
-xcopy /e /h /y /q "src\com\dbboys\ui\i18n\*.properties" "bin\com\dbboys\ui\i18n\"
+xcopy /e /h /y /q "src\com\dbboys\infra\i18n\*.properties" "bin\com\dbboys\infra\i18n\"
 copy /y "src\IKAnalyzer.cfg.xml" "bin\" >nul
 copy /y "src\ik-stopwords.dic" "bin\" >nul
 
