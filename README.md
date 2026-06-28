@@ -156,7 +156,7 @@
 
 ### 从源码构建
 
-当前打包脚本为 Windows 批处理：
+Windows x64：
 
 1. 安装 JDK 25.0.2，并确保 JDK `bin` 目录在 `PATH` 中
 2. 修改 `build.bat` 中的 `JAVAFX_JMODS`，指向本机 JavaFX jmods 目录
@@ -168,6 +168,49 @@
 
 4. 脚本会编译源码、复制资源、生成 `dbboys.jar`、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，并最终输出 `dbboys.zip`
 5. 解压 `dbboys.zip` 后运行 `dbboys/bin/dbboys.exe`
+
+Linux x64：
+
+1. 安装 JDK 25.0.2，并确保 JDK `bin` 目录在 `PATH` 中
+2. 修改 `build.sh` 中的 `JAVAFX_JMODS`，指向本机 JavaFX jmods 目录
+3. 在项目根目录执行：
+
+   ```shell
+   sh build.sh
+   ```
+
+4. 脚本会编译源码、复制资源、生成 `dbboys.jar`、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，并最终输出 `dbboys.zip`
+5. 解压 `dbboys.zip` 后运行 `sh start.sh`
+
+Linux aarch64：
+1. 源码编译jmod，官方提供的jmod glibc版本较高，不一定适用大部分linux
+   安装OpenJDK Runtime Environment (build 22+36-2370)（21版本太低，25版本太高）
+   gcc版本7.5以上（4.8太低）
+   下载jfx源码jfx-25-3
+   修改modules/javafx.graphics/src/main/native-glass/gtk/PlatformSupport.cpp，最后一行添加
+   ```
+   constexpr const char* PlatformSupport::OBSERVED_SETTINGS[];
+   ```
+   否则编译完成后可能libglassgtk3.so中的OBSERVED_SETTINGS未定义
+   ```
+   nm -D build/modular-sdk/modules_libs/javafx.graphics/libglassgtk3.so | grep OBSERVED_SETTINGS
+   ```
+   显示D正常，显示U未定义
+   ```
+   cd jfx-25-3
+   chmod 777 gradlew
+   ./gradlew  jmods
+   ```
+2. 安装 JDK 25.0.2，并确保 JDK `bin` 目录在 `PATH` 中
+3. 修改 `build.sh` 中的 `JAVAFX_JMODS`，指向本机 JavaFX jmods 目录（第一步编译好的jmod）
+4. 在项目根目录执行：
+
+   ```shell
+   sh build.sh
+   ```
+
+5. 脚本会编译源码、复制资源、生成 `dbboys.jar`、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，并最终输出 `dbboys.zip`
+6. 解压 `dbboys.zip` 后运行 `sh start.sh`
 
 ### 典型使用流程
 

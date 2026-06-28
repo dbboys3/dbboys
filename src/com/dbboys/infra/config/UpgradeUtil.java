@@ -218,7 +218,6 @@ public class UpgradeUtil {
             String currentDir = new File(System.getProperty("user.dir")).getAbsolutePath();
             boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
 
-            // 在当前路径查找启动器并构造启动命令
             ProcessBuilder pb;
             if (isWindows) {
                 File exeFile = new File(currentDir, "dbboys.exe");
@@ -231,20 +230,21 @@ public class UpgradeUtil {
                 }
                 pb = new ProcessBuilder(exeFile.getAbsolutePath());
             } else {
+                // Linux 需要用 nohup detach，否则 System.exit 会一起杀掉子进程
                 File startSh = new File(currentDir, "start.sh");
+                File linuxBin = new File(currentDir, "bin/dbboys");
                 if (startSh.exists()) {
-                    pb = new ProcessBuilder("bash", startSh.getAbsolutePath());
+                    pb = new ProcessBuilder("bash", "-c",
+                            "nohup bash " + startSh.getAbsolutePath() + " > /dev/null 2>&1 &");
+                } else if (linuxBin.exists()) {
+                    pb = new ProcessBuilder("bash", "-c",
+                            "nohup " + linuxBin.getAbsolutePath() + " > /dev/null 2>&1 &");
                 } else {
-                    File linuxBin = new File(currentDir, "bin/dbboys");
-                    if (linuxBin.exists()) {
-                        pb = new ProcessBuilder(linuxBin.getAbsolutePath());
-                    } else {
-                        AlertUtil.CustomAlert(
-                                I18n.t("upgrade.error.restart.title", "重启错误"),
-                                I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
-                        );
-                        return;
-                    }
+                    AlertUtil.CustomAlert(
+                            I18n.t("upgrade.error.restart.title", "重启错误"),
+                            I18n.t("upgrade.error.executable_missing", "未找到可执行文件！")
+                    );
+                    return;
                 }
             }
 
