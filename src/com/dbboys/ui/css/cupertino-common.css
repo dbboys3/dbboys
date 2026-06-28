@@ -1990,6 +1990,36 @@ Text {
   -fx-icon-color: -color-fg-emphasis;
   -fx-fill: -color-fg-emphasis;
 }
+
+.context-menu.resultset-context-menu .menu-item:focused {
+  -fx-background-color: -color-bg-default;
+}
+.context-menu.resultset-context-menu .menu-item:focused > .label {
+  -fx-text-fill: -color-fg-default;
+}
+.context-menu.resultset-context-menu .menu-item:focused > .right-container > .arrow {
+  -fx-background-color: -color-fg-muted;
+}
+.context-menu.resultset-context-menu .menu-item:focused .font-icon,
+.context-menu.resultset-context-menu .menu-item:focused .ikonli-font-icon {
+  -fx-icon-color: -color-fg-default;
+  -fx-fill: -color-fg-default;
+}
+.context-menu.resultset-context-menu .menu-item:hover {
+  -fx-background-color: -color-base-7, -color-base-7;
+}
+.context-menu.resultset-context-menu .menu-item:hover > .label {
+  -fx-text-fill: -color-fg-emphasis;
+}
+.context-menu.resultset-context-menu .menu-item:hover > .right-container > .arrow {
+  -fx-background-color: -color-fg-muted;
+}
+.context-menu.resultset-context-menu .menu-item:hover .font-icon,
+.context-menu.resultset-context-menu .menu-item:hover .ikonli-font-icon {
+  -fx-icon-color: -color-fg-emphasis;
+  -fx-fill: -color-fg-emphasis;
+}
+
 .menu-item:disabled {
   -fx-opacity: 0.4;
 }
