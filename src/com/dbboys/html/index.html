@@ -52,6 +52,8 @@ a:hover{color:var(--fg)}
 .dots span.active{background:var(--accent);width:18px;border-radius:3px}
 
 /* Download - single row */
+.ftbl{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0 auto;padding:24px 16px 0}.ftbl span{font-size:.72rem;padding:3px 10px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border);color:var(--fg-muted)}
+
 .dwl{display:flex;justify-content:center;gap:10px;padding:24px 0 32px;flex-wrap:wrap}
 .dwl a{
   display:flex;align-items:center;gap:8px;
@@ -99,12 +101,13 @@ GitHub
 </div>
 
 <div class="dwl">
-<a href="#"><span class="os">🖥️</span> Windows <span class="note">.zip</span></a>
-<a href="#"><span class="os">🐧</span> Linux x64 <span class="note">.zip</span></a>
-<a href="#"><span class="os">🧩</span> Linux ARM64 <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/windows/latest.zip"><span class="os">🖥️</span> Windows <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/linux_x86_64/latest.zip"><span class="os">🐧</span> Linux x64 <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/linux_aarch64/latest.zip"><span class="os">🧩</span> Linux ARM64 <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/src/latest.zip"><span class="os">📦</span> 源码 <span class="note">.zip</span></a>
 </div>
 
-</div>
+<div class="ftbl"><span>连接管理</span><span>连接属性编辑</span><span>断线重连</span><span>长连接保活</span><span>SQL 工作台</span><span>语法高亮</span><span>SQL 格式化</span><span>绑定变量</span><span>执行计划</span><span>结果集编辑</span><span>结果集生成 SQL</span><span>交替行背景色</span><span>数据导出 (CSV/JSON/SQL)</span><span>对象浏览</span><span>图形化建表</span><span>DDL 导出</span><span>数据导入</span><span>实例运维</span><span>一键巡检</span><span>空间管理</span><span>参数管理</span><span>锁表处理</span><span>远程安装</span><span>远程卸载</span><span>Markdown 知识库</span><span>全文搜索</span><span>AI 辅助</span><span>DeepSeek</span><span>Qwen</span><span>深色主题</span><span>浅色主题</span><span>国际化多语言</span><span>GBase 8s</span><span>Informix</span><span>MySQL</span><span>Oracle</span><span>达梦</span><span>通用 JDBC</span><span>Windows</span><span>Linux x64</span><span>Linux ARM64</span><span>开源免费</span></div>
 
 <script>
 (function(){
@@ -123,5 +126,7 @@ GitHub
 })();
 </script>
 
+<div style="text-align:center;font-size:.72rem;color:var(--fg-muted);opacity:.5;padding:0 16px 24px">© 2026 DBboys · Powered by OpenJFX · GNU General Public License v3.0</div>
 </body>
 </html>
+

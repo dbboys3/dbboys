@@ -1,5 +1,0 @@
-@echo off
-chcp 65001 >nul 2>&1
-set "PYTHONIOENCODING=UTF-8"
-set "LC_ALL=zh_CN.UTF-8"
-setlocal enabledelayedexpansion
