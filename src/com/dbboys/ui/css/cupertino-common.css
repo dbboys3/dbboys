@@ -3797,6 +3797,9 @@ Text {
   -fx-border-width: 0.5;
   -fx-border-radius: 3;
 }
+.dialog-pane .button:hover {
+  -fx-border-color: -color-accent-emphasis;
+}
 .dialog-pane .button:default,
 .dialog-pane .button.accent {
   -fx-background-color: -color-accent-emphasis;
@@ -6430,6 +6433,10 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-border-width: 0.5;
   -fx-border-radius: 3;
   -fx-padding: 4 16 4 16;
+}
+
+.alert-body .button:hover {
+  -fx-border-color: -color-accent-emphasis;
 }
 .alert-body .button:default,
 .alert-body .button.accent {
