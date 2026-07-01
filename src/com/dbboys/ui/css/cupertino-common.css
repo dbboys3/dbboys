@@ -890,12 +890,16 @@ Text {
 .tree-table-view > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell .tree-table-cell:selected {
   -fx-background-color: -color-cell-bg-selected;
   -fx-background-insets: 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
+  -fx-border-color: -color-cell-border-selected;
 }
 
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected,
 .tree-table-view:focused > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell .tree-table-cell:selected {
   -fx-background-color: -color-cell-bg-selected-focused;
   -fx-background-insets: 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
+  -fx-border-color: -color-cell-border-selected-focused;
 }
 
 .cell .text-input {
@@ -954,6 +958,7 @@ Text {
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell.table-cell-editing:selected:focused {
   -fx-background-color: transparent;
   -fx-background-insets: 0;
+  -fx-border-color: -color-cell-border-selected-focused;
 }
 .table-view .table-cell.custom-table-cell-null {
   -fx-text-fill: -color-table-null-fg;
@@ -967,8 +972,10 @@ Text {
   -color-cell-bg-selected-focused: -color-selection-bg;
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
-  -color-cell-border: -color-table-border;
-  -color-disclosure: -color-fg-muted;
+ -color-cell-border: -color-table-border;
+  -color-cell-border-selected: -color-accent-2;
+  -color-cell-border-selected-focused: -color-accent-2;
+ -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
   -fx-border-width: 1px;
   -fx-border-radius: 0;
@@ -1035,11 +1042,13 @@ Text {
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-table-border;
+  -color-cell-border-selected: -color-accent-2;
+  -color-cell-border-selected-focused: -color-accent-2;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 1px 1px 1px 1px;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
   -fx-border-radius: 0;
   -color-header-bg: -color-bg-default;
   -color-header-fg: -color-table-header-fg;
@@ -1073,13 +1082,11 @@ Text {
   -fx-background-color: -color-resultset-pending-danger-bg-strong;
 }
 
-.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:selected,
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:selected {
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-dml-row .table-cell:selected {
   -fx-background-color: -color-resultset-pending-success-bg-strong;
   -fx-background-insets: 0;
 }
-.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:selected,
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:selected {
+.table-view.resultset-table-view > .virtual-flow > .clipped-container > .sheet > .table-row-cell.resultset-pending-delete-row .table-cell:selected {
   -fx-background-color: -color-resultset-pending-danger-bg-strong;
   -fx-background-insets: 0;
 }
@@ -1099,98 +1106,30 @@ Text {
   -fx-opacity: 0.4;
 }
 
-.MarkdownTableView .scroll-bar:vertical,
-.MarkdownTableView .scroll-bar:horizontal {
-  -fx-opacity: 0;
-  -fx-pref-width: 0;
-  -fx-pref-height: 0;
-  -fx-min-width: 0;
-  -fx-min-height: 0;
 }
 
-.table-view.MarkdownTableView {
-  -fx-background-color: transparent;
-}
-.table-view.MarkdownTableView > .virtual-flow > .corner {
-  -fx-background-color: transparent;
-}
-.table-view.MarkdownTableView > .column-header-background {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-}
-.table-view.MarkdownTableView > .column-header-background .column-header {
-  -fx-background-color: transparent;
-  -fx-border-color: -color-border-default;
-}
-.table-view.MarkdownTableView > .column-header-background > .filler {
-  -fx-background-color: transparent;
-}
-.table-view.MarkdownTableView .table-row-cell,
-.table-view.MarkdownTableView .table-row-cell:filled,
-.table-view.MarkdownTableView .table-row-cell:filled:odd,
-.table-view.MarkdownTableView .table-row-cell:filled:even {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-}
-.table-view.MarkdownTableView .table-row-cell > .table-cell {
-  -fx-background-color: transparent;
-}
-.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:focused {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-}
-.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:focused {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-}
-.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:selected:focused {
-  -fx-background-color: -color-selection-bg;
-  -fx-background-insets: 0;
-}
-.table-view.MarkdownTableView .table-row-cell:filled:selected {
-  -fx-background-color: -color-selection-bg;
-}
-.table-view.MarkdownTableView .table-row-cell:filled > .table-cell:selected {
-  -fx-background-color: -color-selection-bg;
 }
 
-.table-view.MarkdownTableView > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:selected {
-  -fx-background-color: -color-selection-bg;
-  -color-cell-fg: -color-fg-default;
-}
-.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:selected {
-  -fx-background-color: -color-selection-bg;
-  -color-cell-fg: -color-fg-default;
-}
-.table-view.MarkdownTableView > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected,
-.table-view.MarkdownTableView:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected {
-  -fx-background-color: -color-selection-bg;
-  -fx-background-insets: 0;
 }
 
 .table-view > .virtual-flow:disabled {
   -fx-opacity: 0.4;
 }
-.table-view.edge-to-edge {
-  -fx-border-width: 0;
 }
-.table-view.bordered > .column-header-background .column-header {
+.table-view > .column-header-background .column-header {
   -fx-background-color: -color-cell-border, -color-header-bg;
   -fx-background-insets: 0, 0 0.5 0 0;
+  -fx-size: 25px;
+  -fx-padding: 0;
+  -fx-font-weight: bold;
+  -fx-border-color: -color-cell-border;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 .table-view > .column-header-background {
   -fx-background-color: -color-cell-border, -color-header-bg;
   -fx-background-insets: 0, 0 0 0.5 0;
 }
-.table-view > .column-header-background .column-header {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-  -fx-size: 25px;
-  -fx-padding: 0;
-  -fx-font-weight: bold;
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
-}
+
 .table-view > .column-header-background .column-header .label {
   -fx-text-fill: -color-header-fg;
   -fx-alignment: CENTER-LEFT;
@@ -1218,11 +1157,11 @@ Text {
 .table-view > .column-header-background > .filler {
   -fx-background-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 .table-view > .column-header-background > .show-hide-columns-button {
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
   -fx-cursor: hand;
 }
 .table-view > .column-header-background > .show-hide-columns-button > .show-hide-column-image {
@@ -1244,13 +1183,6 @@ Text {
 .table-view .placeholder > .label {
   -fx-font-size: 1em;
 }
-.table-view.bordered .table-row-cell > .table-cell {
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
-}
-.table-view.bordered .table-row-cell > .table-cell:empty {
-  -fx-border-color: transparent;
-}
 .table-view.dense > .column-header-background .column-header {
   -fx-size: 34px;
 }
@@ -1258,12 +1190,6 @@ Text {
   -fx-cell-size: 2em;
 }
 /* 交替行背景色已是默认行为，.striped 保留兼容无变化 */
-.table-view.striped .table-row-cell {
-  -fx-background-insets: 0;
-}
-.table-view.striped .table-row-cell:filled:odd {
-  -fx-background-color: -color-cell-bg;
-}
 .table-view.no-header > .column-header-background {
   -fx-max-height: 0;
   -fx-pref-height: 0;
@@ -1292,7 +1218,7 @@ Text {
   -fx-padding: 0 0.5em 0 0.5em;
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
-  -fx-border-width: 0 1px 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
   -fx-border-color: -color-cell-border;
 }
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled:focused {
@@ -1307,15 +1233,12 @@ Text {
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell:selected:focused {
   -fx-background-color: -color-cell-bg-selected-focused;
   -fx-background-insets: 0;
+  -fx-border-color: -color-cell-border-selected-focused;
 }
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-dml-row > .table-cell:selected:focused,
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-delete-row > .table-cell:selected:focused {
   -fx-background-insets: 0;
 }
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-dml-row > .table-cell:selected:focused {
   -fx-background-color: -color-resultset-pending-success-bg-strong;
 }
-.table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled.resultset-pending-delete-row > .table-cell:selected:focused {
   -fx-background-color: -color-resultset-pending-danger-bg-strong;
 }
 .table-view.resultset-table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell:filled > .table-cell.resultset-pending-update-cell:selected:focused {
@@ -1335,7 +1258,7 @@ Text {
 .table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .table-row-cell > .table-cell:last-visible,
 .tree-table-view:constrained-resize > .virtual-flow > .clipped-container > .sheet > .tree-table-row-cell > .tree-table-cell:last-visible {
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 
 .table-view .table-row-cell > .table-cell.check-box-table-cell,
@@ -1478,7 +1401,7 @@ Text {
   -color-cell-border: -color-table-border;
   -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 1px 0 0 1px;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
   -fx-border-radius: 0;
   -color-header-bg: -color-bg-default;
   -color-header-fg: -color-table-header-fg;
@@ -1490,26 +1413,20 @@ Text {
 .tree-table-view > .virtual-flow:disabled {
   -fx-opacity: 0.4;
 }
-.tree-table-view.edge-to-edge {
-  -fx-border-width: 0;
-}
-.tree-table-view.bordered > .column-header-background .column-header {
+.tree-table-view > .column-header-background .column-header {
   -fx-background-color: -color-cell-border, -color-header-bg;
   -fx-background-insets: 0, 0 0.5 0 0;
+  -fx-size: 40px;
+  -fx-padding: 0;
+  -fx-font-weight: bold;
+  -fx-border-color: -color-cell-border;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 .tree-table-view > .column-header-background {
   -fx-background-color: -color-cell-border, -color-header-bg;
   -fx-background-insets: 0, 0 0 0.5 0;
 }
-.tree-table-view > .column-header-background .column-header {
-  -fx-background-color: transparent;
-  -fx-background-insets: 0;
-  -fx-size: 40px;
-  -fx-padding: 0;
-  -fx-font-weight: bold;
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
-}
+
 .tree-table-view > .column-header-background .column-header .label {
   -fx-text-fill: -color-header-fg;
   -fx-alignment: CENTER_LEFT;
@@ -1537,11 +1454,11 @@ Text {
 .tree-table-view > .column-header-background > .filler {
   -fx-background-color: transparent;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 .tree-table-view > .column-header-background > .show-hide-columns-button {
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 0 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
   -fx-cursor: hand;
 }
 .tree-table-view > .column-header-background > .show-hide-columns-button > .show-hide-column-image {
@@ -1563,13 +1480,6 @@ Text {
 .tree-table-view .placeholder > .label {
   -fx-font-size: 1.25em;
 }
-.tree-table-view.bordered .tree-table-row-cell > .tree-table-cell {
-  -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
-}
-.tree-table-view.bordered .tree-table-row-cell > .tree-table-cell:empty {
-  -fx-border-color: transparent;
-}
 .tree-table-view.dense > .column-header-background .column-header {
   -fx-size: 34px;
 }
@@ -1578,15 +1488,6 @@ Text {
 }
 .tree-table-view.dense .tree-table-row-cell > .tree-disclosure-node {
   -fx-padding: 0.6em 0.5em 0 0.5em;
-}
-.tree-table-view.striped .tree-table-row-cell {
-  -fx-background-insets: 0;
-}
-.tree-table-view.striped.bordered .tree-table-row-cell {
-  -fx-background-insets: 0, 0 0 0.5 0;
-}
-.tree-table-view.striped .tree-table-row-cell:filled:odd {
-  -fx-background-color: -color-cell-border, -color-cell-bg;
 }
 .tree-table-view.no-header > .column-header-background {
   -fx-max-height: 0;
@@ -1613,7 +1514,7 @@ Text {
   -fx-text-fill: -color-cell-fg;
   -fx-alignment: BASELINE_LEFT;
   -fx-border-color: -color-cell-border;
-  -fx-border-width: 0 1px 1px 0;
+  -fx-border-width: 0.5 0.5 0.5 0.5;
 }
 .tree-table-view .tree-table-row-cell > .tree-table-cell.table-column.align-left {
   -fx-alignment: BASELINE_LEFT;
