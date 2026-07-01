@@ -3790,6 +3790,36 @@ Text {
 .dialog-pane > .button-bar > .container > .details-button:hover {
   -fx-underline: true;
 }
+
+.dialog-pane .button {
+  -fx-background-color: -color-bg-subtle;
+  -fx-border-color: -color-border-default;
+  -fx-border-width: 0.5;
+  -fx-border-radius: 3;
+}
+.dialog-pane .button:default,
+.dialog-pane .button.accent {
+  -fx-background-color: -color-accent-emphasis;
+  -fx-text-fill: -color-fg-emphasis;
+  -fx-border-color: transparent;
+}
+.dialog-pane .button:default:hover,
+.dialog-pane .button.accent:hover {
+  -fx-opacity: 0.85;
+}
+.dialog-pane .button > .font-icon,
+.dialog-pane .button > .ikonli-font-icon {
+  -fx-icon-color: -color-button-fg;
+  -fx-fill: -color-button-fg;
+}
+.dialog-pane .button:default > .font-icon,
+.dialog-pane .button:default > .ikonli-font-icon,
+.dialog-pane .button.accent > .font-icon,
+.dialog-pane .button.accent > .ikonli-font-icon {
+  -fx-icon-color: -color-fg-emphasis;
+  -fx-fill: -color-fg-emphasis;
+}
+
 .dialog-pane > .content {
   -fx-padding: 1em 1em 0 1em;
 }
@@ -3857,6 +3887,36 @@ Text {
 .dialog-pane > .button-bar > .container > .details-button:hover {
   -fx-underline: true;
 }
+
+.dialog-pane .button {
+  -fx-background-color: -color-bg-subtle;
+  -fx-border-color: -color-border-default;
+  -fx-border-width: 0.5;
+  -fx-border-radius: 3;
+}
+.dialog-pane .button:default,
+.dialog-pane .button.accent {
+  -fx-background-color: -color-accent-emphasis;
+  -fx-text-fill: -color-fg-emphasis;
+  -fx-border-color: transparent;
+}
+.dialog-pane .button:default:hover,
+.dialog-pane .button.accent:hover {
+  -fx-opacity: 0.85;
+}
+.dialog-pane .button > .font-icon,
+.dialog-pane .button > .ikonli-font-icon {
+  -fx-icon-color: -color-button-fg;
+  -fx-fill: -color-button-fg;
+}
+.dialog-pane .button:default > .font-icon,
+.dialog-pane .button:default > .ikonli-font-icon,
+.dialog-pane .button.accent > .font-icon,
+.dialog-pane .button.accent > .ikonli-font-icon {
+  -fx-icon-color: -color-fg-emphasis;
+  -fx-fill: -color-fg-emphasis;
+}
+
 .dialog-pane > .content {
   -fx-padding: 1em 1em 0 1em;
 }
