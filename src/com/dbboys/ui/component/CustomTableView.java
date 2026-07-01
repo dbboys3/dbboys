@@ -83,6 +83,7 @@ public class CustomTableView<S> extends TableView<S> {
         generateSqlMenu = new Menu();
         generateSqlMenu.textProperty().bind(com.dbboys.infra.i18n.I18n.bind("resultset.table.menu.generateSql", "生成SQL"));
         generateSqlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
+        generateSqlMenu.getGraphic().setTranslateY(2);
         generateSqlMenu.getItems().addAll(
                 generateInsertSqlMenuItem,
                 generateUpdateSqlMenuItem,
