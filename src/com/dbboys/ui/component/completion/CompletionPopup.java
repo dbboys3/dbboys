@@ -88,6 +88,17 @@ public class CompletionPopup {
             listView.scrollTo(0);
         }
 
+        // Mouse click on an item applies it (same as Enter/Tab)
+        listView.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 1) {
+                CompletionItem item = listView.getSelectionModel().getSelectedItem();
+                if (item != null) {
+                    applyCompletionToEditor(item);
+                    hide();
+                }
+            }
+        });
+
         // Size the list - total height capped at MAX_LIST_HEIGHT for scrollbar
         int rows = Math.min(items.size(), MAX_VISIBLE_ROWS);
         double listHeight = rows * CELL_HEIGHT + 2;
