@@ -106,10 +106,17 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     event.consume();
                     return;
                 }
-                if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.TAB) {
+                if (event.getCode() == KeyCode.ENTER) {
                     completeSelectionApplied = true;
                     completionPopup.applySelection();
                     event.consume();
+                    return;
+                }
+                if (event.getCode() == KeyCode.TAB) {
+                    // Tab confirms selection, but do NOT consume the event
+                    // so the RichTextFX editor still receives it for indent.
+                    completeSelectionApplied = true;
+                    completionPopup.applySelection();
                     return;
                 }
                 if (event.getCode() == KeyCode.ESCAPE) {

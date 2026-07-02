@@ -8,9 +8,7 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -46,7 +44,6 @@ public class CompletionPopup {
     private List<CompletionItem> currentItems = List.of();
     private int prefixLen;
     private boolean showing;
-    private boolean needsScrollbar;
     private EventHandler<javafx.event.Event> outsideClickHandler;
 
     public CompletionPopup() {
@@ -57,6 +54,7 @@ public class CompletionPopup {
         listView = new ListView<>();
         listView.setFocusTraversable(false);
         listView.getStyleClass().add("completion-list");
+        listView.setFixedCellSize(CELL_HEIGHT);
         listView.setCellFactory(lv -> new CompletionCell());
 
         root = new VBox(0);
@@ -68,13 +66,6 @@ public class CompletionPopup {
 
         // Keyboard navigation within the popup
         root.addEventFilter(KeyEvent.KEY_PRESSED, this::handleKeyPress);
-
-        // Mouse click on item -> apply
-        listView.setOnMouseClicked(event -> {
-            if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 1) {
-                applySelection();
-            }
-        });
     }
 
     // ---- public API ----
@@ -87,25 +78,22 @@ public class CompletionPopup {
 
         this.codeArea = codeArea;
         this.currentItems = items;
-        this.needsScrollbar = items.size() > MAX_VISIBLE_ROWS;
-
-        // Compute prefix length at the time the popup is shown.
-        // This avoids relying on caret-to-prefix walk later, which can be
-        // broken by intervening keystrokes (ENTER/TAB inserted by RichTextFX).
+        // Stash prefix length at show time so applyCompletionToEditor
+        // knows how much to replace regardless of intervening keystrokes.
         this.prefixLen = computePrefixLen(codeArea);
 
         listView.getItems().setAll(items);
         listView.getSelectionModel().select(0);
-        listView.scrollTo(0);
+        if (items.size() > MAX_VISIBLE_ROWS) {
+            listView.scrollTo(0);
+        }
 
         // Size the list - total height capped at MAX_LIST_HEIGHT for scrollbar
         int rows = Math.min(items.size(), MAX_VISIBLE_ROWS);
         double listHeight = rows * CELL_HEIGHT + 2;
         double prefWidth = computeListWidth(items);
-        double maxHeight = MAX_VISIBLE_ROWS * CELL_HEIGHT + 2;
 
         listView.setPrefHeight(listHeight);
-        listView.setMaxHeight(maxHeight);
         listView.setMinWidth(prefWidth);
         listView.setPrefWidth(prefWidth);
 
@@ -120,8 +108,8 @@ public class CompletionPopup {
                 x = areaBounds.getMinX();
                 y = areaBounds.getMinY();
             } else {
-                x = codeArea.getScene().getWindow().getX();
-                y = codeArea.getScene().getWindow().getY();
+                x = 0;
+                y = 0;
             }
         } else {
             x = caretBounds.getMinX();
@@ -139,8 +127,8 @@ public class CompletionPopup {
                 x = screenBounds.getMinX() + 4;
             }
             // If popup would overflow bottom, flip above the caret
-            if (y + maxHeight > screenBounds.getMaxY()) {
-                y = (caretBounds != null ? caretBounds.getMinY() : y) - maxHeight - 4;
+            if (y + listHeight > screenBounds.getMaxY()) {
+                y = (caretBounds != null ? caretBounds.getMinY() : y) - listHeight - 4;
             }
             if (y < screenBounds.getMinY()) {
                 y = screenBounds.getMinY() + 4;
@@ -190,7 +178,6 @@ public class CompletionPopup {
         currentItems = List.of();
         codeArea = null;
         prefixLen = 0;
-        needsScrollbar = false;
         showing = false;
     }
 
@@ -204,7 +191,7 @@ public class CompletionPopup {
         if (size == 0) return;
         int next = (idx + 1) % size;
         listView.getSelectionModel().select(next);
-        listView.scrollTo(next);
+        scrollIfNeeded(next, 1);
     }
 
     public void selectPrevious() {
@@ -213,7 +200,35 @@ public class CompletionPopup {
         if (size == 0) return;
         int prev = idx <= 0 ? size - 1 : idx - 1;
         listView.getSelectionModel().select(prev);
-        listView.scrollTo(prev);
+        scrollIfNeeded(prev, -1);
+    }
+
+    /**
+     * Lazy scroll: only scroll when the selection reaches the edge of the
+     * visible area, so the user can see relevant context above/below.
+     */
+    private void scrollIfNeeded(int index, int direction) {
+        int size = listView.getItems().size();
+        if (size <= MAX_VISIBLE_ROWS) {
+            return; // all fit, no scrollbar
+        }
+        // determine first and last visible cell indices
+        int firstVis = -1, lastVis = -1;
+        for (var n : listView.lookupAll(".list-cell")) {
+            if (n instanceof ListCell<?> c && c.getItem() != null) {
+                int i = c.getIndex();
+                if (firstVis < 0 || i < firstVis) firstVis = i;
+                if (lastVis < 0 || i > lastVis) lastVis = i;
+            }
+        }
+        if (firstVis < 0) return;
+        // scroll only when the selection would leave the visible window
+        int margin = 1; // keep 1 item of context
+        if (direction < 0 && index <= firstVis + margin) {
+            listView.scrollTo(Math.max(0, index - margin));
+        } else if (direction > 0 && index >= lastVis - margin) {
+            listView.scrollTo(Math.min(size - 1, index + margin));
+        }
     }
 
     public CompletionItem getSelectedItem() {
@@ -240,9 +255,12 @@ public class CompletionPopup {
                 event.consume();
                 break;
             case ENTER:
-            case TAB:
                 applySelection();
                 event.consume();
+                break;
+            case TAB:
+                applySelection();
+                // don't consume — let the editor see TAB for indent
                 break;
             case ESCAPE:
                 hide();
@@ -309,7 +327,7 @@ public class CompletionPopup {
             maxChars = Math.max(maxChars, chars);
         }
         double width = maxChars * 8 + 20; // ~8px per char + padding
-        if (needsScrollbar) { width += 14; } // room for scrollbar
+        if (items.size() > MAX_VISIBLE_ROWS) { width += 14; } // room for scrollbar
         return Math.max(MIN_LIST_WIDTH, Math.min(MAX_LIST_WIDTH, width));
     }
 
