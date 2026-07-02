@@ -1,4 +1,4 @@
-package com.dbboys.infra.config;
+﻿package com.dbboys.infra.config;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -11,17 +11,18 @@ public class ConfigManagerUtil {
     private static final Logger log = LogManager.getLogger(ConfigManagerUtil.class);
     private static Properties properties = new Properties();
     private static String filePath="etc/config.properties";
-    private static final Map<String, String> DEFAULTS = Map.of(
-        "AI_MODEL", "deepseek-v4-pro",
-        "AUTOCOMPLETE_ENABLED", "true",
-        "AUTOCOMPLETE_TRIGGER_DELAY_MS", "50",
-        "CONNECT_KEEPALIVE_SECONDS", "180",
-        "DEFAULT_LISTVIEW_TAB", "0",
-        "RESULT_FETCH_PER_TIME", "200",
-        "SPLIT_DRIVER_MAIN", "0.2",
-        "SPLIT_DRIVER_SQL", "0.6",
-        "UI_LANG", "zh-CN",
-        "UI_THEME", "dark"
+    private static final Map<String, String> DEFAULTS = Map.ofEntries(
+        Map.entry("AI_MODEL", "deepseek-v4-pro"),
+        Map.entry("AUTOCOMPLETE_ENABLED", "true"),
+        Map.entry("AUTOCOMPLETE_TRIGGER_DELAY_MS", "50"),
+        Map.entry("CONNECT_KEEPALIVE_SECONDS", "180"),
+        Map.entry("DEFAULT_LISTVIEW_TAB", "0"),
+        Map.entry("RESULT_FETCH_PER_TIME", "200"),
+        Map.entry("SPLIT_DRIVER_MAIN", "0.2"),
+        Map.entry("SPLIT_DRIVER_SQL", "0.6"),
+        Map.entry("SQL_EDITOR_FONT_SIZE", "12"),
+        Map.entry("UI_LANG", "zh-CN"),
+        Map.entry("UI_THEME", "dark")
     );
 
     public static Map<String, String> getDefaults() {
@@ -32,7 +33,7 @@ public class ConfigManagerUtil {
         loadProperties();
     }
 
-    // 读取配置文件
+    // 璇诲彇閰嶇疆鏂囦欢
     private static void loadProperties() {
         try (InputStream input = new FileInputStream(filePath)) {
             properties.load(input);
@@ -41,25 +42,25 @@ public class ConfigManagerUtil {
         }
     }
 
-    // 获取属性值，文件不存在时返回出厂默认值
+    // 鑾峰彇灞炴€у€?鏂囦欢涓嶅瓨鍦ㄦ椂杩斿洖鍑哄巶榛樿鍊?
     public static String getProperty(String key) {
         String val = properties.getProperty(key);
         return val != null ? val : DEFAULTS.get(key);
     }
 
-    // 获取属性值（带默认值），文件不存在时先查出厂默认值，没有再返回参数 default
+    // 鑾峰彇灞炴€у€?甯﹂粯璁ゅ€?,鏂囦欢涓嶅瓨鍦ㄦ椂鍏堟煡鍑哄巶榛樿鍊?娌℃湁鍐嶈繑鍥炲弬鏁?default
     public static String getProperty(String key, String defaultValue) {
         String val = properties.getProperty(key);
         return val != null ? val : DEFAULTS.getOrDefault(key, defaultValue);
     }
 
-    // 修改属性值
+    // 淇敼灞炴€у€?
     public static void setProperty(String key, String value) {
         properties.setProperty(key, value);
         saveProperties();
     }
 
-    // 保存修改到文件
+    // 淇濆瓨淇敼鍒版枃浠?
     private static void saveProperties() {
         try (OutputStream output = new FileOutputStream(filePath)) {
             properties.store(output, "Updated configuration");
