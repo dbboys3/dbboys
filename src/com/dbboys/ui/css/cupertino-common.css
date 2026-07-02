@@ -6544,3 +6544,71 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .table-cell.custom-prop-row {
   -fx-text-fill: -color-accent-fg;
 }
+
+/* ===== SQL autocomplete popup ===== */
+
+.completion-popup {
+  -fx-background-color: -color-bg-content;
+  -fx-border-color: -color-border-default;
+  -fx-border-width: 0.5;
+  -fx-border-radius: 0;
+  -fx-background-radius: 0;
+  -fx-effect: null;
+  -fx-padding: 0;
+}
+
+.completion-popup .completion-list {
+  -fx-background-color: transparent;
+  -fx-padding: 1 0 1 0;
+}
+
+.completion-popup .completion-list .list-cell,
+.completion-popup .completion-list .list-cell:filled:hover,
+.completion-popup .completion-list .list-cell:filled:selected,
+.completion-popup .completion-list .list-cell:filled:selected:focused {
+  -fx-background-color: transparent;
+  -fx-text-fill: -color-fg-default;
+  -fx-padding: 0;
+  -fx-font-size: 11;
+  -fx-background-insets: 0;
+  -fx-border-width: 0;
+  -fx-border-color: transparent;
+}
+
+.completion-popup .completion-list .list-cell:filled:hover {
+  -fx-background-color: -color-hover-bg;
+}
+
+.completion-popup .completion-list .list-cell:filled:selected,
+.completion-popup .completion-list .list-cell:filled:selected:focused {
+  -fx-background-color: -color-accent-subtle;
+}
+
+.completion-popup .completion-icon {
+  -fx-text-fill: -color-fg-muted;
+  -fx-font-size: 11;
+  -fx-font-family: "Monospaced";
+}
+
+.completion-popup .completion-label {
+  -fx-text-fill: -color-fg-default;
+  -fx-font-size: 11;
+}
+
+.completion-popup .completion-kind-badge {
+  -fx-text-fill: -color-fg-muted;
+  -fx-font-size: 10;
+  -fx-padding: 0 4 0 4;
+}
+
+/* Kind badge accents */
+.completion-popup .kind-keyword { -fx-text-fill: -color-code-keyword; }
+.completion-popup .kind-function { -fx-text-fill: -color-code-function; }
+.completion-popup .kind-table    { -fx-text-fill: -color-accent-fg; }
+.completion-popup .kind-view     { -fx-text-fill: -color-success-fg; }
+.completion-popup .kind-column   { -fx-text-fill: -color-code-string; }
+.completion-popup .kind-schema   { -fx-text-fill: -color-warning-fg; }
+.completion-popup .kind-alias    { -fx-text-fill: -color-fg-muted; }
+.completion-popup .kind-snippet  { -fx-text-fill: -color-code-number; }
+.completion-popup .kind-synonym  { -fx-text-fill: -color-warning-fg; }
+

@@ -430,6 +430,13 @@ public class SqlTabController {
         connectionHandler.setupDatabaseListener();
         connectionHandler.setupCommitModeListener();
 
+        // Wire autocomplete context — keep it in sync with connection/database selection
+        sqlEditCodeArea.setCompletionContext(sqlConnect, sqlDbChoiceBox.getValue());
+        sqlDbChoiceBox.valueProperty().addListener((obs, oldVal, newVal) ->
+                sqlEditCodeArea.setCompletionContext(sqlConnect, newVal));
+        sqlConnectChoiceBox.valueProperty().addListener((obs, oldVal, newVal) ->
+                sqlEditCodeArea.setCompletionContext(newVal, sqlDbChoiceBox.getValue()));
+
         sqlRecordButton.setOnAction(envent -> {
             PopupWindowUtil.openSqlHistoryPopupWindow(sqlConnect.getId());
         });

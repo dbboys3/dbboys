@@ -2,12 +2,17 @@ package com.dbboys.ui.component;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.ui.component.CustomShortcutMenuItem;
+import com.dbboys.ui.component.completion.CompletionEngine;
+import com.dbboys.ui.component.completion.CompletionItem;
+import com.dbboys.ui.component.completion.CompletionPopup;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.infra.util.KeywordsHighlightUtil;
 import com.dbboys.infra.util.MenuItemUtil;
 import com.dbboys.infra.util.SqlParserUtil;
+import com.dbboys.model.Catalog;
+import com.dbboys.model.Connect;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.input.*;
@@ -36,6 +41,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private static final int FONT_SIZE_STEP = 1;
     private static final String SQL_EDITOR_FONT_SIZE_KEY = "SQL_EDITOR_FONT_SIZE";
     private static final String SQL_EDITOR_FONT_SIZE_CLASS_PREFIX = "sql-editor-font-size-";
+    private static final String AUTOCOMPLETE_ENABLED_KEY = "AUTOCOMPLETE_ENABLED";
+    private static final String AUTOCOMPLETE_TRIGGER_DELAY_MS_KEY = "AUTOCOMPLETE_TRIGGER_DELAY_MS";
+    private static final int DEFAULT_TRIGGER_DELAY_MS = 50;
     private static int sharedFontSize = loadConfiguredFontSize();
 
     private final int[] sqlEditCodeAreaCursorPosition = {-1, -1};
@@ -45,8 +53,14 @@ public class CustomSqlEditCodeArea extends CodeArea {
             Collections.emptyList()
     };
     private int styleChangeFlag = 0;
+    private boolean completeSelectionApplied = false;
     private final AtomicLong highlightSeq = new AtomicLong(0);
+    private final AtomicLong completionSeq = new AtomicLong(0);
+    private final CompletionEngine completionEngine = new CompletionEngine();
+    private final CompletionPopup completionPopup = new CompletionPopup();
     private int fontSize = sharedFontSize;
+    private Connect activeConnect;
+    private Catalog activeDatabase;
     private Runnable onSaveRequest = () -> {};
     private Runnable onContentDirty = () -> {};
     private Runnable onShowFindPanel = () -> {};
@@ -79,8 +93,44 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 codeAreaCutItem, codeAreaPasteItem, codeAreaUndoItem, codeAreaRedoItem, codeAreaSaveItem
         );
 
+        // 补全弹窗导航 — 用 EventFilter（捕获阶段）拦截，必须在 RichTextFX 行为层处理之前
+        addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (completionPopup.isShowing()) {
+                if (event.getCode() == KeyCode.UP) {
+                    completionPopup.selectPrevious();
+                    event.consume();
+                    return;
+                }
+                if (event.getCode() == KeyCode.DOWN) {
+                    completionPopup.selectNext();
+                    event.consume();
+                    return;
+                }
+                if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.TAB) {
+                    completeSelectionApplied = true;
+                    completionPopup.applySelection();
+                    event.consume();
+                    return;
+                }
+                if (event.getCode() == KeyCode.ESCAPE) {
+                    completionPopup.hide();
+                    event.consume();
+                    return;
+                }
+            }
+        });
+
         // ctrl快捷键
         setOnKeyPressed(event -> {
+            if (completionPopup.isShowing()) {
+                // 补全弹窗显示时的按键已经在上面的 EventFilter 处理了
+                return;
+            }
+            if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
+                triggerCompletionNow();
+                event.consume();
+                return;
+            }
             if(event.isControlDown()&&event.getCode() == KeyCode.S){
                 onSaveRequest.run();
             }
@@ -131,6 +181,15 @@ public class CustomSqlEditCodeArea extends CodeArea {
         });
         // 自动补全/跳过成对引号，避免重复插入（使用 EventFilter，先于默认处理）
         addEventFilter(KeyEvent.KEY_TYPED, event -> {
+            // 补全选中后跳过紧接着的按键字符（回车/制表符），防止追加到替换文本后面
+            if (completeSelectionApplied) {
+                completeSelectionApplied = false;
+                String ch = event.getCharacter();
+                if ("\r".equals(ch) || "\n".equals(ch) || "\t".equals(ch)) {
+                    event.consume();
+                    return;
+                }
+            }
             String ch = event.getCharacter();
             if (ch == null || ch.length() != 1) {
                 return;
@@ -141,7 +200,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 int textLen = getLength();
                 event.consume(); // 阻止默认插入
 
-                // 如果光标右侧已经是同样的引号，则视为“跳过”而非再插入
+                // 如果光标右侧已经是同样的引号，则视为"跳过"而非再插入
                 if (caret < textLen && getText(caret, caret + 1).charAt(0) == c) {
                     moveTo(caret + 1);
                     return;
@@ -155,6 +214,29 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     insertText(caret, ch + ch); // 总共两个字符
                     moveTo(caret + 1);
                 }
+            }
+            // 空格 -> 关闭补全
+            if (c == ' ') {
+                completionPopup.hide();
+                return;
+            }
+            // 智能补全触发：字母、数字、下划线、点号 -> 50ms 防抖后弹出
+            if (c == '.' || Character.isLetterOrDigit(c) || c == '_') {
+                scheduleCompletion();
+            }
+        });
+
+        // Backspace / Delete -> 更新或关闭补全
+        addEventFilter(KeyEvent.KEY_RELEASED, event2 -> {
+            if (event2.getCode() == KeyCode.BACK_SPACE || event2.getCode() == KeyCode.DELETE) {
+                if (!isAutocompleteEnabled()) return;
+                Platform.runLater(() -> {
+                    if (completionPopup.isShowing()) {
+                        completionSeq.incrementAndGet(); // cancel pending
+                        int caret = getCaretPosition();
+                        doComplete(caret, false);
+                    }
+                });
             }
         });
 
@@ -564,5 +646,81 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 styleChangeFlag = 0;
             });
         });
+    }
+
+    // ---- completion ----
+
+    /**
+     * Set the active connection/database context for metadata-aware completion.
+     * Call from the owning controller when connection or database selection changes.
+     */
+    public void setCompletionContext(Connect connect, Catalog database) {
+        this.activeConnect = connect;
+        this.activeDatabase = database;
+    }
+
+    /** Debounced trigger invoked from the KEY_TYPED event filter. */
+    private void scheduleCompletion() {
+        if (!isAutocompleteEnabled()) {
+            return;
+        }
+        int delayMs = getAutocompleteTriggerDelayMs();
+        long seq = completionSeq.incrementAndGet();
+        // KEY_TYPED fires before the character is inserted; by the time
+        // doComplete runs (50ms+ later on FX thread) the char will be in
+        // the text and the caret will have advanced by one.
+        int caret = getCaretPosition() + 1;
+        AppExecutor.runAsync(() -> {
+            try {
+                Thread.sleep(delayMs);
+            } catch (InterruptedException e) {
+                return;
+            }
+            if (completionSeq.get() != seq) {
+                return; // newer keystroke arrived
+            }
+            Platform.runLater(() -> doComplete(caret, false));
+        });
+    }
+
+    /** Immediate (Ctrl+Space) trigger — bypasses min-prefix check. */
+    private void triggerCompletionNow() {
+        long seq = completionSeq.incrementAndGet();
+        int caret = getCaretPosition();
+        Platform.runLater(() -> {
+            if (completionSeq.get() != seq) return;
+            doComplete(caret, true);
+        });
+    }
+
+    private void doComplete(int caretPos, boolean forceShow) {
+        if (!isAutocompleteEnabled()) {
+            return;
+        }
+        String sql = getText();
+        CompletionEngine.CompletionResult result = completionEngine.complete(
+                sql, caretPos, activeConnect, activeDatabase);
+        // Auto-popup requires >=2 char prefix; Ctrl+Space bypasses
+        if (result.shouldShow() && (forceShow || result.minPrefixMet())) {
+            completionPopup.show(this, result.getItems());
+        } else {
+            completionPopup.hide();
+        }
+    }
+
+    private static boolean isAutocompleteEnabled() {
+        String val = ConfigManagerUtil.getProperty(AUTOCOMPLETE_ENABLED_KEY, "true");
+        return !"false".equalsIgnoreCase(val);
+    }
+
+    private static int getAutocompleteTriggerDelayMs() {
+        String val = ConfigManagerUtil.getProperty(AUTOCOMPLETE_TRIGGER_DELAY_MS_KEY,
+                String.valueOf(DEFAULT_TRIGGER_DELAY_MS));
+        try {
+            int ms = Integer.parseInt(val.trim());
+            return Math.max(10, Math.min(ms, 1000));
+        } catch (NumberFormatException e) {
+            return DEFAULT_TRIGGER_DELAY_MS;
+        }
     }
 }

@@ -13,6 +13,8 @@ public class ConfigManagerUtil {
     private static String filePath="etc/config.properties";
     private static final Map<String, String> DEFAULTS = Map.of(
         "AI_MODEL", "deepseek-v4-pro",
+        "AUTOCOMPLETE_ENABLED", "true",
+        "AUTOCOMPLETE_TRIGGER_DELAY_MS", "50",
         "CONNECT_KEEPALIVE_SECONDS", "180",
         "DEFAULT_LISTVIEW_TAB", "0",
         "RESULT_FETCH_PER_TIME", "200",

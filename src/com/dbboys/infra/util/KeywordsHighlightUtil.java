@@ -138,6 +138,16 @@ public final class KeywordsHighlightUtil {
     private KeywordsHighlightUtil() {
     }
 
+    /** @return a copy of the SQL keyword array (safe for external use). */
+    public static String[] getSqlKeywords() {
+        return SQL_KEYWORDS.clone();
+    }
+
+    /** @return a copy of the SQL function array (safe for external use). */
+    public static String[] getSqlFunctions() {
+        return SQL_FUNCTIONS.clone();
+    }
+
     public static StyleSpans<Collection<String>> highlightInstanceInfo(String text) {
         return applyPattern(text, INSTANCE_INFO_PATTERN, matcher -> {
             if (matcher.group("KEYWORD") != null) return STYLE_KEYWORD;
