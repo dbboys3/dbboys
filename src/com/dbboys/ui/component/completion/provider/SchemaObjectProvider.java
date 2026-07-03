@@ -23,7 +23,7 @@ import java.util.Locale;
 public class SchemaObjectProvider implements CandidateProvider {
 
     /** Higher cap for schema objects — there can be thousands of tables. */
-    private static final int SCHEMA_MAX_RESULTS = 200;
+    private static final int SCHEMA_MAX_RESULTS = 10000;
 
     /** Clause-introducing keywords that the user completes before typing a table name. */
     private static final java.util.Set<String> CLAUSE_KEYWORDS = java.util.Set.of(
