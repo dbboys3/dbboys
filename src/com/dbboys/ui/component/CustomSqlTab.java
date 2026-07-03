@@ -21,6 +21,7 @@ import java.nio.file.Paths;
 public class CustomSqlTab extends CustomTab{
     //sql编辑框以上控件
     public SqlTabController sqlTabController;
+    private boolean suppressDirty = false;
 
     public CustomSqlTab(String title) {
         super(title);
@@ -75,12 +76,22 @@ public class CustomSqlTab extends CustomTab{
     //打开sql文件
     public void openSqlFile() {
         try {
+            suppressDirty = true;
             sqlTabController.sqlEditCodeArea.replaceText(Files.readString(Path.of(filePath)));
             markSaved();
             refreshTooltip();
+            // Delay clearing the flag so the async onContentDirty from replaceText is ignored
+            javafx.application.Platform.runLater(() -> suppressDirty = false);
         } catch (IOException e) {
            // log.error("Operation failed", e);
             AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
+        }
+    }
+
+    @Override
+    public void markDirty() {
+        if (!suppressDirty) {
+            super.markDirty();
         }
     }
 
@@ -111,14 +122,24 @@ public class CustomSqlTab extends CustomTab{
                     filePath = file.getAbsolutePath();
                     markSaved();
                     refreshTooltip();
+                    com.dbboys.ui.controller.MainController.addRecentFilePath(filePath);
                 } catch (IOException e) {
                     AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
                 }
             }
         }else{
             try {
-                Files.writeString(Paths.get(filePath), content);
+                Path savePath = Path.of(filePath).toAbsolutePath();
+                Path parent = savePath.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.writeString(savePath, content);
+                filePath = savePath.toString();
+                setTitle(savePath.getFileName().toString());
                 markSaved();
+                refreshTooltip();
+                com.dbboys.ui.controller.MainController.addRecentFilePath(filePath);
             } catch (IOException e) {
                 AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
             }

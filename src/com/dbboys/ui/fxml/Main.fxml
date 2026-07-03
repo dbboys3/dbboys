@@ -34,6 +34,8 @@
                             </CustomShortcutMenuItem>
                             <CustomShortcutMenuItem fx:id="menuFileOpenSql" mnemonicParsing="false" onAction="#openSqlFile">
                             </CustomShortcutMenuItem>
+                            <Menu fx:id="menuFileRecent" mnemonicParsing="false">
+                            </Menu>
                         </items>
                     </Menu>
                     <Menu fx:id="menuConfig" mnemonicParsing="false">

@@ -25,6 +25,7 @@ import javafx.scene.input.MouseButton;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,12 +45,29 @@ public class TabpaneUtil {
 
     public static void addCustomSqlTab(Connect connect) {
         String tabName = "script";
+        // Scan scripts/ folder for existing script files, pick next available number
+        File scriptsDir = new File("scripts");
+        if (!scriptsDir.isDirectory()) {
+            scriptsDir.mkdirs();
+        }
+        File[] existingFiles = scriptsDir.listFiles((dir, name) -> name.matches("script\\d+\\.sql"));
         for (int i = 1; i <= 9999999; i++) {
             boolean isContained = false;
+            // Check open tabs
             for (Tab tab : tabPane().getTabs()) {
                 if (((CustomTab) tab).getTitle().replaceAll("\\*", "").equals("script" + i + ".sql")) {
                     isContained = true;
                     break;
+                }
+            }
+            // Check scripts/ folder
+            if (!isContained && existingFiles != null) {
+                String candidate = "script" + i + ".sql";
+                for (File f : existingFiles) {
+                    if (f.getName().equals(candidate)) {
+                        isContained = true;
+                        break;
+                    }
                 }
             }
             if (!isContained) {
@@ -58,6 +76,7 @@ public class TabpaneUtil {
             }
         }
         CustomSqlTab newtab = new CustomSqlTab(tabName);
+        newtab.filePath = Paths.get("scripts", tabName).toString();
         //newtab.setContent(new CustomSqlTab().getSqlTab());
         tabPane().getTabs().add(newtab);
         tabPane().getSelectionModel().select(newtab);

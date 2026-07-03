@@ -33,12 +33,16 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import com.dbboys.ui.icon.IconFactory;
@@ -47,6 +51,7 @@ import com.dbboys.ui.icon.IconPaths;
 
 public class MainController {
     private static final Logger log = LogManager.getLogger(MainController.class);
+    private static final int MAX_RECENT_FILES = 10;
 
     private AiController aiController;
 
@@ -89,6 +94,8 @@ public class MainController {
     private CustomShortcutMenuItem menuFileDisconnectAll;
     @FXML
     private CustomShortcutMenuItem menuFileOpenSql;
+    @FXML
+    private Menu menuFileRecent;
     @FXML
     private Menu menuConfig;
     @FXML
@@ -204,6 +211,7 @@ public class MainController {
         initAiPanel();
         initSqlTabInteractions();
         initMenuActions();
+        restoreOpenTabs();
         Main.loadProgressBar.setProgress(0.7);
         initSplitPaneResizeBehavior();
         initTreeView();
@@ -438,6 +446,201 @@ public class MainController {
         installConfigMenuBehavior();
     }
 
+    // --- Recent files persistence (user temp dir) ---
+
+    private static File sessionStoreFile() {
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        Path dir = Path.of(tmpDir, "dbboys");
+        log.info("Session store at: {}", dir.resolve("session.json").toAbsolutePath());
+        return dir.resolve("session.json").toFile();
+    }
+
+    private static void persistRecentFilePaths(LinkedHashSet<String> paths) {
+        try {
+            File file = sessionStoreFile();
+            log.warn("DBBOYS-RECENT: persistRecentFilePaths to {}", file.getAbsolutePath());
+            file.getParentFile().mkdirs();
+            // Read existing JSON, update recentFiles, write back
+            JSONObject root = readSessionJson();
+            JSONArray arr = new JSONArray();
+            for (String p : paths) {
+                arr.put(p);
+            }
+            root.put("recentFiles", arr);
+            Files.writeString(file.toPath(), root.toString());
+        } catch (IOException e) {
+            log.error("Failed to persist recent file paths.", e);
+        }
+    }
+
+    private static JSONObject readSessionJson() {
+        File file = sessionStoreFile();
+        if (file.isFile()) {
+            try {
+                String content = Files.readString(file.toPath());
+                if (content != null && !content.isBlank()) {
+                    return new JSONObject(content);
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return new JSONObject();
+    }
+
+    // --- Recent files menu ---
+
+    private void refreshRecentFilesMenu() {
+        if (menuFileRecent == null) {
+            log.warn("menuFileRecent is null, cannot refresh");
+            return;
+        }
+        menuFileRecent.getItems().clear();
+        LinkedHashSet<String> recentPaths = loadRecentFilePaths();
+        log.warn("DBBOYS-RECENT: refreshRecentFilesMenu, {} paths loaded", recentPaths.size());
+        if (recentPaths.isEmpty()) {
+            MenuItem emptyItem = new MenuItem();
+            emptyItem.textProperty().bind(I18n.bind("main.menu.file.recent.empty"));
+            emptyItem.setDisable(true);
+            menuFileRecent.getItems().add(emptyItem);
+            return;
+        }
+        for (String path : recentPaths) {
+            MenuItem item = new MenuItem(path);
+            item.setOnAction(e -> openRecentFile(path));
+            menuFileRecent.getItems().add(item);
+        }
+    }
+
+    private void openRecentFile(String filePath) {
+        File file = new File(filePath);
+        if (!file.isFile()) {
+            AlertUtil.CustomAlert(
+                    I18n.t("common.error", "错误"),
+                    I18n.t("main.notice.file_not_found", "文件不存在：%s").formatted(filePath)
+            );
+            removeRecentFilePath(filePath);
+            refreshRecentFilesMenu();
+            return;
+        }
+        // Check if already open
+        for (Tab tab : sqlTabPane.getTabs()) {
+            if (tab instanceof CustomSqlTab customSqlTab
+                    && customSqlTab.filePath.equals(filePath)) {
+                sqlTabPane.getSelectionModel().select(tab);
+                return;
+            }
+        }
+        CustomSqlTab newtab = new CustomSqlTab(file.getName());
+        newtab.filePath = filePath;
+        newtab.openSqlFile();
+        sqlTabPane.getTabs().add(newtab);
+        sqlTabPane.getSelectionModel().select(newtab);
+    }
+
+    public static void addRecentFilePath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return;
+        }
+        LinkedHashSet<String> paths = loadRecentFilePaths();
+        paths.remove(filePath); // move to front if already present
+        LinkedHashSet<String> reordered = new LinkedHashSet<>();
+        reordered.add(filePath);
+        reordered.addAll(paths);
+
+        // Trim to MAX_RECENT_FILES
+        List<String> trimmed = new ArrayList<>();
+        for (String p : reordered) {
+            trimmed.add(p);
+            if (trimmed.size() >= MAX_RECENT_FILES) break;
+        }
+        persistRecentFilePaths(new LinkedHashSet<>(trimmed));
+        Platform.runLater(() -> {
+            MainController ctrl = AppState.getMainController();
+            if (ctrl != null) {
+                ctrl.refreshRecentFilesMenu();
+            }
+        });
+    }
+
+    private static void removeRecentFilePath(String filePath) {
+        LinkedHashSet<String> paths = loadRecentFilePaths();
+        paths.remove(filePath);
+        persistRecentFilePaths(paths);
+    }
+
+    private static LinkedHashSet<String> loadRecentFilePaths() {
+        try {
+            JSONObject root = readSessionJson();
+            JSONArray arr = root.optJSONArray("recentFiles");
+            LinkedHashSet<String> paths = new LinkedHashSet<>();
+            if (arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    String p = arr.optString(i, "");
+                    if (p != null && !p.isBlank()) {
+                        paths.add(p);
+                    }
+                }
+            }
+            log.info("Loaded {} recent files from session", paths.size());
+            return paths;
+        } catch (Exception e) {
+            log.error("Failed to load recent file paths.", e);
+            return new LinkedHashSet<>();
+        }
+    }
+
+    // --- Session restore: persist open tabs on close, restore on startup ---
+
+    private void persistOpenTabs() {
+        List<String> filePaths = new ArrayList<>();
+        for (Tab tab : sqlTabPane.getTabs()) {
+            if (tab instanceof CustomSqlTab customSqlTab
+                    && customSqlTab.filePath != null
+                    && !customSqlTab.filePath.isBlank()) {
+                filePaths.add(customSqlTab.filePath);
+            }
+        }
+        try {
+            JSONObject root = readSessionJson();
+            JSONArray arr = new JSONArray();
+            for (String p : filePaths) {
+                arr.put(p);
+            }
+            root.put("openTabs", arr);
+            File file = sessionStoreFile();
+            file.getParentFile().mkdirs();
+            Files.writeString(file.toPath(), root.toString());
+        } catch (IOException e) {
+            log.error("Failed to persist open tabs.", e);
+        }
+    }
+
+    private void restoreOpenTabs() {
+        try {
+            JSONObject root = readSessionJson();
+            JSONArray arr = root.optJSONArray("openTabs");
+            if (arr == null) {
+                return;
+            }
+            for (int i = 0; i < arr.length(); i++) {
+                String filePath = arr.optString(i, "");
+                if (filePath.isBlank()) {
+                    continue;
+                }
+                File file = new File(filePath);
+                if (!file.isFile()) {
+                    continue;
+                }
+                CustomSqlTab tab = new CustomSqlTab(file.getName());
+                tab.filePath = filePath;
+                tab.openSqlFile();
+                sqlTabPane.getTabs().add(tab);
+            }
+        } catch (Exception e) {
+            log.error("Failed to restore open tabs.", e);
+        }
+    }
+
     private void installSettingsMenuBehavior() {
         installHoverHideMenuBehavior(menuSettings, "settingsMenuHoverFixInstalled", menuSettingsLanguage, menuSettingsTheme);
     }
@@ -536,6 +739,16 @@ public class MainController {
         bindText(menuFileDisconnectAll, "main.menu.file.disconnect_all");
         bindText(newSqlFileMenuItem, "main.menu.file.new_sql");
         bindText(menuFileOpenSql, "main.menu.file.open_sql");
+        if (menuFileRecent != null) {
+            bindText(menuFileRecent, "main.menu.file.recent");
+            menuFileRecent.setOnShowing(e -> refreshRecentFilesMenu());
+            // Pre-populate so the submenu has items before first showing,
+            // otherwise empty Menu won't trigger onShowing at all.
+            refreshRecentFilesMenu();
+            log.warn("DBBOYS-RECENT: menuFileRecent initialized, i18n and onShowing bound");
+        } else {
+            log.warn("DBBOYS-RECENT: menuFileRecent is null after FXML load, recent files menu unavailable");
+        }
 
         bindText(menuConfig, "main.menu.config");
         bindText(menuConfigCheckEnv, "main.menu.config.check_env");
@@ -663,8 +876,9 @@ public class MainController {
         return true;
     }
 
-    /** Saves split positions, closes the stage, and exits. Call after requestClose() returns true. */
+    /** Saves split positions, persists open tabs, closes the stage, and exits. Call after requestClose() returns true. */
     public void performCloseAndExit() {
+        persistOpenTabs();
         String split1Content = String.valueOf(AppState.getSplit1Pos());
         String split2Content = String.valueOf(AppState.getSplit2Pos());
         ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", split1Content);
@@ -777,6 +991,10 @@ public class MainController {
     public void openSqlFile(){
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle(I18n.t("main.filechooser.select_sql"));
+        File scriptsDir = new File("scripts");
+        if (scriptsDir.isDirectory()) {
+            fileChooser.setInitialDirectory(scriptsDir);
+        }
         File selectedFile = fileChooser.showOpenDialog(AppState.getWindow());
         if (selectedFile != null) {
             String tabName = selectedFile.getName();
@@ -795,6 +1013,7 @@ public class MainController {
                 newtab.openSqlFile();
                 sqlTabPane.getTabs().add(newtab);
                 sqlTabPane.getSelectionModel().select(newtab);
+                addRecentFilePath(selectedFile.getAbsolutePath());
             }
         }
     }
