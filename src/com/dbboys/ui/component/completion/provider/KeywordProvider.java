@@ -15,7 +15,7 @@ import java.util.Locale;
  * {@link KeywordsHighlightUtil}.
  *
  * <p>Always applicable except when the context is explicitly disabled.
- * Runs entirely in-memory — zero I/O.
+ * Runs entirely in-memory 鈥?zero I/O.
  */
 public class KeywordProvider implements CandidateProvider {
 
@@ -51,6 +51,9 @@ public class KeywordProvider implements CandidateProvider {
         int count = 0;
         for (CompletionItem item : ALL_KEYWORDS) {
             if (item.getLabel().toLowerCase(Locale.ROOT).startsWith(lowerPrefix)) {
+
+                // Don't suggest a keyword the user has already fully typed
+                if (item.getLabel().equalsIgnoreCase(prefix)) continue;
                 results.add(item);
                 if (++count >= MAX_RESULTS) break;
             }

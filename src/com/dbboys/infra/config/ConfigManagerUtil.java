@@ -1,4 +1,4 @@
-﻿package com.dbboys.infra.config;
+package com.dbboys.infra.config;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

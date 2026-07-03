@@ -4,6 +4,8 @@ import com.dbboys.model.Catalog;
 import com.dbboys.model.Connect;
 import com.dbboys.ui.component.completion.provider.FunctionProvider;
 import com.dbboys.ui.component.completion.provider.KeywordProvider;
+import com.dbboys.ui.component.completion.provider.SchemaObjectProvider;
+import com.dbboys.ui.component.completion.provider.SchemaObjectsFetcher;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,12 +24,15 @@ public class CompletionEngine {
 
     private final SqlContextAnalyzer contextAnalyzer = new SqlContextAnalyzer();
     private final List<CandidateProvider> providers = new ArrayList<>();
+    private final SchemaObjectProvider schemaObjectProvider;
 
     public CompletionEngine() {
         // L0 providers — always available, zero I/O
         registerProvider(new KeywordProvider());
         registerProvider(new FunctionProvider());
-        // Phase 2+ providers registered later
+        // L1 provider — schema objects (tables/views/synonyms/sys-tables) from cached metadata
+        schemaObjectProvider = new SchemaObjectProvider();
+        registerProvider(schemaObjectProvider);
     }
 
     /** Register an additional provider (called during wiring or Phase 2+ setup). */
@@ -45,6 +50,9 @@ public class CompletionEngine {
      */
     public CompletionResult complete(String fullSql, int caretPos,
                                      Connect connect, Catalog database) {
+        // Update the schema object provider's context so it reads the right cache partition
+        schemaObjectProvider.setContext(connect, database);
+
         CompletionContext ctx = contextAnalyzer.analyze(fullSql, caretPos);
         if (ctx.isDisabled()) {
             return CompletionResult.disabled(ctx);
@@ -62,6 +70,15 @@ public class CompletionEngine {
 
         sortAndDeduplicate(results);
         return new CompletionResult(ctx, results);
+    }
+
+    /**
+     * Trigger a background fetch of schema objects for the given connection+database.
+     * Safe to call on every database switch — the fetcher runs asynchronously and
+     * results will be available for the next completion request.
+     */
+    public void refreshSchemaObjects(Connect connect, Catalog database) {
+        SchemaObjectsFetcher.fetchAsync(connect, database);
     }
 
     private void sortAndDeduplicate(List<CompletionItem> items) {
@@ -121,9 +138,12 @@ public class CompletionEngine {
             return items.size() >= 1;
         }
 
-        /** True when the prefix is at least 2 characters — used to gate auto-popup. */
+        /** True when the prefix is at least 2 characters — used to gate auto-popup.
+         *  In table-reference contexts (FROM/JOIN), 1 character is sufficient because
+         *  the user is explicitly expecting table/view/synonym names. */
         public boolean minPrefixMet() {
-            return context.getPrefixToken().length() >= 2;
+            int minLen = context.expectsTableReferences() ? 1 : 2;
+            return context.getPrefixToken().length() >= minLen;
         }
 
         public int size() {

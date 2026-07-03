@@ -16,6 +16,7 @@ import com.dbboys.infra.util.SqlErrorUtil;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Catalog;
 import com.dbboys.model.TreeData;
+import com.dbboys.ui.component.completion.provider.SchemaObjectsFetcher;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
@@ -287,6 +288,8 @@ public class SqlConnectionHandler {
                     } else if (ctrl.sqlCommitModeChoiceBox.getSelectionModel().getSelectedIndex() == 1) {
                         tryApplyManualCommitMode();
                     }
+                    // Trigger background fetch of schema objects for autocomplete (FROM/JOIN hints)
+                    SchemaObjectsFetcher.fetchAsync(ctrl.sqlConnect, newValue);
                     if (!ctrl.sqlInit.isEmpty()) {
                         Platform.runLater(() -> {
                             ctrl.sqlEditCodeArea.appendText(ctrl.sqlInit);

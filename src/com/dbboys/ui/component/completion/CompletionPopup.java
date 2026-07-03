@@ -308,7 +308,14 @@ public class CompletionPopup {
 
         int replaceStart = Math.max(0, effectiveEnd - prefixLen);
         if (prefixLen > 0) {
-            codeArea.replaceText(replaceStart, effectiveEnd, insertText);
+            // When the prefix is a completed FROM/JOIN clause keyword,
+            // insert after the keyword with a space instead of replacing it.
+            String prefix = text.substring(replaceStart, effectiveEnd);
+            if (isClauseKeyword(prefix)) {
+                codeArea.insertText(effectiveEnd, " " + insertText);
+            } else {
+                codeArea.replaceText(replaceStart, effectiveEnd, insertText);
+            }
         } else {
             codeArea.insertText(caret, insertText);
         }
@@ -346,7 +353,18 @@ public class CompletionPopup {
         return Character.isLetterOrDigit(c) || c == '_';
     }
 
-    // ---- cell factory ----
+        /** True when ${@code s} is a SQL FROM/JOIN clause keyword whose text
+     *  should not be replaced by a completion item
+     *  (the item is inserted after the keyword with a space prefix).
+     */
+    private static boolean isClauseKeyword(String s) {
+        String lower = s.toLowerCase(java.util.Locale.ROOT);
+        return "from".equals(lower) || "join".equals(lower)
+            || "into".equals(lower) || "update".equals(lower)
+            || "table".equals(lower) || "view".equals(lower);
+    }
+
+// ---- cell factory ----
 
     private static class CompletionCell extends ListCell<CompletionItem> {
         private final HBox row;

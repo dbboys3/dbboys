@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
 
 public class CustomSqlEditCodeArea extends CodeArea {
     private static final int LOCAL_HIGHLIGHT_MAX = 4000;
-    private static final int LOOKBACK_RANGE = 2000; // 上文最多回溯这么多字符尝试局部高亮
+    private static final int LOOKBACK_RANGE = 2000; // 上文最多回溯这么多字符尝试局部高�?
     private static final int DEFAULT_FONT_SIZE = 12;
     private static final int MIN_FONT_SIZE = 9;
     private static final int MAX_FONT_SIZE = 40;
@@ -93,7 +93,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 codeAreaCutItem, codeAreaPasteItem, codeAreaUndoItem, codeAreaRedoItem, codeAreaSaveItem
         );
 
-        // 补全弹窗导航 — 用 EventFilter（捕获阶段）拦截，必须在 RichTextFX 行为层处理之前
+        // 补全弹窗导航 �?�?EventFilter（捕获阶段）拦截，必须在 RichTextFX 行为层处理之�?
         addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (completionPopup.isShowing()) {
                 if (event.getCode() == KeyCode.UP) {
@@ -126,10 +126,10 @@ public class CustomSqlEditCodeArea extends CodeArea {
             }
         });
 
-        // ctrl快捷键
+        // ctrl快捷�?
         setOnKeyPressed(event -> {
             if (completionPopup.isShowing()) {
-                // 补全弹窗显示时的按键已经在上面的 EventFilter 处理了
+                // 补全弹窗显示时的按键已经在上面的 EventFilter 处理�?
                 return;
             }
             if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
@@ -173,7 +173,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 onShowReplacePanel.run();
             }
         });
-        // Ctrl + 鼠标滚轮：与 Ctrl++/Ctrl+- 相同，调整 SQL 编辑器字号
+        // Ctrl + 鼠标滚轮：与 Ctrl++/Ctrl+- 相同，调�?SQL 编辑器字�?
         addEventFilter(ScrollEvent.SCROLL, event -> {
             if (!event.isControlDown()) {
                 return;
@@ -206,7 +206,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 int textLen = getLength();
                 event.consume(); // 阻止默认插入
 
-                // 如果光标右侧已经是同样的引号，则视为"跳过"而非再插入
+                // 如果光标右侧已经是同样的引号，则视为"跳过"而非再插�?
                 if (caret < textLen && getText(caret, caret + 1).charAt(0) == c) {
                     moveTo(caret + 1);
                     return;
@@ -221,27 +221,37 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     moveTo(caret + 1);
                 }
             }
-            // 空格 -> 关闭补全
-            if (c == ' ') {
+            // 空格 -> 关闭补全（除非光标紧�?FROM/JOIN 关键字之后）
+                        if (c == ' ') {
                 completionPopup.hide();
+                // After a space in FROM/JOIN/UPDATE context, eagerly show tables.
+                // For all other spaces, just hide without triggering completion.
+                if (isAutocompleteEnabled()) {
+                    int caret = getCaretPosition();
+                    if (isAfterTableKeyword(getText(), caret)) {
+                        long seq = completionSeq.get();
+                        Platform.runLater(() -> {
+                            if (completionSeq.get() != seq) return;
+                            doComplete(caret, false);
+                        });
+                    }
+                }
                 return;
             }
-            // 智能补全触发：字母、数字、下划线、点号 -> 50ms 防抖后弹出
+            // 智能补全触发：字母、数字、下划线、点�?-> 50ms 防抖后弹�?
             if (c == '.' || Character.isLetterOrDigit(c) || c == '_') {
                 scheduleCompletion();
             }
         });
 
-        // Backspace / Delete -> 更新或关闭补全
+        // Backspace / Delete -> 更新或关闭补�?
         addEventFilter(KeyEvent.KEY_RELEASED, event2 -> {
             if (event2.getCode() == KeyCode.BACK_SPACE || event2.getCode() == KeyCode.DELETE) {
                 if (!isAutocompleteEnabled()) return;
                 Platform.runLater(() -> {
-                    if (completionPopup.isShowing()) {
-                        completionSeq.incrementAndGet(); // cancel pending
-                        int caret = getCaretPosition();
-                        doComplete(caret, false);
-                    }
+                    completionSeq.incrementAndGet(); // cancel pending
+                    int caret = getCaretPosition();
+                    doComplete(caret, false);
                 });
             }
         });
@@ -552,14 +562,14 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 balance--;
             }
         }
-        return -1; // 未找到匹配括号
+        return -1; // 未找到匹配括�?
     }
 
     /**
      * Incremental highlight only the paragraphs around the change; fallback to full when the slice is large.
      */
     private void scheduleIncrementalHighlight(PlainTextChange change) {
-        // 删除引号时直接做全量高亮，防止字符串状态错乱
+        // 删除引号时直接做全量高亮，防止字符串状态错�?
         if (change.getRemoved() != null && (change.getRemoved().contains("'") || change.getRemoved().contains("\"") || change.getRemoved().contains("`"))) {
             scheduleHighlighting();
             return;
@@ -578,7 +588,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             return;
         }
 
-        // 尝试在局部范围内回溯，减少因未闭合引号/块注释导致的全量回退。
+        // 尝试在局部范围内回溯，减少因未闭合引�?块注释导致的全量回退�?
         int lookbackStart = Math.max(0, regionStart - LOOKBACK_RANGE);
         boolean unsafePrefix = hasOpenDelimiterBefore(regionStart, lookbackStart);
         int effectiveStart = unsafePrefix ? lookbackStart : regionStart;
@@ -607,16 +617,16 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     /**
-     * 判断 regionStart 之前是否有未闭合的字符串/块注释，若有则需要全量重算。
+     * 判断 regionStart 之前是否有未闭合的字符串/块注释，若有则需要全量重算�?
      */
     private boolean hasOpenDelimiterBefore(int regionStart, int scanStart) {
         String prefix = regionStart <= 0 ? "" : getText(scanStart, regionStart);
-        // 简单奇偶计数，针对 SQL 的 '' / "" / ``。若为奇数视为未闭合。
+        // 简单奇偶计数，针对 SQL �?'' / "" / ``。若为奇数视为未闭合�?
         if ((countChar(prefix, '\'') & 1) == 1) return true;
         if ((countChar(prefix, '\"') & 1) == 1) return true;
         if ((countChar(prefix, '`') & 1) == 1) return true;
 
-        // 块注释未闭合：最后出现的 /* 在最后一个 */ 之后
+        // 块注释未闭合：最后出现的 /* 在最后一�?*/ 之后
         int lastOpen = prefix.lastIndexOf("/*");
         int lastClose = prefix.lastIndexOf("*/");
         return lastOpen > lastClose;
@@ -626,7 +636,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
         int cnt = 0;
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) == ch) {
-                // 对 SQL 来说，使用两个相邻引号 '' 作为转义，这里仍然按出现次数计数，奇偶即可。
+                // �?SQL 来说，使用两个相邻引�?'' 作为转义，这里仍然按出现次数计数，奇偶即可�?
                 cnt++;
             }
         }
@@ -665,33 +675,40 @@ public class CustomSqlEditCodeArea extends CodeArea {
         this.activeDatabase = database;
     }
 
+    /**
+     * Trigger a background fetch of schema objects (tables/views/synonyms/system tables)
+     * for the active connection+database.  Results populate the cache and will be
+     * available for the next autocomplete query.
+     */
+    public void refreshSchemaObjects(Connect connect, Catalog database) {
+        completionEngine.refreshSchemaObjects(connect, database);
+    }
+
     /** Debounced trigger invoked from the KEY_TYPED event filter. */
     private void scheduleCompletion() {
         if (!isAutocompleteEnabled()) {
             return;
         }
         int delayMs = getAutocompleteTriggerDelayMs();
-        long seq = completionSeq.incrementAndGet();
-        // KEY_TYPED fires before the character is inserted; by the time
-        // doComplete runs (50ms+ later on FX thread) the char will be in
-        // the text and the caret will have advanced by one.
-        int caret = getCaretPosition() + 1;
+        long seq = completionSeq.get(); // don't increment — let pending scheduleCompletion still fire
         AppExecutor.runAsync(() -> {
             try {
                 Thread.sleep(delayMs);
             } catch (InterruptedException e) {
                 return;
             }
-            if (completionSeq.get() != seq) {
-                return; // newer keystroke arrived
-            }
-            Platform.runLater(() -> doComplete(caret, false));
+            Platform.runLater(() -> {
+                if (completionSeq.get() != seq) {
+                    return; // newer keystroke arrived
+                }
+                doComplete(getCaretPosition(), false);
+            });
         });
     }
 
-    /** Immediate (Ctrl+Space) trigger — bypasses min-prefix check. */
+    /** Immediate (Ctrl+Space) trigger �?bypasses min-prefix check. */
     private void triggerCompletionNow() {
-        long seq = completionSeq.incrementAndGet();
+        long seq = completionSeq.get(); // don't increment — let pending scheduleCompletion still fire
         int caret = getCaretPosition();
         Platform.runLater(() -> {
             if (completionSeq.get() != seq) return;
@@ -729,4 +746,22 @@ public class CustomSqlEditCodeArea extends CodeArea {
             return DEFAULT_TRIGGER_DELAY_MS;
         }
     }
+    /** True when the caret follows a FROM/JOIN clause keyword ("from", "join",
+     *  "into", "update", "table", "view") that expects a table name next.
+     *  Duplicates the set in SchemaObjectProvider#CLAUSE_KEYWORDS.
+     */
+    private static boolean isAfterTableKeyword(String text, int caret) {
+        if (caret <= 0 || caret > text.length()) return false;
+        // Walk back past trailing spaces to find the last word
+        int end = caret;
+        while (end > 0 && text.charAt(end - 1) == ' ') end--;
+        if (end <= 0) return false;
+        int start = end;
+        while (start > 0 && (Character.isLetterOrDigit(text.charAt(start - 1)))) start--;
+        String word = text.substring(start, end).toLowerCase(java.util.Locale.ROOT);
+        return "from".equals(word) || "join".equals(word)
+            || "into".equals(word) || "update".equals(word)
+            || "table".equals(word) || "view".equals(word);
+    }
+
 }
