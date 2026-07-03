@@ -448,7 +448,7 @@ public class CompletionPopup {
             case ALIAS -> I18n.t("completion.kind.alias", "AL");
             case SNIPPET -> I18n.t("completion.kind.snippet", "SN");
             case SYNONYM -> I18n.t("completion.kind.synonym", "SY");
-            case SYSTABLE -> I18n.t("completion.kind.systable", "ST");
+            case SYSTABLE -> I18n.t("completion.kind.systable", "系统表/视图");
         };
     }
 
