@@ -995,25 +995,28 @@ public class MainController {
         if (scriptsDir.isDirectory()) {
             fileChooser.setInitialDirectory(scriptsDir);
         }
-        File selectedFile = fileChooser.showOpenDialog(AppState.getWindow());
-        if (selectedFile != null) {
-            String tabName = selectedFile.getName();
-            Boolean isOpened = false;
-            for (Tab tab : sqlTabPane.getTabs()) {
-                if (tab instanceof CustomSqlTab customSqlTab
-                        && customSqlTab.filePath.equals(selectedFile.getAbsolutePath())) {
-                    isOpened = true;
-                    sqlTabPane.getSelectionModel().select(tab);
-                    break;
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
+        List<File> selectedFiles = fileChooser.showOpenMultipleDialog(AppState.getWindow());
+        if (selectedFiles != null && !selectedFiles.isEmpty()) {
+            for (File selectedFile : selectedFiles) {
+                String tabName = selectedFile.getName();
+                Boolean isOpened = false;
+                for (Tab tab : sqlTabPane.getTabs()) {
+                    if (tab instanceof CustomSqlTab customSqlTab
+                            && customSqlTab.filePath.equals(selectedFile.getAbsolutePath())) {
+                        isOpened = true;
+                        sqlTabPane.getSelectionModel().select(tab);
+                        break;
+                    }
                 }
-            }
-            if (!isOpened) {
-                CustomSqlTab newtab = new CustomSqlTab(tabName);
-                newtab.filePath=selectedFile.getAbsolutePath();
-                newtab.openSqlFile();
-                sqlTabPane.getTabs().add(newtab);
-                sqlTabPane.getSelectionModel().select(newtab);
-                addRecentFilePath(selectedFile.getAbsolutePath());
+                if (!isOpened) {
+                    CustomSqlTab newtab = new CustomSqlTab(tabName);
+                    newtab.filePath = selectedFile.getAbsolutePath();
+                    newtab.openSqlFile();
+                    sqlTabPane.getTabs().add(newtab);
+                    sqlTabPane.getSelectionModel().select(newtab);
+                    addRecentFilePath(selectedFile.getAbsolutePath());
+                }
             }
         }
     }
