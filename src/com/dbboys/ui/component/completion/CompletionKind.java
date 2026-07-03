@@ -13,5 +13,6 @@ public enum CompletionKind {
     SCHEMA,
     ALIAS,
     SNIPPET,
-    SYNONYM
+    SYNONYM,
+    SYSTABLE
 }

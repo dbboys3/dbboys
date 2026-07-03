@@ -64,7 +64,8 @@ public class CompletionContext {
     public boolean expectsTableReferences() {
         return expectedKinds.contains(CompletionKind.TABLE)
                 || expectedKinds.contains(CompletionKind.VIEW)
-                || expectedKinds.contains(CompletionKind.SYNONYM);
+                || expectedKinds.contains(CompletionKind.SYNONYM)
+                || expectedKinds.contains(CompletionKind.SYSTABLE);
     }
 
     /** True when completion should suggest column names. */

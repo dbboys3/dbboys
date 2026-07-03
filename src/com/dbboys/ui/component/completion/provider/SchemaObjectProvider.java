@@ -74,7 +74,7 @@ public class SchemaObjectProvider implements CandidateProvider {
         int count = 0;
         for (SchemaObjectsCache.CachedObject obj : objects) {
             if (lowerPrefix.isEmpty() || obj.name().toLowerCase(Locale.ROOT).startsWith(lowerPrefix)) {
-                results.add(new CompletionItem(obj.name(), obj.name(), mapKind(obj), "", 300));
+                results.add(new CompletionItem(obj.name(), obj.name(), mapKind(obj), "", priority(obj)));
                 if (++count >= SCHEMA_MAX_RESULTS) break;
             }
         }
@@ -86,7 +86,16 @@ public class SchemaObjectProvider implements CandidateProvider {
             case TABLE    -> CompletionKind.TABLE;
             case VIEW     -> CompletionKind.VIEW;
             case SYNONYM  -> CompletionKind.SYNONYM;
-            case SYSTABLE -> CompletionKind.TABLE;   // system tables display with TABLE icon
+            case SYSTABLE -> CompletionKind.SYSTABLE;
+        };
+    }
+
+    private static int priority(SchemaObjectsCache.CachedObject obj) {
+        return switch (obj.kind()) {
+            case TABLE    -> 100;
+            case VIEW     -> 200;
+            case SYNONYM  -> 300;
+            case SYSTABLE -> 400;
         };
     }
 }

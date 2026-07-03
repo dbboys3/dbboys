@@ -412,7 +412,7 @@ public class CompletionPopup {
                 kindBadge.getStyleClass().removeAll(
                         "kind-keyword", "kind-function", "kind-table",
                         "kind-view", "kind-column", "kind-schema",
-                        "kind-alias", "kind-snippet", "kind-synonym"
+                        "kind-alias", "kind-snippet", "kind-synonym", "kind-systable"
                 );
                 kindBadge.getStyleClass().add(kindClass);
             }
@@ -433,6 +433,7 @@ public class CompletionPopup {
             case ALIAS -> "↔";
             case SNIPPET -> "§";
             case SYNONYM -> "≈";
+            case SYSTABLE -> "\u2630";
         };
     }
 
@@ -447,6 +448,7 @@ public class CompletionPopup {
             case ALIAS -> I18n.t("completion.kind.alias", "AL");
             case SNIPPET -> I18n.t("completion.kind.snippet", "SN");
             case SYNONYM -> I18n.t("completion.kind.synonym", "SY");
+            case SYSTABLE -> I18n.t("completion.kind.systable", "ST");
         };
     }
 
@@ -461,6 +463,7 @@ public class CompletionPopup {
             case ALIAS -> I18n.t("completion.detail.alias", "alias");
             case SNIPPET -> I18n.t("completion.detail.snippet", "snippet");
             case SYNONYM -> I18n.t("completion.detail.synonym", "synonym");
+            case SYSTABLE -> I18n.t("completion.detail.systable", "system table");
         };
     }
 
