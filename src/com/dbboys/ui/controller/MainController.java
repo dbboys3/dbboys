@@ -210,7 +210,7 @@ public class MainController {
         initMarkdownPanel();
         initAiPanel();
         initSqlTabInteractions();
-        initMenuActions();
+        installMenuActions();
         restoreOpenTabs();
         Main.loadProgressBar.setProgress(0.7);
         initSplitPaneResizeBehavior();
@@ -439,11 +439,13 @@ public class MainController {
         aiController.init();
     }
 
-    private void initMenuActions() {
+    private void installMenuActions() {
         newSqlFileMenuItem.setOnAction(event -> {
             TabpaneUtil.addCustomSqlTab(null);});
         installSettingsMenuBehavior();
         installConfigMenuBehavior();
+        // Recent files submenu: use the same hover-hide behavior as language/theme submenus.
+        installHoverHideMenuBehavior(menuFile, "menuFileRecentHoverHide", menuFileRecent);
     }
 
     // --- Recent files persistence (user temp dir) ---
@@ -740,14 +742,12 @@ public class MainController {
         bindText(newSqlFileMenuItem, "main.menu.file.new_sql");
         bindText(menuFileOpenSql, "main.menu.file.open_sql");
         if (menuFileRecent != null) {
+            menuFileRecent.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_OPEN_SQL, 0.62));
             bindText(menuFileRecent, "main.menu.file.recent");
             menuFileRecent.setOnShowing(e -> refreshRecentFilesMenu());
             // Pre-populate so the submenu has items before first showing,
             // otherwise empty Menu won't trigger onShowing at all.
             refreshRecentFilesMenu();
-            log.warn("DBBOYS-RECENT: menuFileRecent initialized, i18n and onShowing bound");
-        } else {
-            log.warn("DBBOYS-RECENT: menuFileRecent is null after FXML load, recent files menu unavailable");
         }
 
         bindText(menuConfig, "main.menu.config");
