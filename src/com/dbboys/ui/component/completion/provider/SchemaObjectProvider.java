@@ -57,10 +57,14 @@ public class SchemaObjectProvider implements CandidateProvider {
 
         String lowerPrefix = (prefix != null) ? prefix.toLowerCase(Locale.ROOT) : "";
 
-        // If the prefix exactly matches a completed FROM/JOIN clause keyword,
-        // treat it as empty so all tables/views/synonyms are shown immediately.
-        if (CLAUSE_KEYWORDS.contains(lowerPrefix)) {
-            lowerPrefix = "";
+        // If the prefix ends with a space, the caret is after a clause keyword + space.
+        // Clear the prefix so all tables/views/synonyms are shown immediately.
+        // This avoids showing tables while the user is still typing the keyword itself.
+        if (lowerPrefix.endsWith(" ") && !lowerPrefix.endsWith("  ")) {
+            String trimmed = lowerPrefix.trim();
+            if (CLAUSE_KEYWORDS.contains(trimmed)) {
+                lowerPrefix = "";
+            }
         }
 
         List<CompletionItem> results = new ArrayList<>();

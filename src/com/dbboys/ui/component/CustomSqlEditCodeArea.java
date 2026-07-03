@@ -232,7 +232,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                         long seq = completionSeq.get();
                         Platform.runLater(() -> {
                             if (completionSeq.get() != seq) return;
-                            doComplete(caret, false);
+                            doComplete(caret + 1, false);
                         });
                     }
                 }
@@ -756,6 +756,8 @@ public class CustomSqlEditCodeArea extends CodeArea {
         int end = caret;
         while (end > 0 && text.charAt(end - 1) == ' ') end--;
         if (end <= 0) return false;
+        // Only trigger for the first space after the keyword (not subsequent spaces)
+        if (end < caret) return false;
         int start = end;
         while (start > 0 && (Character.isLetterOrDigit(text.charAt(start - 1)))) start--;
         String word = text.substring(start, end).toLowerCase(java.util.Locale.ROOT);
