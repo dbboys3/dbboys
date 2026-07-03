@@ -17,10 +17,13 @@ import java.util.Locale;
  * <p>Reads from {@link SchemaObjectsCache}, which is populated asynchronously by
  * {@link SchemaObjectsFetcher} when the user switches database in the SQL editor.
  *
- * <p>The provider is stateful 鈥?call {@link #setContext(Connect, Catalog)} before
+ * <p>The provider is stateful — call {@link #setContext(Connect, Catalog)} before
  * each completion query to ensure the correct cache entry is read.
  */
 public class SchemaObjectProvider implements CandidateProvider {
+
+    /** Higher cap for schema objects — there can be thousands of tables. */
+    private static final int SCHEMA_MAX_RESULTS = 200;
 
     /** Clause-introducing keywords that the user completes before typing a table name. */
     private static final java.util.Set<String> CLAUSE_KEYWORDS = java.util.Set.of(
@@ -52,8 +55,8 @@ public class SchemaObjectProvider implements CandidateProvider {
 
     @Override
     public List<CompletionItem> fetch(String prefix, CompletionContext ctx) {
-        List<String> names = SchemaObjectsCache.get(connectId, databaseName);
-        if (names.isEmpty()) return List.of();
+        List<SchemaObjectsCache.CachedObject> objects = SchemaObjectsCache.get(connectId, databaseName);
+        if (objects.isEmpty()) return List.of();
 
         String lowerPrefix = (prefix != null) ? prefix.toLowerCase(Locale.ROOT) : "";
 
@@ -69,21 +72,21 @@ public class SchemaObjectProvider implements CandidateProvider {
 
         List<CompletionItem> results = new ArrayList<>();
         int count = 0;
-        for (String name : names) {
-            if (lowerPrefix.isEmpty() || name.toLowerCase(Locale.ROOT).startsWith(lowerPrefix)) {
-                CompletionKind kind = inferKind(ctx);
-                results.add(new CompletionItem(name, name, kind, "", 300));
-                if (++count >= MAX_RESULTS) break;
+        for (SchemaObjectsCache.CachedObject obj : objects) {
+            if (lowerPrefix.isEmpty() || obj.name().toLowerCase(Locale.ROOT).startsWith(lowerPrefix)) {
+                results.add(new CompletionItem(obj.name(), obj.name(), mapKind(obj), "", 300));
+                if (++count >= SCHEMA_MAX_RESULTS) break;
             }
         }
         return results;
     }
 
-    private CompletionKind inferKind(CompletionContext ctx) {
-        // If the context expects synonyms, mark as SYNONYM; default to TABLE
-        if (ctx.getExpectedKinds().contains(CompletionKind.SYNONYM)) {
-            return CompletionKind.TABLE; // we merge all under TABLE for simplicity
-        }
-        return CompletionKind.TABLE;
+    private static CompletionKind mapKind(SchemaObjectsCache.CachedObject obj) {
+        return switch (obj.kind()) {
+            case TABLE    -> CompletionKind.TABLE;
+            case VIEW     -> CompletionKind.VIEW;
+            case SYNONYM  -> CompletionKind.SYNONYM;
+            case SYSTABLE -> CompletionKind.TABLE;   // system tables display with TABLE icon
+        };
     }
 }

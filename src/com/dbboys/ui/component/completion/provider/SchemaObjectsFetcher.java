@@ -40,7 +40,7 @@ public final class SchemaObjectsFetcher {
      * thread pool.
      */
     public static void fetchAsync(Connect connect, Catalog database) {
-        if (connect == null || connect == databaseGetDefault(connect)) return;
+        if (connect == null || isDefaultConnect(connect)) return;
         if (database == null || database.getName() == null || database.getName().isBlank()) return;
 
         // Snapshot connect info for the background thread — Connect is mutable on the FX thread
@@ -50,7 +50,7 @@ public final class SchemaObjectsFetcher {
         AppExecutor.runAsync(() -> fetchAndCache(snapshot, dbName));
     }
 
-    private static boolean databaseGetDefault(Connect connect) {
+    private static boolean isDefaultConnect(Connect connect) {
         // The default placeholder Connect has name like "请选择连接" — skip it
         return connect.getId() <= 0;
     }
@@ -62,7 +62,7 @@ public final class SchemaObjectsFetcher {
 
         Connection conn = null;
         try {
-            conn = connectionService.createConnection(connect);
+            conn = connectionService.getConnectionWithSessionInit(connect);
             if (conn == null) {
                 log.warn("SchemaObjectsFetcher: failed to create connection for {}", connect.getName());
                 return;
