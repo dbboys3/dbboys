@@ -38,7 +38,8 @@ public class KeywordProvider implements CandidateProvider {
 
     @Override
     public boolean appliesTo(CompletionContext ctx) {
-        return !ctx.isDisabled();
+        return !ctx.isDisabled()
+                && ctx.getExpectedKinds().contains(CompletionKind.KEYWORD);
     }
 
     @Override

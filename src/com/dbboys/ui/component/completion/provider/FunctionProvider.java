@@ -46,7 +46,8 @@ public class FunctionProvider implements CandidateProvider {
 
     @Override
     public boolean appliesTo(CompletionContext ctx) {
-        return !ctx.isDisabled();
+        return !ctx.isDisabled()
+                && ctx.getExpectedKinds().contains(CompletionKind.FUNCTION);
     }
 
     @Override

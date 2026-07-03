@@ -6,10 +6,10 @@ import java.util.*;
  * Lightweight char-scanning analyser that determines what kind of SQL context the
  * caret is in and extracts the partial token being typed.
  *
- * <p>Pure state-machine 鈥?no JSqlParser dependency.  Walks backward from the caret
+ * <p>Pure state-machine 闁?no JSqlParser dependency.  Walks backward from the caret
  * through the SQL text to detect:
  * <ul>
- *   <li>String / comment boundaries (鈫?disable completion)</li>
+ *   <li>String / comment boundaries (闁?disable completion)</li>
  *   <li>The partial word prefix immediately before the caret</li>
  *   <li>Dot-qualified prefixes (schema. / alias.)</li>
  *   <li>(Phase 2) Clause-introducing keywords to narrow expected kinds</li>
@@ -18,7 +18,7 @@ import java.util.*;
  */
 public class SqlContextAnalyzer {
 
-    /** Max chars to scan backward 鈥?mirrors {@code LOCAL_HIGHLIGHT_MAX} in the editor. */
+    /** Max chars to scan backward 闁?mirrors {@code LOCAL_HIGHLIGHT_MAX} in the editor. */
     private static final int MAX_SCAN_BACK = 4000;
 
     /** Characters that count as "word" for the prefix token. */
@@ -44,7 +44,7 @@ public class SqlContextAnalyzer {
      * {@link CompletionContext}.
      *
      * @param fullSql  complete editor text
-     * @param caretPos absolute caret offset (0 鈮?caretPos 鈮?fullSql.length())
+     * @param caretPos absolute caret offset (0 闁?caretPos 闁?fullSql.length())
      */
     public CompletionContext analyze(String fullSql, int caretPos) {
         if (caretPos <= 0) {
@@ -85,6 +85,19 @@ public class SqlContextAnalyzer {
         expectedKinds = clauseInfo.expectedKinds;
         tableRefs = clauseInfo.tableRefs;
 
+        // If prefix ends with a space (past a keyword+space like "from "),
+        // ensure tables are included even when preceding-text analysis
+        // missed the FROM context (e.g. "select * from ").
+        String prefixTrimmed = prefixToken.trim();
+        if (prefixToken.endsWith(" ") && FROM_CLAUSE_KW.contains(prefixTrimmed.toUpperCase(java.util.Locale.ROOT))) {
+            expectedKinds.remove(CompletionKind.KEYWORD);
+            expectedKinds.remove(CompletionKind.FUNCTION);
+            expectedKinds.addAll(EnumSet.of(
+                    CompletionKind.TABLE, CompletionKind.VIEW,
+                    CompletionKind.SCHEMA, CompletionKind.SYNONYM
+            ));
+        }
+
         return CompletionContext.enabled(prefixToken, caretPos)
                 .setExpectedKinds(expectedKinds)
                 .setTableReferences(tableRefs)
@@ -100,7 +113,7 @@ public class SqlContextAnalyzer {
         boolean inBacktick = false;
         boolean inLineComment = false;
         boolean inBlockComment = false;
-        // Phase 2: track brace-style comments too (Informix { 鈥?})
+        // Phase 2: track brace-style comments too (Informix { 闁?})
 
         // Walk FROM THE END of prefix toward the beginning so we know the
         // "current" state nearest the caret.
@@ -132,7 +145,7 @@ public class SqlContextAnalyzer {
                 inBlockComment = false;
                 continue;
             }
-            // -- line comment (walking backward, encounter \n 鈫?past start of comment)
+            // -- line comment (walking backward, encounter \n 闁?past start of comment)
             if (c == '\n' && inLineComment) {
                 inLineComment = false;
                 continue;
@@ -145,7 +158,7 @@ public class SqlContextAnalyzer {
 
             // If we're inside a string or comment, we're not at a completion site
             if (inSingleQuote || inDoubleQuote || inBacktick || inLineComment || inBlockComment) {
-                // Keep unwinding state 鈥?toggle in/out of strings
+                // Keep unwinding state 闁?toggle in/out of strings
                 if (c == '\'' && !inDoubleQuote && !inBacktick && !inLineComment && !inBlockComment) {
                     inSingleQuote = !inSingleQuote;
                 } else if (c == '"' && !inSingleQuote && !inBacktick && !inLineComment && !inBlockComment) {
@@ -156,12 +169,12 @@ public class SqlContextAnalyzer {
                 continue;
             }
 
-            // ---- we are NOT in a string/comment 鈥?track the word boundary ----
+            // ---- we are NOT in a string/comment 闁?track the word boundary ----
             if (WORD_CHARS.indexOf(c) >= 0) {
-                // still inside the partial word 鈥?extend left
+                // still inside the partial word 闁?extend left
                 wordStart = i;
             } else {
-                // we hit a non-word char 鈫?word boundary
+                // we hit a non-word char 闁?word boundary
                 if (wordStart < len) {
                     // we've already found the word; collect preceding text and stop
                     preceding.insert(0, prefix.substring(i + 1, wordStart));
@@ -173,7 +186,7 @@ public class SqlContextAnalyzer {
             }
         }
 
-        // Reached start of scanned region 鈥?word extends to position 0
+        // Reached start of scanned region 闁?word extends to position 0
         if (wordStart < len) {
             return new BackwardScanResult(false, prefix.substring(wordStart, len), "", "");
         }
@@ -198,15 +211,13 @@ public class SqlContextAnalyzer {
         String prevUpper = prevToken.toUpperCase(java.util.Locale.ROOT);
 
         if (prevToken.isEmpty()) {
-            // At statement start 鈥?suggest everything
-            kinds.addAll(EnumSet.of(
-                    CompletionKind.TABLE, CompletionKind.VIEW,
-                    CompletionKind.SCHEMA, CompletionKind.SNIPPET
-            ));
+            // At statement start, only suggest keywords and functions
             return new ClauseInfo(kinds, List.of());
         }
 
         if (FROM_CLAUSE_KW.contains(prevUpper)) {
+            kinds.remove(CompletionKind.KEYWORD);
+            kinds.remove(CompletionKind.FUNCTION);
             kinds.addAll(EnumSet.of(
                     CompletionKind.TABLE, CompletionKind.VIEW,
                     CompletionKind.SCHEMA, CompletionKind.SYNONYM
@@ -221,17 +232,15 @@ public class SqlContextAnalyzer {
         }
 
         if (",".equals(prevToken)) {
-            // Comma 鈥?what to suggest depends on what clause we're in.
+            // Comma 闁?what to suggest depends on what clause we're in.
             // Fall back: suggest columns+functions (most comma-separated lists are columns)
             kinds.addAll(EnumSet.of(CompletionKind.COLUMN, CompletionKind.ALIAS));
             return new ClauseInfo(kinds, extractTableReferences(precedingText));
         }
 
-        // Default: generic context
+        // Default: generic context (not after FROM/JOIN 閳?don't suggest tables)
         kinds.addAll(EnumSet.of(
-                CompletionKind.TABLE, CompletionKind.VIEW,
-                CompletionKind.COLUMN, CompletionKind.ALIAS,
-                CompletionKind.SCHEMA, CompletionKind.SYNONYM
+                CompletionKind.COLUMN, CompletionKind.ALIAS
         ));
         return new ClauseInfo(kinds, extractTableReferences(precedingText));
     }
@@ -262,7 +271,7 @@ public class SqlContextAnalyzer {
 
     /**
      * Naive extraction of table references from FROM/JOIN clauses.
-     * For Phase 2 鈥?a simple regex-based scan; will be refined later.
+     * For Phase 2 闁?a simple regex-based scan; will be refined later.
      */
     private List<String> extractTableReferences(String precedingText) {
         // Simple approach: find words following FROM or JOIN that are not keywords
