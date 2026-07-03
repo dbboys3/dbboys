@@ -426,14 +426,14 @@ public class CompletionPopup {
         return switch (kind) {
             case KEYWORD -> "≣";
             case FUNCTION -> "ƒ";
-            case TABLE -> "■";
+            case TABLE -> "□";
             case VIEW -> "◇";
             case COLUMN -> "→";
             case SCHEMA -> "□";
             case ALIAS -> "↔";
             case SNIPPET -> "§";
             case SYNONYM -> "≈";
-            case SYSTABLE -> "\u2630";
+            case SYSTABLE -> "□";
         };
     }
 
