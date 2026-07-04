@@ -8,6 +8,7 @@ import com.dbboys.core.ConnectionService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +30,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("drop table if exists t_connect_folder");
             statement.executeUpdate("drop table if exists t_sqlhistory");
             statement.executeUpdate("create table if not exists t_connect_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
-            statement.executeUpdate("create table if not exists t_connect(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid int,c_name varchar(100),c_dbtype varchar(50),c_dbversion varchar(100),c_driver varchar(100),c_drivermd5 varchar(100),c_ip varchar(50),c_port varchar(50),c_database varchar(100),c_readonly varchar(2),c_username varchar(50),c_password varchar(50),c_props varchar(3200),c_info varchar(3200))");
-            // Migrate: add SSH columns if they don't exist (safe to run on existing DBs)
-            try { statement.executeUpdate("alter table t_connect add column c_ssh_host varchar(100)"); } catch (Exception ignored) {}
-            try { statement.executeUpdate("alter table t_connect add column c_ssh_port varchar(10)"); } catch (Exception ignored) {}
-            try { statement.executeUpdate("alter table t_connect add column c_ssh_user varchar(100)"); } catch (Exception ignored) {}
-            try { statement.executeUpdate("alter table t_connect add column c_ssh_password varchar(100)"); } catch (Exception ignored) {}
-            try { statement.executeUpdate("alter table t_connect add column c_ssh_enabled varchar(2)"); } catch (Exception ignored) {}
+            statement.executeUpdate("create table if not exists t_connect(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid int,c_name varchar(100),c_dbtype varchar(50),c_dbversion varchar(100),c_driver varchar(100),c_drivermd5 varchar(100),c_ip varchar(50),c_port varchar(50),c_database varchar(100),c_readonly varchar(2),c_username varchar(50),c_password varchar(50),c_props varchar(3200),c_info varchar(3200),c_ssh_host varchar(100),c_ssh_port varchar(10),c_ssh_user varchar(100),c_ssh_password varchar(100),c_ssh_enabled varchar(2))");
             statement.executeUpdate("create table if not exists t_sqlhistory(c_connectid INTEGER,c_database varchar(50),c_sql varchar(32000),c_starttime varchar(20),c_endtime varchar(20),c_elapsedtime varchar(20),c_affect int,c_mark varchar(100))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             //statement.executeUpdate("INSERT INTO t_connect(c_parentid,c_level,c_name,c_expand,c_dbtype,c_ip,c_port,c_username,c_password) VALUES (2,3, '核心业务系统',0,'GBASE 8S','192.168.17.123','9088','gbasedbt','GBase123')");
