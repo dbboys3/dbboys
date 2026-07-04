@@ -16,8 +16,30 @@ public class JschUtil {
     //private static JSch jsch = new JSch();
     //private static Session session;
     public static Session getConnect(Connect connect) throws Exception {
-                    Session session = new JSch().getSession(connect.getUsername(), connect.getIp(), 22);
-                    session.setPassword(connect.getPassword());
+        String sshHost = connect.getSshHost();
+        boolean useSsh = sshHost != null && !sshHost.isBlank();
+        String host;
+        String user;
+        String pass;
+        int port;
+        if (useSsh) {
+            host = sshHost;
+            user = connect.getSshUser();
+            pass = connect.getSshPassword();
+        } else {
+            host = connect.getIp();
+            user = connect.getUsername();
+            pass = connect.getPassword();
+        }
+        String portStr = connect.getSshPort();
+        try {
+            port = (portStr != null && !portStr.isBlank()) ? Integer.parseInt(portStr.trim()) : 22;
+        } catch (NumberFormatException e) {
+            port = 22;
+        }
+        Session session = new JSch().getSession(user, host, port);
+                    session.setPassword(pass);
+                    session.setPassword(pass);
                     Properties config = new Properties();
                     config.put("StrictHostKeyChecking", "no");
                     session.setConfig(config);

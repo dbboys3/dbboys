@@ -115,6 +115,8 @@ public class CreateConnectController {
     @FXML
     private PasswordField sshPasswordTextField;
     @FXML
+    private CheckBox sshToggleButton;
+    @FXML
     private ButtonType commitButtonType;
     @FXML
     private ButtonType testButtonType;
@@ -285,9 +287,10 @@ public class CreateConnectController {
                 sshPortTextField.setText(Objects.toString(persisted.getSshPort(), "22"));
                 sshUserTextField.setText(Objects.toString(persisted.getSshUser(), ""));
                 sshPasswordTextField.setText(Objects.toString(persisted.getSshPassword(), ""));
-                if (persisted.getSshEnabled() != null && persisted.getSshEnabled()) {
-                    connectTabPane.getSelectionModel().select(sshTab);
-                }
+                // SSH toggle initialization (edit/copy path)
+                sshToggleButton.setSelected(persisted.getSshEnabled() != null && persisted.getSshEnabled());
+                bindSshFieldsEnabled(sshToggleButton.isSelected());
+
             }
 
             int i=0;
@@ -300,6 +303,18 @@ public class CreateConnectController {
             }
 
         }
+
+        // SSH toggle: initialize for new connection path and add change listener
+        if (!(treeDataParam instanceof Connect)) {
+            sshToggleButton.setSelected(false);
+            bindSshFieldsEnabled(false);
+
+        }
+
+        sshToggleButton.selectedProperty().addListener((obs, old, val) -> {
+
+            bindSshFieldsEnabled(val);
+        });
 
         initializingDbTypeSelection = false;
         refreshDriverPropertyButton(dbTypeChoiceBox.getValue());
@@ -417,11 +432,8 @@ public class CreateConnectController {
         connect.setPassword(passwordTextField.getText());
         connect.setReadonly(readOnlyCheckBox.isSelected());
 
-        // SSH: enabled if any field is filled, regardless of which tab is active
-        boolean hasSshConfig = !sshHostTextField.getText().isBlank()
-                || !sshUserTextField.getText().isBlank()
-                || !sshPasswordTextField.getText().isBlank();
-        connect.setSshEnabled(hasSshConfig);
+        // SSH: controlled by toggle switch
+        connect.setSshEnabled(sshToggleButton.isSelected());
         connect.setSshHost(sshHostTextField.getText());
         connect.setSshPort(sshPortTextField.getText());
         connect.setSshUser(sshUserTextField.getText());
@@ -430,38 +442,62 @@ public class CreateConnectController {
     public boolean checkInput(){
         if(isOracleDbType(dbTypeChoiceBox.getValue())){
             if(instanceNameTextField == null || instanceNameTextField.getText().isBlank()){
+                connectTabPane.getSelectionModel().select(connectBasicTab);
                 instanceNameTextField.requestFocus();
                 return false;
             }
         }
         if(driverChoiceBox.getValue()==null || driverChoiceBox.getValue().isBlank()){
             AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_required", "请先选择或添加驱动程序！"));
+            connectTabPane.getSelectionModel().select(connectBasicTab);
             driverChoiceBox.requestFocus();
             return false;
         }
         if(groupHbox.isVisible()){
                 if(groupTextField.getText().isEmpty()){
+                    connectTabPane.getSelectionModel().select(connectBasicTab);
                     groupTextField.requestFocus();
                     return false;
                 }
             }else 
                 {
                     if(ipAddressTextField.getText().isEmpty()){
+                        connectTabPane.getSelectionModel().select(connectBasicTab);
                         ipAddressTextField.requestFocus();
                         return false;
                     }
                     else if(!isGeneralJdbcDbType(dbTypeChoiceBox.getValue()) && portTextField.getText().isEmpty()){
+                        connectTabPane.getSelectionModel().select(connectBasicTab);
                         portTextField.requestFocus();
                         return false;
                     }
                 }
             if(usernameTextField.getText().isEmpty()){
+                connectTabPane.getSelectionModel().select(connectBasicTab);
                 usernameTextField.requestFocus();
                 return false;
             }
             else if(passwordTextField.getText().isEmpty()){
+                connectTabPane.getSelectionModel().select(connectBasicTab);
                 passwordTextField.requestFocus();
                 return false;
+            }
+            if(sshToggleButton.isSelected()){
+                if(sshHostTextField.getText().isBlank()){
+                    connectTabPane.getSelectionModel().select(sshTab);
+                    sshHostTextField.requestFocus();
+                    return false;
+                }
+                if(sshUserTextField.getText().isBlank()){
+                    connectTabPane.getSelectionModel().select(sshTab);
+                    sshUserTextField.requestFocus();
+                    return false;
+                }
+                if(sshPasswordTextField.getText().isBlank()){
+                    connectTabPane.getSelectionModel().select(sshTab);
+                    sshPasswordTextField.requestFocus();
+                    return false;
+                }
             }
             return true;
     }
@@ -1327,7 +1363,10 @@ public class CreateConnectController {
 
 
                         }else{
-                            AlertUtil.CustomAlert(I18n.t("common.error"), result);
+                            Platform.runLater(() -> {
+                                AlertUtil.CustomAlert(I18n.t("common.error"), result);
+                                setConnectingVisible(false);
+                            });
                         }
 
                     //如果不是提交连接，那就是点击了测试连接,需要
@@ -1362,6 +1401,7 @@ public class CreateConnectController {
                 setConnectingVisible(false);
             });
             setTaskCancelOnClose(task::cancel);
+            task.setOnFailed(event -> Platform.runLater(() -> setConnectingVisible(false)));
             AppExecutor.runTask(task);
 
         } catch (Exception e) {
@@ -1371,5 +1411,12 @@ public class CreateConnectController {
 
 
 
+    }
+
+    private void bindSshFieldsEnabled(boolean enabled) {
+        sshHostTextField.setDisable(!enabled);
+        sshPortTextField.setDisable(!enabled);
+        sshUserTextField.setDisable(!enabled);
+        sshPasswordTextField.setDisable(!enabled);
     }
 }

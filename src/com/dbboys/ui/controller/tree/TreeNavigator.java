@@ -336,7 +336,7 @@ public class TreeNavigator {
             Stage stage = new Stage();
 
             dialogPane.setHeader(null);
-            int dialogW = 526;
+            int dialogW = 519;
             int dialogH = 350;
             int titleBarHeight = 28;
             int contentH = dialogH - titleBarHeight;

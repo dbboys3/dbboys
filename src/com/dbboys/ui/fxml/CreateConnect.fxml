@@ -124,6 +124,10 @@
                             <Label fx:id="sshPasswordLabel" text="%createconnect.label.ssh_password" prefWidth="80">
                             </Label>
                             <CustomPasswordField fx:id="sshPasswordTextField" promptText="%createconnect.prompt.ssh_password" prefWidth="200"></CustomPasswordField>
+                                                </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <CheckBox fx:id="sshToggleButton" text="%createconnect.label.ssh_enable">
+                            </CheckBox>
                         </HBox>
                     </VBox>
                 </Tab>
