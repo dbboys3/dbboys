@@ -9,9 +9,11 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.infra.util.*;
 import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.ui.icon.IconFactory;
+import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;
-import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
+import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.*;
 import javafx.animation.KeyFrame;
@@ -42,6 +44,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SqlTabController {
@@ -401,6 +404,7 @@ public class SqlTabController {
         uiHelper.setupSplitPaneBehavior();
         uiHelper.bindEditorSizeToPane();
         uiHelper.setupConnectIcons();
+        setupAiActions();
         connectionHandler.setupDefaultConnectionState();
         connectionHandler.loadConnectChoices();
         /*
@@ -748,6 +752,143 @@ public class SqlTabController {
                 sqlPanelKeepAliveChecking.set(false);
             }
         });
+    }
+
+    // ---- AI SQL actions (wired to CustomSqlEditCodeArea's aiMenu items) ----
+
+    private Future<?> aiSqlFuture;
+    private volatile boolean aiSqlCancelled;
+
+    private void setupAiActions() {
+        CustomSqlEditCodeArea area = sqlEditCodeArea;
+        if (area == null || area.aiMenu == null) return;
+
+        area.aiFormatSqlItem.setOnAction(e -> executeAiAction(
+                "formatSql", I18n.t("sql.ai.menu.formatSql")));
+        area.aiOptimizeSqlItem.setOnAction(e -> executeAiAction(
+                "optimizeSql", I18n.t("sql.ai.menu.optimizeSql")));
+        area.aiConvertOracleItem.setOnAction(e -> executeAiAction(
+                "convertOracle", I18n.t("sql.ai.menu.convertOracle")));
+        area.aiConvertMysqlItem.setOnAction(e -> executeAiAction(
+                "convertMysql", I18n.t("sql.ai.menu.convertMysql")));
+        area.aiConvertInformixItem.setOnAction(e -> executeAiAction(
+                "convertInformix", I18n.t("sql.ai.menu.convertInformix")));
+        area.aiConvertPostgresqlItem.setOnAction(e -> executeAiAction(
+                "convertPostgresql", I18n.t("sql.ai.menu.convertPostgresql")));
+    }
+
+    private void executeAiAction(String actionKey, String actionLabel) {
+        if (!AiAuthUtil.hasConfiguredApi()) {
+            NotificationUtil.showMainNotification(I18n.t("sql.ai.noApiKey"));
+            return;
+        }
+
+        String selectedText = sqlEditCodeArea.getSelectedText();
+        if (selectedText == null || selectedText.isBlank()) {
+            NotificationUtil.showMainNotification(I18n.t("sql.ai.noSelection"));
+            return;
+        }
+        final String sqlText = selectedText;
+        final String prompt = buildAiSqlPrompt(actionKey, sqlText);
+
+        // Build standalone AI progress dialog
+        Label statusLabel = new Label(actionLabel + " - " + I18n.t("sql.ai.thinking"));
+        statusLabel.setWrapText(true);
+        Label timeLabel = new Label("0.0 " + I18n.t("sql.exec.elapsed", "秒"));
+        timeLabel.getStyleClass().add("ai-time-label");
+
+        Button stopBtn = new Button(I18n.t("ai.button.stop", "停止"));
+        stopBtn.getStyleClass().add("accent");
+        stopBtn.setGraphic(IconFactory.groupFixedColor(IconPaths.AI_STOP, 0.5, IconFactory.stopColor()));
+
+        HBox bottomRow = new HBox(8, stopBtn);
+        bottomRow.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+
+        VBox content = new VBox(12, statusLabel, timeLabel, bottomRow);
+        content.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        content.setPadding(new javafx.geometry.Insets(16));
+        content.setPrefWidth(480);
+
+        ButtonType cancelType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                actionLabel, content, 500, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
+        dialog.getStage().setOnCloseRequest(we -> {
+            aiSqlCancelled = true;
+            if (aiSqlFuture != null) aiSqlFuture.cancel(true);
+        });
+
+        aiSqlCancelled = false;
+
+        // Timer
+        final long[] startMs = {System.currentTimeMillis()};
+        javafx.animation.Timeline timer = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(Duration.millis(200), te -> {
+                    double secs = (System.currentTimeMillis() - startMs[0]) / 1000.0;
+                    timeLabel.setText(String.format("%.1f 秒", secs));
+                })
+        );
+        timer.setCycleCount(javafx.animation.Timeline.INDEFINITE);
+        timer.play();
+
+        stopBtn.setOnAction(se -> {
+            aiSqlCancelled = true;
+            if (aiSqlFuture != null) aiSqlFuture.cancel(true);
+            statusLabel.setText(I18n.t("sql.ai.aborted"));
+            timer.stop();
+            stopBtn.setDisable(true);
+        });
+
+        aiSqlFuture = AppExecutor.submit(() -> {
+            try {
+                String result = AiApiUtil.chat(prompt);
+                Platform.runLater(() -> {
+                    timer.stop();
+                    if (aiSqlCancelled) {
+                        return;
+                    }
+                    if (result == null || result.isEmpty()) {
+                        statusLabel.setText(I18n.t("ai.notice.api_error"));
+                        stopBtn.setText(I18n.t("common.confirm", "确定"));
+                        stopBtn.setGraphic(null);
+                        stopBtn.setOnAction(ce -> dialog.getStage().close());
+                        return;
+                    }
+                    sqlEditCodeArea.replaceSelection(result);
+                    statusLabel.setText(actionLabel + " " + I18n.t("sql.exec.success"));
+                    stopBtn.setText(I18n.t("common.confirm", "确定"));
+                    stopBtn.setGraphic(null);
+                    stopBtn.setOnAction(ce -> dialog.getStage().close());
+                });
+            } catch (Exception ex) {
+                log.error("AI SQL action failed", ex);
+                Platform.runLater(() -> {
+                    timer.stop();
+                    statusLabel.setText(I18n.t("ai.notice.api_error"));
+                    stopBtn.setText(I18n.t("common.confirm", "确定"));
+                    stopBtn.setGraphic(null);
+                    stopBtn.setOnAction(ce -> dialog.getStage().close());
+                });
+            }
+        });
+
+        dialog.showAndWait();
+        timer.stop();
+        aiSqlCancelled = true;
+        if (aiSqlFuture != null && !aiSqlFuture.isDone()) {
+            aiSqlFuture.cancel(true);
+        }
+    }
+
+    private String buildAiSqlPrompt(String actionKey, String sqlText) {
+        return switch (actionKey) {
+            case "formatSql" -> "请将以下 SQL 语句格式化为规范、易读的格式。只返回格式化后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            case "optimizeSql" -> "你是一个数据库专家。请优化以下 SQL 语句以提高性能。说明优化点，然后给出优化后的 SQL。\n\n" + sqlText;
+            case "convertOracle" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Oracle 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            case "convertMysql" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 MySQL 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            case "convertInformix" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Informix 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            case "convertPostgresql" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 PostgreSQL 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            default -> sqlText;
+        };
     }
 
 

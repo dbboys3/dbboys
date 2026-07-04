@@ -8,6 +8,7 @@ import com.dbboys.ui.component.completion.CompletionPopup;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.KeywordsHighlightUtil;
 import com.dbboys.infra.util.MenuItemUtil;
 import com.dbboys.infra.util.SqlParserUtil;
@@ -15,6 +16,7 @@ import com.dbboys.model.Catalog;
 import com.dbboys.model.Connect;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.*;
 import javafx.scene.paint.Color;
 
@@ -59,6 +61,14 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private final CompletionEngine completionEngine = new CompletionEngine();
     private final CompletionPopup completionPopup = new CompletionPopup();
     private int fontSize = sharedFontSize;
+    // AI submenu and items (accessible from SqlTabController for action wiring)
+    public final CustomMenu aiMenu;
+    public final CustomShortcutMenuItem aiFormatSqlItem;
+    public final CustomShortcutMenuItem aiOptimizeSqlItem;
+    public final CustomShortcutMenuItem aiConvertOracleItem;
+    public final CustomShortcutMenuItem aiConvertMysqlItem;
+    public final CustomShortcutMenuItem aiConvertInformixItem;
+    public final CustomShortcutMenuItem aiConvertPostgresqlItem;
     private Connect activeConnect;
     private Catalog activeDatabase;
     private Runnable onSaveRequest = () -> {};
@@ -86,11 +96,29 @@ public class CustomSqlEditCodeArea extends CodeArea {
         CustomShortcutMenuItem codeAreaRedoItem = MenuItemUtil.createMenuItemI18n("sql.editor.menu.redo", "Ctrl+Y", IconFactory.group(IconPaths.REDO, 0.6));
         CustomShortcutMenuItem codeAreaSaveItem = MenuItemUtil.createMenuItemI18n("sql.editor.menu.save", "Ctrl+S", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
 
+        // AI submenu
+        aiMenu = new CustomMenu();
+        aiMenu.textProperty().bind(I18n.bind("sql.ai.menu", "AI"));
+        aiMenu.setGraphic(IconFactory.group(IconPaths.AI_TAB_TOGGLE, 0.55));
+
+        aiFormatSqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.formatSql", null);
+        aiOptimizeSqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.optimizeSql", null);
+        aiConvertOracleItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertOracle", null);
+        aiConvertMysqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertMysql", null);
+        aiConvertInformixItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertInformix", null);
+        aiConvertPostgresqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertPostgresql", null);
+        aiMenu.getItems().addAll(
+                aiFormatSqlItem, aiOptimizeSqlItem,
+                new SeparatorMenuItem(),
+                aiConvertOracleItem, aiConvertMysqlItem, aiConvertInformixItem, aiConvertPostgresqlItem
+        );
+
         ContextMenu codeAreaMenu = new ContextMenu();
         codeAreaMenu.getItems().addAll(
                 codeAreaExecuteItem, codeAreaFormatItem, codeAreaUpperItem, codeAreaLowerItem,
                 codeAreaCommRowItem, codeAreaCommRowsItem, codeAreaSearchItem, codeAreaCopyItem,
-                codeAreaCutItem, codeAreaPasteItem, codeAreaUndoItem, codeAreaRedoItem, codeAreaSaveItem
+                codeAreaCutItem, codeAreaPasteItem, codeAreaUndoItem, codeAreaRedoItem, codeAreaSaveItem,
+                aiMenu
         );
 
         // 补全弹窗导航 �?�?EventFilter（捕获阶段）拦截，必须在 RichTextFX 行为层处理之�?
@@ -309,6 +337,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             codeAreaPasteItem.setDisable(!clipboard.hasString());
             codeAreaExecuteItem.setDisable(executeDisabledSupplier.getAsBoolean());
+            aiMenu.setDisable(!hasSelection);
         });
 
         setParagraphGraphicFactory(LineNumberFactory.get(this));
