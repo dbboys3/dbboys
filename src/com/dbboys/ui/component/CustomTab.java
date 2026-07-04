@@ -19,7 +19,9 @@ public class CustomTab extends Tab {
 
     public CustomTab(String title) {
         //如果有面板，去掉双击响应事件
-        AppState.getSqlTabPane().setOnMouseClicked(null);
+        if (AppState.getSqlTabPane() != null) {
+            AppState.getSqlTabPane().setOnMouseClicked(null);
+        }
         //super(title);
         //设置标题保证标题溢出下拉正常显示标题
         setText(title);
@@ -52,7 +54,7 @@ public class CustomTab extends Tab {
 
         setOnCloseRequest(event1 -> {
             /*避免关闭后双击无响应*/
-            if (AppState.getSqlTabPane().getTabs().size() == 1) {
+            if (AppState.getSqlTabPane() != null && AppState.getSqlTabPane().getTabs().size() == 1) {
                 AppState.getSqlTabPane().setOnMouseClicked(event -> {
                     if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
                         TabpaneUtil.addCustomSqlTab(null);
