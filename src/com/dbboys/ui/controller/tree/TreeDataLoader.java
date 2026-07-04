@@ -11,6 +11,7 @@ import com.dbboys.app.AppErrorHandler;
 import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.infra.util.SqlParserUtil;
+import com.dbboys.infra.util.SqlErrorUtil;
 import com.dbboys.model.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -116,7 +117,11 @@ public class TreeDataLoader {
                               Connect connect = TreeNavigator.getMetaConnect(treeItem);
                               databases.addAll(resolvePlatformResolver().metadata(connect).getMetadataDatabases(connect.getConn()));
                           } catch (SQLException e) {
-                              AppErrorHandler.handle(e);
+                              if (SqlErrorUtil.isDisconnectError(e)) {
+                                  TreeNavigator.connectionDisconnected(treeItem);
+                              } else {
+                                  AppErrorHandler.handle(e);
+                              }
                           }
                         //查询到结果后删除loading节点
                         if(databases.size()>0){
@@ -143,7 +148,11 @@ public class TreeDataLoader {
                           try {
                               users.addAll(TreeViewUtil.userService.getUsers(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getMetaConnect(treeItem).getConn()));
                           } catch (SQLException e) {
-                              AppErrorHandler.handle(e);
+                              if (SqlErrorUtil.isDisconnectError(e)) {
+                                  TreeNavigator.connectionDisconnected(treeItem);
+                              } else {
+                                  AppErrorHandler.handle(e);
+                              }
                           }
                         //查询到结果后删除loading节点
                         if(users.size()>0){
@@ -171,11 +180,15 @@ public class TreeDataLoader {
                             Catalog database = TreeNavigator.getCurrentDatabase(treeItem);
                             objectList = TreeViewUtil.databaseService.loadObjects(TreeNavigator.getMetaConnect(treeItem), database);
                         } catch (Exception e) {
-                            AppErrorHandler.handle(e);
-                            Platform.runLater(() -> {
-                                treeItem.getChildren().clear();
-                                treeItem.setExpanded(false);
-                            });
+                            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                                TreeNavigator.connectionDisconnected(treeItem);
+                            } else {
+                                AppErrorHandler.handle(e);
+                                Platform.runLater(() -> {
+                                    treeItem.getChildren().clear();
+                                    treeItem.setExpanded(false);
+                                });
+                            }
                             return;
                         }
 
@@ -269,11 +282,15 @@ public class TreeDataLoader {
                         try {
                             objectList = TreeViewUtil.tableService.loadSystemTables(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
                         } catch (Exception e) {
-                            AppErrorHandler.handle(e);
-                            Platform.runLater(() -> {
-                                treeItem.getChildren().clear();
-                                treeItem.setExpanded(false);
-                            });
+                            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                                TreeNavigator.connectionDisconnected(treeItem);
+                            } else {
+                                AppErrorHandler.handle(e);
+                                Platform.runLater(() -> {
+                                    treeItem.getChildren().clear();
+                                    treeItem.setExpanded(false);
+                                });
+                            }
                             return;
                         }
                         if(objectList.getInfo()!=null&&!objectList.getItems().isEmpty()) {
@@ -305,11 +322,15 @@ public class TreeDataLoader {
                         try {
                             objectList = service.loadObjects(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem));
                         } catch (Exception e) {
-                            AppErrorHandler.handle(e);
-                            Platform.runLater(() -> {
-                                treeItem.getChildren().clear();
-                                treeItem.setExpanded(false);
-                            });
+                            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                                TreeNavigator.connectionDisconnected(treeItem);
+                            } else {
+                                AppErrorHandler.handle(e);
+                                Platform.runLater(() -> {
+                                    treeItem.getChildren().clear();
+                                    treeItem.setExpanded(false);
+                                });
+                            }
                             return;
                         }
                         if (objectList.getInfo() != null ) {
@@ -334,7 +355,11 @@ public class TreeDataLoader {
                             packageDDL = TreeViewUtil.packageService.getDDL(TreeNavigator.getMetaConnect(treeItem), TreeNavigator.getCurrentDatabase(treeItem),treeItem.getValue().getName());
                     
                         } catch (Exception e) {
-                            AppErrorHandler.handle(e);
+                            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                                TreeNavigator.connectionDisconnected(treeItem);
+                            } else {
+                                AppErrorHandler.handle(e);
+                            }
                         }
                         if (!packageDDL.isEmpty()) {
                             ((DBPackage) treeItem.getValue()).setDDL(packageDDL);

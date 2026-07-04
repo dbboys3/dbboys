@@ -40,8 +40,23 @@ public class TreeNavigator {
         if (selectedItem == null) {
             return;
         }
-        TreeItem<TreeData> treeItem=getMetaConnTreeItem(selectedItem);
-        if (treeItem == null || !(treeItem.getValue() instanceof Connect connect)) {
+        connectionDisconnected(selectedItem);
+    }
+
+    /**
+     * ??????????????????????????????
+     * <p>
+     * ??????????????????????????????????
+     * ????????????
+     *
+     * @param treeItem ????????????????????? Connect ???
+     */
+    public static void connectionDisconnected(TreeItem<TreeData> treeItem){
+        if (treeItem == null) {
+            return;
+        }
+        TreeItem<TreeData> connTreeItem = getMetaConnTreeItem(treeItem);
+        if (connTreeItem == null || !(connTreeItem.getValue() instanceof Connect connect)) {
             return;
         }
         try {
@@ -55,16 +70,15 @@ public class TreeNavigator {
         }
 
         Platform.runLater(() -> {
-
             if (AlertUtil.CustomAlertConfirm(
-                    I18n.t("common.error", "错误"),
-                    I18n.t("metadata.alert.connection_lost", "数据库已断开连接，是否需要重新连接？"))) {
-                treeItem.getChildren().clear();
-                treeItem.setExpanded(false);
-                treeItem.setExpanded(true);
+                    I18n.t("common.error", "??"),
+                    I18n.t("metadata.alert.connection_lost", "??????????????????"))) {
+                connTreeItem.getChildren().clear();
+                connTreeItem.setExpanded(false);
+                connTreeItem.setExpanded(true);
             } else {
-                treeItem.setExpanded(false);
-                treeItem.getChildren().clear();
+                connTreeItem.setExpanded(false);
+                connTreeItem.getChildren().clear();
             }
         });
     }
