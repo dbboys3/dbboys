@@ -1237,6 +1237,8 @@ public class TreeCrudHandler {
             Connect connect = buildObjectConnect(tableItem,false);
 
             FileChooser chooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) chooser.setInitialDirectory(desktopDir);
             chooser.setTitle(I18n.t("metadata.export.title", "导出表数据"));
             String baseName = table.getName();
             switch (format) {
@@ -2194,6 +2196,8 @@ public class TreeCrudHandler {
         }
 
         FileChooser chooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) chooser.setInitialDirectory(desktopDir);
         chooser.setTitle(I18n.t("metadata.import.title", "导入表数据"));
         chooser.getExtensionFilters().addAll(
                 new FileChooser.ExtensionFilter(

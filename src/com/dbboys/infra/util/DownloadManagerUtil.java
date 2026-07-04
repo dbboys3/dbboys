@@ -607,6 +607,7 @@ class DownloadTaskWrapper {
             return false;
         }
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            writer.write('\uFEFF');
             int columnCount = meta.getColumnCount();
             for (int i = 1; i <= columnCount; i++) {
                 if (i > 1) writer.write(",");
@@ -1275,6 +1276,7 @@ public class DownloadManagerUtil {
             return false;
         }
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            writer.write('\uFEFF');
             int columnCount = meta.getColumnCount();
             long row = 1;
             for (int i = 1; i <= columnCount; i++) {

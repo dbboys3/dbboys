@@ -422,6 +422,8 @@ public class ResultSetTabController {
             if (exportSql.endsWith(";")) exportSql = exportSql.substring(0, exportSql.length() - 1);
 
             FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("resultset.export.title", "结果集导出"));
             String defaultName = I18n.t("resultset.export.filename_prefix", "结果集导出")
                     + "_"

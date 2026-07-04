@@ -210,6 +210,8 @@ public class TreeContextMenuHandler {
                 return;
             }
             FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("main.filechooser.select_sql", "选择SQL文件"));
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
             File file = fileChooser.showOpenDialog(AppState.getWindow());
@@ -866,6 +868,8 @@ public class TreeContextMenuHandler {
 
         ddlToFile.setOnAction(event -> TreeCrudHandler.handleDdlAction(treeView, (treeData, ddlText) -> {
             FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("metadata.menu.ddl.to_file", "保存DDL为SQL"));
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
             fileChooser.setInitialFileName(treeData.getName() + ".sql");
@@ -913,6 +917,8 @@ public class TreeContextMenuHandler {
 
         exportDdlToFile.setOnAction(event -> TreeCrudHandler.handleDatabaseDdlAction(treeView, (treeData, ddlText) -> {
             FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("metadata.menu.ddl.to_file", "保存DDL为SQL"));
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
             fileChooser.setInitialFileName(treeData.getName() + ".sql");
