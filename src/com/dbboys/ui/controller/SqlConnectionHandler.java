@@ -108,11 +108,13 @@ public class SqlConnectionHandler {
                 ctrl.sqlConnect = newVal;
                 ctrl.sqlConnect.setConn(conn);
                 ctrl.currentResultSetTabController.sqlConnect = ctrl.sqlConnect;
+                /* 这里会导致拖动非默认字符集数据库到右边后，sqlconnect字符集被重置为默认，这段代码看起来不需要
                 try {
                     connectionService.refreshRuntimeConnectInfo(ctrl.sqlConnect);
                 } catch (Exception e) {
                     log.debug("Refresh runtime connect info failed", e);
                 }
+                */
 
                 refreshMetaTreeForConnect();
                 updateConnectIcon();
