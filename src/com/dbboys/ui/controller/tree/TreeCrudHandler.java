@@ -868,6 +868,8 @@ public class TreeCrudHandler {
 
         DirectoryChooser dirChooser = new DirectoryChooser();
         dirChooser.setTitle(I18n.t("metadata.export.dir.title", "选择导出目录"));
+        File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+        if (desktopDir.exists()) dirChooser.setInitialDirectory(desktopDir);
         File dir = dirChooser.showDialog(AppState.getWindow());
         if (dir == null) {
             return;
@@ -1573,6 +1575,8 @@ public class TreeCrudHandler {
 
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle(I18n.t("metadata.import_ddl_data.dir.title", "选择数据库导出目录"));
+        File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+        if (desktopDir.exists()) chooser.setInitialDirectory(desktopDir);
         File dir = chooser.showDialog(AppState.getWindow());
         if (dir == null) {
             return;
