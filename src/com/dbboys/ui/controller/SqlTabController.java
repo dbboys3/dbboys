@@ -888,13 +888,23 @@ public class SqlTabController {
 
     private String buildAiSqlPrompt(String actionKey, String sqlText) {
         return switch (actionKey) {
-            case "formatSql" -> "请将以下 SQL 语句格式化为规范、易读的格式。只返回格式化后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
-            case "optimizeSql" -> "你是一个数据库专家。请优化以下 SQL 语句以提高性能。只返回优化后的 SQL，在修改的地方用 -- 注释说明原因，不要包含其他解释或 Markdown 标记。\n\n" + sqlText;
-            case "fixSql" -> "你是一个数据库专家。请检查以下 SQL 语句是否存在语法或逻辑错误，如果有错误请修正。只返回修正后的 SQL，在修改的地方用 -- 注释说明原因，不要包含其他解释或 Markdown 标记。\n\n" + sqlText;
-            case "convertOracle" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Oracle 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
-            case "convertMysql" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 MySQL 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
-            case "convertInformix" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Informix 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
-            case "convertPostgresql" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 PostgreSQL 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
+            case "formatSql" -> "Format the following SQL statement into a clean, readable style. "
+                    + "Return only the formatted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "optimizeSql" -> "You are a database expert. Optimize the following SQL statement for better performance. "
+                    + "Return only the optimized SQL. Add -- comments at changed lines to explain the change. "
+                    + "Where an index would significantly help, add a -- comment suggesting the CREATE INDEX statement. "
+                    + "Do NOT include any other explanations or markdown.\n\n" + sqlText;
+            case "fixSql" -> "You are a database expert. Check the following SQL for syntax or logic errors and fix them. "
+                    + "Return only the corrected SQL. Add -- comments at changed lines to explain the fix. "
+                    + "Do NOT include any other explanations or markdown.\n\n" + sqlText;
+            case "convertOracle" -> "You are a database migration expert. Convert the following SQL to Oracle-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "convertMysql" -> "You are a database migration expert. Convert the following SQL to MySQL-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "convertInformix" -> "You are a database migration expert. Convert the following SQL to Informix-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "convertPostgresql" -> "You are a database migration expert. Convert the following SQL to PostgreSQL-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
             default -> sqlText;
         };
     }
