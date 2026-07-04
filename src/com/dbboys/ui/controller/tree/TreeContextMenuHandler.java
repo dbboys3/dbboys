@@ -200,10 +200,6 @@ public class TreeContextMenuHandler {
         exportDdlMenu.getItems().addAll(exportDdlToClipboard, exportDdlToPopupWindow, exportDdlToFile,
                 exportDdlToCurrentSqlEditarea, exportDdlToNewSqlEditarea);
 
-        // CustomMenu handles hover-to-close automatically.
-        // Install the shared filter the first time any submenu shows.
-        treeview_menu.setOnShowing(e -> CustomMenu.installOn(ddlMenu));
-
         exportCsvItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.CSV));
         exportJsonItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.JSON));
         exportSqlItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.SQL));

@@ -442,11 +442,6 @@ public class MainController {
     private void installMenuActions() {
         newSqlFileMenuItem.setOnAction(event -> {
             TabpaneUtil.addCustomSqlTab(null);});
-        // CustomMenu handles hover-to-close submenus automatically.
-        // Each parent menu just needs to install the shared filter once on first show.
-        menuFile.setOnShowing(e -> CustomMenu.installOn(menuFileRecent));
-        menuConfig.setOnShowing(e -> CustomMenu.installOn(menuConfigInformix));
-        menuSettings.setOnShowing(e -> CustomMenu.installOn(menuSettingsLanguage));
     }
 
     // --- Recent files persistence (user temp dir) ---

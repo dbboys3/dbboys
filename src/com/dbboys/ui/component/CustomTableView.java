@@ -4,7 +4,6 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.infra.util.MenuItemUtil;
 import javafx.collections.ObservableList;
-import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.*;
 import javafx.util.Callback;
@@ -80,7 +79,7 @@ public class CustomTableView<S> extends TableView<S> {
                 null
         );
 
-        generateSqlMenu = new Menu();
+        generateSqlMenu = new CustomMenu();
         generateSqlMenu.textProperty().bind(com.dbboys.infra.i18n.I18n.bind("resultset.table.menu.generateSql", "生成SQL"));
         generateSqlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
         generateSqlMenu.getGraphic().setTranslateY(2);
@@ -109,27 +108,7 @@ public class CustomTableView<S> extends TableView<S> {
 
         contextMenu.setOnShowing(e -> {
             boolean hasSelection = !getSelectionModel().getSelectedCells().isEmpty();
-            copyMenuItem.setDisable(!hasSelection); // 没有选中则禁用
-            if (generateSqlMenu.isShowing()) generateSqlMenu.hide();
-        });
-
-        // 鼠标移到 "复制" 菜单项时自动关闭"生成SQL"子菜单（与 TreeContextMenuHandler 逻辑一致）
-        contextMenu.skinProperty().addListener((obs, oldSkin, newSkin) -> {
-            if (newSkin == null) return;
-            Node skinRoot = newSkin.getNode();
-            skinRoot.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_ENTERED_TARGET, event -> {
-                if (!generateSqlMenu.isShowing()) return;
-                Node target = (Node) event.getTarget();
-                while (target != null && target != skinRoot) {
-                    if (target.getStyleClass().contains("menu-item")) {
-                        if (!target.getStyleClass().contains("menu")) {
-                            generateSqlMenu.hide();
-                        }
-                        return;
-                    }
-                    target = target.getParent();
-                }
-            });
+            copyMenuItem.setDisable(!hasSelection);
         });
     }
 
