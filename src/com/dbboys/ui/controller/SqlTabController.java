@@ -777,6 +777,8 @@ public class SqlTabController {
                 "convertInformix", I18n.t("sql.ai.menu.convertInformix")));
         area.aiConvertPostgresqlItem.setOnAction(e -> executeAiAction(
                 "convertPostgresql", I18n.t("sql.ai.menu.convertPostgresql")));
+        area.aiFixSqlItem.setOnAction(e -> executeAiAction(
+                "fixSql", I18n.t("sql.ai.menu.fixSql")));
     }
 
     private void executeAiAction(String actionKey, String actionLabel) {
@@ -887,7 +889,8 @@ public class SqlTabController {
     private String buildAiSqlPrompt(String actionKey, String sqlText) {
         return switch (actionKey) {
             case "formatSql" -> "请将以下 SQL 语句格式化为规范、易读的格式。只返回格式化后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
-            case "optimizeSql" -> "你是一个数据库专家。请优化以下 SQL 语句以提高性能。说明优化点，然后给出优化后的 SQL。\n\n" + sqlText;
+            case "optimizeSql" -> "你是一个数据库专家。请优化以下 SQL 语句以提高性能。只返回优化后的 SQL，在修改的地方用 -- 注释说明原因，不要包含其他解释或 Markdown 标记。\n\n" + sqlText;
+            case "fixSql" -> "你是一个数据库专家。请检查以下 SQL 语句是否存在语法或逻辑错误，如果有错误请修正。只返回修正后的 SQL，在修改的地方用 -- 注释说明原因，不要包含其他解释或 Markdown 标记。\n\n" + sqlText;
             case "convertOracle" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Oracle 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
             case "convertMysql" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 MySQL 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;
             case "convertInformix" -> "你是一个数据库迁移专家。请将以下 SQL 语句转换为 Informix 兼容语法。只返回转换后的 SQL，不要包含任何解释或 Markdown 标记。\n\n" + sqlText;

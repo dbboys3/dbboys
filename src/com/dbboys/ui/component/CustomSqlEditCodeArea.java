@@ -69,6 +69,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
     public final CustomShortcutMenuItem aiConvertMysqlItem;
     public final CustomShortcutMenuItem aiConvertInformixItem;
     public final CustomShortcutMenuItem aiConvertPostgresqlItem;
+    public final CustomShortcutMenuItem aiFixSqlItem;
     private Connect activeConnect;
     private Catalog activeDatabase;
     private Runnable onSaveRequest = () -> {};
@@ -107,8 +108,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
         aiConvertMysqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertMysql", null);
         aiConvertInformixItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertInformix", null);
         aiConvertPostgresqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.convertPostgresql", null);
+        aiFixSqlItem = MenuItemUtil.createMenuItemI18n("sql.ai.menu.fixSql", null);
         aiMenu.getItems().addAll(
-                aiFormatSqlItem, aiOptimizeSqlItem,
+                aiFormatSqlItem, aiOptimizeSqlItem, aiFixSqlItem,
                 new SeparatorMenuItem(),
                 aiConvertOracleItem, aiConvertMysqlItem, aiConvertInformixItem, aiConvertPostgresqlItem
         );
