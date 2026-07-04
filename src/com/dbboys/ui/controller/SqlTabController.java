@@ -9,7 +9,6 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.infra.util.*;
 import com.dbboys.infra.config.ConfigManagerUtil;
-import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.AlertUtil;
@@ -777,6 +776,10 @@ public class SqlTabController {
                 "convertInformix", I18n.t("sql.ai.menu.convertInformix")));
         area.aiConvertPostgresqlItem.setOnAction(e -> executeAiAction(
                 "convertPostgresql", I18n.t("sql.ai.menu.convertPostgresql")));
+        area.aiConvertSqlserverItem.setOnAction(e -> executeAiAction(
+                "convertSqlserver", I18n.t("sql.ai.menu.convertSqlserver")));
+        area.aiConvertSqliteItem.setOnAction(e -> executeAiAction(
+                "convertSqlite", I18n.t("sql.ai.menu.convertSqlite")));
         area.aiFixSqlItem.setOnAction(e -> executeAiAction(
                 "fixSql", I18n.t("sql.ai.menu.fixSql")));
     }
@@ -795,34 +798,23 @@ public class SqlTabController {
         final String sqlText = selectedText;
         final String prompt = buildAiSqlPrompt(actionKey, sqlText);
 
-        // Inline progress overlay — same style as CreateConnect connectingHBox
+        // Simple progress dialog — loading icon + elapsed time only, no border/background/stop button
+        HBox progressRow = new HBox(8);
+        progressRow.setAlignment(javafx.geometry.Pos.CENTER);
+
         ImageView loadingIcon = new ImageView(new Image(IconPaths.LOADING_GIF));
-        loadingIcon.setFitHeight(12);
-        loadingIcon.setFitWidth(12);
+        loadingIcon.setFitHeight(16);
+        loadingIcon.setFitWidth(16);
         loadingIcon.setPreserveRatio(true);
 
-        Label statusLabel = new Label(actionLabel + " - " + I18n.t("sql.ai.thinking"));
+        Label timeLabel = new Label("0.0s");
 
-        Button stopBtn = new Button(I18n.t("ai.button.stop", "停止"));
-        stopBtn.getStyleClass().add("small");
-        stopBtn.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
-        Tooltip stopTooltip = new Tooltip(I18n.t("sql.ai.stop.tooltip", "停止 AI 操作"));
-        stopBtn.setTooltip(stopTooltip);
-
-        HBox statusBox = new HBox(loadingIcon, statusLabel, stopBtn);
-        statusBox.getStyleClass().add("modal-progress-card-padded");
-        statusBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        statusBox.setMaxHeight(24);
-
-        VBox overlay = new VBox(statusBox);
-        overlay.getStyleClass().add("modal-progress-overlay");
-        overlay.setAlignment(javafx.geometry.Pos.CENTER);
-        overlay.setPrefHeight(60);
-        overlay.setPadding(new javafx.geometry.Insets(0, 20, 0, 20));
+        progressRow.getChildren().addAll(loadingIcon, timeLabel);
+        progressRow.setPadding(new javafx.geometry.Insets(12, 24, 12, 24));
 
         ButtonType cancelType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                actionLabel, overlay, 500, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
+                actionLabel, progressRow, 300, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
         dialog.getStage().setOnCloseRequest(we -> {
             aiSqlCancelled = true;
             if (aiSqlFuture != null) aiSqlFuture.cancel(true);
@@ -835,20 +827,11 @@ public class SqlTabController {
         javafx.animation.Timeline timer = new javafx.animation.Timeline(
                 new javafx.animation.KeyFrame(Duration.millis(200), te -> {
                     double secs = (System.currentTimeMillis() - startMs[0]) / 1000.0;
-                    statusLabel.setText(actionLabel + " - " + I18n.t("sql.ai.thinking")
-                            + "  (" + String.format("%.1f", secs) + " "
-                            + I18n.t("sql.exec.elapsed", "秒") + ")");
+                    timeLabel.setText(String.format("%.1fs", secs));
                 })
         );
         timer.setCycleCount(javafx.animation.Timeline.INDEFINITE);
         timer.play();
-
-        stopBtn.setOnAction(se -> {
-            aiSqlCancelled = true;
-            if (aiSqlFuture != null) aiSqlFuture.cancel(true);
-            timer.stop();
-            dialog.getStage().close();
-        });
 
         aiSqlFuture = AppExecutor.submit(() -> {
             try {
@@ -904,6 +887,10 @@ public class SqlTabController {
             case "convertInformix" -> "You are a database migration expert. Convert the following SQL to Informix-compatible syntax. "
                     + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
             case "convertPostgresql" -> "You are a database migration expert. Convert the following SQL to PostgreSQL-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "convertSqlserver" -> "You are a database migration expert. Convert the following SQL to SQL Server-compatible syntax. "
+                    + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
+            case "convertSqlite" -> "You are a database migration expert. Convert the following SQL to SQLite-compatible syntax. "
                     + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
             default -> sqlText;
         };
