@@ -833,7 +833,7 @@ public class MainController {
 
     private void initBackgroundTasks() {
         //清理sql历史记录保留1000行
-        AppExecutor.runAsync(() -> LocalDbRepository.deleteSqlHistory());
+        AppExecutor.runAsync(() -> { LocalDbRepository.deleteSqlHistory(); LocalDbRepository.migrateTConnectTable(); });
         //运行一次搜索，避免首次搜索慢
         AppExecutor.runAsync(() -> MarkdownSearchUtil.warmUpIndex());
     }

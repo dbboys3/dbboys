@@ -21,6 +21,22 @@ public  class LocalDbRepository {
     private static Connection conn = com.dbboys.infra.db.LocalDbConnection.get();
 
     //初始化数据库，在恢复出厂设置时调用
+    public static void migrateTConnectTable() {
+        String[][] sshColumns = {
+            {"c_ssh_host", "varchar(100)"},
+            {"c_ssh_port", "varchar(10)"},
+            {"c_ssh_user", "varchar(100)"},
+            {"c_ssh_password", "varchar(100)"},
+            {"c_ssh_enabled", "varchar(2)"}
+        };
+        for (String[] col : sshColumns) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("ALTER TABLE t_connect ADD COLUMN " + col[0] + " " + col[1]);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     public static boolean initDB()   {
         boolean success = false;
         try {
