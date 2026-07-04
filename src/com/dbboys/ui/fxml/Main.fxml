@@ -11,6 +11,7 @@
 <!--xmlns用于声明默认命名空间，这里的声明随着你安装的Java JDK版本号的不同可以不同，但是最好不要比你安装的JDK版本高-->
 <?import com.dbboys.ui.component.CustomLabelTextField?>
 <?import com.dbboys.ui.component.CustomShortcutMenuItem?>
+<?import com.dbboys.ui.component.CustomMenu?>
 <?import com.dbboys.ui.component.CustomUserTextarea?>
 <?import com.dbboys.ui.component.CustomUserTextField?>
 <?import com.dbboys.ui.component.CustomTreeviewTab?>
@@ -34,8 +35,8 @@
                             </CustomShortcutMenuItem>
                             <CustomShortcutMenuItem fx:id="menuFileOpenSql" mnemonicParsing="false" onAction="#openSqlFile">
                             </CustomShortcutMenuItem>
-                            <Menu fx:id="menuFileRecent" mnemonicParsing="false">
-                            </Menu>
+                            <CustomMenu fx:id="menuFileRecent" mnemonicParsing="false">
+                            </CustomMenu>
                         </items>
                     </Menu>
                     <Menu fx:id="menuConfig" mnemonicParsing="false">
@@ -48,30 +49,30 @@
                             <MenuItem mnemonicParsing="false"  text="安装MYSQL ( coding )">
                             </MenuItem>
                             -->
-                            <Menu fx:id="menuConfigInformix" mnemonicParsing="false">
+                            <CustomMenu fx:id="menuConfigInformix" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuConfigInstallInformix" mnemonicParsing="false" onAction="#installInformix">
                                     </CustomShortcutMenuItem>
                                     <CustomShortcutMenuItem fx:id="menuConfigUninstallInformix" mnemonicParsing="false" onAction="#unInstallInformix">
                                     </CustomShortcutMenuItem>
                                 </items>
-                            </Menu>
-                            <Menu fx:id="menuConfigMysql" mnemonicParsing="false">
+                            </CustomMenu>
+                            <CustomMenu fx:id="menuConfigMysql" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuConfigInstallMysql" mnemonicParsing="false" onAction="#installMysql">
                                     </CustomShortcutMenuItem>
                                     <CustomShortcutMenuItem fx:id="menuConfigUninstallMysql" mnemonicParsing="false" onAction="#unInstallMysql">
                                     </CustomShortcutMenuItem>
                                 </items>
-                            </Menu>
-                            <Menu fx:id="menuConfigGbase" mnemonicParsing="false">
+                            </CustomMenu>
+                            <CustomMenu fx:id="menuConfigGbase" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuConfigInstallGbase" mnemonicParsing="false" onAction="#installGBase8S">
                                     </CustomShortcutMenuItem>
                                     <CustomShortcutMenuItem fx:id="menuConfigUninstallGbase" mnemonicParsing="false" onAction="#unInstallGBase8S">
                                     </CustomShortcutMenuItem>
                                 </items>
-                            </Menu>
+                            </CustomMenu>
 
                             <!--
                             <MenuItem mnemonicParsing="false"  text="安装PG(Install POSTGRESQL)">
@@ -86,19 +87,19 @@
                     </Menu>
                     <Menu fx:id="menuSettings" mnemonicParsing="false" >
                         <items>
-                            <Menu fx:id="menuSettingsLanguage" mnemonicParsing="false">
+                            <CustomMenu fx:id="menuSettingsLanguage" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuSettingsLanguageZh" mnemonicParsing="false" onAction="#setLanguageZh"/>
                                     <CustomShortcutMenuItem fx:id="menuSettingsLanguageEn" mnemonicParsing="false" onAction="#setLanguageEn"/>
                                     <CustomShortcutMenuItem fx:id="menuSettingsLanguageZhTw" mnemonicParsing="false" onAction="#setLanguageZhHant"/>
                                 </items>
-                            </Menu>
-                            <Menu fx:id="menuSettingsTheme" mnemonicParsing="false">
+                            </CustomMenu>
+                            <CustomMenu fx:id="menuSettingsTheme" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuSettingsThemeDark" mnemonicParsing="false" onAction="#setThemeDark"/>
                                     <CustomShortcutMenuItem fx:id="menuSettingsThemeLight" mnemonicParsing="false" onAction="#setThemeLight"/>
                                 </items>
-                            </Menu>
+                            </CustomMenu>
                             <CustomShortcutMenuItem fx:id="menuSettingsReset" mnemonicParsing="false"  id="settingMenu" onAction="#initDB">
                             </CustomShortcutMenuItem>
                         </items>

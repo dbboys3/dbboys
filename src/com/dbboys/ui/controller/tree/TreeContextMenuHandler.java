@@ -127,7 +127,7 @@ public class TreeContextMenuHandler {
         //setDefaultDatabaseItem.disableProperty().bind(trans_not_committed_buttons_hbox.visibleProperty());
         SeparatorMenuItem separator1 = new SeparatorMenuItem(); // 第一个分隔线
         SeparatorMenuItem separator2 = new SeparatorMenuItem();
-        Menu exportMenu = new Menu();
+        Menu exportMenu = new CustomMenu();
         exportMenu.textProperty().bind(I18n.bind("metadata.menu.export", "导出数据"));
         exportMenu.setGraphic(IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.6, 0.6));
         CustomShortcutMenuItem importDataItem = MenuItemUtil.createMenuItemI18n("metadata.menu.import_data",
@@ -147,11 +147,11 @@ public class TreeContextMenuHandler {
                 IconFactory.group(IconPaths.METADATA_ONCONFIG_ITEM, 0.55, 0.55));
         CustomShortcutMenuItem instanceStopItem = MenuItemUtil.createMenuItemI18n("metadata.menu.instance_start_stop",
                 IconFactory.groupFixedColor(IconPaths.METADATA_INSTANCE_STOP_ITEM, 0.65, 0.65, IconFactory.stopColor()));
-        Menu instanceManagementMenu = new Menu();
+        Menu instanceManagementMenu = new CustomMenu();
         instanceManagementMenu.textProperty().bind(I18n.bind("metadata.menu.instance_management", "实例管理"));
         instanceManagementMenu.setGraphic(IconFactory.group(IconPaths.METADATA_CONNECT_INFO_ITEM, 0.55, 0.55));
 
-        Menu ddlMenu = new Menu();
+        Menu ddlMenu = new CustomMenu();
         ddlMenu.textProperty().bind(I18n.bind("metadata.menu.ddl.title", "查看DDL"));
         ddlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
@@ -167,7 +167,7 @@ public class TreeContextMenuHandler {
                 MenuItemUtil.createMenuItemI18n("metadata.menu.ddl.to_popup_window", null);
         ddlMenu.getItems().addAll(ddlToClipboard,ddlToPopuWindow,ddlToFile,ddlToCurrentSqlEditarea,ddlToNewSqlEditarea);
 
-        Menu importMenu = new Menu();
+        Menu importMenu = new CustomMenu();
         importMenu.textProperty().bind(I18n.bind("metadata.menu.import", "导入"));
         importMenu.setGraphic(IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
 
@@ -178,7 +178,7 @@ public class TreeContextMenuHandler {
                 MenuItemUtil.createMenuItemI18n("metadata.menu.import_ddl_data",
                         IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
 
-        Menu exportDdlMenu = new Menu();
+        Menu exportDdlMenu = new CustomMenu();
         exportDdlMenu.textProperty().bind(I18n.bind("metadata.menu.export_ddl.title", "导出DDL"));
         exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
@@ -200,63 +200,9 @@ public class TreeContextMenuHandler {
         exportDdlMenu.getItems().addAll(exportDdlToClipboard, exportDdlToPopupWindow, exportDdlToFile,
                 exportDdlToCurrentSqlEditarea, exportDdlToNewSqlEditarea);
 
-        ddlMenu.showingProperty().addListener((obs, was, now) -> {
-            if (now && exportMenu.isShowing()) exportMenu.hide();
-            if (now && importMenu.isShowing()) importMenu.hide();
-            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
-            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
-        });
-        exportMenu.showingProperty().addListener((obs, was, now) -> {
-            if (now && ddlMenu.isShowing()) ddlMenu.hide();
-            if (now && importMenu.isShowing()) importMenu.hide();
-            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
-            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
-        });
-        importMenu.showingProperty().addListener((obs, was, now) -> {
-            if (now && ddlMenu.isShowing()) ddlMenu.hide();
-            if (now && exportMenu.isShowing()) exportMenu.hide();
-            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
-            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
-        });
-        exportDdlMenu.showingProperty().addListener((obs, was, now) -> {
-            if (now && ddlMenu.isShowing()) ddlMenu.hide();
-            if (now && importMenu.isShowing()) importMenu.hide();
-            if (now && exportMenu.isShowing()) exportMenu.hide();
-            if (now && instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
-        });
-        instanceManagementMenu.showingProperty().addListener((obs, was, now) -> {
-            if (now && ddlMenu.isShowing()) ddlMenu.hide();
-            if (now && exportMenu.isShowing()) exportMenu.hide();
-            if (now && importMenu.isShowing()) importMenu.hide();
-            if (now && exportDdlMenu.isShowing()) exportDdlMenu.hide();
-        });
-
-        treeview_menu.skinProperty().addListener((obs, oldSkin, newSkin) -> {
-            if (newSkin == null) return;
-            Node skinRoot = newSkin.getNode();
-            skinRoot.addEventFilter(MouseEvent.MOUSE_ENTERED_TARGET, event -> {
-                if (!ddlMenu.isShowing()
-                        && !exportMenu.isShowing()
-                        && !importMenu.isShowing()
-                        && !exportDdlMenu.isShowing()
-                        && !instanceManagementMenu.isShowing()) return;
-                Node target = (Node) event.getTarget();
-                while (target != null && target != skinRoot) {
-                    if (target.getStyleClass().contains("menu-item")) {
-                        if (!target.getStyleClass().contains("menu")) {
-                            if (ddlMenu.isShowing()) ddlMenu.hide();
-                            if (exportMenu.isShowing()) exportMenu.hide();
-                            if (importMenu.isShowing()) importMenu.hide();
-                            if (exportDdlMenu.isShowing()) exportDdlMenu.hide();
-                            if (instanceManagementMenu.isShowing()) instanceManagementMenu.hide();
-                        }
-                        return;
-                    }
-                    target = target.getParent();
-                }
-            });
-        });
-        
+        // CustomMenu handles hover-to-close automatically.
+        // Install the shared filter the first time any submenu shows.
+        treeview_menu.setOnShowing(e -> CustomMenu.installOn(ddlMenu));
 
         exportCsvItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.CSV));
         exportJsonItem.setOnAction(ev -> TreeCrudHandler.exportTableData(treeView.getSelectionModel().getSelectedItems(), TreeCrudHandler.ExportFormat.JSON));

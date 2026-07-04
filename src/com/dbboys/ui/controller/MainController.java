@@ -442,10 +442,11 @@ public class MainController {
     private void installMenuActions() {
         newSqlFileMenuItem.setOnAction(event -> {
             TabpaneUtil.addCustomSqlTab(null);});
-        installSettingsMenuBehavior();
-        installConfigMenuBehavior();
-        // Recent files submenu: use the same hover-hide behavior as language/theme submenus.
-        installHoverHideMenuBehavior(menuFile, "menuFileRecentHoverHide", menuFileRecent);
+        // CustomMenu handles hover-to-close submenus automatically.
+        // Each parent menu just needs to install the shared filter once on first show.
+        menuFile.setOnShowing(e -> CustomMenu.installOn(menuFileRecent));
+        menuConfig.setOnShowing(e -> CustomMenu.installOn(menuConfigInformix));
+        menuSettings.setOnShowing(e -> CustomMenu.installOn(menuSettingsLanguage));
     }
 
     // --- Recent files persistence (user temp dir) ---
@@ -641,97 +642,6 @@ public class MainController {
         } catch (Exception e) {
             log.error("Failed to restore open tabs.", e);
         }
-    }
-
-    private void installSettingsMenuBehavior() {
-        installHoverHideMenuBehavior(menuSettings, "settingsMenuHoverFixInstalled", menuSettingsLanguage, menuSettingsTheme);
-    }
-
-    private void installConfigMenuBehavior() {
-        installHoverHideMenuBehavior(menuConfig, "configMenuHoverFixInstalled", menuConfigInformix, menuConfigMysql, menuConfigGbase);
-    }
-
-    private void installHoverHideMenuBehavior(Menu ownerMenu, String propertyKey, Menu... submenus) {
-        ownerMenu.setOnShowing(event -> {
-            if (submenus == null || submenus.length == 0) {
-                return;
-            }
-            ContextMenu parentPopup = null;
-            for (Menu submenu : submenus) {
-                if (submenu != null && submenu.getParentPopup() != null) {
-                    parentPopup = submenu.getParentPopup();
-                    break;
-                }
-            }
-            if (parentPopup == null || parentPopup.getProperties().containsKey(propertyKey)) {
-                return;
-            }
-            parentPopup.getProperties().put(propertyKey, Boolean.TRUE);
-            parentPopup.skinProperty().addListener((obs, oldSkin, newSkin) -> {
-                if (newSkin != null) {
-                    attachMenuHoverHideFilter(newSkin.getNode(), submenus);
-                }
-            });
-            if (parentPopup.getSkin() != null) {
-                attachMenuHoverHideFilter(parentPopup.getSkin().getNode(), submenus);
-            }
-        });
-    }
-
-    private void attachMenuHoverHideFilter(Node skinRoot, Menu... submenus) {
-        if (skinRoot == null || Boolean.TRUE.equals(skinRoot.getProperties().get("hoverHideFilterInstalled"))) {
-            return;
-        }
-        skinRoot.getProperties().put("hoverHideFilterInstalled", Boolean.TRUE);
-        skinRoot.addEventFilter(MouseEvent.MOUSE_ENTERED_TARGET, mouseEvent -> {
-            if (!(mouseEvent.getTarget() instanceof Node target)) {
-                return;
-            }
-            Node menuItemNode = findAncestorMenuItem(target, skinRoot);
-            if (menuItemNode == null) {
-                return;
-            }
-            for (Menu submenu : submenus) {
-                if (submenu != null && submenu.isShowing() && !isMenuItemNodeForMenu(menuItemNode, submenu)) {
-                    submenu.hide();
-                }
-            }
-        });
-    }
-
-    private Node findAncestorMenuItem(Node target, Node skinRoot) {
-        Node current = target;
-        while (current != null && current != skinRoot) {
-            if (current.getStyleClass().contains("menu-item")) {
-                return current;
-            }
-            current = current.getParent();
-        }
-        return null;
-    }
-
-    private boolean isMenuItemNodeForMenu(Node menuItemNode, Menu menu) {
-        return menu != null
-                && menuItemNode != null
-                && menu.getText() != null
-                && nodeContainsText(menuItemNode, menu.getText());
-    }
-
-    private boolean nodeContainsText(Node node, String text) {
-        if (node == null || text == null) {
-            return false;
-        }
-        if (node instanceof Labeled labeled && text.equals(labeled.getText())) {
-            return true;
-        }
-        if (node instanceof Parent parent) {
-            for (Node child : parent.getChildrenUnmodifiable()) {
-                if (nodeContainsText(child, text)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private void initI18nBindings() {
