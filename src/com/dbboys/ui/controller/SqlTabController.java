@@ -33,6 +33,8 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.shape.SVGPath;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
@@ -791,27 +793,34 @@ public class SqlTabController {
         final String sqlText = selectedText;
         final String prompt = buildAiSqlPrompt(actionKey, sqlText);
 
-        // Build standalone AI progress dialog
+        // Inline progress overlay — same style as CreateConnect connectingHBox
+        ImageView loadingIcon = new ImageView(new Image(IconPaths.LOADING_GIF));
+        loadingIcon.setFitHeight(12);
+        loadingIcon.setFitWidth(12);
+        loadingIcon.setPreserveRatio(true);
+
         Label statusLabel = new Label(actionLabel + " - " + I18n.t("sql.ai.thinking"));
-        statusLabel.setWrapText(true);
-        Label timeLabel = new Label("0.0 " + I18n.t("sql.exec.elapsed", "秒"));
-        timeLabel.getStyleClass().add("ai-time-label");
 
         Button stopBtn = new Button(I18n.t("ai.button.stop", "停止"));
-        stopBtn.getStyleClass().add("accent");
-        stopBtn.setGraphic(IconFactory.groupFixedColor(IconPaths.AI_STOP, 0.5, IconFactory.stopColor()));
+        stopBtn.getStyleClass().add("small");
+        stopBtn.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
+        Tooltip stopTooltip = new Tooltip(I18n.t("sql.ai.stop.tooltip", "停止 AI 操作"));
+        stopBtn.setTooltip(stopTooltip);
 
-        HBox bottomRow = new HBox(8, stopBtn);
-        bottomRow.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        HBox statusBox = new HBox(loadingIcon, statusLabel, stopBtn);
+        statusBox.getStyleClass().add("modal-progress-card-padded");
+        statusBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        statusBox.setMaxHeight(24);
 
-        VBox content = new VBox(12, statusLabel, timeLabel, bottomRow);
-        content.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        content.setPadding(new javafx.geometry.Insets(16));
-        content.setPrefWidth(480);
+        VBox overlay = new VBox(statusBox);
+        overlay.getStyleClass().add("modal-progress-overlay");
+        overlay.setAlignment(javafx.geometry.Pos.CENTER);
+        overlay.setPrefHeight(60);
+        overlay.setPadding(new javafx.geometry.Insets(0, 20, 0, 20));
 
         ButtonType cancelType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                actionLabel, content, 500, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
+                actionLabel, overlay, 500, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
         dialog.getStage().setOnCloseRequest(we -> {
             aiSqlCancelled = true;
             if (aiSqlFuture != null) aiSqlFuture.cancel(true);
@@ -824,7 +833,9 @@ public class SqlTabController {
         javafx.animation.Timeline timer = new javafx.animation.Timeline(
                 new javafx.animation.KeyFrame(Duration.millis(200), te -> {
                     double secs = (System.currentTimeMillis() - startMs[0]) / 1000.0;
-                    timeLabel.setText(String.format("%.1f 秒", secs));
+                    statusLabel.setText(actionLabel + " - " + I18n.t("sql.ai.thinking")
+                            + "  (" + String.format("%.1f", secs) + " "
+                            + I18n.t("sql.exec.elapsed", "秒") + ")");
                 })
         );
         timer.setCycleCount(javafx.animation.Timeline.INDEFINITE);
@@ -833,9 +844,8 @@ public class SqlTabController {
         stopBtn.setOnAction(se -> {
             aiSqlCancelled = true;
             if (aiSqlFuture != null) aiSqlFuture.cancel(true);
-            statusLabel.setText(I18n.t("sql.ai.aborted"));
             timer.stop();
-            stopBtn.setDisable(true);
+            dialog.getStage().close();
         });
 
         aiSqlFuture = AppExecutor.submit(() -> {
@@ -843,30 +853,25 @@ public class SqlTabController {
                 String result = AiApiUtil.chat(prompt);
                 Platform.runLater(() -> {
                     timer.stop();
-                    if (aiSqlCancelled) {
-                        return;
-                    }
+                    if (aiSqlCancelled) return;
                     if (result == null || result.isEmpty()) {
-                        statusLabel.setText(I18n.t("ai.notice.api_error"));
-                        stopBtn.setText(I18n.t("common.confirm", "确定"));
-                        stopBtn.setGraphic(null);
-                        stopBtn.setOnAction(ce -> dialog.getStage().close());
+                        AlertUtil.CustomAlert(I18n.t("common.error"),
+                                I18n.t("ai.notice.api_error"));
+                        dialog.getStage().close();
                         return;
                     }
                     sqlEditCodeArea.replaceSelection(result);
-                    statusLabel.setText(actionLabel + " " + I18n.t("sql.exec.success"));
-                    stopBtn.setText(I18n.t("common.confirm", "确定"));
-                    stopBtn.setGraphic(null);
-                    stopBtn.setOnAction(ce -> dialog.getStage().close());
+                    dialog.getStage().close();
+                    NotificationUtil.showMainNotification(
+                            actionLabel + " " + I18n.t("sql.exec.success"));
                 });
             } catch (Exception ex) {
                 log.error("AI SQL action failed", ex);
                 Platform.runLater(() -> {
                     timer.stop();
-                    statusLabel.setText(I18n.t("ai.notice.api_error"));
-                    stopBtn.setText(I18n.t("common.confirm", "确定"));
-                    stopBtn.setGraphic(null);
-                    stopBtn.setOnAction(ce -> dialog.getStage().close());
+                    AlertUtil.CustomAlert(I18n.t("common.error"),
+                            I18n.t("ai.notice.api_error"));
+                    dialog.getStage().close();
                 });
             }
         });
