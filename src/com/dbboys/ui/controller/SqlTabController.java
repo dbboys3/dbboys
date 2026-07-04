@@ -798,23 +798,24 @@ public class SqlTabController {
         final String sqlText = selectedText;
         final String prompt = buildAiSqlPrompt(actionKey, sqlText);
 
-        // Simple progress dialog — loading icon + elapsed time only, no border/background/stop button
-        HBox progressRow = new HBox(8);
-        progressRow.setAlignment(javafx.geometry.Pos.CENTER);
+        // Simple progress row — loading icon + thinking text + elapsed time
+        HBox progressRow = new HBox(6);
+        progressRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         ImageView loadingIcon = new ImageView(new Image(IconPaths.LOADING_GIF));
-        loadingIcon.setFitHeight(16);
-        loadingIcon.setFitWidth(16);
+        loadingIcon.setFitHeight(13);
+        loadingIcon.setFitWidth(13);
         loadingIcon.setPreserveRatio(true);
 
-        Label timeLabel = new Label("0.0s");
+        Label statusLabel = new Label();
+        statusLabel.textProperty().bind(I18n.bind("sql.ai.thinking", "AI 助手正在思考..."));
+        Label timeLabel = new Label(I18n.t("sql.ai.elapsed", "耗时 0.0s"));
 
-        progressRow.getChildren().addAll(loadingIcon, timeLabel);
-        progressRow.setPadding(new javafx.geometry.Insets(12, 24, 12, 24));
+        progressRow.getChildren().addAll(loadingIcon, statusLabel, timeLabel);
 
         ButtonType cancelType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                actionLabel, progressRow, 300, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
+                actionLabel, progressRow, 380, javafx.scene.layout.Region.USE_COMPUTED_SIZE, cancelType);
         dialog.getStage().setOnCloseRequest(we -> {
             aiSqlCancelled = true;
             if (aiSqlFuture != null) aiSqlFuture.cancel(true);
@@ -827,7 +828,7 @@ public class SqlTabController {
         javafx.animation.Timeline timer = new javafx.animation.Timeline(
                 new javafx.animation.KeyFrame(Duration.millis(200), te -> {
                     double secs = (System.currentTimeMillis() - startMs[0]) / 1000.0;
-                    timeLabel.setText(String.format("%.1fs", secs));
+                    timeLabel.setText(I18n.t("sql.ai.elapsed", "耗时 %.1fs").formatted(secs));
                 })
         );
         timer.setCycleCount(javafx.animation.Timeline.INDEFINITE);
@@ -847,8 +848,6 @@ public class SqlTabController {
                     }
                     sqlEditCodeArea.replaceSelection(result);
                     dialog.getStage().close();
-                    NotificationUtil.showMainNotification(
-                            actionLabel + " " + I18n.t("sql.exec.success"));
                 });
             } catch (Exception ex) {
                 log.error("AI SQL action failed", ex);
