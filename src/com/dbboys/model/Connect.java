@@ -48,6 +48,11 @@ public class Connect extends TreeData{
     private StringProperty  drivermd5=new SimpleStringProperty();
     private StringProperty  dbversion=new SimpleStringProperty();
     private BooleanProperty readonly=new SimpleBooleanProperty();
+    private StringProperty  sshHost=new SimpleStringProperty();
+    private StringProperty  sshPort=new SimpleStringProperty();
+    private StringProperty  sshUser=new SimpleStringProperty();
+    private StringProperty  sshPassword=new SimpleStringProperty();
+    private BooleanProperty sshEnabled=new SimpleBooleanProperty();
     private volatile boolean keepAliveEnabled;
     private volatile ScheduledFuture<?> keepAliveFuture;
     /** 进程内首次读取 CONNECT_KEEPALIVE_SECONDS 后的快照；Long.MIN_VALUE 表示尚未读取。 */
@@ -79,6 +84,11 @@ public class Connect extends TreeData{
         setDrivermd5(connect.getDrivermd5());
         setDbversion(connect.getDbversion());
         setReadonly(connect.getReadonly());
+        setSshHost(connect.getSshHost());
+        setSshPort(connect.getSshPort());
+        setSshUser(connect.getSshUser());
+        setSshPassword(connect.getSshPassword());
+        setSshEnabled(connect.getSshEnabled());
         keepAliveEnabled = connect.keepAliveEnabled;
     }
 
@@ -311,6 +321,56 @@ public class Connect extends TreeData{
 
     public void setReadonly(Boolean readonly) {
         this.readonly.set(readonly);
+    }
+
+    public String getSshHost() {
+        return sshHost.get();
+    }
+    public StringProperty sshHostProperty() {
+        return sshHost;
+    }
+    public void setSshHost(String sshHost) {
+        this.sshHost.set(sshHost);
+    }
+
+    public String getSshPort() {
+        return sshPort.get();
+    }
+    public StringProperty sshPortProperty() {
+        return sshPort;
+    }
+    public void setSshPort(String sshPort) {
+        this.sshPort.set(sshPort);
+    }
+
+    public String getSshUser() {
+        return sshUser.get();
+    }
+    public StringProperty sshUserProperty() {
+        return sshUser;
+    }
+    public void setSshUser(String sshUser) {
+        this.sshUser.set(sshUser);
+    }
+
+    public String getSshPassword() {
+        return sshPassword.get();
+    }
+    public StringProperty sshPasswordProperty() {
+        return sshPassword;
+    }
+    public void setSshPassword(String sshPassword) {
+        this.sshPassword.set(sshPassword);
+    }
+
+    public Boolean getSshEnabled() {
+        return sshEnabled.get();
+    }
+    public BooleanProperty sshEnabledProperty() {
+        return sshEnabled;
+    }
+    public void setSshEnabled(Boolean sshEnabled) {
+        this.sshEnabled.set(sshEnabled);
     }
     public String toString(){
         return getName();

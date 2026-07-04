@@ -9,6 +9,9 @@ import com.dbboys.core.NamedServerConnectionCapability;
 import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.MD5Util;
+import com.dbboys.infra.util.SshTunnel;
+import com.dbboys.infra.util.SshTunnelUtil;
+import com.dbboys.infra.util.SshConnectionWrapper;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.*;
 
@@ -48,15 +51,51 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public Connection createConnection(Connect connect) throws Exception {
-        DatabasePlatform dialect = platformResolver.requirePlatform(connect);
-        ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
-        Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
-        Properties info = buildConnectionProperties(connect, false);
-        Connection conn = driver.connect(params.getUrl(), info);
-        if (conn == null) {
-            throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
+        SshTunnel tunnel = null;
+        String originalIp = null;
+        String originalPort = null;
+        try {
+            if (connect.getSshEnabled() != null && connect.getSshEnabled()) {
+                originalIp = connect.getIp();
+                originalPort = connect.getPort();
+                int sshPort = connect.getSshPort() != null && !connect.getSshPort().isBlank()
+                        ? Integer.parseInt(connect.getSshPort().trim()) : 22;
+                int remotePort = originalPort != null && !originalPort.isBlank()
+                        ? Integer.parseInt(originalPort.trim()) : 0;
+                tunnel = SshTunnelUtil.createTunnel(
+                        connect.getSshHost(), sshPort,
+                        connect.getSshUser(), connect.getSshPassword(),
+                        originalIp, remotePort);
+                // Point JDBC to local tunnel endpoint
+                connect.setIp("127.0.0.1");
+                connect.setPort(String.valueOf(tunnel.getLocalPort()));
+            }
+            DatabasePlatform dialect = platformResolver.requirePlatform(connect);
+            ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
+            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
+            Properties info = buildConnectionProperties(connect, false);
+            Connection conn = driver.connect(params.getUrl(), info);
+            if (conn == null) {
+                throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
+            }
+            if (tunnel != null) {
+                conn = new SshConnectionWrapper(conn, tunnel);
+            }
+            return conn;
+        } catch (Exception e) {
+            if (tunnel != null) {
+                SshTunnelUtil.closeTunnel(tunnel);
+            }
+            throw e;
+        } finally {
+            // Restore original ip/port on the Connect object
+            if (originalIp != null) {
+                connect.setIp(originalIp);
+            }
+            if (originalPort != null) {
+                connect.setPort(originalPort);
+            }
         }
-        return conn;
     }
 
     private static Properties buildConnectionProperties(Connect connect, boolean ignoreTrimTrailingSpaces) {
@@ -104,16 +143,50 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     public Connection getConnectionWithSessionInit(Connect connect) throws Exception {
-        DatabasePlatform dialect = platformResolver.requirePlatform(connect);
-        ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
-        Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
-        Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
-        Connection conn = driver.connect(params.getUrl(), info);
-        if (conn == null) {
-            throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
+        SshTunnel tunnel = null;
+        String originalIp = null;
+        String originalPort = null;
+        try {
+            if (connect.getSshEnabled() != null && connect.getSshEnabled()) {
+                originalIp = connect.getIp();
+                originalPort = connect.getPort();
+                int sshPort = connect.getSshPort() != null && !connect.getSshPort().isBlank()
+                        ? Integer.parseInt(connect.getSshPort().trim()) : 22;
+                int remotePort = originalPort != null && !originalPort.isBlank()
+                        ? Integer.parseInt(originalPort.trim()) : 0;
+                tunnel = SshTunnelUtil.createTunnel(
+                        connect.getSshHost(), sshPort,
+                        connect.getSshUser(), connect.getSshPassword(),
+                        originalIp, remotePort);
+                connect.setIp("127.0.0.1");
+                connect.setPort(String.valueOf(tunnel.getLocalPort()));
+            }
+            DatabasePlatform dialect = platformResolver.requirePlatform(connect);
+            ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
+            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
+            Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
+            Connection conn = driver.connect(params.getUrl(), info);
+            if (conn == null) {
+                throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
+            }
+            if (tunnel != null) {
+                conn = new SshConnectionWrapper(conn, tunnel);
+            }
+            initializeSessionIfSupported(connect, conn);
+            return conn;
+        } catch (Exception e) {
+            if (tunnel != null) {
+                SshTunnelUtil.closeTunnel(tunnel);
+            }
+            throw e;
+        } finally {
+            if (originalIp != null) {
+                connect.setIp(originalIp);
+            }
+            if (originalPort != null) {
+                connect.setPort(originalPort);
+            }
         }
-        initializeSessionIfSupported(connect, conn);
-        return conn;
     }
 
     private String buildDriverRejectedUrlMessage(ConnectionSupport.ConnectionParams params, Driver driver) {

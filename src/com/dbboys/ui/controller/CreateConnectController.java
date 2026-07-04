@@ -101,6 +101,20 @@ public class CreateConnectController {
     @FXML
     private Button switchGroupOrIP;
     @FXML
+    private TabPane connectTabPane;
+    @FXML
+    private Tab connectBasicTab;
+    @FXML
+    private Tab sshTab;
+    @FXML
+    private CustomUserTextField sshHostTextField;
+    @FXML
+    private CustomUserTextField sshPortTextField;
+    @FXML
+    private CustomUserTextField sshUserTextField;
+    @FXML
+    private PasswordField sshPasswordTextField;
+    @FXML
     private ButtonType commitButtonType;
     @FXML
     private ButtonType testButtonType;
@@ -266,6 +280,14 @@ public class CreateConnectController {
                         usernameTextField.setText(fromUrl);
                     }
                 }
+                // Populate SSH fields if editing a connection with SSH enabled
+                sshHostTextField.setText(Objects.toString(persisted.getSshHost(), ""));
+                sshPortTextField.setText(Objects.toString(persisted.getSshPort(), "22"));
+                sshUserTextField.setText(Objects.toString(persisted.getSshUser(), ""));
+                sshPasswordTextField.setText(Objects.toString(persisted.getSshPassword(), ""));
+                if (persisted.getSshEnabled() != null && persisted.getSshEnabled()) {
+                    connectTabPane.getSelectionModel().select(sshTab);
+                }
             }
 
             int i=0;
@@ -284,7 +306,9 @@ public class CreateConnectController {
         refreshInstanceField(dbTypeChoiceBox.getValue(), connect.getCatalog());
         applyTextFormatters();
 
-
+        // Bind i18n tab titles
+        connectBasicTab.textProperty().bind(I18n.bind("createconnect.tab.basic", "数据库连接"));
+        sshTab.textProperty().bind(I18n.bind("createconnect.tab.ssh", "SSH 隧道"));
 
         Button tryConnectButton = (Button) dialogPane.lookupButton(testButtonType);
         tryConnectButton.disableProperty().bind(connectingHBox.visibleProperty());
@@ -392,7 +416,16 @@ public class CreateConnectController {
         connect.setUsername(username);
         connect.setPassword(passwordTextField.getText());
         connect.setReadonly(readOnlyCheckBox.isSelected());
-            
+
+        // SSH: enabled if any field is filled, regardless of which tab is active
+        boolean hasSshConfig = !sshHostTextField.getText().isBlank()
+                || !sshUserTextField.getText().isBlank()
+                || !sshPasswordTextField.getText().isBlank();
+        connect.setSshEnabled(hasSshConfig);
+        connect.setSshHost(sshHostTextField.getText());
+        connect.setSshPort(sshPortTextField.getText());
+        connect.setSshUser(sshUserTextField.getText());
+        connect.setSshPassword(sshPasswordTextField.getText());
     }
     public boolean checkInput(){
         if(isOracleDbType(dbTypeChoiceBox.getValue())){
@@ -632,18 +665,7 @@ public class CreateConnectController {
     }
 
     private void setupIcons() {
-
-        connectNameLabel.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.5));
-        connectFolderLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_FOLDER, 0.4));
-        dbTypeLabel.setGraphic(IconFactory.group(IconPaths.SQL_DATABASE, 0.4));
-        driverLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_DRIVER, 0.05));
-        ipAddressLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6));
-        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45));
-        groupLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_GROUP, 0.55));
-        usernameLabel.setGraphic(IconFactory.group(IconPaths.SQL_USER, 0.5));
-        passwordLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5));
-        readOnlyCheckBox.setGraphic(IconFactory.group(IconPaths.SQL_READONLY, 0.5));
-
+        // Label icons removed per user request — keep only button icons
         addDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.7));
         deleteDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.6));
         modifyDriverButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));

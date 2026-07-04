@@ -30,6 +30,12 @@ public  class LocalDbRepository {
             statement.executeUpdate("drop table if exists t_sqlhistory");
             statement.executeUpdate("create table if not exists t_connect_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
             statement.executeUpdate("create table if not exists t_connect(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid int,c_name varchar(100),c_dbtype varchar(50),c_dbversion varchar(100),c_driver varchar(100),c_drivermd5 varchar(100),c_ip varchar(50),c_port varchar(50),c_database varchar(100),c_readonly varchar(2),c_username varchar(50),c_password varchar(50),c_props varchar(3200),c_info varchar(3200))");
+            // Migrate: add SSH columns if they don't exist (safe to run on existing DBs)
+            try { statement.executeUpdate("alter table t_connect add column c_ssh_host varchar(100)"); } catch (Exception ignored) {}
+            try { statement.executeUpdate("alter table t_connect add column c_ssh_port varchar(10)"); } catch (Exception ignored) {}
+            try { statement.executeUpdate("alter table t_connect add column c_ssh_user varchar(100)"); } catch (Exception ignored) {}
+            try { statement.executeUpdate("alter table t_connect add column c_ssh_password varchar(100)"); } catch (Exception ignored) {}
+            try { statement.executeUpdate("alter table t_connect add column c_ssh_enabled varchar(2)"); } catch (Exception ignored) {}
             statement.executeUpdate("create table if not exists t_sqlhistory(c_connectid INTEGER,c_database varchar(50),c_sql varchar(32000),c_starttime varchar(20),c_endtime varchar(20),c_elapsedtime varchar(20),c_affect int,c_mark varchar(100))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             //statement.executeUpdate("INSERT INTO t_connect(c_parentid,c_level,c_name,c_expand,c_dbtype,c_ip,c_port,c_username,c_password) VALUES (2,3, '核心业务系统',0,'GBASE 8S','192.168.17.123','9088','gbasedbt','GBase123')");
@@ -189,7 +195,7 @@ public  class LocalDbRepository {
         PreparedStatement psmt = null;
         try {
             com.dbboys.app.AppContext.get(ConnectionService.class).setConnectInfo(connect);
-            psmt=conn.prepareStatement("insert into t_connect(c_parentid,c_name,c_dbtype,c_driver,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_props,c_info,c_drivermd5,c_dbversion) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            psmt=conn.prepareStatement("insert into t_connect(c_parentid,c_name,c_dbtype,c_driver,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_props,c_info,c_drivermd5,c_dbversion,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_enabled) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             psmt.setObject(1, connect.getParentId());
             psmt.setObject(2, connect.getName());
             psmt.setObject(3, connect.getDbtype());
@@ -204,6 +210,11 @@ public  class LocalDbRepository {
             psmt.setObject(12, connect.getInfo());
             psmt.setObject(13, connect.getDrivermd5());
             psmt.setObject(14, connect.getDbversion());
+            psmt.setObject(15, connect.getSshHost());
+            psmt.setObject(16, connect.getSshPort());
+            psmt.setObject(17, connect.getSshUser());
+            psmt.setObject(18, connect.getSshPassword());
+            psmt.setObject(19, connect.getSshEnabled()?"1":"0");
 
             psmt.executeUpdate();
             psmt=conn.prepareStatement("select max(c_id) from t_connect");
@@ -281,6 +292,12 @@ public  class LocalDbRepository {
                 connect.setDrivermd5(rs.getString(13));
                 connect.setDbversion(rs.getString(14));
                 connect.setReadonly(Boolean.valueOf(String.valueOf(rs.getString(15).equals("1")?true:false)));
+                // SSH columns may not exist yet (migration done in initDB)
+                try { connect.setSshHost(rs.getString(16)); } catch (Exception ignored) {}
+                try { connect.setSshPort(rs.getString(17)); } catch (Exception ignored) {}
+                try { connect.setSshUser(rs.getString(18)); } catch (Exception ignored) {}
+                try { connect.setSshPassword(rs.getString(19)); } catch (Exception ignored) {}
+                try { connect.setSshEnabled(rs.getString(20) != null && rs.getString(20).equals("1")); } catch (Exception ignored) {}
                 connectLeafList.add(connect);
             }
         } catch (Exception e) {
@@ -351,12 +368,17 @@ public  class LocalDbRepository {
                boolean success = false;
                PreparedStatement psmt = null;
                try {
-                   psmt= conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_database=?,c_props=? where c_id=?");
+                   psmt= conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_database=?,c_props=?,c_ssh_host=?,c_ssh_port=?,c_ssh_user=?,c_ssh_password=?,c_ssh_enabled=? where c_id=?");
                    psmt.setInt(1,connect.getParentId());
                    psmt.setString(2,connect.getName());
                    psmt.setString(3,connect.getCatalog());
                    psmt.setString(4,connect.getProps());
-                   psmt.setInt(5,connect.getId());
+                   psmt.setString(5,connect.getSshHost());
+                   psmt.setString(6,connect.getSshPort());
+                   psmt.setString(7,connect.getSshUser());
+                   psmt.setString(8,connect.getSshPassword());
+                   psmt.setString(9,connect.getSshEnabled()?"1":"0");
+                   psmt.setInt(10,connect.getId());
                    psmt.executeUpdate();
                    success = true;
                } catch (Exception e) {

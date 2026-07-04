@@ -16,92 +16,118 @@
 <DialogPane fx:id="dialogPane" fx:controller="com.dbboys.ui.controller.CreateConnectController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
     <content>
         <StackPane>
-        <VBox >
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="connectNameLabel" text="%createconnect.label.name" prefWidth="100">
-                </Label>
-                <CustomUserTextField fx:id="connectNameTextField" promptText="%createconnect.prompt.connect_name" prefWidth="315"></CustomUserTextField>
-            </HBox>
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="connectFolderLabel" text="%createconnect.label.folder" prefWidth="100">
-                </Label>
-                <ChoiceBox fx:id="connectFolderChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
-                </ChoiceBox>
-            </HBox>
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="dbTypeLabel" text="%createconnect.label.db_type" prefWidth="100">
-                </Label>
-                <ChoiceBox fx:id="dbTypeChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
-                </ChoiceBox>
-            </HBox>
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="driverLabel" text="%createconnect.label.driver" prefWidth="100">
-                </Label>
-                <ChoiceBox fx:id="driverChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
-                </ChoiceBox>
-                <Label text=" "></Label>
-                <Button fx:id="addDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#addDriverClicked" styleClass="custom-button-with-radius">
-                    <tooltip>
-                        <Tooltip text="%createconnect.tooltip.add_driver"/>
-                    </tooltip>
-                </Button>
-                <Label text=" "></Label>
-                <Button fx:id="deleteDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#deleteDriverClicked" styleClass="custom-button-with-radius">
-                    <tooltip>
-                        <Tooltip text="%createconnect.tooltip.delete_driver"/>
-                    </tooltip>
-                </Button>
-                <Label text=" "></Label>
-                <Button fx:id="modifyDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyDriverProps" styleClass="custom-button-with-radius">
-                    <tooltip>
-                        <Tooltip text="%createconnect.tooltip.edit_driver_props"/>
-                    </tooltip>
-                </Button>
-            </HBox>
-            <StackPane prefHeight="30" alignment="CENTER_LEFT">
-                <HBox prefHeight="30" alignment="CENTER_LEFT">
-                    <Label fx:id="ipAddressLabel" text="%createconnect.label.ip" prefWidth="100">
-                    </Label>
-                    <CustomUserTextField fx:id="ipAddressTextField" promptText="%createconnect.prompt.ip" prefWidth="200"></CustomUserTextField>
-                    <Label text="" prefWidth="10"></Label>
-                    <Label fx:id="portLabel" text="%createconnect.label.port">
-                    </Label>
-                    <CustomUserTextField fx:id="portTextField" promptText="%createconnect.prompt.port" prefWidth="48"></CustomUserTextField>
-                    <HBox alignment="CENTER_LEFT" fx:id="instanceHBox" spacing="8">
-                    </HBox>
-                </HBox>
-                <HBox fx:id="groupHbox" prefHeight="30" alignment="CENTER_LEFT" visible="false">
-                    <Label fx:id="groupLabel" text="%createconnect.label.group" prefWidth="100">
-                    </Label>
-                    <CustomUserTextField fx:id="groupTextField" text="db_group" promptText="%createconnect.prompt.group" prefWidth="200"></CustomUserTextField>
-                    <Label text=" "></Label>
-                    <Button fx:id="modifyGroupButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyGroupProps" styleClass="custom-button-with-radius">
-                    <tooltip>
-                        <Tooltip text="%createconnect.tooltip.edit_group_props"/>
-                    </tooltip>
-                    </Button>
-                </HBox>
-                <Button fx:id="switchGroupOrIP" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius" StackPane.alignment="CENTER_RIGHT" onAction="#switchGroupOrIP">
-                    <tooltip>
-                        <Tooltip text="%createconnect.tooltip.switch_group_or_ip"/>
-                    </tooltip>
-                </Button>
-                
-            </StackPane>
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="usernameLabel" text="%createconnect.label.username" prefWidth="100">
-                </Label>
-                <CustomUserTextField fx:id="usernameTextField" promptText="%createconnect.prompt.username" prefWidth="200"></CustomUserTextField>
-            </HBox>
-            <HBox prefHeight="30" alignment="CENTER_LEFT">
-                <Label fx:id="passwordLabel" text="%createconnect.label.password" prefWidth="100">
-                </Label>
-                <CustomPasswordField fx:id="passwordTextField" promptText="%createconnect.prompt.password" prefWidth="200"></CustomPasswordField>
-                <Label text="  "></Label>
-                <CheckBox fx:id="readOnlyCheckBox" text="%createconnect.label.read_only">
-                </CheckBox>
-            </HBox>
-        </VBox>
+            <TabPane fx:id="connectTabPane" tabClosingPolicy="UNAVAILABLE">
+                <Tab fx:id="connectBasicTab" closable="false">
+                    <VBox style="-fx-padding: 10 18 10 18;">
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="connectNameLabel" text="%createconnect.label.name" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="connectNameTextField" promptText="%createconnect.prompt.connect_name" prefWidth="315"></CustomUserTextField>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="connectFolderLabel" text="%createconnect.label.folder" prefWidth="80">
+                            </Label>
+                            <ChoiceBox fx:id="connectFolderChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
+                            </ChoiceBox>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="dbTypeLabel" text="%createconnect.label.db_type" prefWidth="80">
+                            </Label>
+                            <ChoiceBox fx:id="dbTypeChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
+                            </ChoiceBox>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="driverLabel" text="%createconnect.label.driver" prefWidth="80">
+                            </Label>
+                            <ChoiceBox fx:id="driverChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
+                            </ChoiceBox>
+                            <Label text=" "></Label>
+                            <Button fx:id="addDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#addDriverClicked" styleClass="custom-button-with-radius">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.add_driver"/>
+                                </tooltip>
+                            </Button>
+                            <Label text=" "></Label>
+                            <Button fx:id="deleteDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#deleteDriverClicked" styleClass="custom-button-with-radius">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.delete_driver"/>
+                                </tooltip>
+                            </Button>
+                            <Label text=" "></Label>
+                            <Button fx:id="modifyDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyDriverProps" styleClass="custom-button-with-radius">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.edit_driver_props"/>
+                                </tooltip>
+                            </Button>
+                        </HBox>
+                        <StackPane prefHeight="30" alignment="CENTER_LEFT">
+                            <HBox prefHeight="30" alignment="CENTER_LEFT">
+                                <Label fx:id="ipAddressLabel" text="%createconnect.label.ip" prefWidth="80">
+                                </Label>
+                                <CustomUserTextField fx:id="ipAddressTextField" promptText="%createconnect.prompt.ip" prefWidth="200"></CustomUserTextField>
+                                <Label text="" prefWidth="10"></Label>
+                                <Label fx:id="portLabel" text="%createconnect.label.port">
+                                </Label>
+                                <CustomUserTextField fx:id="portTextField" promptText="%createconnect.prompt.port" prefWidth="48"></CustomUserTextField>
+                                <HBox alignment="CENTER_LEFT" fx:id="instanceHBox" spacing="8">
+                                </HBox>
+                            </HBox>
+                            <HBox fx:id="groupHbox" prefHeight="30" alignment="CENTER_LEFT" visible="false">
+                                <Label fx:id="groupLabel" text="%createconnect.label.group" prefWidth="80">
+                                </Label>
+                                <CustomUserTextField fx:id="groupTextField" text="db_group" promptText="%createconnect.prompt.group" prefWidth="200"></CustomUserTextField>
+                                <Label text=" "></Label>
+                                <Button fx:id="modifyGroupButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyGroupProps" styleClass="custom-button-with-radius">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.edit_group_props"/>
+                                </tooltip>
+                                </Button>
+                            </HBox>
+                            <Button fx:id="switchGroupOrIP" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius" StackPane.alignment="CENTER_RIGHT" onAction="#switchGroupOrIP">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.switch_group_or_ip"/>
+                                </tooltip>
+                            </Button>
+                        </StackPane>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="usernameLabel" text="%createconnect.label.username" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="usernameTextField" promptText="%createconnect.prompt.username" prefWidth="200"></CustomUserTextField>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="passwordLabel" text="%createconnect.label.password" prefWidth="80">
+                            </Label>
+                            <CustomPasswordField fx:id="passwordTextField" promptText="%createconnect.prompt.password" prefWidth="200"></CustomPasswordField>
+                            <Label text="  "></Label>
+                            <CheckBox fx:id="readOnlyCheckBox" text="%createconnect.label.read_only">
+                            </CheckBox>
+                        </HBox>
+                    </VBox>
+                </Tab>
+                <Tab fx:id="sshTab" closable="false">
+                    <VBox style="-fx-padding: 10 18 10 18;">
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshHostLabel" text="%createconnect.label.ssh_host" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="sshHostTextField" promptText="%createconnect.prompt.ssh_host" prefWidth="200"></CustomUserTextField>
+                            <Label text="" prefWidth="10"></Label>
+                            <Label fx:id="sshPortLabel" text="%createconnect.label.ssh_port">
+                            </Label>
+                            <CustomUserTextField fx:id="sshPortTextField" promptText="%createconnect.prompt.ssh_port" prefWidth="48" text="22"></CustomUserTextField>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshUserLabel" text="%createconnect.label.ssh_user" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="sshUserTextField" promptText="%createconnect.prompt.ssh_user" prefWidth="200"></CustomUserTextField>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshPasswordLabel" text="%createconnect.label.ssh_password" prefWidth="80">
+                            </Label>
+                            <CustomPasswordField fx:id="sshPasswordTextField" promptText="%createconnect.prompt.ssh_password" prefWidth="200"></CustomPasswordField>
+                        </HBox>
+                    </VBox>
+                </Tab>
+            </TabPane>
             <HBox fx:id="connectingHBox" alignment="CENTER" visible="false">
                 <HBox fx:id="connectingStatusBox" maxWidth="100" maxHeight="15" alignment="CENTER">
                 <ImageView fx:id="connectingLoadingImageView" fitHeight="12" fitWidth="12">
