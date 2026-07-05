@@ -1,3 +1,7 @@
 db_group	group	-	-
 gbase01	onsoctcp	192.168.17.110	9088	g=db_group
 gbase02	onsoctcp	192.168.17.111	9088	g=db_group
+
+db_group1	group	-	-
+gbase01	onsoctcp	192.168.17.101	9088	g=db_group1
+gbase02	onsoctcp	192.168.17.102	9088	g=db_group1
