@@ -19,7 +19,7 @@ import java.nio.file.Path;
 public final class SqliteDialect implements DatabasePlatform, ConnectionSupport {
     private static final String DB_TYPE = "SQLITE";
     private static final String DRIVER_CLASS = "org.sqlite.JDBC";
-    private static final String DEFAULT_DRIVER = "sqlite-jdbc-3.44.1.0.jar";
+    private static final String DEFAULT_DRIVER = "sqlite-jdbc-3.46.0.0.jar";
 
     private final MetadataRepository metadataRepository = new SqliteMetadataRepository();
     private final SqlexeRepository sqlexeRepository = new SqliteSqlexeRepository();

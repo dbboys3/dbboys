@@ -789,6 +789,12 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.execute_sql",
                         "main.compatibility.feature.execution_plan",
                         "main.compatibility.feature.import_export")),
+                new CompatibilityRow("SQLITE", "3.46.0.0", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.metadata_list",
+                        "main.compatibility.feature.metadata_detail",
+                        "main.compatibility.feature.metadata_change",
+                        "main.compatibility.feature.execute_sql",
+                        "main.compatibility.feature.import_export")),
                 new CompatibilityRow("GENERAL JDBC", "JDBC 4.x", compatibilityFeaturesByKey(
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.execute_sql"))
@@ -820,7 +826,9 @@ public class PopupWindowUtil {
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeatures(
-                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出"))
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
+                new CompatibilityRow("SQLITE", "3.46.0.0", compatibilityFeatures(
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "导入导出"))
         );
     }
 
