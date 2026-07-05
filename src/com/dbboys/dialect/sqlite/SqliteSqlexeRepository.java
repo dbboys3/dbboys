@@ -1,4 +1,4 @@
-﻿package com.dbboys.dialect.sqlite;
+package com.dbboys.dialect.sqlite;
 
 import com.dbboys.core.SqlexeRepository;
 import java.sql.Connection;
