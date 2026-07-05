@@ -90,20 +90,53 @@ public final class SqliteMetadataRepository implements MetadataRepository {
 
     @Override public String getTableComment(Connection conn, String tableName) { return ""; }
 
-    @Override public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
+    @Override     public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
         ArrayList<ColumnsInfo> columns = new ArrayList<>();
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {
             while (rs.next()) {
                 ColumnsInfo col = new ColumnsInfo();
                 col.setColName(rs.getString("name"));
-                col.setColType(rs.getString("type") == null ? "TEXT" : rs.getString("type"));
+                parseAndSetType(col, rs.getString("type"));
                 col.setIsNullable(rs.getInt("notnull") == 0);
                 col.setColDef(rs.getString("dflt_value"));
                 columns.add(col);
             }
         }
         return columns;
+    }
+
+    private static void parseAndSetType(ColumnsInfo col, String rawType) {
+        if (rawType == null || rawType.isBlank()) {
+            col.setColType("TEXT");
+            return;
+        }
+        String trimmed = rawType.trim();
+        int parenIdx = trimmed.indexOf('(');
+        if (parenIdx < 0) {
+            // Plain type like TEXT, INTEGER — no length/scale
+            col.setColType(trimmed);
+            return;
+        }
+        // Extract base type
+        String baseType = trimmed.substring(0, parenIdx).trim();
+        col.setColType(baseType);
+        // Extract length and optional scale from parentheses
+        String params = trimmed.substring(parenIdx + 1, trimmed.lastIndexOf(')'));
+        String[] parts = params.split(",");
+        try {
+            int len = Integer.parseInt(parts[0].trim());
+            col.setTypeP(len);
+            if (parts.length > 1) {
+                int scale = Integer.parseInt(parts[1].trim());
+                col.setTypeS(scale);
+            }
+        } catch (NumberFormatException e) {
+            // Fall back to keeping the original raw type string if parsing fails
+            col.setColType(trimmed);
+            col.setTypeP(0);
+            col.setTypeS(0);
+        }
     }
 
     @Override

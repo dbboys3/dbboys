@@ -155,6 +155,30 @@ public interface ConnectionSupport {
         return jsonArray.toString();
     }
 
+
+
+    // === ALTER TABLE capability hints and platform-specific SQL ===
+
+    default boolean supportsModifyColumn() {
+        return true;
+    }
+
+    default boolean supportsCommentOnTable() {
+        return true;
+    }
+
+    default String renameColumnSql(String tableName, String oldName, String newName) {
+        return "RENAME COLUMN " + tableName + "." + oldName + " TO " + newName;
+    }
+
+    default String renameTableSql(String oldName, String newName) {
+        return "RENAME TABLE " + oldName + " TO " + newName;
+    }
+
+    default String dropColumnSql(String tableName, String columnName) {
+        return "ALTER TABLE " + tableName + " DROP " + columnName;
+    }
+
     final class ConnectionParams {
         private final String url;
         private final String driverClassName;

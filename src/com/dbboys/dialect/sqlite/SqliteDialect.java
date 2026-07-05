@@ -101,6 +101,29 @@ public final class SqliteDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
+    public boolean supportsModifyColumn() { return false; }
+
+    @Override
+    public boolean supportsCommentOnTable() { return false; }
+
+    @Override
+    public String renameColumnSql(String tableName, String oldName, String newName) {
+        return "ALTER TABLE " + tableName + " RENAME COLUMN " + oldName + " TO " + newName;
+    }
+
+    @Override
+    public String renameTableSql(String oldName, String newName) {
+        return "ALTER TABLE " + oldName + " RENAME TO " + newName;
+    }
+
+    @Override
+    public String dropColumnSql(String tableName, String columnName) {
+        return "ALTER TABLE " + tableName + " DROP COLUMN " + columnName;
+    }
+
+
+
+    @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
         String filePath = connect.getIp() == null || connect.getIp().isBlank()
                 ? "test.db" : connect.getIp().trim();
