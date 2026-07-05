@@ -64,7 +64,7 @@ public final class SqliteDialect implements DatabasePlatform, ConnectionSupport 
 
     @Override
     public IconInfo iconInfo() {
-        return new IconInfo(IconPaths.CONNECTION_LINK, 0.55, 0.55);
+        return new IconInfo(IconPaths.SQLITE_LOGO, 0.023, 0.023);
     }
 
     @Override
