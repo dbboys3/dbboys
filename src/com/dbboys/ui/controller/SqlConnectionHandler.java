@@ -16,6 +16,7 @@ import com.dbboys.infra.util.SqlErrorUtil;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Catalog;
 import com.dbboys.model.TreeData;
+import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
 import com.dbboys.ui.component.completion.provider.SchemaObjectsFetcher;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -242,6 +243,19 @@ public class SqlConnectionHandler {
     private void selectCurrentDatabase() {
         String sessionDb = ctrl.sqlConnect.getSessionCatalog();
         if (sessionDb == null || sessionDb.isBlank()) {
+            sessionDb = ctrl.sqlConnect.getCatalog();
+        }
+        if ((sessionDb == null || sessionDb.isBlank())
+                && "GENERAL JDBC".equalsIgnoreCase(ctrl.sqlConnect.getDbtype())) {
+            sessionDb = GeneralJdbcDialect.suggestedDatabaseFromJdbcUrl(ctrl.sqlConnect.getIp());
+        }
+        if (sessionDb != null) {
+            int colonIdx = sessionDb.indexOf(":GBASEDBT");
+            if (colonIdx >= 0) {
+                sessionDb = sessionDb.substring(0, colonIdx);
+            }
+        }
+        if (sessionDb == null || sessionDb.isBlank()) {
             return;
         }
         int i = 0;
@@ -256,8 +270,6 @@ public class SqlConnectionHandler {
 
     public void setupDatabaseListener() {
         ctrl.sqlDbChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            log.info("oldvalue is:" + oldValue);
-            log.info("newValue is:" + newValue);
             if (ctrl.suppressDbChange) {
                 return;
             }

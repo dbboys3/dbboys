@@ -289,6 +289,41 @@ public final class GeneralJdbcDialect implements DatabasePlatform, ConnectionSup
         }
     }
 
+    /**
+     * Extract the database name from a JDBC URL (the path segment after the last "/").
+     * e.g. jdbc:postgresql://127.0.0.1:5432/mydb -> mydb.
+     * Also handles SQL Server "databaseName" parameter syntax.
+     * Returns null when no database name can be inferred.
+     */
+    public static String suggestedDatabaseFromJdbcUrl(String jdbcUrl) {
+        String u = trimToEmpty(jdbcUrl);
+        if (u.isEmpty()) {
+            return null;
+        }
+        // Try SQL Server style: ;databaseName=xxx or ;Database=xxx
+        java.util.regex.Matcher ssMatcher = java.util.regex.Pattern.compile(
+                "(?i);\\s*(database|db|databasename)\\s*=\\s*([^;&?#]+)").matcher(u);
+        if (ssMatcher.find()) {
+            String db = ssMatcher.group(2).trim();
+            return db.isEmpty() ? null : db;
+        }
+        // Common format: .../databaseName[?param][;param]
+        int slash = u.lastIndexOf('/');
+        if (slash < 0 || slash == u.length() - 1) {
+            return null;
+        }
+        int end = u.length();
+        for (int k = slash + 1; k < u.length(); k++) {
+            char c = u.charAt(k);
+            if (c == '?' || c == ';' || c == '#') {
+                end = k;
+                break;
+            }
+        }
+        String db = u.substring(slash + 1, end).trim();
+        return db.isEmpty() ? null : db;
+    }
+
     private static int authorityEnd(String u, int start) {
         for (int k = start; k < u.length(); k++) {
             char c = u.charAt(k);
