@@ -142,5 +142,7 @@
   -color-modal-progress-stop-icon: -color-danger-fg;
   -color-modal-progress-stop-icon-hover: -color-danger-5;
   -color-install-step-current-icon: -color-accent-4;
+  -color-cell-border-selected-focused: white;
+
 }
 

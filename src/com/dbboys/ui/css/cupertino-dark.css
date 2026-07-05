@@ -128,6 +128,7 @@
   -color-modal-progress-stop-icon: -color-danger-fg;
   -color-modal-progress-stop-icon-hover: -color-danger-5;
   -color-install-step-current-icon: -color-accent-fg;
+  -color-cell-border-selected-focused: -color-fg-default;
   -fx-background-radius: inherit;
   -fx-background-insets: inherit;
   -fx-padding: inherit;

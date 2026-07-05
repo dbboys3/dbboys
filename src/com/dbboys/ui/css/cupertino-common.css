@@ -891,7 +891,7 @@ Text {
   -fx-background-color: -color-cell-bg-selected;
   -fx-background-insets: 0;
   -fx-border-width: 0.5 0.5 0.5 0.5;
-  -fx-border-color: -color-cell-border-selected;
+  -fx-border-color: -color-cell-border-selected-focused;
 }
 
 .table-view:focused > .virtual-flow > .clipped-container > .sheet > .table-row-cell .table-cell:selected,
@@ -973,8 +973,6 @@ Text {
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
  -color-cell-border: -color-table-border;
-  -color-cell-border-selected: -color-accent-2;
-  -color-cell-border-selected-focused: -color-accent-2;
  -color-disclosure: -color-fg-muted;
   -fx-border-color: -color-cell-border;
   -fx-border-width: 1px;
@@ -1042,8 +1040,6 @@ Text {
   -color-cell-fg-selected-focused: -color-selection-fg;
   -color-cell-bg-odd: -color-bg-subtle;
   -color-cell-border: -color-table-border;
-  -color-cell-border-selected: -color-accent-2;
-  -color-cell-border-selected-focused: -color-accent-2;
   -color-disclosure: -color-fg-muted;
   -fx-focus-color: transparent;
   -fx-faint-focus-color: transparent;
