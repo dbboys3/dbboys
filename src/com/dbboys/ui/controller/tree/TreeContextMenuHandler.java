@@ -1832,6 +1832,7 @@ public class TreeContextMenuHandler {
             Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
             String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
             connect.setCatalog(resolveFallbackDatabase(connect));
+            connect.setSessionCatalog("");
             ConnectionPropertyUtil.applySupportedConnectionProperty(
                     TreeViewUtil.connectionService,
                     resolvePlatformResolver(),
