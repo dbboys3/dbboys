@@ -386,6 +386,8 @@ public class CustomMarkdownTab extends CustomTab{
 
         if (filePath.isBlank()) {
             FileChooser fileChooser = new FileChooser();
+        File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+        if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("markdown.tab.save_dialog_title", "保存文件"));
             fileChooser.setInitialFileName(getTitle().replace("*", ""));
             File filename = fileChooser.showSaveDialog(AppState.getWindow());

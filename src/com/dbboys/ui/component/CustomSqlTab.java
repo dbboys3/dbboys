@@ -112,6 +112,8 @@ public class CustomSqlTab extends CustomTab{
         String content = sqlTabController.sqlEditCodeArea.getText();
         if (filePath.isEmpty()) {
             FileChooser fileChooser = new FileChooser();
+        File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+        if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
             fileChooser.setTitle(I18n.t("sql.tab.save_dialog_title", "保存文件"));
             fileChooser.setInitialFileName(getBaseTitle());
             File file = fileChooser.showSaveDialog(AppState.getWindow());

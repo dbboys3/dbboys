@@ -183,6 +183,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         if(DOC_TYPES.contains(ext)||ext.equals("md")){
                             saveAsItem.setOnAction(ev -> {
                                 FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
                                 fileChooser.setTitle(I18n.t("genericstyled.filechooser.save_link_content"));
                                 String defaultName;
                                 try {
@@ -517,6 +519,8 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
     private void saveImageAs(String source, boolean isHttpLink) {
         FileChooser fileChooser = new FileChooser();
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
         fileChooser.setTitle(I18n.t("genericstyled.filechooser.image_save_as"));
         try {
             fileChooser.setInitialFileName(resolveDownloadFileName(source, isHttpLink));

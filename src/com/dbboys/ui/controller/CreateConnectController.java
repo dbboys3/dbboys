@@ -381,6 +381,8 @@ public class CreateConnectController {
         }
         sqliteBrowseButton.setOnAction(e -> {
                 FileChooser fileChooser = new FileChooser();
+                File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+                if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
                 String currentDbType = dbTypeChoiceBox.getValue();
                 com.dbboys.core.DatabasePlatform browserDialect = resolvePlatformResolver().getPlatform(currentDbType);
                 if (browserDialect != null) {

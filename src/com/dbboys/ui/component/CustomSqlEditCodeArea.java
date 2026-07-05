@@ -277,6 +277,8 @@ public class CustomSqlEditCodeArea extends CodeArea {
             // 智能补全触发：字母、数字、下划线、点�?-> 50ms 防抖后弹�?
             if (c == '.' || Character.isLetterOrDigit(c) || c == '_') {
                 scheduleCompletion();
+            } else {
+                completionPopup.hide();
             }
         });
 

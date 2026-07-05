@@ -898,7 +898,8 @@ public class MainController {
         fileChooser.setTitle(I18n.t("main.filechooser.select_sql"));
         File scriptsDir = new File("scripts");
         if (scriptsDir.isDirectory()) {
-            fileChooser.setInitialDirectory(scriptsDir);
+            File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
+            if (desktopDir.exists()) fileChooser.setInitialDirectory(desktopDir);
         }
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQL Files", "*.sql"));
         List<File> selectedFiles = fileChooser.showOpenMultipleDialog(AppState.getWindow());
