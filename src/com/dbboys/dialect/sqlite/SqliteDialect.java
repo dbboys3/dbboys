@@ -117,8 +117,34 @@ public final class SqliteDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
-    public String dropColumnSql(String tableName, String columnName) {
-        return "ALTER TABLE " + tableName + " DROP COLUMN " + columnName;
+   public String dropColumnSql(String tableName, String columnName) {
+       return "ALTER TABLE " + tableName + " DROP COLUMN " + columnName;
+   }
+    @Override
+   public String addColumnsSql(String tableName, java.util.List<String> columnDefs) {
+       if (columnDefs == null || columnDefs.isEmpty()) {
+           return "";
+       }
+       java.util.List<String> stmts = new java.util.ArrayList<>();
+       for (String def : columnDefs) {
+           stmts.add("ALTER TABLE " + tableName + " ADD " + def);
+       }
+       return String.join(";\n", stmts);
+   }
+    @Override
+   public String dropColumnsSql(String tableName, java.util.List<String> columnNames) {
+       if (columnNames == null || columnNames.isEmpty()) {
+           return "";
+       }
+       java.util.List<String> stmts = new java.util.ArrayList<>();
+       for (String col : columnNames) {
+           stmts.add("ALTER TABLE " + tableName + " DROP COLUMN " + col);
+       }
+       return String.join(";\n", stmts);
+   }
+    @Override
+    public String modifyColumnsSql(String tableName, java.util.List<String> columnDefs) {
+        return ""; // SQLite does not support ALTER TABLE MODIFY
     }
 
 

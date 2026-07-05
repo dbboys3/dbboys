@@ -167,7 +167,14 @@ public class CustomTableInfoTab extends CustomTab {
                 column.setCellValueFactory(data -> Bindings.createObjectBinding(() -> data.getValue().get(columnIndex)));
                 column.setCellFactory(col -> new CustomLostFocusCommitTableCell<ObservableList<String>, String>());
                 column.setSortable(false);
-                column.setEditable(true);
+               column.setEditable(true);
+                if (columnIndex == 8) {
+                    try {
+                        column.setEditable(platformResolver.requirePlatform(connect).connection().supportsCommentOnTable());
+                    } catch (Exception ignored) {
+                        // keep editable
+                    }
+                }
                 column.setOnEditCommit(event -> {
                     // 获取当前行的模型数据（ObservableList<String>）
                     ObservableList<String> rowData = event.getRowValue();
@@ -557,8 +564,14 @@ public class CustomTableInfoTab extends CustomTab {
             deleteColumnButton.setDisable(true);
             colsTableView.setEditable(false);
             tableNameField.setDisable(true);
-            tableCommentField.setDisable(true);
-        }
+           tableCommentField.setDisable(true);
+       }
+        // Disable table comment for databases that don't support COMMENT ON TABLE (e.g. SQLite)
+        try {
+            if (!platformResolver.requirePlatform(connect).connection().supportsCommentOnTable()) {
+                tableCommentField.setDisable(true);
+            }
+        } catch (Exception ignored) {}
     }
 
     private boolean showSaveSqlConfirmDialog(List<String> sqlList) {
@@ -1095,7 +1108,14 @@ public List<String> generateAlterTableSQL() {
                 autoIncrementChanged = !safeEquals(currentRow.get(6), originalRow.get(6));
             }
             if (currentRow.size() > 7 && originalRow.size() > 7) {
-                defaultChanged = !safeEquals(currentRow.get(7), originalRow.get(7));
+               defaultChanged = !safeEquals(currentRow.get(7), originalRow.get(7));
+           }
+            // Skip MODIFY SQL for databases that don't support ALTER TABLE MODIFY (e.g. SQLite)
+            if (!supportsModifyColumn()) {
+                boolean hasModifyChange = typeChanged || lengthChanged || scaleChanged || notNullChanged || defaultChanged;
+                if (hasModifyChange) {
+                    continue;
+                }
             }
 
             if (supportsEditableAutoIncrement()) {
@@ -1135,20 +1155,13 @@ public List<String> generateAlterTableSQL() {
         }
     }
 
-    // MySQL: 多条 MODIFY COLUMN 合并为一条 ALTER TABLE
-    if (!mysqlModifyDefs.isEmpty()) {
-        String merged = "ALTER TABLE " + tableName + " "
-                + mysqlModifyDefs.stream()
-                .map(def -> "MODIFY COLUMN " + def)
-                .collect(Collectors.joining(", "))
-                + ";";
-        addSql(sqlList, merged);
-    }
-
-    // Informix/GBase: 多条 MODIFY 合并为一条
-    if (!modifyDefs.isEmpty()) {
-        String modifySQL = "ALTER TABLE " + tableName + " MODIFY (" + String.join(", ", modifyDefs) + ");";
-        addSql(sqlList, modifySQL);
+    // MODIFY columns via dialect
+    if (!mysqlModifyDefs.isEmpty() || !modifyDefs.isEmpty()) {
+        List<String> allModifyDefs = mysqlModifyDefs.isEmpty() ? modifyDefs : mysqlModifyDefs;
+        String sql = dialectModifyColumnsSql(tableName, allModifyDefs);
+        if (sql != null && !sql.isEmpty()) {
+            addSql(sqlList, sql);
+        }
     }
 
     // 新增列：多个列合并为一个 ALTER TABLE ADD (...)
@@ -1286,7 +1299,12 @@ private void addSql(List<String> sqlList, String sql) {
  * @return 重命名列的SQL语句
  */
 private String generateRenameColumnSQL(String schemaName, String tableName, 
-                                      String oldColumnName, String newColumnName) {
+                                     String oldColumnName, String newColumnName) {
+    try {
+        com.dbboys.core.ConnectionSupport cs = platformResolver.requirePlatform(connect).connection();
+        return cs.renameColumnSql(tableName, oldColumnName, newColumnName) + ";";
+    } catch (Exception ignored) {
+    }
     StringBuilder sqlBuilder = new StringBuilder();
     
     sqlBuilder.append("RENAME COLUMN ");
@@ -1498,8 +1516,12 @@ private String generateRenameTableSQL(String oldTableName, String newTableName) 
     }
     String oldName = oldTableName.trim();
     String newName = newTableName.trim();
-    if (oldName.isEmpty() || newName.isEmpty() || oldName.equals(newName)) {
-        return "";
+   if (oldName.isEmpty() || newName.isEmpty() || oldName.equals(newName)) {
+       return "";
+   }
+    try {
+        return platformResolver.requirePlatform(connect).connection().renameTableSql(oldName, newName) + ";";
+    } catch (Exception ignored) {
     }
     return "RENAME TABLE " + oldName + " TO " + newName + ";";
 }
@@ -1636,6 +1658,36 @@ private boolean supportsEditableAutoIncrement() {
     }
 }
 
+
+private boolean supportsModifyColumn() {
+    if (connect == null) {
+        return true;
+    }
+    try {
+        return platformResolver.requirePlatform(connect).connection().supportsModifyColumn();
+    } catch (Exception ignored) {
+        return true;
+    }
+}
+
+private String dialectAddColumnsSql(String tableName, java.util.List<String> columnDefs) {
+    try {
+        return platformResolver.requirePlatform(connect).connection().addColumnsSql(tableName, columnDefs);
+    } catch (Exception ignored) {
+        if (columnDefs == null || columnDefs.isEmpty()) return "";
+        if (columnDefs.size() == 1) return "ALTER TABLE " + tableName + " ADD " + columnDefs.get(0);
+        return "ALTER TABLE " + tableName + " ADD (" + String.join(", ", columnDefs) + ")";
+    }
+}
+
+private String dialectModifyColumnsSql(String tableName, java.util.List<String> columnDefs) {
+    try {
+        return platformResolver.requirePlatform(connect).connection().modifyColumnsSql(tableName, columnDefs);
+    } catch (Exception ignored) {
+        if (columnDefs == null || columnDefs.isEmpty()) return "";
+        return "ALTER TABLE " + tableName + " MODIFY (" + String.join(", ", columnDefs) + ")";
+    }
+}
 private String buildMysqlModifyColumnDefinition(String columnName, ObservableList<String> row) {
     if (columnName == null || columnName.isBlank() || row == null || row.size() < 2) {
         return null;
@@ -1869,19 +1921,16 @@ private String generateAddColumnsSQL(String schemaName, String tableName, List<O
     if (columnRows == null || columnRows.isEmpty()) {
         return "";
     }
-    if (columnRows.size() == 1) {
-        return generateAddColumnSQL(schemaName, tableName, columnRows.get(0));
-    }
+   if (columnRows.size() == 1) {
+       return generateAddColumnSQL(schemaName, tableName, columnRows.get(0));
+   }
 
-    StringBuilder sqlBuilder = new StringBuilder();
-    sqlBuilder.append("ALTER TABLE ").append(tableName).append(" ADD (");
-    for (int i = 0; i < columnRows.size(); i++) {
-        if (i > 0) {
-            sqlBuilder.append(", ");
-        }
-        sqlBuilder.append(buildAddColumnDefinition(columnRows.get(i)));
+    List<String> defs = new ArrayList<>();
+    for (ObservableList<String> row : columnRows) {
+        defs.add(buildAddColumnDefinition(row));
     }
-    sqlBuilder.append(");\n");
+    StringBuilder sqlBuilder = new StringBuilder();
+    sqlBuilder.append(dialectAddColumnsSql(tableName, defs)).append(";\n");
 
     for (ObservableList<String> row : columnRows) {
         String comment = row.get(8);
@@ -2031,22 +2080,21 @@ private String generateDropColumnsSQL(String schemaName, String tableName, List<
     if (columnNames == null || columnNames.isEmpty()) {
         return "";
     }
-    if (columnNames.size() == 1) {
-        return generateDropColumnSQL(schemaName, tableName, columnNames.get(0));
+   if (columnNames.size() == 1) {
+        try {
+            String sql = platformResolver.requirePlatform(connect).connection().dropColumnsSql(tableName, columnNames);
+            return sql.isEmpty() ? "" : sql + ";\n";
+        } catch (Exception ignored) {
+            return "ALTER TABLE " + tableName + " DROP " + columnNames.get(0) + ";\n";
+        }
     }
 
-    StringBuilder sqlBuilder = new StringBuilder();
-    sqlBuilder.append("ALTER TABLE ");
-    // 去掉schema引用
-    sqlBuilder.append(tableName).append(" DROP (");
-    for (int i = 0; i < columnNames.size(); i++) {
-        if (i > 0) {
-            sqlBuilder.append(",");
-        }
-        sqlBuilder.append(columnNames.get(i));
+    try {
+        String sql = platformResolver.requirePlatform(connect).connection().dropColumnsSql(tableName, columnNames);
+        return sql.isEmpty() ? "" : sql + ";\n";
+    } catch (Exception ignored) {
+        return "ALTER TABLE " + tableName + " DROP (" + String.join(", ", columnNames) + ");\n";
     }
-    sqlBuilder.append(");\n");
-    return sqlBuilder.toString();
 }
     
     private  Node createErrorNode(String mesg){
@@ -2057,5 +2105,4 @@ private String generateDropColumnsSQL(String schemaName, String tableName, List<
         return errorPane;
     }
 }
-
 

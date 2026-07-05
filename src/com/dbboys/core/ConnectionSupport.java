@@ -175,8 +175,47 @@ public interface ConnectionSupport {
         return "RENAME TABLE " + oldName + " TO " + newName;
     }
 
-    default String dropColumnSql(String tableName, String columnName) {
-        return "ALTER TABLE " + tableName + " DROP " + columnName;
+   default String dropColumnSql(String tableName, String columnName) {
+       return "ALTER TABLE " + tableName + " DROP " + columnName;
+   }
+    /**
+     * Returns the ALTER TABLE ADD statement(s) for adding multiple columns.
+     * Default implementation merges columns into a single ADD clause (Informix/GBase style).
+     * Override for dialects with different syntax (e.g. SQLite requires individual statements).
+     */
+    default String addColumnsSql(String tableName, java.util.List<String> columnDefs) {
+        if (columnDefs == null || columnDefs.isEmpty()) {
+            return "";
+        }
+        if (columnDefs.size() == 1) {
+            return "ALTER TABLE " + tableName + " ADD " + columnDefs.get(0);
+        }
+       return "ALTER TABLE " + tableName + " ADD (" + String.join(", ", columnDefs) + ")";
+   }
+    /**
+     * Returns the ALTER TABLE DROP statement(s) for dropping multiple columns.
+     * Default implementation merges columns into a single DROP clause (Informix/GBase style).
+     * Override for dialects with different syntax (e.g. SQLite requires individual statements).
+     */
+    default String dropColumnsSql(String tableName, java.util.List<String> columnNames) {
+        if (columnNames == null || columnNames.isEmpty()) {
+            return "";
+        }
+        if (columnNames.size() == 1) {
+            return "ALTER TABLE " + tableName + " DROP " + columnNames.get(0);
+        }
+       return "ALTER TABLE " + tableName + " DROP (" + String.join(", ", columnNames) + ")";
+   }
+    /**
+     * Returns the ALTER TABLE MODIFY statement(s) for modifying multiple column definitions.
+     * Default implementation uses Informix/GBase style: ALTER TABLE t MODIFY (col1 type, col2 type).
+     * Override for dialects with different syntax (e.g. MySQL uses MODIFY COLUMN, SQLite not supported).
+     */
+    default String modifyColumnsSql(String tableName, java.util.List<String> columnDefs) {
+        if (columnDefs == null || columnDefs.isEmpty()) {
+            return "";
+        }
+        return "ALTER TABLE " + tableName + " MODIFY (" + String.join(", ", columnDefs) + ")";
     }
 
     final class ConnectionParams {
