@@ -100,6 +100,8 @@ public class CreateConnectController {
     private Button modifyGroupButton;
     @FXML
     private Button switchGroupOrIP;
+    private Button sqliteBrowseButton;
+    private static final String BROWSE_ICON_PATH = "M9.8438 1.7184 Q12.0469 1.7184 13.9219 2.7965 Q15.7969 3.8746 16.8906 5.7496 Q18 7.609 18 9.8278 Q18 12.4684 16.4688 14.6246 L21.8906 20.0934 Q22.2656 20.4371 22.2812 20.9684 Q22.3125 21.484 21.9531 21.8746 Q21.5938 22.2496 21.0938 22.2809 Q20.5938 22.2965 20.2031 21.9684 L14.6406 16.4528 Q12.4844 17.984 9.8438 17.984 Q7.625 17.984 5.75 16.8903 Q3.8906 15.7809 2.8125 13.9059 Q1.7344 12.0309 1.7344 9.8278 Q1.7344 7.609 2.8125 5.7496 Q3.8906 3.8746 5.75 2.7965 Q7.625 1.7184 9.8438 1.7184 ZM9.8438 4.2496 Q8.3594 4.2496 7.0625 4.9996 Q5.7656 5.7496 5.0156 7.0465 Q4.2656 8.3434 4.2656 9.8278 Q4.2656 11.3121 5.0156 12.609 Q5.7656 13.9059 7.0625 14.6559 Q8.3594 15.3903 9.8594 15.3903 Q11.375 15.3903 12.6406 14.6559 Q13.9219 13.9059 14.6562 12.6403 Q15.4062 11.359 15.4062 9.859 Q15.4062 8.3434 14.6562 7.0778 Q13.9219 5.7965 12.6406 5.0309 Q11.375 4.2496 9.8438 4.2496 Z";
     @FXML
     private TabPane connectTabPane;
     @FXML
@@ -207,7 +209,7 @@ public class CreateConnectController {
 
         //driver增加监听，发生变化重置connect.driver
         driverChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable,oldValue,newValue)->{
-            //driverChoiceBox.setItems会触发此事件，此时newvalue==null，需要排除
+            //driverChoiceBox.setItems会触发此事件，此时newvalue==null，需要排�?
             if(newValue!=null){
                 connect.setDriver(newValue);
             } else {
@@ -239,7 +241,7 @@ public class CreateConnectController {
         //如果传了参数，可能树分类上右键新建连接或编辑连接，需将已有参数填充到表单
         if(treeDataParam!=null){
             String connectFolder=null;
-            //如果当前选中的元素级别为2，就是在分类上右键创建连接，默认选择对应的系统分类就行
+            //如果当前选中的元素级别为2，就是在分类上右键创建连接，默认选择对应的系统分类就�?
             if(treeDataParam instanceof ConnectFolder){
                 connectFolder=treeDataParam.getName();
             }else{
@@ -249,7 +251,7 @@ public class CreateConnectController {
                 usernameTextField.setText(((Connect) treeDataParam).getUsername());
                 passwordTextField.setText(((Connect) treeDataParam).getPassword());
                 readOnlyCheckBox.setSelected(((Connect) treeDataParam).getReadonly());
-                connect.setId(((Connect) treeDataParam).getId()); //用于检查连接名称是否已存在，如果是编辑，要排除自己的名字
+                connect.setId(((Connect) treeDataParam).getId()); //用于检查连接名称是否已存在，如果是编辑，要排除自己的名�?
                 connect.setCatalog(((Connect) treeDataParam).getCatalog());
                 int j=0;
                 ObservableList<String> items = dbTypeChoiceBox.getItems();
@@ -271,11 +273,11 @@ public class CreateConnectController {
 
                 selectChoiceValue(driverChoiceBox, ((Connect) treeDataParam).getDriver());
                 // applyDialectDefaults runs on db type change: if saved username equals the *previous* dialect's
-                // defaultUsername (e.g. gbasedbt), it is replaced with GENERAL JDBC's empty default — restore here.
+                // defaultUsername (e.g. gbasedbt), it is replaced with GENERAL JDBC's empty default �?restore here.
                 Connect persisted = (Connect) treeDataParam;
                 usernameTextField.setText(Objects.toString(persisted.getUsername(), ""));
                 passwordTextField.setText(Objects.toString(persisted.getPassword(), ""));
-                if (isGeneralJdbcDbType(persisted.getDbtype())
+                if (resolvePlatformResolver().getPlatform(persisted.getDbtype()) != null && resolvePlatformResolver().getPlatform(persisted.getDbtype()).connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT
                         && usernameTextField.getText().isBlank()) {
                     String fromUrl = GeneralJdbcDialect.suggestedUsernameFromJdbcUrl(ipAddressTextField.getText());
                     if (fromUrl != null && !fromUrl.isBlank()) {
@@ -322,7 +324,7 @@ public class CreateConnectController {
         applyTextFormatters();
 
         // Bind i18n tab titles
-        connectBasicTab.textProperty().bind(I18n.bind("createconnect.tab.basic", "数据库连接"));
+                connectBasicTab.textProperty().bind(I18n.bind("createconnect.tab.basic", "数据库连接"));
         sshTab.textProperty().bind(I18n.bind("createconnect.tab.ssh", "SSH 隧道"));
 
         Button tryConnectButton = (Button) dialogPane.lookupButton(testButtonType);
@@ -334,7 +336,7 @@ public class CreateConnectController {
             }else {
                 setConnect(connect);
                 
-                //如果连接信息可正常连接，检查连接名是否已存在
+                //如果连接信息可正常连接，检查连接名是否已存�?
                 commitConnecting(connect,false);
             }
             event.consume();
@@ -349,7 +351,7 @@ public class CreateConnectController {
                 event1.consume();
             }else {
                 setConnect(connect);
-                //如果连接信息可正常连接，检查连接名是否已存在
+                //如果连接信息可正常连接，检查连接名是否已存�?
                 if(LocalDbRepository.checkConnectLeafNameExists(connect)){
                     AlertUtil.CustomAlert(
                             I18n.t("common.error"),
@@ -362,7 +364,41 @@ public class CreateConnectController {
                 }
             }
         });
-        //connectNameTextField.requestFocus();
+        // Create browse button for SQLite file selection
+        sqliteBrowseButton = new Button("");
+        sqliteBrowseButton.setGraphic(IconFactory.group(BROWSE_ICON_PATH, 0.72, 0.72));
+        sqliteBrowseButton.getStyleClass().add("small");
+        sqliteBrowseButton.setFocusTraversable(false);
+        sqliteBrowseButton.setVisible(false);
+        sqliteBrowseButton.setManaged(false);
+        Tooltip browseTooltip = new Tooltip(I18n.t("createconnect.tooltip.browse_file", "\u6d4f\u89c8\u6587\u4ef6"));
+        sqliteBrowseButton.setTooltip(browseTooltip);
+        if (ipAddressTextField.getParent() instanceof javafx.scene.layout.HBox parentHBox) {
+            int idx = parentHBox.getChildren().indexOf(ipAddressTextField);
+            if (idx >= 0) {
+                parentHBox.getChildren().add(idx + 1, sqliteBrowseButton);
+            }
+        }
+        sqliteBrowseButton.setOnAction(e -> {
+                FileChooser fileChooser = new FileChooser();
+                String currentDbType = dbTypeChoiceBox.getValue();
+                com.dbboys.core.DatabasePlatform browserDialect = resolvePlatformResolver().getPlatform(currentDbType);
+                if (browserDialect != null) {
+                    String title = browserDialect.connection().fileBrowserDialogTitle();
+                    if (title != null && !title.isBlank()) {
+                        fileChooser.setTitle(title);
+                    }
+                    java.util.List<String> exts = browserDialect.connection().fileBrowserExtensions();
+                    if (exts != null && !exts.isEmpty()) {
+                        String desc = browserDialect.connection().fileBrowserExtensionDescription();
+                        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc != null ? desc : "", exts.toArray(new String[0])));
+                    }
+                }
+                File selectedFile = fileChooser.showOpenDialog(AppState.getWindow());
+                if (selectedFile != null) {
+                    ipAddressTextField.setText(selectedFile.getAbsolutePath());
+                }
+            });
     }
 
     private void closeWindow() {
@@ -395,9 +431,9 @@ public class CreateConnectController {
                 connect.setPropByName(namedServerPropName, "");
             }
             connect.setIp(ipAddressTextField.getText());
-            connect.setPort(isGeneralJdbcDbType(connect.getDbtype()) ? "" : portTextField.getText());
+            connect.setPort(resolvePlatformResolver().getPlatform(connect.getDbtype()).connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT ? "" : portTextField.getText());
             if (connectNameTextField.getText().isEmpty()) {
-                if (isGeneralJdbcDbType(connect.getDbtype())) {
+                if (resolvePlatformResolver().getPlatform(connect.getDbtype()) != null && resolvePlatformResolver().getPlatform(connect.getDbtype()).connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
                     String fromUrl = GeneralJdbcDialect.suggestedHostPortLabelFromJdbcUrl(ipAddressTextField.getText());
                     if (fromUrl != null && !fromUrl.isBlank()) {
                         connect.setName("[" + fromUrl + "]");
@@ -412,9 +448,9 @@ public class CreateConnectController {
             }
         }
 
-        if (isGeneralJdbcDbType(connect.getDbtype())) {
+        if (resolvePlatformResolver().getPlatform(connect.getDbtype()) != null && resolvePlatformResolver().getPlatform(connect.getDbtype()).connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
             connect.setCatalog("");
-        } else if (isOracleDbType(connect.getDbtype())) {
+        } else if (resolvePlatformResolver().requirePlatform(connect).connection().supportsServiceName()) {
             String serviceName = instanceNameTextField == null ? "" : instanceNameTextField.getText();
             if (serviceName == null || serviceName.isBlank()) {
                 connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
@@ -425,7 +461,7 @@ public class CreateConnectController {
             connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
         }
         String username = usernameTextField.getText();
-        if (isOracleDbType(connect.getDbtype()) && username != null) {
+        if (resolvePlatformResolver().requirePlatform(connect).connection().supportsServiceName() && username != null) {
             username = username.toUpperCase();
         }
         connect.setUsername(username);
@@ -440,7 +476,7 @@ public class CreateConnectController {
         connect.setSshPassword(sshPasswordTextField.getText());
     }
     public boolean checkInput(){
-        if(isOracleDbType(dbTypeChoiceBox.getValue())){
+        if(resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()) != null && resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()).connection().supportsServiceName()){
             if(instanceNameTextField == null || instanceNameTextField.getText().isBlank()){
                 connectTabPane.getSelectionModel().select(connectBasicTab);
                 instanceNameTextField.requestFocus();
@@ -466,18 +502,18 @@ public class CreateConnectController {
                         ipAddressTextField.requestFocus();
                         return false;
                     }
-                    else if(!isGeneralJdbcDbType(dbTypeChoiceBox.getValue()) && portTextField.getText().isEmpty()){
+                    else if((resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()) == null || resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()).connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.HOST_PORT) && portTextField.getText().isEmpty()){
                         connectTabPane.getSelectionModel().select(connectBasicTab);
                         portTextField.requestFocus();
                         return false;
                     }
                 }
-            if(usernameTextField.getText().isEmpty()){
+            if(usernameTextField.isVisible() && usernameTextField.getText().isEmpty()){
                 connectTabPane.getSelectionModel().select(connectBasicTab);
                 usernameTextField.requestFocus();
                 return false;
             }
-            else if(passwordTextField.getText().isEmpty()){
+            else if(passwordTextField.isVisible() && passwordTextField.getText().isEmpty()){
                 connectTabPane.getSelectionModel().select(connectBasicTab);
                 passwordTextField.requestFocus();
                 return false;
@@ -584,6 +620,17 @@ public class CreateConnectController {
 
     private void refreshDriverChoices(Connect connect, String dbType) {
         List<String> driverList = loadDriversForDbType(dbType);
+        com.dbboys.core.DatabasePlatform dialect = resolvePlatformResolver().getPlatform(dbType);
+        if (dialect != null) {
+            java.util.List<String> excluded = dialect.connection().excludedDriverJars();
+            if (excluded != null && !excluded.isEmpty()) {
+                driverList.removeIf(name -> excluded.stream().anyMatch(pattern -> {
+                    String lowerName = name.toLowerCase(Locale.ROOT);
+                    String lowerPattern = pattern.toLowerCase(Locale.ROOT);
+                    return lowerPattern.endsWith("*") ? lowerName.startsWith(lowerPattern.substring(0, lowerPattern.length() - 1)) : lowerName.equals(lowerPattern);
+                }));
+            }
+        }
         ObservableList<String> driverItems = FXCollections.observableArrayList(driverList);
         driverChoiceBox.setItems(driverItems);
         if (!driverItems.isEmpty()) {
@@ -701,7 +748,7 @@ public class CreateConnectController {
     }
 
     private void setupIcons() {
-        // Label icons removed per user request — keep only button icons
+        // Label icons removed per user request �?keep only button icons
         addDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.7));
         deleteDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.6));
         modifyDriverButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));
@@ -764,7 +811,7 @@ public class CreateConnectController {
         if (instanceHBox == null || instanceNameTextField == null) {
             return;
         }
-        if (isOracleDbType(dbType)) {
+        if (resolvePlatformResolver().getPlatform(dbType) != null && resolvePlatformResolver().getPlatform(dbType).connection().supportsServiceName()) {
             instanceNameTextField.setPromptText(I18n.t("createconnect.prompt.service_name", "Oracle服务名，例如 ORCLPDB"));
             instanceNameTextField.setText(databaseValue == null ? "" : databaseValue);
             instanceHBox.setVisible(true);
@@ -775,44 +822,69 @@ public class CreateConnectController {
         refreshConnectionInputMode(dbType);
     }
 
-    private boolean isOracleDbType(String dbType) {
-        return "ORACLE".equalsIgnoreCase(dbType);
-    }
 
-    private boolean isGeneralJdbcDbType(String dbType) {
-        return "GENERAL JDBC".equalsIgnoreCase(dbType);
-    }
+
+
 
     private void refreshConnectionInputMode(String dbType) {
-        boolean generalJdbc = isGeneralJdbcDbType(dbType);
+        com.dbboys.core.DatabasePlatform dialect = resolvePlatformResolver().getPlatform(dbType);
+        com.dbboys.core.ConnectionAddressType addressType = dialect != null
+                ? dialect.connection().connectionAddressType()
+                : com.dbboys.core.ConnectionAddressType.HOST_PORT;
+        boolean filePath = addressType == com.dbboys.core.ConnectionAddressType.FILE_PATH;
+        boolean jdbcUrl = addressType == com.dbboys.core.ConnectionAddressType.JDBC_URL;
+        boolean hostPort = addressType == com.dbboys.core.ConnectionAddressType.HOST_PORT;
         if (ipAddressLabel != null) {
-            ipAddressLabel.setText(generalJdbc
-                    ? I18n.t("createconnect.label.jdbc_url", "JDBC URL")
-                    : I18n.t("createconnect.label.ip", "IP"));
+            if (filePath) {
+                ipAddressLabel.setText(I18n.t("createconnect.label.file_path", "数据库文件"));
+            } else if (jdbcUrl) {
+                ipAddressLabel.setText(I18n.t("createconnect.label.jdbc_url", "JDBC URL"));
+            } else {
+                ipAddressLabel.setText(I18n.t("createconnect.label.ip", "IP"));
+            }
         }
         if (ipAddressTextField != null) {
-            ipAddressTextField.setPromptText(generalJdbc
-                    ? I18n.t("createconnect.prompt.jdbc_url", "例如 jdbc:postgresql://127.0.0.1:5432/postgres")
-                    : I18n.t("createconnect.prompt.ip", "IP"));
-            ipAddressTextField.setPrefWidth(generalJdbc ? 315 : 200);
+            if (filePath) {
+                ipAddressTextField.setPromptText(I18n.t("createconnect.prompt.file_path", "请选择数据库文件"));
+            } else if (jdbcUrl) {
+                ipAddressTextField.setPromptText(I18n.t("createconnect.prompt.jdbc_url", "例如 jdbc:postgresql://127.0.0.1:5432/postgres"));
+            } else {
+                ipAddressTextField.setPromptText(I18n.t("createconnect.prompt.ip", "IP"));
+            }
+            ipAddressTextField.setPrefWidth(filePath || jdbcUrl ? 315 : 200);
         }
         if (portLabel != null) {
-            portLabel.setVisible(!generalJdbc);
-            portLabel.setManaged(!generalJdbc);
+            portLabel.setVisible(hostPort);
+            portLabel.setManaged(hostPort);
         }
         if (portTextField != null) {
-            portTextField.setVisible(!generalJdbc);
-            portTextField.setManaged(!generalJdbc);
-            if (generalJdbc) {
+            portTextField.setVisible(hostPort);
+            portTextField.setManaged(hostPort);
+            if (!hostPort) {
                 portTextField.clear();
             }
         }
         if (switchGroupOrIP != null) {
-            boolean showSwitch = !generalJdbc && supportsNamedServerConnection(resolvePlatformResolver().getPlatform(dbType));
+            boolean showSwitch = hostPort && dialect != null && supportsNamedServerConnection(dialect);
             switchGroupOrIP.setVisible(showSwitch);
             switchGroupOrIP.setManaged(showSwitch);
         }
-        if (generalJdbc && groupHbox != null) {
+        if (sqliteBrowseButton != null) {
+            sqliteBrowseButton.setVisible(filePath);
+            sqliteBrowseButton.setManaged(filePath);
+        }
+        if (filePath) {
+            if (usernameLabel != null) { usernameLabel.setVisible(false); usernameLabel.setManaged(false); }
+            if (passwordLabel != null) { passwordLabel.setVisible(false); passwordLabel.setManaged(false); }
+            if (usernameTextField != null) { usernameTextField.setVisible(false); usernameTextField.setManaged(false); }
+            if (passwordTextField != null) { passwordTextField.setVisible(false); passwordTextField.setManaged(false); }
+        } else {
+            if (usernameLabel != null) { usernameLabel.setVisible(true); usernameLabel.setManaged(true); }
+            if (passwordLabel != null) { passwordLabel.setVisible(true); passwordLabel.setManaged(true); }
+            if (usernameTextField != null) { usernameTextField.setVisible(true); usernameTextField.setManaged(true); }
+            if (passwordTextField != null) { passwordTextField.setVisible(true); passwordTextField.setManaged(true); }
+        }
+        if (!hostPort && groupHbox != null) {
             groupHbox.setVisible(false);
         }
     }
@@ -826,7 +898,7 @@ public class CreateConnectController {
     }
 
 
-        //添加驱动包
+        //添加驱动�?
         public void addDriverClicked(){
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle(I18n.t("createconnect.filechooser.select_driver"));
@@ -842,7 +914,7 @@ public class CreateConnectController {
                     : AppState.getWindow();
             File selectedFile = fileChooser.showOpenDialog(owner);
             if (selectedFile != null) {
-                // 处理选中的文件
+                // 处理选中的文�?
                 ObservableList<String> items = driverChoiceBox.getItems();
                 if(items.stream().anyMatch(name -> name.equals(selectedFile.getName()))){
                     AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_same_name"));
@@ -883,7 +955,7 @@ public class CreateConnectController {
             }
         }
 
-        //删除当前驱动包
+        //删除当前驱动�?
         private File resolveInitialFileChooserDirectory() {
             String userHome = System.getProperty("user.home");
             if (userHome != null && !userHome.isBlank()) {
@@ -942,7 +1014,7 @@ public class CreateConnectController {
         }
 
 
-    //编辑当前驱动属性
+    //编辑当前驱动属�?
     public void modifyDriverProps(){
         if (modifyDriverButton.isDisabled()) {
             return;
@@ -1003,12 +1075,12 @@ public class CreateConnectController {
         valueColumn.setPrefWidth(120);
 
         valueColumn.setOnEditCommit(event -> {
-            // 获取当前行的模型数据（ObservableList<String>）
+            // 获取当前行的模型数据（ObservableList<String>�?
             ObservableList<String> rowData = event.getRowValue();
 
-            // 获取编辑后的新值
+            // 获取编辑后的新�?
             Object newValue = event.getNewValue();
-            // 更新ObservableList中索引1的位置（与cellValueFactory对应）
+            // 更新ObservableList中索�?的位置（与cellValueFactory对应�?
             if (rowData.size() > 2) {  // 确保索引有效
                 // 转换为字符串（根据实际需求调整类型）
                 rowData.set(2,  newValue.toString());
@@ -1190,7 +1262,7 @@ public class CreateConnectController {
     }
 
 
-    //编辑组信息
+    //编辑组信�?
     public void modifyGroupProps(){
     
         VBox contentBox = new VBox();
@@ -1212,7 +1284,7 @@ public class CreateConnectController {
                     Files.createDirectories(parent);
                 }
                 Files.writeString(file, defaultContent, StandardCharsets.UTF_8);
-                content = defaultContent; // 写入后返回默认内容
+                content = defaultContent; // 写入后返回默认内�?
             }
         } catch (IOException e) {
             log.error(e.getMessage(),e);
@@ -1280,7 +1352,7 @@ public class CreateConnectController {
                             setConnectingVisible(false);
                         });
                         return null;
-                    }catch (Exception e1){
+                    }catch (Throwable e1){
                         log.error(e1.getMessage(),e1);
                         if(isCancelled())return  null;
 
@@ -1318,19 +1390,19 @@ public class CreateConnectController {
                             TreeItem<TreeData> treeItem=TreeViewUtil.createTreeItem(connect);
 
 
-                            //判断是否为编辑连接，符合条件表示为编辑连接
+                            //判断是否为编辑连接，符合条件表示为编辑连�?
                             if (treeDataParam != null && treeDataParam instanceof Connect &&!isCopy) {
                                 Platform.runLater(()->{
                                     TreeItem<TreeData> currItem = new TreeItem<>();
                                     currItem = AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem();
                                     currItem.getParent().getChildren().remove(currItem);
                                     TreeViewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
-                                    LocalDbRepository.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节点
+                                    LocalDbRepository.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节�?
 
                                     //如果当前编辑的连接为空或已断开，不处理
                                     try {
                                         if (((Connect)currItem.getValue()).getConn() == null||((Connect)currItem.getValue()).getConn().isClosed()) {
-                                        } else {//如果当前编辑的连接已连接，关闭原老节点连接后展开触发连接数据库
+                                        } else {//如果当前编辑的连接已连接，关闭原老节点连接后展开触发连接数据�?
                                             ((Connect)currItem.getValue()).getConn().close();
 
                                         }
@@ -1347,9 +1419,9 @@ public class CreateConnectController {
                             } else { //否则为新建连接或复制连接
                                 Platform.runLater(()-> {
                                     TreeViewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
-                                    //展开触发展开事件，展开事件会连接数据库，改变连接状态
+                                    //展开触发展开事件，展开事件会连接数据库，改变连接状�?
                                     treeItem.setExpanded(true);
-                                    //数据库连接后，默认折叠
+                                    //数据库连接后，默认折�?
                                     treeItem.setExpanded(false);
 
                                 });
@@ -1369,7 +1441,7 @@ public class CreateConnectController {
                             });
                         }
 
-                    //如果不是提交连接，那就是点击了测试连接,需要
+                    //如果不是提交连接，那就是点击了测试连�?需�?
                     }else{
                         Platform.runLater(()->{
                             AlertUtil.CustomAlert(
@@ -1401,7 +1473,12 @@ public class CreateConnectController {
                 setConnectingVisible(false);
             });
             setTaskCancelOnClose(task::cancel);
-            task.setOnFailed(event -> Platform.runLater(() -> setConnectingVisible(false)));
+            task.setOnFailed(event -> Platform.runLater(() -> {
+                setConnectingVisible(false);
+                Throwable taskEx = task.getException();
+                String errMsg = taskEx != null ? (taskEx.getMessage() != null ? taskEx.getMessage() : taskEx.getClass().getName()) : "\u8fde\u63a5\u5931\u8d25";
+                AlertUtil.CustomAlert(I18n.t("common.error"), errMsg);
+            }));
             AppExecutor.runTask(task);
 
         } catch (Exception e) {

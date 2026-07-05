@@ -38,6 +38,52 @@ public interface ConnectionSupport {
         return "[]";
     }
 
+    // ── 连接模型 / UI 提示 ──
+
+    default ConnectionAddressType connectionAddressType() {
+        return ConnectionAddressType.HOST_PORT;
+    }
+
+    default boolean supportsCredentials() {
+        return true;
+    }
+
+    default java.util.List<String> excludedDriverJars() {
+        return java.util.List.of();
+    }
+
+    default java.util.List<String> fileBrowserExtensions() {
+        return java.util.List.of();
+    }
+
+    default String fileBrowserExtensionDescription() {
+        return "";
+    }
+
+    default String fileBrowserDialogTitle() {
+        return "";
+    }
+
+    default boolean supportsServiceName() {
+        return false;
+    }
+
+    default String getServiceNameLabelI18nKey() {
+        return "createconnect.label.service_name";
+    }
+
+    default String getServiceNameLabelDefault() {
+        return "服务名";
+    }
+
+    default String getServiceNamePromptI18nKey() {
+        return "createconnect.prompt.service_name";
+    }
+
+    default String getServiceNamePromptDefault() {
+        return "数据库服务名，例如 ORCLPDB";
+    }
+
     default String getSessionCatalog(Connect connect) {
         if (connect == null) {
             return "";
@@ -113,11 +159,17 @@ public interface ConnectionSupport {
         private final String url;
         private final String driverClassName;
         private final String jarFilePath;
+        private final java.util.List<String> extraJarPaths;
 
         public ConnectionParams(String url, String driverClassName, String jarFilePath) {
+            this(url, driverClassName, jarFilePath, java.util.List.of());
+        }
+
+        public ConnectionParams(String url, String driverClassName, String jarFilePath, java.util.List<String> extraJarPaths) {
             this.url = url;
             this.driverClassName = driverClassName;
             this.jarFilePath = jarFilePath;
+            this.extraJarPaths = extraJarPaths != null ? extraJarPaths : java.util.List.of();
         }
 
         public String getUrl() {
@@ -130,6 +182,10 @@ public interface ConnectionSupport {
 
         public String getJarFilePath() {
             return jarFilePath;
+        }
+
+        public java.util.List<String> getExtraJarPaths() {
+            return extraJarPaths;
         }
     }
 }

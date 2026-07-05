@@ -104,7 +104,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             }
             DatabasePlatform dialect = platformResolver.requirePlatform(connect);
             ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
-            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
+            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath(), params.getExtraJarPaths());
             Properties info = buildConnectionProperties(connect, false);
             Connection conn = driver.connect(params.getUrl(), info);
             if (conn == null) {
@@ -149,31 +149,38 @@ public class ConnectionServiceImpl implements ConnectionService {
         return info;
     }
 
-    private Driver getOrLoadDriver(String className, String jarFilePath) throws Exception {
+    private Driver getOrLoadDriver(String className, String jarFilePath, java.util.List<String> extraJarPaths) throws Exception {
         if (className == null || jarFilePath == null) {
             throw new IllegalArgumentException("className/jarFilePath is null");
         }
-        String key = className + "|" + jarFilePath;
+        String extraSuffix = extraJarPaths == null || extraJarPaths.isEmpty() ? "" : "|" + String.join(",", extraJarPaths);
+        String key = className + "|" + jarFilePath + extraSuffix;
         Driver cached = DRIVER_CACHE.get(key);
         if (cached != null) {
             return cached;
         }
+        String loaderKey = jarFilePath + extraSuffix;
         synchronized (DRIVER_CACHE) {
             cached = DRIVER_CACHE.get(key);
             if (cached != null) {
                 return cached;
             }
-            URLClassLoader loader = LOADER_CACHE.get(jarFilePath);
+            URLClassLoader loader = LOADER_CACHE.get(loaderKey);
             if (loader == null) {
-                loader = new URLClassLoader(new URL[]{new URL(jarFilePath)}, ClassLoader.getPlatformClassLoader());
-                LOADER_CACHE.put(jarFilePath, loader);
+                int extraCount = extraJarPaths == null ? 0 : extraJarPaths.size();
+                URL[] urls = new URL[1 + extraCount];
+                urls[0] = new URL(jarFilePath);
+                for (int i = 0; i < extraCount; i++) {
+                    urls[i + 1] = new URL(extraJarPaths.get(i));
+                }
+                loader = new URLClassLoader(urls, ClassLoader.getPlatformClassLoader());
+                LOADER_CACHE.put(loaderKey, loader);
             }
             Driver driver = (Driver) Class.forName(className, true, loader).getDeclaredConstructor().newInstance();
             DRIVER_CACHE.put(key, driver);
             return driver;
         }
     }
-
     public Connection getConnectionWithSessionInit(Connect connect) throws Exception {
         SshTunnel tunnel = null;
         String originalIp = null;
@@ -194,7 +201,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             }
             DatabasePlatform dialect = platformResolver.requirePlatform(connect);
             ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
-            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath());
+            Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath(), params.getExtraJarPaths());
             Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
             Connection conn = driver.connect(params.getUrl(), info);
             if (conn == null) {

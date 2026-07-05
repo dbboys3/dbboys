@@ -447,12 +447,16 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             graphicHbox.getChildren().addAll(nodeIconStackpane, nameLabel);
         }
         setGraphic(graphicHbox);
-        if (connect.getDbtype() != null && "GENERAL JDBC".equalsIgnoreCase(connect.getDbtype().trim())) {
-            bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nURL    : ", connect.ipProperty(),
-                    "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
-        } else {
-            bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nIP ADDR: ", connect.ipProperty(),
-                    "\nPORT   : ", connect.portProperty(), "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+        String connectDbType = connect.getDbtype();
+        if (connectDbType != null) {
+            DatabasePlatform cp = resolvePlatformResolver().getPlatform(connectDbType);
+            if (cp != null && cp.connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
+                bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nURL    : ", connect.ipProperty(),
+                        "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+            } else {
+                bindTooltip("DB TYPE: ", connect.dbtypeProperty(), "\nIP ADDR: ", connect.ipProperty(),
+                        "\nPORT   : ", connect.portProperty(), "\nUSER   : ", connect.usernameProperty(), "\nSTATUS : ", status);
+            }
         }
     }
 
@@ -743,9 +747,9 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         }
         try {
             Connect connect = TreeNavigator.getMetaConnect(treeItem);
-            return connect != null
-                    && connect.getDbtype() != null
-                    && "GENERAL JDBC".equalsIgnoreCase(connect.getDbtype().trim());
+            if (connect == null || connect.getDbtype() == null) return false;
+            com.dbboys.core.DatabasePlatform cp = resolvePlatformResolver().getPlatform(connect.getDbtype());
+            return cp != null && cp.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.JDBC_URL;
         } catch (Exception ignored) {
             return false;
         }
@@ -765,10 +769,21 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             return;
         }
         if (item instanceof Connect connect) {
-            if (connect.getDbtype() != null && "GENERAL JDBC".equalsIgnoreCase(connect.getDbtype().trim())) {
-                TabpaneUtil.addCustomSqlTab(new Connect(connect));
-            } else {
-                TreeViewUtil.connectInfoItem.fire();
+            String cd = connect.getDbtype();
+            if (cd != null) {
+                com.dbboys.core.DatabasePlatform cdp = resolvePlatformResolver().getPlatform(cd);
+                if (cdp != null && cdp.connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
+                    Connect sqlConnect = new Connect(connect);
+                    if (cdp.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.FILE_PATH) {
+                        String catalog = sqlConnect.getCatalog();
+                        if (catalog == null || catalog.isBlank()) {
+                            sqlConnect.setCatalog("main");
+                        }
+                    }
+                    TabpaneUtil.addCustomSqlTab(sqlConnect);
+                } else {
+                    TreeViewUtil.connectInfoItem.fire();
+                }
             }
             return;
         }
@@ -776,10 +791,12 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             TreeItem<TreeData> catalogItem = getTreeItem();
             if (catalogItem != null) {
                 Connect meta = TreeNavigator.getMetaConnect(catalogItem);
-                if (meta != null && meta.getDbtype() != null
-                        && "GENERAL JDBC".equalsIgnoreCase(meta.getDbtype().trim())) {
-                    TabpaneUtil.addCustomSqlTab(new Connect(meta));
-                    return;
+                if (meta != null && meta.getDbtype() != null) {
+                    com.dbboys.core.DatabasePlatform md = resolvePlatformResolver().getPlatform(meta.getDbtype());
+                    if (md != null && md.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.JDBC_URL) {
+                        TabpaneUtil.addCustomSqlTab(new Connect(meta));
+                        return;
+                    }
                 }
             }
             TreeViewUtil.databaseOpenFileItem.fire();
@@ -1023,6 +1040,15 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     private boolean isOracleTreeItem(TreeItem<TreeData> treeItem) {
         DatabasePlatform platform = safeResolvePlatform(treeItem);
         return platform != null && "ORACLE".equalsIgnoreCase(platform.getDbType());
+    }
+
+
+    private static com.dbboys.core.DatabasePlatformResolver resolvePlatformResolver() {
+        try {
+            return com.dbboys.app.AppContext.get(com.dbboys.core.DatabasePlatformResolver.class);
+        } catch (IllegalStateException e) {
+            return com.dbboys.core.DatabasePlatforms.createDefault();
+        }
     }
 
     private DatabasePlatform safeResolvePlatform(TreeItem<TreeData> treeItem) {

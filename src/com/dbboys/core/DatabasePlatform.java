@@ -74,6 +74,26 @@ public interface DatabasePlatform {
         return true;
     }
 
+
+    /** When true, schema/database object tree shows a functions folder. */
+    default boolean supportsFunctionsFolder() {
+        return true;
+    }
+
+    /** When true, schema/database object tree shows a procedures folder. */
+    default boolean supportsProceduresFolder() {
+        return true;
+    }
+
+
+    /** When true, database node context menu shows import DDL & data items. */
+    default boolean supportsDatabaseImport() {
+        return true;
+    }
+    /** When true, database node context menu shows export DDL & data items. */
+    default boolean supportsDatabaseExport() {
+        return true;
+    }
     /** When true, table designer allows toggling AUTO_INCREMENT on columns (MySQL). */
     default boolean supportsEditableAutoIncrement() {
         return false;

@@ -338,6 +338,11 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
+    public boolean supportsServiceName() {
+        return true;
+    }
+
+    @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
         if (connect.getSessionCatalog() == null || connect.getSessionCatalog().isBlank()) {
             String username = connect.getUsername();

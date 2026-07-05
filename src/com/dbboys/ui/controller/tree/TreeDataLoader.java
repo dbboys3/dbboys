@@ -235,12 +235,16 @@ public class TreeDataLoader {
                                     objectFolder = createObjectFolder(ObjectFolderKind.TRIGGERS);
                                     objectFolder.setDescription(items.get(i++).toString());
                                     treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.FUNCTIONS);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.PROCEDURES);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    if (p.supportsFunctionsFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.FUNCTIONS);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
+                                    if (p.supportsProceduresFolder()) {
+                                        objectFolder = createObjectFolder(ObjectFolderKind.PROCEDURES);
+                                        objectFolder.setDescription(items.get(i++).toString());
+                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                                    }
                                     if (p.supportsPackages()) {
                                         objectFolder = createObjectFolder(ObjectFolderKind.PACKAGES);
                                         objectFolder.setDescription(items.get(i++).toString());

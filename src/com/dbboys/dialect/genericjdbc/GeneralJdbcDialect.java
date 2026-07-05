@@ -1,6 +1,7 @@
 package com.dbboys.dialect.genericjdbc;
 
 import com.dbboys.core.ConnectionSupport;
+import com.dbboys.core.ConnectionAddressType;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DdlRepository;
 import com.dbboys.core.InstanceAdminRepository;
@@ -56,6 +57,11 @@ public final class GeneralJdbcDialect implements DatabasePlatform, ConnectionSup
     @Override
     public ConnectionSupport connection() {
         return this;
+    }
+
+    @Override
+    public ConnectionAddressType connectionAddressType() {
+        return ConnectionAddressType.JDBC_URL;
     }
 
     @Override

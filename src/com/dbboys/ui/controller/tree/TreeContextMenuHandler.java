@@ -1409,16 +1409,12 @@ public class TreeContextMenuHandler {
                 //连接
                 else if(selectedItem.getValue() instanceof Connect){
                     Connect connect =(Connect)selectedItem.getValue();
-                    boolean hideStartStopMenu = isOracleConnectForMenu(connect) || isMysqlConnectForMenu(connect);
-                    boolean hideInstanceManagementMenu = isGeneralJdbcConnectForMenu(connect);
-                    if (!hideInstanceManagementMenu) {
+                    if (resolvePlatformResolver().admin(connect).supportsAdminFeatures(connect)) {
                         healthCheckItem.setDisable(!supportsHealthCheck(connect));
                         onlinelogItem.setDisable(!supportsOnlineLog(connect));
                         spaceManagerItem.setDisable(!supportsSpaceManager(connect));
                         onconfigItem.setDisable(!supportsConfigManagement(connect));
-                        if (!hideStartStopMenu) {
-                            instanceStopItem.setDisable(!supportsStartStop(connect));
-                        }
+                        instanceStopItem.setDisable(!supportsStartStop(connect));
                     }
                     //treeview_menu.getItems().add(createConnectItem);
                     treeview_menu.getItems().add(sqlHisItem);
@@ -1433,19 +1429,17 @@ public class TreeContextMenuHandler {
                     //treeview_menu.getItems().add(refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);
-                    if (!hideInstanceManagementMenu) {
+                    if (resolvePlatformResolver().admin(connect).supportsAdminFeatures(connect)) {
                         treeview_menu.getItems().add(separator2);
                         instanceManagementMenu.getItems().setAll(
                                 TreeViewUtil.connectInfoItem,
                                 healthCheckItem,
                                 onlinelogItem,
                                 spaceManagerItem,
-                                onconfigItem
+                                onconfigItem,
+                                instanceStopItem
                         );
-                        if (!hideStartStopMenu) {
-                            instanceManagementMenu.getItems().add(instanceStopItem);
-                        }
-                        treeview_menu.getItems().add(instanceManagementMenu);
+
                     }
 
 
@@ -1484,13 +1478,13 @@ public class TreeContextMenuHandler {
                             createDatabaseItem.setGraphic(IconFactory.group(IconPaths.METADATA_CREATE_DATABASE_ITEM, 0.6, 0.6));
                         }
                         treeview_menu.getItems().add(createDatabaseItem);
+                    }
 
                         importDdlAndDataItem.textProperty().unbind();
                         String importKey = dbFolderPlatform != null ? dbFolderPlatform.getImportDdlDataMenuI18nKey() : "metadata.menu.import_ddl_data";
                         String importDefault = dbFolderPlatform != null ? dbFolderPlatform.getImportDdlDataMenuDefaultText() : "导入数据库";
                         importDdlAndDataItem.textProperty().bind(I18n.bind(importKey, importDefault));
                         treeview_menu.getItems().add(importDdlAndDataItem);
-                    }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                 }
                 else if(selectedItem.getValue() instanceof UserFolder) {
@@ -1517,14 +1511,18 @@ public class TreeContextMenuHandler {
                     if (dbNodePlatform == null || dbNodePlatform.supportsRenameDatabaseNode()) {
                         treeview_menu.getItems().add(renameItem);
                     }
-                    treeview_menu.getItems().add(deleteItem);
+                    if (dbNodePlatform == null || dbNodePlatform.canDropDatabase()) {
+                        treeview_menu.getItems().add(deleteItem);
+                    }
                     treeview_menu.getItems().add(importMenu);
+                    if (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport()) {
                     exportDdlAndDataItem.textProperty().unbind();
                     String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";
                     String exportDefault = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuDefaultText() : "导出数据库";
                     exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
                     treeview_menu.getItems().add(exportDdlAndDataItem);
                     treeview_menu.getItems().add(exportDdlMenu);
+                    }
                 }
                 //对象文件夹
                 else if(selectedItem.getValue() instanceof ObjectFolder) {
@@ -1965,7 +1963,7 @@ public class TreeContextMenuHandler {
     }
 
     private static boolean supportsLockSession(Connect connect) {
-        if (connect == null || isGeneralJdbcConnectForMenu(connect)) {
+        if (connect == null) {
             return false;
         }
         try {
@@ -2030,37 +2028,6 @@ public class TreeContextMenuHandler {
         }
     }
 
-    /** Oracle 连接树右键不展示「实例启停」菜单项（与产品策略一致）。 */
-    private static boolean isOracleConnectForMenu(Connect connect) {
-        if (connect == null || connect.getDbtype() == null) {
-            return false;
-        }
-        return "ORACLE".equalsIgnoreCase(connect.getDbtype().trim());
-    }
-
-    private static boolean isMysqlConnectForMenu(Connect connect) {
-        if (connect == null || connect.getDbtype() == null) {
-            return false;
-        }
-        return "MYSQL".equalsIgnoreCase(connect.getDbtype().trim());
-    }
-
-    /** General JDBC 无实例管理能力，右键不展示实例相关菜单。 */
-    private static boolean isGeneralJdbcConnectForMenu(Connect connect) {
-        if (connect == null || connect.getDbtype() == null) {
-            return false;
-        }
-        return "GENERAL JDBC".equalsIgnoreCase(connect.getDbtype().trim());
-    }
-
-    private static boolean isGbaseOrInformixConnect(Connect connect) {
-        if (connect == null || connect.getDbtype() == null) {
-            return false;
-        }
-        String dbType = connect.getDbtype().trim().toUpperCase();
-        return dbType.contains("GBASE") || dbType.contains("INFORMIX");
-    }
-
     private static boolean isGeneralJdbcMetadataSelection(List<TreeItem<TreeData>> selectedItems) {
         if (selectedItems == null || selectedItems.isEmpty()) {
             return false;
@@ -2082,7 +2049,10 @@ public class TreeContextMenuHandler {
             return false;
         }
         try {
-            return isGeneralJdbcConnectForMenu(TreeNavigator.getMetaConnect(item));
+            Connect connect = TreeNavigator.getMetaConnect(item);
+            if (connect == null || connect.getDbtype() == null) return false;
+            DatabasePlatform platform = resolvePlatformResolver().getPlatform(connect.getDbtype());
+            return platform != null && platform.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.JDBC_URL;
         } catch (Exception ignored) {
             return false;
         }
