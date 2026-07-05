@@ -633,10 +633,43 @@ public class CreateConnectController {
                 }));
             }
         }
+        // Auto-deploy SQLite drivers from app/ if extlib/sqlite/ has no jars
+        if (driverList.isEmpty() && "SQLITE".equalsIgnoreCase(dbType)) {
+            try {
+                File targetDir = ensureDriverFolder(dbType);
+                File appDir = new File("app");
+                File sourceJdbc = new File(appDir, "sqlite-jdbc-3.46.0.0.jar");
+                File sourceSlf4j = new File(appDir, "slf4j-api-2.0.13.jar");
+                if (sourceJdbc.exists()) {
+                    Files.copy(sourceJdbc.toPath(), new File(targetDir, "sqlite-jdbc-3.46.0.0.jar").toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                if (sourceSlf4j.exists()) {
+                    Files.copy(sourceSlf4j.toPath(), new File(targetDir, "slf4j-api-2.0.13.jar").toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                driverList = loadDriversForDbType(dbType);
+                if (dialect != null) {
+                    java.util.List<String> excluded = dialect.connection().excludedDriverJars();
+                    if (excluded != null && !excluded.isEmpty()) {
+                        driverList.removeIf(name -> excluded.stream().anyMatch(pattern -> {
+                            String lowerName = name.toLowerCase(Locale.ROOT);
+                            String lowerPattern = pattern.toLowerCase(Locale.ROOT);
+                            return lowerPattern.endsWith("*") ? lowerName.startsWith(lowerPattern.substring(0, lowerPattern.length() - 1)) : lowerName.equals(lowerPattern);
+                        }));
+                    }
+                }
+            } catch (IOException e) {
+                log.error("Failed to auto-deploy SQLite drivers", e);
+            }
+        }
         ObservableList<String> driverItems = FXCollections.observableArrayList(driverList);
         driverChoiceBox.setItems(driverItems);
         if (!driverItems.isEmpty()) {
-            driverChoiceBox.getSelectionModel().select(driverItems.size() - 1);
+            // Prefer the target driver jar for SQLite; otherwise select the last item
+            if ("SQLITE".equalsIgnoreCase(dbType) && driverItems.contains("sqlite-jdbc-3.46.0.0.jar")) {
+                driverChoiceBox.getSelectionModel().select(driverItems.indexOf("sqlite-jdbc-3.46.0.0.jar"));
+            } else {
+                driverChoiceBox.getSelectionModel().select(driverItems.size() - 1);
+            }
             if (connect != null) {
                 connect.setDriver(driverChoiceBox.getValue());
             }
