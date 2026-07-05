@@ -7,6 +7,7 @@ import com.dbboys.ui.controller.MainController;
 import com.dbboys.ui.component.CustomSqlEditCodeArea;
 import com.dbboys.infra.util.TabpaneUtil;
 import com.dbboys.infra.config.UpgradeUtil;
+import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Version;
 import javafx.application.Application;
@@ -151,8 +152,9 @@ public class Main extends Application {
                 } else if (Files.notExists(configFile)) {
                     UpgradeUtil.initDefaultConfig();
                 }
+                //表t_connect在这里增加ssh隧道的5个字段
+                LocalDbRepository.migrateTConnectTable();
     
-
 
                 //从配置文件读取分隔符位置，配置文件保存的是最后一次拖动的位置
                 AppState.setSplit1Pos(Double.parseDouble(ConfigManagerUtil.getProperty("SPLIT_DRIVER_MAIN", "0.2")));
