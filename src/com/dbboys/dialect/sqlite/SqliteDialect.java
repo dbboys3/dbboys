@@ -190,16 +190,17 @@ public final class SqliteDialect implements DatabasePlatform, ConnectionSupport 
     }
 
     @Override
-    public List<String> getColumnTypes() {
-        return List.of(
-                "INTEGER", "INT", "BIGINT", "SMALLINT", "TINYINT",
-                "REAL", "DOUBLE", "FLOAT", "NUMERIC", "DECIMAL",
-                "TEXT", "VARCHAR", "CHAR", "CLOB",
-                "BLOB", "NONE",
-                "DATE", "DATETIME", "TIMESTAMP",
-                "BOOLEAN"
-        );
-    }
+   public List<String> getColumnTypes() {
+      return List.of(
+               "INTEGER",
+               "REAL",
+                "VARCHAR",
+                "CHAR",
+               "TEXT",
+               "BLOB",
+               "NUMERIC"
+      );
+   }
 
     @Override public String buildBootstrapSql(com.dbboys.model.Catalog database) { return ""; }
     @Override public String createDatabaseSql(String name, String charset, String dbspace) { return null; }
