@@ -13,10 +13,22 @@ public class SshConnectionWrapper implements Connection {
 
     private final Connection delegate;
     private final SshTunnel tunnel;
+    private final boolean closeTunnel;
+    private final Runnable onRelease;
 
     public SshConnectionWrapper(Connection delegate, SshTunnel tunnel) {
+        this(delegate, tunnel, true, null);
+    }
+
+    public SshConnectionWrapper(Connection delegate, SshTunnel tunnel, boolean closeTunnel) {
+        this(delegate, tunnel, closeTunnel, null);
+    }
+
+    public SshConnectionWrapper(Connection delegate, SshTunnel tunnel, boolean closeTunnel, Runnable onRelease) {
         this.delegate = delegate;
         this.tunnel = tunnel;
+        this.closeTunnel = closeTunnel;
+        this.onRelease = onRelease;
     }
 
     @Override
@@ -26,8 +38,11 @@ public class SshConnectionWrapper implements Connection {
                 delegate.close();
             }
         } finally {
-            if (tunnel != null) {
+            if (tunnel != null && closeTunnel) {
                 SshTunnelUtil.closeTunnel(tunnel);
+            }
+            if (onRelease != null) {
+                onRelease.run();
             }
         }
     }

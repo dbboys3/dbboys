@@ -285,7 +285,7 @@ public  class LocalDbRepository {
         Statement statement = null;
         try{
             statement = conn.createStatement();
-            ResultSet rs=statement.executeQuery("select c_id,c_parentid,c_name,c_ip,c_port,c_database,c_username,c_dbtype,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion,c_readonly from t_connect order by c_name");
+            ResultSet rs=statement.executeQuery("select c_id,c_parentid,c_name,c_ip,c_port,c_database,c_username,c_dbtype,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion,c_readonly,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_enabled from t_connect order by c_name");
             while (rs.next()){
                 Connect connect =new Connect();
                 connect.setId(rs.getInt(1));

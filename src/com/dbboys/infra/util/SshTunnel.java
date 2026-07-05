@@ -9,10 +9,16 @@ import com.jcraft.jsch.Session;
 public class SshTunnel implements AutoCloseable {
     private final Session session;
     private final int localPort;
+    private final boolean shared;
 
     public SshTunnel(Session session, int localPort) {
+        this(session, localPort, false);
+    }
+
+    public SshTunnel(Session session, int localPort, boolean shared) {
         this.session = session;
         this.localPort = localPort;
+        this.shared = shared;
     }
 
     public Session getSession() {
@@ -26,7 +32,14 @@ public class SshTunnel implements AutoCloseable {
     @Override
     public void close() {
         if (session != null && session.isConnected()) {
-            session.disconnect();
+            if (shared) {
+                try {
+                    session.delPortForwardingL(localPort);
+                } catch (Exception ignored) {
+                }
+            } else {
+                session.disconnect();
+            }
         }
     }
 }
