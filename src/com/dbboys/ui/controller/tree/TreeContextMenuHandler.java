@@ -1409,13 +1409,6 @@ public class TreeContextMenuHandler {
                 //连接
                 else if(selectedItem.getValue() instanceof Connect){
                     Connect connect =(Connect)selectedItem.getValue();
-                    if (resolvePlatformResolver().admin(connect).supportsAdminFeatures(connect)) {
-                        healthCheckItem.setDisable(!supportsHealthCheck(connect));
-                        onlinelogItem.setDisable(!supportsOnlineLog(connect));
-                        spaceManagerItem.setDisable(!supportsSpaceManager(connect));
-                        onconfigItem.setDisable(!supportsConfigManagement(connect));
-                        instanceStopItem.setDisable(!supportsStartStop(connect));
-                    }
                     //treeview_menu.getItems().add(createConnectItem);
                     treeview_menu.getItems().add(sqlHisItem);
                     treeview_menu.getItems().add(separator1);
@@ -1431,15 +1424,15 @@ public class TreeContextMenuHandler {
                     treeview_menu.getItems().add(deleteItem);
                     if (resolvePlatformResolver().admin(connect).supportsAdminFeatures(connect)) {
                         treeview_menu.getItems().add(separator2);
-                        instanceManagementMenu.getItems().setAll(
-                                TreeViewUtil.connectInfoItem,
-                                healthCheckItem,
-                                onlinelogItem,
-                                spaceManagerItem,
-                                onconfigItem,
-                                instanceStopItem
-                        );
-
+                        List<MenuItem> adminItems = new ArrayList<>();
+                        adminItems.add(TreeViewUtil.connectInfoItem);
+                        if (supportsHealthCheck(connect)) adminItems.add(healthCheckItem);
+                        if (supportsOnlineLog(connect)) adminItems.add(onlinelogItem);
+                        if (supportsSpaceManager(connect)) adminItems.add(spaceManagerItem);
+                        if (supportsConfigManagement(connect)) adminItems.add(onconfigItem);
+                        if (supportsStartStop(connect)) adminItems.add(instanceStopItem);
+                        instanceManagementMenu.getItems().setAll(adminItems);
+                        treeview_menu.getItems().add(instanceManagementMenu);
                     }
 
 

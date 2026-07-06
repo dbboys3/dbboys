@@ -638,6 +638,10 @@ public class CreateConnectController {
             try {
                 File targetDir = ensureDriverFolder(dbType);
                 File appDir = new File("app");
+                if (!new File(appDir, "sqlite-jdbc-3.46.0.0.jar").exists()
+                        && !new File(appDir, "slf4j-api-2.0.13.jar").exists()) {
+                    appDir = new File("lib", "app");
+                }
                 File sourceJdbc = new File(appDir, "sqlite-jdbc-3.46.0.0.jar");
                 File sourceSlf4j = new File(appDir, "slf4j-api-2.0.13.jar");
                 if (sourceJdbc.exists()) {
