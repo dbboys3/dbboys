@@ -171,7 +171,7 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
     }
 
     public CustomTableCell() {
-        ContextMenu contextMenu = new ContextMenu();
+        ContextMenu contextMenu = new CustomContextMenu();
         CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n(
                 "customtablecell.menu.copy",
                 "Ctrl+C",

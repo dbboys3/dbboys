@@ -437,7 +437,7 @@ public class CustomSpaceChart extends BarChart<Number, String> {
         });
 
         // 2. 右键菜单功能（使用统一 MenuItem + Icon 工厂）
-        ContextMenu contextMenu = new ContextMenu();
+        ContextMenu contextMenu = new CustomContextMenu();
 
         if (spaceContextMenuPolicy == SpaceContextMenuPolicy.ORACLE_READONLY) {
             buildOracleReadonlySpaceMenu(contextMenu, spaceUsage, isMenuShowing);

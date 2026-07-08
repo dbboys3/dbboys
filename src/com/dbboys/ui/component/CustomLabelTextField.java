@@ -24,7 +24,7 @@ public class CustomLabelTextField extends TextField {
         );
         copyMenuItem.setOnAction(event -> copy());
 
-        ContextMenu contextMenu = new ContextMenu(copyMenuItem);
+        ContextMenu contextMenu = new CustomContextMenu(copyMenuItem);
         contextMenu.setOnShowing(event -> copyMenuItem.setDisable(getSelectedText().isEmpty()));
         setContextMenu(contextMenu);
 

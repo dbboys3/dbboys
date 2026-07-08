@@ -25,7 +25,7 @@ public class CustomTreeviewTab extends Tab {
     private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#888");
 
     public ToggleButton titleToggle = new ToggleButton();
-    public ContextMenu contextMenu=new ContextMenu();
+    public ContextMenu contextMenu=new CustomContextMenu();
     public SVGPath titleToggleIcon;
 
     public CustomTreeviewTab() {

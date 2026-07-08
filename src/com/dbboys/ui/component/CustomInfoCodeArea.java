@@ -25,7 +25,7 @@ public class CustomInfoCodeArea extends CodeArea {
                 IconFactory.group(IconPaths.COPY, 0.7)
         );
 
-        ContextMenu contextMenu = new ContextMenu();
+        ContextMenu contextMenu = new CustomContextMenu();
         contextMenu.getItems().add(copyMenuItem);
         setContextMenu(contextMenu);
 

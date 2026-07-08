@@ -14,7 +14,7 @@ import org.fxmisc.richtext.LineNumberFactory;
 
 public class CustomInlineCssTextArea extends InlineCssTextArea {
     private CustomShortcutMenuItem copyItem ;
-    public ContextMenu inlineCssMenu = new ContextMenu();
+    public ContextMenu inlineCssMenu = new CustomContextMenu();
 
     public CustomInlineCssTextArea() {
         super();

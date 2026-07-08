@@ -1,4 +1,5 @@
 package com.dbboys.search;
+import com.dbboys.ui.component.CustomContextMenu;
 
 import com.dbboys.ui.component.*;
 import com.dbboys.ui.dialog.AlertUtil;
@@ -48,7 +49,7 @@ public class MarkdownUtil {
     private static boolean cutOperation;
     public static TreeItem<Markdown> selectedTreeItem;
     //public static TreeItem<Markdown> sourceTreeItem;
-    public static ContextMenu contextMenu=new ContextMenu();
+    public static ContextMenu contextMenu=new CustomContextMenu();
 
 
     public static List<TreeItem<Markdown>> sourceTreeItems;
@@ -384,9 +385,9 @@ public class MarkdownUtil {
 
         /*
         if (file.isDirectory()) {
-            return new ContextMenu(copyItem, cutItem, pasteItem, renameItem, newFileItem, newFolderItem, deleteItem, refreshItem);
+            return new CustomContextMenu(copyItem, cutItem, pasteItem, renameItem, newFileItem, newFolderItem, deleteItem, refreshItem);
         } else {
-            return new ContextMenu(copyItem, cutItem, renameItem, deleteItem);
+            return new CustomContextMenu(copyItem, cutItem, renameItem, deleteItem);
         }
 
          */

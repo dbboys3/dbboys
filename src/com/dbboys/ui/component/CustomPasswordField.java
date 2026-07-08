@@ -19,7 +19,7 @@ public class CustomPasswordField extends PasswordField {
                 IconFactory.group(IconPaths.PASTE, 0.65)
         );
 
-        ContextMenu contextMenu = new ContextMenu();
+        ContextMenu contextMenu = new CustomContextMenu();
         contextMenu.getItems().add(pasteMenuItem);
         setContextMenu(contextMenu);
 

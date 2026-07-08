@@ -123,7 +123,7 @@ public class CustomLockSessionTab extends CustomTab {
                 null
         );
         killItem.setOnAction(event -> killSessionFromRow(cell.getTableRow() == null ? null : cell.getTableRow().getItem()));
-        ContextMenu contextMenu = new ContextMenu(killItem);
+        ContextMenu contextMenu = new CustomContextMenu(killItem);
         contextMenu.setOnShowing(event -> {
             ObservableList<String> row = cell.getTableRow() == null ? null : cell.getTableRow().getItem();
             killItem.setDisable(!canKillSession() || resolveOwner(row).isEmpty());

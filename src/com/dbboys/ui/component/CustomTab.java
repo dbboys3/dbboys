@@ -28,7 +28,7 @@ public class CustomTab extends Tab {
         // 安装 SQL 标签页区域的双击最大化处理（全局只装一次）
         installSqlTabPaneDoubleClickHandler();
 
-        ContextMenu tabMenu = new ContextMenu();
+        ContextMenu tabMenu = new CustomContextMenu();
         setContextMenu(tabMenu);
         CustomShortcutMenuItem closeAllItem = MenuItemUtil.createMenuItemI18n(
                 "customtab.menu.close_all",

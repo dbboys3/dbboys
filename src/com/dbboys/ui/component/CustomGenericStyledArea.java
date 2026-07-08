@@ -82,7 +82,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     public int[] headingCounters = new int[6]; // 索引0对应H1，1对应H2，以此类推
     public Runnable onSearchRequest = () -> {};
     public  CustomShortcutMenuItem codeAreaSearchItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.search", "Ctrl+F", IconFactory.group(IconPaths.MAIN_SEARCH, 0.6));
-    public  ContextMenu contextMenu = new ContextMenu();
+    public  ContextMenu contextMenu = new CustomContextMenu();
     public  CustomShortcutMenuItem modifyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.modify", "Ctrl+Enter", IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.65));
     public  CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
     public File markdownFile;
@@ -171,7 +171,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
                         CustomShortcutMenuItem saveAsItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.save_as", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
                         CustomShortcutMenuItem copyLinkItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_link", IconFactory.group(IconPaths.COPY, 0.7));
-                        ContextMenu linkContextMenu = new ContextMenu();
+                        ContextMenu linkContextMenu = new CustomContextMenu();
                         linkContextMenu.getItems().addAll(saveAsItem,copyLinkItem);
                         copyLinkItem.setOnAction(ev -> {
                             Clipboard clipboard = Clipboard.getSystemClipboard();
@@ -267,7 +267,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                         t.getStyleClass().add(".markdown-bold");
                     }else if (seg.getStyle() != null) {
                         if (seg.getStyle().contains("title")) {
-                            ContextMenu contextMenu = new ContextMenu();
+                            ContextMenu contextMenu = new CustomContextMenu();
                             CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_simple", IconFactory.group(IconPaths.COPY, 0.7));
                             contextMenu.getItems().addAll(copyItem);
                             CustomUserTextField customUserTextField = new CustomUserTextField();
@@ -480,7 +480,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     private void installNetworkImageContextMenu(StackPane pane, String imgUrl) {
         CustomShortcutMenuItem saveAsItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.image_save_as", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
         CustomShortcutMenuItem copyLinkItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_link", IconFactory.group(IconPaths.COPY, 0.7));
-        ContextMenu contextMenu = new ContextMenu(saveAsItem, copyLinkItem);
+        ContextMenu contextMenu = new CustomContextMenu(saveAsItem, copyLinkItem);
         saveAsItem.setOnAction(event -> saveImageAs(imgUrl, true));
         copyLinkItem.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
@@ -498,7 +498,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
     private void installLocalImageContextMenu(StackPane pane, ImageView imgView, Path path) {
         CustomShortcutMenuItem saveAsItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.image_save_as", IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6));
         CustomShortcutMenuItem copyImageItem = MenuItemUtil.createMenuItemI18n("genericstyled.menu.copy_image", IconFactory.group(IconPaths.COPY, 0.7));
-        ContextMenu contextMenu = new ContextMenu(saveAsItem, copyImageItem);
+        ContextMenu contextMenu = new CustomContextMenu(saveAsItem, copyImageItem);
         saveAsItem.setOnAction(event -> saveImageAs(path.toString(), false));
         copyImageItem.setOnAction(event -> {
             Image image = imgView.getImage();

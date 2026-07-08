@@ -1,4 +1,5 @@
 package com.dbboys.ui.controller.tree;
+import com.dbboys.ui.component.CustomContextMenu;
 
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
@@ -53,7 +54,7 @@ public class TreeContextMenuHandler {
     public static void setupContextMenu(TreeView<TreeData> treeView) {
 
         //右键弹出框
-        ContextMenu treeview_menu = new ContextMenu();
+        ContextMenu treeview_menu = new CustomContextMenu();
 
         CustomShortcutMenuItem addUserItem = MenuItemUtil.createMenuItemI18n("metadata.menu.add_user",
                 IconFactory.group(IconPaths.METADATA_ADD_USER, 0.55, 0.55));

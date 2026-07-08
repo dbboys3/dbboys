@@ -120,7 +120,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 aiConvertPostgresqlItem, aiConvertSqlserverItem, aiConvertSqliteItem
         );
 
-        ContextMenu codeAreaMenu = new ContextMenu();
+        ContextMenu codeAreaMenu = new CustomContextMenu();
         codeAreaMenu.getItems().addAll(
                 codeAreaExecuteItem, codeAreaFormatItem, codeAreaUpperItem, codeAreaLowerItem,
                 codeAreaCommRowItem, codeAreaCommRowsItem, codeAreaSearchItem, codeAreaCopyItem,

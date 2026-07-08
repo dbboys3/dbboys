@@ -30,7 +30,7 @@ public class CustomUserTextField extends TextField {
         cutMenuItem.setOnAction(event -> cut());
         pasteMenuItem.setOnAction(event -> paste());
 
-        ContextMenu contextMenu = new ContextMenu(copyMenuItem, cutMenuItem, pasteMenuItem);
+        ContextMenu contextMenu = new CustomContextMenu(copyMenuItem, cutMenuItem, pasteMenuItem);
         contextMenu.setOnShowing(event -> {
             boolean hasSelection = !getSelectedText().isEmpty();
             boolean clipboardHasText = Clipboard.getSystemClipboard().hasString();

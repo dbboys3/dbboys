@@ -90,7 +90,7 @@ public class CustomTableView<S> extends TableView<S> {
                 generateSelectSqlMenuItem
         );
 
-        ContextMenu contextMenu = new ContextMenu();
+        ContextMenu contextMenu = new CustomContextMenu();
         contextMenu.getItems().addAll(
                 copyMenuItem,
                 new SeparatorMenuItem(),

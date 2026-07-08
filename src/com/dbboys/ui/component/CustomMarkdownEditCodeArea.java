@@ -64,7 +64,7 @@ public class CustomMarkdownEditCodeArea extends CodeArea {
                 IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.6)
         );
 
-        ContextMenu codeAreaMenu = new ContextMenu(
+        ContextMenu codeAreaMenu = new CustomContextMenu(
                 viewItem, searchReplaceItem, copyItem, cutItem, codeAreaPasteItem, undoItem, redoItem, saveItem
         );
         setContextMenu(codeAreaMenu);
