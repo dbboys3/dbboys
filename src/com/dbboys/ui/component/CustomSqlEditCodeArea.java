@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
 
 public class CustomSqlEditCodeArea extends CodeArea {
     private static final int LOCAL_HIGHLIGHT_MAX = 4000;
-    private static final int LOOKBACK_RANGE = 2000; // 上文最多回溯这么多字符尝试局部高�?
+    private static final int LOOKBACK_RANGE = 2000; // 娑撳﹥鏋冮張鈧径姘礀濠ь垵绻栨稊鍫濐樋鐎涙顑佺亸婵婄槸鐏炩偓闁劑鐝敓?
     private static final int DEFAULT_FONT_SIZE = 12;
     private static final int MIN_FONT_SIZE = 9;
     private static final int MAX_FONT_SIZE = 40;
@@ -128,7 +128,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 aiMenu
         );
 
-        // 补全弹窗导航 �?�?EventFilter（捕获阶段）拦截，必须在 RichTextFX 行为层处理之�?
+        // 鐞涖儱鍙忓鍦崶鐎佃壈鍩?閿?閿?EventFilter閿涘牊宕熼懢鐑芥▉濞堢绱氶幏锔藉焻閿涘苯绻€妞よ婀?RichTextFX 鐞涘奔璐熺仦鍌氼槱閻炲棔绠ｉ敓?
         addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (completionPopup.isShowing()) {
                 if (event.getCode() == KeyCode.UP) {
@@ -161,10 +161,10 @@ public class CustomSqlEditCodeArea extends CodeArea {
             }
         });
 
-        // ctrl快捷�?
+        // ctrl韫囶偅宓庨敓?
         setOnKeyPressed(event -> {
             if (completionPopup.isShowing()) {
-                // 补全弹窗显示时的按键已经在上面的 EventFilter 处理�?
+                // 鐞涖儱鍙忓鍦崶閺勫墽銇氶弮鍓佹畱閹稿鏁鑼病閸︺劋绗傞棃銏㈡畱 EventFilter 婢跺嫮鎮婇敓?
                 return;
             }
             if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
@@ -208,7 +208,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 onShowReplacePanel.run();
             }
         });
-        // Ctrl + 鼠标滚轮：与 Ctrl++/Ctrl+- 相同，调�?SQL 编辑器字�?
+        // Ctrl + 姒х姵鐖ｅ姘崇枂閿涙矮绗?Ctrl++/Ctrl+- 閻╃鎮撻敍宀冪殶閿?SQL 缂傛牞绶崳銊ョ摟閿?
         addEventFilter(ScrollEvent.SCROLL, event -> {
             if (!event.isControlDown()) {
                 return;
@@ -220,9 +220,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
             adjustFontSize(dy > 0 ? FONT_SIZE_STEP : -FONT_SIZE_STEP);
             event.consume();
         });
-        // 自动补全/跳过成对引号，避免重复插入（使用 EventFilter，先于默认处理）
+        // 閼奉亜濮╃悰銉ュ弿/鐠哄疇绻冮幋鎰嚠瀵洖褰块敍宀勪缉閸忓秹鍣告径宥嗗絻閸忋儻绱欐担璺ㄦ暏 EventFilter閿涘苯鍘涙禍搴ㄧ帛鐠併倕顦╅悶鍡礆
         addEventFilter(KeyEvent.KEY_TYPED, event -> {
-            // 补全选中后跳过紧接着的按键字符（回车/制表符），防止追加到替换文本后面
+            // 鐞涖儱鍙忛柅澶夎厬閸氬氦鐑︽潻鍥╂彛閹恒儳娼冮惃鍕瘻闁款喖鐡х粭锔肩礄閸ョ偠婧?閸掓儼銆冪粭锔肩礆閿涘矂妲诲銏ｆ嫹閸旂姴鍩岄弴鎸庡床閺傚洦婀伴崥搴ㄦ桨
             if (completeSelectionApplied) {
                 completeSelectionApplied = false;
                 String ch = event.getCharacter();
@@ -239,9 +239,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
             if ((c == '"' || c == '\'' || c == '`') && !event.isControlDown() && !event.isAltDown() && !event.isMetaDown()) {
                 int caret = getCaretPosition();
                 int textLen = getLength();
-                event.consume(); // 阻止默认插入
+                event.consume(); // 闂冪粯顒涙妯款吇閹绘帒鍙?
 
-                // 如果光标右侧已经是同样的引号，则视为"跳过"而非再插�?
+                // 婵″倹鐏夐崗澶嬬垼閸欏厖鏅跺鑼病閺勵垰鎮撻弽椋庢畱瀵洖褰块敍灞藉灟鐟欏棔璐?鐠哄疇绻?閼板矂娼崘宥嗗絻閿?
                 if (caret < textLen && getText(caret, caret + 1).charAt(0) == c) {
                     moveTo(caret + 1);
                     return;
@@ -252,11 +252,11 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     replaceSelection(ch + selected + ch);
                     selectRange(caret + 1 + selected.length(), caret + 1 + selected.length());
                 } else {
-                    insertText(caret, ch + ch); // 总共两个字符
+                    insertText(caret, ch + ch); // 閹鍙℃稉銈勯嚋鐎涙顑?
                     moveTo(caret + 1);
                 }
             }
-            // 空格 -> 关闭补全（除非光标紧�?FROM/JOIN 关键字之后）
+            // 缁岀儤鐗?-> 閸忔娊妫寸悰銉ュ弿閿涘牓娅庨棃鐐插帨閺嶅洨鎻ｉ敓?FROM/JOIN 閸忔娊鏁€涙ぞ绠ｉ崥搴礆
                         if (c == ' ') {
                 completionPopup.hide();
                 // After a space in FROM/JOIN/UPDATE context, eagerly show tables.
@@ -273,7 +273,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 }
                 return;
             }
-            // 智能补全触发：字母、数字、下划线、点�?-> 50ms 防抖后弹�?
+            // 閺呴缚鍏樼悰銉ュ弿鐟欙箑褰傞敍姘摟濮ｅ秲鈧焦鏆熺€涙ぜ鈧椒绗呴崚鎺斿殠閵嗕胶鍋ｉ敓?-> 50ms 闂冨弶濮堥崥搴¤剨閿?
             if (c == '.' || Character.isLetterOrDigit(c) || c == '_') {
                 scheduleCompletion();
             } else {
@@ -281,7 +281,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             }
         });
 
-        // Backspace / Delete -> 更新或关闭补�?
+        // Backspace / Delete -> 閺囧瓨鏌婇幋鏍у彠闂傤叀藟閿?
         addEventFilter(KeyEvent.KEY_RELEASED, event2 -> {
             if (event2.getCode() == KeyCode.BACK_SPACE || event2.getCode() == KeyCode.DELETE) {
                 if (!isAutocompleteEnabled()) return;
@@ -365,6 +365,21 @@ public class CustomSqlEditCodeArea extends CodeArea {
                     scheduleIncrementalHighlight(change);
                     onContentDirty.run();
                 });
+    }
+
+
+    @Override
+    public void paste() {
+        super.paste();
+        scheduleHighlighting();
+    }
+    @Override
+    public void replaceText(int start, int end, String text) {
+        String oldText = getText(start, end);
+        super.replaceText(start, end, text);
+        if (Objects.equals(oldText, text)) {
+            scheduleHighlighting();
+        }
     }
 
     private static int loadConfiguredFontSize() {
@@ -600,14 +615,14 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 balance--;
             }
         }
-        return -1; // 未找到匹配括�?
+        return -1; // 閺堫亝澹橀崚鏉垮爱闁板秵瀚敓?
     }
 
     /**
      * Incremental highlight only the paragraphs around the change; fallback to full when the slice is large.
      */
     private void scheduleIncrementalHighlight(PlainTextChange change) {
-        // 删除引号时直接做全量高亮，防止字符串状态错�?
+        // 閸掔娀娅庡鏇炲娇閺冨墎娲块幒銉ヤ粵閸忋劑鍣烘妯瑰瘨閿涘矂妲诲銏犵摟缁楋缚瑕嗛悩鑸碘偓渚€鏁婇敓?
         if (change.getRemoved() != null && (change.getRemoved().contains("'") || change.getRemoved().contains("\"") || change.getRemoved().contains("`"))) {
             scheduleHighlighting();
             return;
@@ -626,7 +641,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             return;
         }
 
-        // 尝试在局部范围内回溯，减少因未闭合引�?块注释导致的全量回退�?
+        // 鐏忔繆鐦崷銊ョ湰闁劏瀵栭崶鏉戝敶閸ョ偞鍑介敍灞藉櫤鐏忔垵娲滈張顏堟４閸氬牆绱╅敓?閸ф鏁為柌濠傤嚤閼峰娈戦崗銊╁櫤閸ョ偤鈧偓閿?
         int lookbackStart = Math.max(0, regionStart - LOOKBACK_RANGE);
         boolean unsafePrefix = hasOpenDelimiterBefore(regionStart, lookbackStart);
         int effectiveStart = unsafePrefix ? lookbackStart : regionStart;
@@ -655,16 +670,16 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     /**
-     * 判断 regionStart 之前是否有未闭合的字符串/块注释，若有则需要全量重算�?
+     * 閸掋倖鏌?regionStart 娑斿澧犻弰顖氭儊閺堝婀梻顓炴値閻ㄥ嫬鐡х粭锔胯/閸ф鏁為柌濠忕礉閼汇儲婀侀崚娆撴付鐟曚礁鍙忛柌蹇涘櫢缁犳鎷?
      */
     private boolean hasOpenDelimiterBefore(int regionStart, int scanStart) {
         String prefix = regionStart <= 0 ? "" : getText(scanStart, regionStart);
-        // 简单奇偶计数，针对 SQL �?'' / "" / ``。若为奇数视为未闭合�?
+        // 缁犫偓閸楁洖顨岄崑鎯邦吀閺佸府绱濋柦鍫濐嚠 SQL 閿?'' / "" / ``閵嗗倽瀚㈡稉鍝勵殞閺佹媽顫嬫稉鐑樻弓闂傤厼鎮庨敓?
         if ((countChar(prefix, '\'') & 1) == 1) return true;
         if ((countChar(prefix, '\"') & 1) == 1) return true;
         if ((countChar(prefix, '`') & 1) == 1) return true;
 
-        // 块注释未闭合：最后出现的 /* 在最后一�?*/ 之后
+        // 閸ф鏁為柌濠冩弓闂傤厼鎮庨敍姘付閸氬骸鍤悳鎵畱 /* 閸︺劍娓堕崥搴濈閿?*/ 娑斿鎮?
         int lastOpen = prefix.lastIndexOf("/*");
         int lastClose = prefix.lastIndexOf("*/");
         return lastOpen > lastClose;
@@ -674,7 +689,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
         int cnt = 0;
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) == ch) {
-                // �?SQL 来说，使用两个相邻引�?'' 作为转义，这里仍然按出现次数计数，奇偶即可�?
+                // 閿?SQL 閺夈儴顕╅敍灞煎▏閻劋琚辨稉顏嗘祲闁绱╅敓?'' 娴ｆ粈璐熸潪顑跨疅閿涘矁绻栭柌灞肩矝閻掕埖瀵滈崙铏瑰箛濞嗏剝鏆熺拋鈩冩殶閿涘苯顨岄崑璺哄祮閸欘垽鎷?
                 cnt++;
             }
         }
@@ -728,7 +743,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             return;
         }
         int delayMs = getAutocompleteTriggerDelayMs();
-        long seq = completionSeq.get(); // don't increment — let pending scheduleCompletion still fire
+        long seq = completionSeq.get(); // don't increment 閳?let pending scheduleCompletion still fire
         AppExecutor.runAsync(() -> {
             try {
                 Thread.sleep(delayMs);
@@ -744,9 +759,9 @@ public class CustomSqlEditCodeArea extends CodeArea {
         });
     }
 
-    /** Immediate (Ctrl+Space) trigger �?bypasses min-prefix check. */
+    /** Immediate (Ctrl+Space) trigger 閿?bypasses min-prefix check. */
     private void triggerCompletionNow() {
-        long seq = completionSeq.get(); // don't increment — let pending scheduleCompletion still fire
+        long seq = completionSeq.get(); // don't increment 閳?let pending scheduleCompletion still fire
         int caret = getCaretPosition();
         Platform.runLater(() -> {
             if (completionSeq.get() != seq) return;
