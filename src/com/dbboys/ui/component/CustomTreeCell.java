@@ -51,6 +51,8 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     private static final String INACTIVE_ICON_STYLE = "icon-inactive";
     private static final Pattern COUNT_INFO_PATTERN = Pattern.compile("^\\s*(\\d+)\\s*[个個](?:\\s*/\\s*(.+))?\\s*$");
     private static final double ICON_SLOT_SIZE = 16.0;
+    private static final String HOVER_STYLE_CLASS = "hover";
+    private boolean hovered = false;
 
     private final int iconSize = 11;
     private final Label nameLabel = new Label();
@@ -103,10 +105,31 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 });
             }
         });
+
+        // 用程序化样式类代替 CSS :hover 伪类，避免 TreeView 展开/折叠时
+        // 回收的 cell 因鼠标恰好位于其位置而闪现背景色
+        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_ENTERED, e -> {
+            if (!hovered && !isEmpty()) {
+                hovered = true;
+                getStyleClass().add(HOVER_STYLE_CLASS);
+            }
+        });
+
+        setOnMouseExited(e -> {
+            if (hovered) {
+                hovered = false;
+                getStyleClass().remove(HOVER_STYLE_CLASS);
+            }
+        });
     }
 
     @Override
     protected void updateItem(TreeData item, boolean empty) {
+        // 回收前清除 hover 状态，防止 CSS :hover 伪类在回收瞬间匹配
+        if (hovered) {
+            hovered = false;
+            getStyleClass().remove(HOVER_STYLE_CLASS);
+        }
         super.updateItem(item, empty);
         resetCellVisualState();
         if (item == null || empty) {
