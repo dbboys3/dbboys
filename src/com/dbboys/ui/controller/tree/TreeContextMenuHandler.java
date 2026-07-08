@@ -54,8 +54,6 @@ public class TreeContextMenuHandler {
 
         //右键弹出框
         ContextMenu treeview_menu = new ContextMenu();
-        // 为元数据树的右键菜单增加单独样式，便于控制默认选中项的高亮行为
-        treeview_menu.getStyleClass().add("custom-context-menu");
 
         CustomShortcutMenuItem addUserItem = MenuItemUtil.createMenuItemI18n("metadata.menu.add_user",
                 IconFactory.group(IconPaths.METADATA_ADD_USER, 0.55, 0.55));

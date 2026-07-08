@@ -121,7 +121,6 @@ public class CustomSqlEditCodeArea extends CodeArea {
         );
 
         ContextMenu codeAreaMenu = new ContextMenu();
-        codeAreaMenu.getStyleClass().add("custom-context-menu");
         codeAreaMenu.getItems().addAll(
                 codeAreaExecuteItem, codeAreaFormatItem, codeAreaUpperItem, codeAreaLowerItem,
                 codeAreaCommRowItem, codeAreaCommRowsItem, codeAreaSearchItem, codeAreaCopyItem,

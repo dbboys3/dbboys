@@ -91,7 +91,6 @@ public class CustomTableView<S> extends TableView<S> {
         );
 
         ContextMenu contextMenu = new ContextMenu();
-        contextMenu.getStyleClass().add("custom-context-menu");
         contextMenu.getItems().addAll(
                 copyMenuItem,
                 new SeparatorMenuItem(),
