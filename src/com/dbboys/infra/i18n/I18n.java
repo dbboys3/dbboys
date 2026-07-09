@@ -1,4 +1,4 @@
-package com.dbboys.infra.i18n;
+﻿package com.dbboys.infra.i18n;
 
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.StringBinding;
@@ -12,7 +12,7 @@ import java.util.ResourceBundle;
 
 public final class I18n {
     private static final String BUNDLE_BASE = "com.dbboys.infra.i18n.messages";
-    private static final ObjectProperty<Locale> localeProperty = new SimpleObjectProperty<>(Locale.getDefault());
+    private static final ObjectProperty<Locale> localeProperty = new SimpleObjectProperty<>(Locale.CHINA);
     private static ResourceBundle bundle = ResourceBundle.getBundle(BUNDLE_BASE, localeProperty.get());
 
     static {
