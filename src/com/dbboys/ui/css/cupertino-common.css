@@ -5468,18 +5468,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-font-family: "System Regular";
   -fx-font-size: 11px;
 }
-.code-area .context-menu .menu-item > .label {
-  -fx-text-fill: -color-fg-default;
-}
-.code-area .context-menu .menu-item > .label > .text {
-  -fx-fill: -color-fg-default;
-}
-.code-area .context-menu .menu-item:focused > .label {
-  -fx-text-fill: -color-fg-emphasis;
-}
-.code-area .context-menu .menu-item:focused > .label > .text {
-  -fx-fill: -color-fg-emphasis;
-}
 
 .paragraph-box:has-caret {
   -fx-background-color: -color-code-current-line-bg;
