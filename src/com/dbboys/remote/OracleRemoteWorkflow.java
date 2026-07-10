@@ -204,17 +204,32 @@ public final class OracleRemoteWorkflow {
             "SECURITY_UPDATES_VIA_MYORACLESUPPORT=false\n" +
             "DECLINE_SECURITY_UPDATES=true");
 
-        // Run the silent installer as oracle.  -silent -noconfig -nowait means:
-        // no GUI, no config tool after install, exit when done.
-        // Must set DISPLAY= (empty) so the installer's internal JVM doesn't
-        // try to connect to an X server, which causes NPE on headless servers.
-        // CV_ASSUME_DISTID tricks 11g into accepting RHEL 7/8 as a supported OS.
-        check(runOra(ctx,
-            "unset DISPLAY\n" +
+        // Run the silent installer with a CLEAN environment.
+        // Oracle 11g's internal JVM crashes with NPE when it encounters
+        // garbage env vars like %j %@dPP %mxhsV that leak from the shell.
+        // `env -i` starts with an empty environment, then we set only what's needed.
+        // The runOra() helper uses `su - oracle` which gives a login shell;
+        // we pipe through bash so `env -i` takes effect.
+        String installCmd = b64(
+            "#!/bin/bash\n" +
+            "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + staging + "/database\n" +
+            "export HOME=/home/oracle\n" +
+            "export TEMP=/tmp\n" +
+            "export TMPDIR=/tmp\n" +
             "export CV_ASSUME_DISTID=OEL7\n" +
             "cd /home/oracle\n" +
-            staging + "/database/runInstaller -silent -noconfig -nowait -ignorePrereq -ignoreSysPrereqs -waitforcompletion -responseFile " + rspFile + " 2>&1\n" +
-            "echo RC=$?"),
+            "exec env -i PATH=\"$PATH\" HOME=\"$HOME\" TEMP=\"$TEMP\" TMPDIR=\"$TMPDIR\" " +
+            "CV_ASSUME_DISTID=\"$CV_ASSUME_DISTID\" " +
+            staging + "/database/runInstaller -silent -noconfig -nowait " +
+            "-ignorePrereq -ignoreSysPrereqs -waitforcompletion " +
+            "-J-Djava.awt.headless=true " +
+            "-responseFile " + rspFile + " 2>&1\n" +
+            "echo RC=$?");
+        check(ctx.executeCommand(
+            "echo " + q(installCmd) + " | base64 -d > /tmp/runInstaller_" + sid + ".sh && " +
+            "chmod +x /tmp/runInstaller_" + sid + ".sh && " +
+            "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
+            "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1"),
             "Oracle runInstaller failed");
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
@@ -255,7 +270,16 @@ public final class OracleRemoteWorkflow {
         String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
 
-        check(ctx.executeCommand("echo '" + sid + ":" + oh + ":Y' > /etc/oratab && chown oracle:oinstall /etc/oratab && echo OK"),
+        // Remove any existing oratab entry + oradata dir for this SID
+        // so DBCA doesn't complain "SID already exists".
+        check(ctx.executeCommand(
+            "sed -i '/^" + sid + ":/d' /etc/oratab 2>/dev/null || true\n" +
+            "echo '" + sid + ":" + oh + ":Y' >> /etc/oratab\n" +
+            "chown oracle:oinstall /etc/oratab\n" +
+            "rm -rf " + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "/" + sid + " 2>/dev/null || true\n" +
+            "rm -rf " + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "/" + sid + " 2>/dev/null || true\n" +
+            "rm -rf " + oh + "/dbs/init" + sid + ".ora " + oh + "/dbs/spfile" + sid + ".ora 2>/dev/null || true\n" +
+            "echo OK"),
             "Failed to create /etc/oratab");
 
         // 11g DBCA response file keys are ALL UPPERCASE (RESPONSEFILE_VERSION not responseFileVersion).
