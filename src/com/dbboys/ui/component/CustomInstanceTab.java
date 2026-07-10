@@ -1,4 +1,4 @@
-package com.dbboys.ui.component;
+﻿package com.dbboys.ui.component;
 
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.InstanceAdminRepository;
@@ -2052,7 +2052,14 @@ public class CustomInstanceTab extends CustomTab {
         });
     }
 
+
+
     private void loadStartTabThroughCapability() {
+        if (!supportsStartStop()) {
+            // Dialect does not support instance start/stop, keep buttons hidden
+            Platform.runLater(() -> startTab.setContent(startStackPane));
+            return;
+        }
         boolean online = resolveInstanceTabCapability()
                 .map(capability -> {
                     try {
@@ -2076,6 +2083,8 @@ public class CustomInstanceTab extends CustomTab {
             startTab.setContent(startStackPane);
         });
     }
+
+
 
 
     private void initCheckTableColumns() {

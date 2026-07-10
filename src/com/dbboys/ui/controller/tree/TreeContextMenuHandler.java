@@ -3,6 +3,7 @@ import com.dbboys.ui.component.CustomContextMenu;
 
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
@@ -2014,6 +2015,12 @@ public class TreeContextMenuHandler {
             return false;
         }
         try {
+            // Check dialect capability (InstanceTabCapability) first
+            DatabasePlatform platform = resolvePlatformResolver().requirePlatform(connect);
+            if (platform instanceof InstanceTabCapability) {
+                return ((InstanceTabCapability) platform).supportsStartStopTab(connect);
+            }
+            // Fallback to admin repository
             return resolvePlatformResolver().admin(connect).supportsStartStop(connect);
         } catch (Exception ignored) {
             return false;
