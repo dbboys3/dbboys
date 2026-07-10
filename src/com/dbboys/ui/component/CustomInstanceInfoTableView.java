@@ -1,4 +1,4 @@
-package com.dbboys.ui.component;
+﻿package com.dbboys.ui.component;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.app.AppContext;
@@ -179,28 +179,18 @@ public class CustomInstanceInfoTableView extends CustomTableView {
         contextMenu.setOnShowing(event -> {
             Connect selectedConnect = getSelectedConnect();
             InstanceAdminRepository admin = resolveAdminRepository(selectedConnect);
-            boolean oracleConnect = selectedConnect != null
-                    && selectedConnect.getDbtype() != null
-                    && "ORACLE".equalsIgnoreCase(selectedConnect.getDbtype().trim());
-            boolean mysqlConnect = selectedConnect != null
-                    && selectedConnect.getDbtype() != null
-                    && "MYSQL".equalsIgnoreCase(selectedConnect.getDbtype().trim());
-            boolean generalJdbc = selectedConnect != null
-                    && selectedConnect.getDbtype() != null
-                    && "GENERAL JDBC".equalsIgnoreCase(selectedConnect.getDbtype().trim());
-            boolean showInstanceMenu = selectedConnect != null && !generalJdbc;
+            boolean showInstanceMenu = selectedConnect != null && admin.supportsAdminFeatures(selectedConnect);
             instanceInfoItem.setVisible(showInstanceMenu);
             healthCheckItem.setVisible(showInstanceMenu);
             onlineLogItem.setVisible(showInstanceMenu);
             spaceManagerItem.setVisible(showInstanceMenu);
             onconfigItem.setVisible(showInstanceMenu);
-            instanceStartStopItem.setVisible(showInstanceMenu && !oracleConnect && !mysqlConnect);
+            instanceStartStopItem.setVisible(showInstanceMenu && admin.supportsStartStop(selectedConnect));
             if (showInstanceMenu) {
                 healthCheckItem.setDisable(!admin.supportsHealthCheck(selectedConnect));
                 onlineLogItem.setDisable(!admin.supportsOnlineLog(selectedConnect));
                 spaceManagerItem.setDisable(!admin.supportsSpaceManager(selectedConnect));
                 onconfigItem.setDisable(!admin.supportsConfigManagement(selectedConnect));
-                instanceStartStopItem.setDisable(oracleConnect || mysqlConnect || !admin.supportsStartStop(selectedConnect));
             }
             copyItem.setDisable(getSelectionModel().getSelectedCells().isEmpty());
         });

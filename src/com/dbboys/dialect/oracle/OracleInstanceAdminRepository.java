@@ -1,4 +1,4 @@
-package com.dbboys.dialect.oracle;
+﻿package com.dbboys.dialect.oracle;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.model.SpaceUsage;
@@ -146,6 +146,9 @@ public final class OracleInstanceAdminRepository implements InstanceAdminReposit
     public boolean supportsAdminFeatures(Connect connect) {
         return supportsSpaceManager(connect);
     }
+    @Override
+    public boolean supportsStartStop(Connect connect) { return false; }
+
 
     @Override
     public boolean supportsSpaceManager(Connect connect) {
