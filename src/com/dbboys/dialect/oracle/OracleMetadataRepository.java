@@ -35,14 +35,12 @@ public final class OracleMetadataRepository implements MetadataRepository {
     private static final String SQL_CURRENT_DATABASE = """
             select
                 nvl(sys_context('USERENV', 'SERVICE_NAME'),
-                    nvl(sys_context('USERENV', 'CON_NAME'),
-                        sys_context('USERENV', 'DB_NAME'))) as dbname,
+                    sys_context('USERENV', 'DB_NAME')) as dbname,
                 username as owner,
                 to_char(created, 'YYYY-MM-DD') as created_time,
                 default_tablespace as dbspace,
                 nvl(sys_context('USERENV', 'SERVICE_NAME'),
-                    nvl(sys_context('USERENV', 'CON_NAME'),
-                        sys_context('USERENV', 'DB_NAME'))) as service_name,
+                    sys_context('USERENV', 'DB_NAME')) as service_name,
                 sys_context('USERENV', 'LANGUAGE') as db_locale,
                 nvl((select sum(bytes) from user_segments), 0) as schema_bytes
             from user_users
@@ -72,8 +70,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
     private static final String SQL_SESSION_SCHEMA_LIST_CONTEXT = """
             select
                 nvl(sys_context('USERENV', 'SERVICE_NAME'),
-                    nvl(sys_context('USERENV', 'CON_NAME'),
-                        sys_context('USERENV', 'DB_NAME'))) as service_name,
+                    sys_context('USERENV', 'DB_NAME')) as service_name,
                 sys_context('USERENV', 'LANGUAGE') as db_locale
             from dual
             """;
@@ -116,8 +113,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
                 username as schema_name,
                 to_char(created, 'YYYY-MM-DD') as created_time,
                 nvl(sys_context('USERENV', 'SERVICE_NAME'),
-                    nvl(sys_context('USERENV', 'CON_NAME'),
-                        sys_context('USERENV', 'DB_NAME'))) as service_name,
+                    sys_context('USERENV', 'DB_NAME')) as service_name,
                 sys_context('USERENV', 'LANGUAGE') as db_locale
             from all_users
             where upper(username) = upper(?)
