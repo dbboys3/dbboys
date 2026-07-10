@@ -154,17 +154,13 @@ public final class OracleMetadataRepository implements MetadataRepository {
             select
                 t.owner,
                 t.table_name,
-                to_char(o.created, 'YYYY-MM-DD HH24:MI:SS') as created_time,
+                cast(null as varchar2(20)) as created_time,
                 nvl(tc.comments, '') as table_comment,
                 nvl(t.num_rows, 0) as num_rows,
                 nvl(t.blocks, 0) as blocks,
                 nvl(t.logging, 'YES') as logging,
                 (nvl(t.blocks, 0) * 8192) as size_bytes
             from all_tables t
-            join all_objects o
-              on o.owner = t.owner
-             and o.object_name = t.table_name
-             and o.object_type = 'TABLE'
             left join all_tab_comments tc
               on tc.owner = t.owner
              and tc.table_name = t.table_name
@@ -561,7 +557,7 @@ public final class OracleMetadataRepository implements MetadataRepository {
             select
                 s.sequence_owner,
                 s.sequence_name,
-                to_char(o.created, 'YYYY-MM-DD HH24:MI:SS') as created_time,
+                cast(null as varchar2(20)) as created_time,
                 s.min_value,
                 s.max_value,
                 s.increment_by,
@@ -570,10 +566,6 @@ public final class OracleMetadataRepository implements MetadataRepository {
                 s.cycle_flag,
                 s.order_flag
             from all_sequences s
-            join all_objects o
-              on o.owner = s.sequence_owner
-             and o.object_name = s.sequence_name
-             and o.object_type = 'SEQUENCE'
             where s.sequence_owner = ?
             order by s.sequence_name
             """;
@@ -591,12 +583,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
                 s.table_owner,
                 s.table_name,
                 nvl(s.db_link, '') as db_link,
-                to_char(o.created, 'YYYY-MM-DD HH24:MI:SS') as created_time
+                cast(null as varchar2(20)) as created_time
             from all_synonyms s
-            left join all_objects o
-              on o.owner = s.owner
-             and o.object_name = s.synonym_name
-             and o.object_type = 'SYNONYM'
             where s.owner = ?
             order by s.synonym_name
             """;
@@ -653,12 +641,8 @@ public final class OracleMetadataRepository implements MetadataRepository {
             select
                 v.owner,
                 v.view_name,
-                to_char(o.created, 'YYYY-MM-DD HH24:MI:SS') as created_time
+                cast(null as varchar2(20)) as created_time
             from all_views v
-            join all_objects o
-              on o.owner = v.owner
-             and o.object_name = v.view_name
-             and o.object_type = 'VIEW'
             where v.owner = ?
             order by v.view_name
             """;
