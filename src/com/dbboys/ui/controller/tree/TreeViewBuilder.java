@@ -1,10 +1,12 @@
-package com.dbboys.ui.controller.tree;
+﻿package com.dbboys.ui.controller.tree;
 
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.app.AppState;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.model.*;
+
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
@@ -24,9 +26,9 @@ public class TreeViewBuilder {
         if(!(treeData instanceof ConnectFolder)){
             treeItem.expandedProperty().addListener((obs, wasExpanded, isNowExpanded) -> {
                 if (isNowExpanded&& treeItem.getChildren().isEmpty()){
-                    AppState.getDatabaseMetaTreeView().getSelectionModel().clearSelection();;
+                    AppState.getDatabaseMetaTreeView().getSelectionModel().clearSelection();
                     AppState.getDatabaseMetaTreeView().getSelectionModel().select(treeItem);
-                    TreeDataLoader.treeItemAddChildrens(treeItem);
+                    Platform.runLater(() -> TreeDataLoader.treeItemAddChildrens(treeItem));
                 };
             });
         }
