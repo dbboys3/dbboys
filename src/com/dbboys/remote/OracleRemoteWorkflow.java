@@ -102,16 +102,44 @@ public final class OracleRemoteWorkflow {
     // ============ Step 1: Cleanup ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
         String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
+        String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
+        // Thoroughly scrub ALL Oracle traces so DBCA won't complain
+        // "SID already exists" on a re-install.
         String s = b64("#!/bin/bash\nset +e\n" +
-            "systemctl stop oracle.service 2>/dev/null\nsystemctl disable oracle.service 2>/dev/null\n" +
-            "pkill -9 -u oracle 2>/dev/null; pkill -9 -f pmon 2>/dev/null; pkill -9 -f tns_lsnr 2>/dev/null\nsleep 2\n" +
+            // Stop services
+            "systemctl stop oracle.service 2>/dev/null\n" +
+            "systemctl disable oracle.service 2>/dev/null\n" +
+            // Kill all oracle processes
+            "pkill -9 -u oracle 2>/dev/null\n" +
+            "pkill -9 -f pmon 2>/dev/null\n" +
+            "pkill -9 -f tns_lsnr 2>/dev/null\n" +
+            "sleep 2\n" +
+            // Remove oracle user/groups
             "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
             "groupdel dba 2>/dev/null; groupdel oinstall 2>/dev/null; groupdel oper 2>/dev/null\n" +
-            "for d in " + oh + " /opt/oracle /opt/oracle/staging /u01 /u02 /u03 /u04 /tmp/OraInstall* /tmp/.oracle /var/tmp/.oracle /opt/oraInventory /etc/oraInst.loc /etc/oratab; do\n" +
+            // Wipe all Oracle directories
+            "for d in " + oh + " " + ob + " /opt/oracle /opt/oracle/staging /opt/oraInventory " +
+              "/u01 /u02 /u03 /u04 /opt/app/oracle; do\n" +
             "  for g in $d; do [ -e \"$g\" ] && rm -rf \"$g\" 2>/dev/null; done\n" +
             "done\n" +
-            "rm -f /etc/oratab /etc/oraInst.loc /etc/systemd/system/oracle.service 2>/dev/null\n" +
-            "rm -f /etc/init.d/oracle 2>/dev/null; systemctl daemon-reload 2>/dev/null\necho OK");
+            // Wipe DBCA remnants — these persist even after rm -rf /opt/oracle
+            "rm -rf /opt/oracle/cfgtoollogs 2>/dev/null\n" +
+            "rm -rf /etc/oraInst.loc /etc/oratab 2>/dev/null\n" +
+            "rm -f /etc/oratab.bak /etc/oraInst.loc.bak 2>/dev/null\n" +
+            // Remove SID-specific files from standard DBCA locations
+            "rm -rf " + oh + "/cfgtoollogs/dbca/" + sid + " 2>/dev/null\n" +
+            "rm -rf " + oh + "/cfgtoollogs/dbca/" + sid.toLowerCase() + " 2>/dev/null\n" +
+            "rm -rf " + oh + "/admin/" + sid + " " + oh + "/admin/" + sid.toLowerCase() + " 2>/dev/null\n" +
+            "rm -rf " + oh + "/oradata/" + sid + " " + oh + "/oradata/" + sid.toLowerCase() + " 2>/dev/null\n" +
+            "rm -f " + oh + "/dbs/init" + sid + ".ora " + oh + "/dbs/spfile" + sid + ".ora " +
+                   oh + "/dbs/lk" + sid.toUpperCase() + " " + oh + "/dbs/hc_" + sid + ".dat 2>/dev/null\n" +
+            // Remove tmp install artifacts
+            "rm -rf /tmp/OraInstall* /tmp/.oracle /var/tmp/.oracle /tmp/oracle /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null\n" +
+            // Remove systemd + init.d
+            "rm -f /etc/systemd/system/oracle.service /etc/init.d/oracle 2>/dev/null\n" +
+            "systemctl daemon-reload 2>/dev/null\n" +
+            "echo OK");
         check(ctx.executeCommand("echo " + q(s) + " | base64 -d | bash 2>&1"), "Cleanup failed");
     }
 
