@@ -119,6 +119,12 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuConfigUninstallGbase;
     @FXML
+    private Menu menuConfigOracle;
+    @FXML
+    private CustomShortcutMenuItem menuConfigInstallOracle;
+    @FXML
+    private CustomShortcutMenuItem menuConfigUninstallOracle;
+    @FXML
     private Menu menuSettings;
     @FXML
     private Menu menuSettingsLanguage;
@@ -666,6 +672,9 @@ public class MainController {
         bindText(menuConfigGbase, "main.menu.config.gbase");
         bindText(menuConfigInstallGbase, "main.menu.config.install_gbase");
         bindText(menuConfigUninstallGbase, "main.menu.config.uninstall_gbase");
+        bindText(menuConfigOracle, "main.menu.config.oracle");
+        bindText(menuConfigInstallOracle, "main.menu.config.install_oracle");
+        bindText(menuConfigUninstallOracle, "main.menu.config.uninstall_oracle");
 
         bindText(menuSettings, "main.menu.settings");
         bindText(menuSettingsLanguage, "main.menu.settings.language");
@@ -953,6 +962,14 @@ public class MainController {
 
     public void unInstallMysql(){
         RemoteDatabaseProviders.mysql().startUninstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void installOracle(){
+        RemoteDatabaseProviders.oracle().startInstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void unInstallOracle(){
+        RemoteDatabaseProviders.oracle().startUninstallWizard((Stage) AppState.getWindow());
     }
 
     public void setLanguageZh() {

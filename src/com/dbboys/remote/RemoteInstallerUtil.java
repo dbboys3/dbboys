@@ -1104,7 +1104,14 @@ public class RemoteInstallerUtil {
     }
 
     private static boolean remoteFileExists(String filePath) throws JSchException, InterruptedException {
-        return executeCommandWithExitStatus("test -f " + shellQuote(filePath)) == 0;
+        // Handle space-separated paths (e.g. Oracle 11g two-zip packages).
+        // Every file in the list must exist.
+        if (filePath == null || filePath.isBlank()) return false;
+        for (String p : filePath.split("\\s+")) {
+            if (p.isEmpty()) continue;
+            if (executeCommandWithExitStatus("test -f " + shellQuote(p)) != 0) return false;
+        }
+        return true;
     }
 
     private static RemoteInstallExecutionContext buildInstallExecutionContext() {

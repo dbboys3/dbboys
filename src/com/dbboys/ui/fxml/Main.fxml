@@ -43,12 +43,14 @@
                         <items>
                             <CustomShortcutMenuItem fx:id="menuConfigCheckEnv" mnemonicParsing="false" id="modifyMenu" onAction="#checkInstallEnv">
                             </CustomShortcutMenuItem>
-                            <!--
-                            <MenuItem mnemonicParsing="false"  text="安装ORACLE ( coding )">
-                            </MenuItem>
-                            <MenuItem mnemonicParsing="false"  text="安装MYSQL ( coding )">
-                            </MenuItem>
-                            -->
+                            <CustomMenu fx:id="menuConfigOracle" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuConfigInstallOracle" mnemonicParsing="false" onAction="#installOracle">
+                                    </CustomShortcutMenuItem>
+                                    <CustomShortcutMenuItem fx:id="menuConfigUninstallOracle" mnemonicParsing="false" onAction="#unInstallOracle">
+                                    </CustomShortcutMenuItem>
+                                </items>
+                            </CustomMenu>
                             <CustomMenu fx:id="menuConfigInformix" mnemonicParsing="false">
                                 <items>
                                     <CustomShortcutMenuItem fx:id="menuConfigInstallInformix" mnemonicParsing="false" onAction="#installInformix">

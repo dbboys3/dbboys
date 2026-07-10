@@ -1,4 +1,4 @@
-﻿package com.dbboys.infra.i18n;
+package com.dbboys.infra.i18n;
 
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.StringBinding;
