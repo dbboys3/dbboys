@@ -69,31 +69,35 @@ public final class OracleInstanceAdminRepository implements InstanceAdminReposit
             order by used_gb desc, df.tablespace_name, df.file_id
             """;
     private static final String SQL_SCHEMA_USAGE = """
-            select
-                u.username,
-                round(nvl(sum(s.bytes), 0) / power(1024, 3), 2) as used_gb
-            from dba_users u
-            left join dba_segments s
-              on s.owner = u.username
-            group by u.username
-            having nvl(sum(s.bytes), 0) > 0
-            order by used_gb desc, u.username
-            fetch first 20 rows only
+            select * from (
+                select
+                    u.username,
+                    round(nvl(sum(s.bytes), 0) / power(1024, 3), 2) as used_gb
+                from dba_users u
+                left join dba_segments s
+                  on s.owner = u.username
+                group by u.username
+                having nvl(sum(s.bytes), 0) > 0
+                order by used_gb desc, u.username
+            )
+            where rownum <= 20
             """;
     private static final String SQL_SEGMENT_USAGE = """
-            select
-                owner,
-                segment_name,
-                segment_type,
-                round(sum(bytes) / power(1024, 3), 2) as used_gb,
-                nvl(sum(blocks), 0) as used_blocks,
-                count(*) as extents
-            from dba_segments
-            where segment_type not in ('ROLLBACK', 'TYPE2 UNDO')
-            group by owner, segment_name, segment_type
-            having sum(bytes) > 0
-            order by used_gb desc, owner, segment_name
-            fetch first 20 rows only
+            select * from (
+                select
+                    owner,
+                    segment_name,
+                    segment_type,
+                    round(sum(bytes) / power(1024, 3), 2) as used_gb,
+                    nvl(sum(blocks), 0) as used_blocks,
+                    count(*) as extents
+                from dba_segments
+                where segment_type not in ('ROLLBACK', 'TYPE2 UNDO')
+                group by owner, segment_name, segment_type
+                having sum(bytes) > 0
+                order by used_gb desc, owner, segment_name
+            )
+            where rownum <= 20
             """;
     private static final String SQL_MAX_TABLESPACE_USAGE = """
             select nvl(max(used_percent), 0)
