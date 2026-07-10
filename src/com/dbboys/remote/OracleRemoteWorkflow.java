@@ -347,17 +347,30 @@ public final class OracleRemoteWorkflow {
         String port = ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT);
         String sysPw = ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD);
 
-        // netca
+        // netca — SILENT mode.  Oracle 11g netca IS a GUI tool; -silent
+        // suppresses the GUI but still requires the response file syntax exactly.
+        // The response file must use the [General] / [oracle.net.ca] section
+        // headers that the silent parser expects.  Also unset DISPLAY so the
+        // JVM doesn't even try to init AWT.
         String netcaRsp = "/tmp/netca_" + sid + ".rsp";
         writeFile(ctx, netcaRsp,
-            "[GENERAL]\nRESPONSEFILE_VERSION=11.2.0\nCREATE_TYPE=CUSTOM\n" +
-            "[oracle.net.ca]\nINSTALLED_COMPONENTS={\"server\",\"net8\",\"javavm\"}\n" +
-            "INSTALL_TYPE=\"typical\"\nLISTENER_NUMBER=1\n" +
+            "[General]\n" +
+            "RESPONSEFILE_VERSION=11.2\n" +
+            "CREATE_TYPE=CUSTOM\n" +
+            "[oracle.net.ca]\n" +
+            "INSTALLED_COMPONENTS={\"server\",\"net8\",\"javavm\"}\n" +
+            "INSTALL_TYPE=\"typical\"\n" +
+            "LISTENER_NUMBER=1\n" +
             "LISTENER_NAMES={\"LISTENER\"}\n" +
             "LISTENER_PROTOCOLS={\"TCP:" + port + "\"}\n" +
             "LISTENER_START=\"LISTENER\"\n");
         ctx.executeCommand("chown oracle:oinstall " + q(netcaRsp));
-        check(runOra(ctx, "export ORACLE_HOME=" + q(oh) + "; export PATH=$ORACLE_HOME/bin:$PATH; $ORACLE_HOME/bin/netca -silent -responseFile " + q(netcaRsp) + " 2>&1; echo NETCA_RC=$?"),
+        check(runOra(ctx,
+            "unset DISPLAY\n" +
+            "export ORACLE_HOME=" + q(oh) + "\n" +
+            "export PATH=$ORACLE_HOME/bin:$PATH\n" +
+            "$ORACLE_HOME/bin/netca /silent /responseFile " + q(netcaRsp) + " 2>&1\n" +
+            "echo NETCA_RC=$?"),
             "netca failed");
 
         // bash_profile
