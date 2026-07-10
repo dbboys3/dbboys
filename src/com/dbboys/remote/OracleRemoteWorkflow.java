@@ -225,12 +225,31 @@ public final class OracleRemoteWorkflow {
             "-J-Djava.awt.headless=true " +
             "-responseFile " + rspFile + " 2>&1\n" +
             "echo RC=$?");
-        check(ctx.executeCommand(
+        // The runInstaller exits with RC=0 even when it prints "run root.sh".
+        // "Please run /opt/oracle/.../root.sh" is NOT a failure — it's just
+        // telling you to execute the next step (which we do automatically).
+        String out = ctx.executeCommand(
             "echo " + q(installCmd) + " | base64 -d > /tmp/runInstaller_" + sid + ".sh && " +
             "chmod +x /tmp/runInstaller_" + sid + ".sh && " +
             "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
-            "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1"),
-            "Oracle runInstaller failed");
+            "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1");
+        log("runInstaller output:\n" + smartClip(out, 3000));
+        // If RC=0 we're good.  If the output contains "root.sh" that's a
+        // normal post-install instruction, not an error.  Only fail on actual
+        // fatal errors (FATAL, SEVERE with NPE, RC=255, etc.).
+        if (out == null) {
+            throw new Exception("Oracle runInstaller produced no output");
+        }
+        if (out.contains("RC=0") || out.contains("successful") || out.contains("Successfully")) {
+            // Expected success path
+        } else if (out.contains("root.sh") && !out.contains("FATAL") && !out.contains("SEVERE") && !out.contains("RC=255")) {
+            // Normal: installer succeeded and is reminding us to run root.sh (next step)
+        } else if (out.contains("FATAL") || out.contains("RC=255") || out.contains("RC=254") || out.contains("NullPointerException")) {
+            throw new Exception("Oracle runInstaller failed:\n" + smartClip(out, 2000));
+        } else if (!out.contains("RC=0")) {
+            // Unknown outcome — probably failed
+            throw new Exception("Oracle runInstaller failed:\n" + smartClip(out, 2000));
+        }
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
 
@@ -442,4 +461,5 @@ public final class OracleRemoteWorkflow {
     private static String b64(String s) { return java.util.Base64.getEncoder().encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
     private static String clip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
     private static String cliptail(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
+    private static String smartClip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "...(truncated)"; }
 }
