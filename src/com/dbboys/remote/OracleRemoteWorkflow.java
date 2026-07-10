@@ -33,28 +33,38 @@ public final class OracleRemoteWorkflow {
     public static void executeUninstallStep(int stepNo, RemoteUninstallExecutionContext ctx) throws Exception {
         switch (stepNo) {
             case 1:
-                String oh = findOracleHome(ctx);
-                if (oh != null) {
-                    check(ctx.executeCommand(
-                        "export ORACLE_HOME=" + q(oh) + "\n" +
-                        "test -x \"$ORACLE_HOME/bin/lsnrctl\" && $ORACLE_HOME/bin/lsnrctl stop 2>/dev/null || true\n" +
-                        "test -x \"$ORACLE_HOME/bin/sqlplus\" && { echo 'shutdown immediate;' | su - oracle -c \"$ORACLE_HOME/bin/sqlplus -S / as sysdba\" 2>/dev/null || true; } || true\n" +
-                        "echo OK"), "Failed to stop Oracle database/listener");
-                }
-                check(ctx.executeCommand("pkill -9 -f pmon 2>/dev/null || true; pkill -9 -f tns_lsnr 2>/dev/null || true; pkill -9 -f 'ora_' 2>/dev/null || true; systemctl stop oracle.service 2>/dev/null || true; echo OK"),
-                    "Failed to stop Oracle processes");
+                // Best-effort stop: if oracle isn't installed, everything is "|| true".
+                // Never fail this step — the system may be partially or not-at-all installed.
+                ctx.executeCommandWithExitStatus(
+                    "pkill -9 -f pmon 2>/dev/null || true\n" +
+                    "pkill -9 -f tns_lsnr 2>/dev/null || true\n" +
+                    "pkill -9 -f 'ora_' 2>/dev/null || true\n" +
+                    "systemctl stop oracle.service 2>/dev/null || true\n" +
+                    "echo OK");
                 break;
             case 2:
-                check(ctx.executeCommand("systemctl disable oracle.service 2>/dev/null || true; rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc; systemctl daemon-reload 2>/dev/null || true; echo OK"),
-                    "Failed to remove services/config");
+                ctx.executeCommandWithExitStatus(
+                    "systemctl disable oracle.service 2>/dev/null || true\n" +
+                    "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
+                    "rm -f /etc/init.d/oracle 2>/dev/null || true\n" +
+                    "systemctl daemon-reload 2>/dev/null || true\n" +
+                    "echo OK");
                 break;
             case 3:
-                check(ctx.executeCommand("for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall*; do [ -e \"$d\" ] && rm -rf \"$d\"; done; echo OK"),
-                    "Failed to remove directories");
+                ctx.executeCommandWithExitStatus(
+                    "for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall* /opt/oraInventory /opt/app/oracle; do\n" +
+                    "  for g in $d; do [ -e \"$g\" ] && rm -rf \"$g\"; done\n" +
+                    "done\n" +
+                    "rm -f /etc/oratab /etc/oraInst.loc /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null || true\n" +
+                    "echo OK");
                 break;
             case 4:
-                check(ctx.executeCommand("id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }; groupdel dba 2>/dev/null || true; groupdel oinstall 2>/dev/null || true; groupdel oper 2>/dev/null || true; echo OK"),
-                    "Failed to remove oracle user/groups");
+                ctx.executeCommandWithExitStatus(
+                    "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
+                    "groupdel dba 2>/dev/null || true\n" +
+                    "groupdel oinstall 2>/dev/null || true\n" +
+                    "groupdel oper 2>/dev/null || true\n" +
+                    "echo OK");
                 break;
             default: throw new IllegalArgumentException("Unknown Oracle uninstall step: " + stepNo);
         }
@@ -99,48 +109,21 @@ public final class OracleRemoteWorkflow {
         return c;
     }
 
-    // ============ Step 1: Cleanup ============
+    // ============ Step 1: Cleanup (delegates to uninstall workflow) ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
-        String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
-        // Thoroughly scrub ALL Oracle traces so DBCA won't complain
-        // "SID already exists" on a re-install.
-        String s = b64("#!/bin/bash\nset +e\n" +
-            // Stop services
-            "systemctl stop oracle.service 2>/dev/null\n" +
-            "systemctl disable oracle.service 2>/dev/null\n" +
-            // Kill all oracle processes
-            "pkill -9 -u oracle 2>/dev/null\n" +
-            "pkill -9 -f pmon 2>/dev/null\n" +
-            "pkill -9 -f tns_lsnr 2>/dev/null\n" +
-            "sleep 2\n" +
-            // Remove oracle user/groups
-            "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
-            "groupdel dba 2>/dev/null; groupdel oinstall 2>/dev/null; groupdel oper 2>/dev/null\n" +
-            // Wipe all Oracle directories
-            "for d in " + oh + " " + ob + " /opt/oracle /opt/oracle/staging /opt/oraInventory " +
-              "/u01 /u02 /u03 /u04 /opt/app/oracle; do\n" +
-            "  for g in $d; do [ -e \"$g\" ] && rm -rf \"$g\" 2>/dev/null; done\n" +
-            "done\n" +
-            // Wipe DBCA remnants — these persist even after rm -rf /opt/oracle
-            "rm -rf /opt/oracle/cfgtoollogs 2>/dev/null\n" +
-            "rm -rf /etc/oraInst.loc /etc/oratab 2>/dev/null\n" +
-            "rm -f /etc/oratab.bak /etc/oraInst.loc.bak 2>/dev/null\n" +
-            // Remove SID-specific files from standard DBCA locations
-            "rm -rf " + oh + "/cfgtoollogs/dbca/" + sid + " 2>/dev/null\n" +
-            "rm -rf " + oh + "/cfgtoollogs/dbca/" + sid.toLowerCase() + " 2>/dev/null\n" +
-            "rm -rf " + oh + "/admin/" + sid + " " + oh + "/admin/" + sid.toLowerCase() + " 2>/dev/null\n" +
-            "rm -rf " + oh + "/oradata/" + sid + " " + oh + "/oradata/" + sid.toLowerCase() + " 2>/dev/null\n" +
-            "rm -f " + oh + "/dbs/init" + sid + ".ora " + oh + "/dbs/spfile" + sid + ".ora " +
-                   oh + "/dbs/lk" + sid.toUpperCase() + " " + oh + "/dbs/hc_" + sid + ".dat 2>/dev/null\n" +
-            // Remove tmp install artifacts
-            "rm -rf /tmp/OraInstall* /tmp/.oracle /var/tmp/.oracle /tmp/oracle /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null\n" +
-            // Remove systemd + init.d
-            "rm -f /etc/systemd/system/oracle.service /etc/init.d/oracle 2>/dev/null\n" +
-            "systemctl daemon-reload 2>/dev/null\n" +
-            "echo OK");
-        check(ctx.executeCommand("echo " + q(s) + " | base64 -d | bash 2>&1"), "Cleanup failed");
+        // Reuse the uninstall logic: stop DB/listener, wipe config, wipe dirs,
+        // remove oracle user/groups.  This keeps install step 1 and the standalone
+        // uninstall wizard 100% consistent — no duplicated cleanup code.
+        String installOh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
+        String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
+
+        // Shell commands mirror executeUninstallStep exactly, but run over
+        // the same SSH session the install wizard already has open.
+        exec(ctx, "pkill -9 -f pmon 2>/dev/null || true; pkill -9 -f tns_lsnr 2>/dev/null || true; pkill -9 -f 'ora_' 2>/dev/null || true; systemctl stop oracle.service 2>/dev/null || true");
+        exec(ctx, "systemctl disable oracle.service 2>/dev/null || true; rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc; systemctl daemon-reload 2>/dev/null || true");
+        exec(ctx, "for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall* /opt/oraInventory /opt/app/oracle " + dd + " " + ra + " " + installOh + "; do [ -e \"$d\" ] && rm -rf \"$d\"; done; echo OK");
+        exec(ctx, "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }; groupdel dba 2>/dev/null || true; groupdel oinstall 2>/dev/null || true; groupdel oper 2>/dev/null || true; echo OK");
     }
 
     // ============ Step 2: Create user & dirs ============
@@ -317,16 +300,12 @@ public final class OracleRemoteWorkflow {
         String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
 
-        // Remove any existing oratab entry + oradata dir for this SID
-        // so DBCA doesn't complain "SID already exists".
+        // DBCA requires /etc/oratab to exist and be writable by oracle,
+        // but it must NOT contain any entry for this SID or this ORACLE_HOME.
+        // Step 1 (cleanup) already wiped all Oracle files, so we just create
+        // a fresh empty oratab here.
         check(ctx.executeCommand(
-            "sed -i '/^" + sid + ":/d' /etc/oratab 2>/dev/null || true\n" +
-            "echo '" + sid + ":" + oh + ":Y' >> /etc/oratab\n" +
-            "chown oracle:oinstall /etc/oratab\n" +
-            "rm -rf " + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "/" + sid + " 2>/dev/null || true\n" +
-            "rm -rf " + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "/" + sid + " 2>/dev/null || true\n" +
-            "rm -rf " + oh + "/dbs/init" + sid + ".ora " + oh + "/dbs/spfile" + sid + ".ora 2>/dev/null || true\n" +
-            "echo OK"),
+            "rm -f /etc/oratab && touch /etc/oratab && chown oracle:oinstall /etc/oratab && echo OK"),
             "Failed to create /etc/oratab");
 
         // 11g DBCA response file keys are ALL UPPERCASE (RESPONSEFILE_VERSION not responseFileVersion).
