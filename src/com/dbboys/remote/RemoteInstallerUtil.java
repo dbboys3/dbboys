@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+﻿package com.dbboys.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
@@ -299,31 +299,31 @@ public class RemoteInstallerUtil {
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(machineInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             // 省略其他信息的显示代码（与原逻辑相同）
-                                            systemInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(osInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(kernelInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(cpuInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(memInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(diskInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n","-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(fileSystemInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
 
 
-                                            //systemInfoArea.append("内核参数\n","-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            //systemInfoArea.append("内核参数\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             //systemInfoArea.append(kernelParams + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.showParagraphAtTop(0);
@@ -868,10 +868,14 @@ public class RemoteInstallerUtil {
         if (activeProvider.supportsPackageDownload()) {
             content.getChildren().add(downloadStackPane);
         }
+        Label remotePathHint = new Label();
+        remotePathHint.textProperty().bind(I18n.bind("remote.install.step3.remote_path_hint", "如果包含多个压缩文件，以空格分隔"));
+        remotePathHint.getStyleClass().add("text-muted");
         content.getChildren().addAll(
                 uploadedRadioButton,
                 uploadPathLabel,
-                remotePathField
+                remotePathField,
+                remotePathHint
         );
 
         return content;
@@ -1126,6 +1130,7 @@ public class RemoteInstallerUtil {
                 cpuInfo,
                 memInfo,
                 diskInfo,
+                fileSystemInfo,
                 collectSelectedInstallSteps()
         );
     }

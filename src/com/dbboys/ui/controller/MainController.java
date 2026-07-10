@@ -1,4 +1,4 @@
-package com.dbboys.ui.controller;
+﻿package com.dbboys.ui.controller;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
@@ -265,6 +265,9 @@ public class MainController {
         menuConfigGbase.setGraphic(IconFactory.group(IconPaths.GBASE_LOGO, 0.22));
         menuConfigInstallGbase.setGraphic(null);
         menuConfigUninstallGbase.setGraphic(null);
+        menuConfigOracle.setGraphic(IconFactory.group(IconPaths.ORACLE_LOGO, 0.5));
+        menuConfigInstallOracle.setGraphic(null);
+        menuConfigUninstallOracle.setGraphic(null);
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
         menuSettingsTheme.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_THEME, 0.68));
         menuSettingsReset.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_RESET, 0.6));

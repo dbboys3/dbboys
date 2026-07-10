@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+﻿package com.dbboys.remote;
 
 import com.jcraft.jsch.JSchException;
 
@@ -20,6 +20,7 @@ public final class RemoteInstallExecutionContext {
     private final String cpuInfo;
     private final String memoryInfo;
     private final String diskInfo;
+    private final String fileSystemInfo;
     private final Set<Integer> selectedInstallSteps;
 
     public RemoteInstallExecutionContext(
@@ -33,6 +34,7 @@ public final class RemoteInstallExecutionContext {
             String cpuInfo,
             String memoryInfo,
             String diskInfo,
+            String fileSystemInfo,
             Set<Integer> selectedInstallSteps
     ) {
         this.remoteClient = remoteClient;
@@ -44,6 +46,7 @@ public final class RemoteInstallExecutionContext {
         this.cpuInfo = cpuInfo;
         this.memoryInfo = memoryInfo;
         this.diskInfo = diskInfo;
+        this.fileSystemInfo = fileSystemInfo;
         this.selectedInstallSteps = selectedInstallSteps == null ? Set.of() : Set.copyOf(new HashSet<>(selectedInstallSteps));
         this.fieldValues = new HashMap<>();
         if (fields != null) {
@@ -108,6 +111,10 @@ public final class RemoteInstallExecutionContext {
 
     public String diskInfo() {
         return diskInfo;
+    }
+
+    public String fileSystemInfo() {
+        return fileSystemInfo;
     }
 
     public boolean isInstallStepSelected(int stepNo) {

@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+﻿package com.dbboys.remote;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.dialect.gbase.GbaseDialect;
@@ -8,7 +8,7 @@ import com.dbboys.model.Connect;
 import java.io.File;
 
 public final class Gbase8sRemoteWorkflow {
-    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
+    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;";
     private static final int CREATE_DEFAULT_DATABASE_STEP_NO = 12;
 
     private Gbase8sRemoteWorkflow() {

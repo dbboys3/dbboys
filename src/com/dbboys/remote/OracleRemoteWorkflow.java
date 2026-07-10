@@ -1,10 +1,11 @@
-package com.dbboys.remote;
+﻿package com.dbboys.remote;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
+import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 
 public final class OracleRemoteWorkflow {
-    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
+    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;";
     private static final String RESULT_BODY_STYLE = "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;";
     private static final int FMT_ZIP = 1, FMT_RPM = 2, FMT_TAR = 3;
 
@@ -84,17 +85,48 @@ public final class OracleRemoteWorkflow {
 
     public static void populateInstallResult(RemoteInstallExecutionContext ctx, CustomInlineCssTextArea area) throws Exception {
         String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         area.replaceText("");
-        area.append("Database version\n", RESULT_TITLE_STYLE);
+
+        // Database version
+        area.append(I18n.t("remote.install.result.db_version", "Database version") + "\n", RESULT_TITLE_STYLE);
         try { area.append(runSql(ctx, "select banner from v$version where rownum=1") + "\n\n", RESULT_BODY_STYLE); } catch (Exception ignored) {}
-        area.append("Instance info\n", RESULT_TITLE_STYLE);
-        area.append("Install: " + oh + "\n", RESULT_BODY_STYLE);
-        area.append("SID:  " + sid + "\n", RESULT_BODY_STYLE);
-        area.append("Port: " + ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT) + "\n", RESULT_BODY_STYLE);
-        area.append("User: system/" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\n", RESULT_BODY_STYLE);
-        area.append("Charset: " + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\n\n", RESULT_BODY_STYLE);
-        area.append("Memory: " + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n\n", RESULT_BODY_STYLE);
+
+        // Instance info
+        area.append(I18n.t("remote.install.result.db_instance_info", "Instance Information") + "\n", RESULT_TITLE_STYLE);
+        area.append(I18n.t("remote.install.result.oracle_home", "ORACLE_HOME") + "：" + oh + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.oracle_base", "ORACLE_BASE") + "：" + ob + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.instance_name", "Instance Name") + "：" + sid + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.listener_port", "Listener Port") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.user_password", "User/Password") + "：system/" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.charset", "Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.ncharset", "National Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.memory", "Memory Target") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n\n", RESULT_BODY_STYLE);
+
+        // Space config
+        area.append(I18n.t("remote.install.result.space_config", "Space Configuration") + "\n", RESULT_TITLE_STYLE);
+        area.append(I18n.t("remote.install.result.data_path", "Data File Path") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.recovery_area", "Recovery Area") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\n\n", RESULT_BODY_STYLE);
+
+        // Data file disk usage
+        String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
+        try {
+            String diskInfo = ctx.executeCommand("df -h " + q(dd) + " | tail -1");
+            area.append(I18n.t("remote.install.result.disk_usage", "Disk Usage") + "：" + diskInfo + "\n\n", RESULT_BODY_STYLE);
+        } catch (Exception ignored) {}
+
+        // System info
+        area.append(I18n.t("remote.install.info.machine", "Server Model") + "\n", RESULT_TITLE_STYLE);
+        area.append(ctx.machineInfo() + "\n\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.info.os", "Operating System") + "\n", RESULT_TITLE_STYLE);
+        area.append(ctx.osInfo() + "\n\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.info.kernel", "Kernel Version") + "\n", RESULT_TITLE_STYLE);
+        area.append(ctx.kernelInfo() + "\n\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.info.cpu", "CPU Information") + "\n", RESULT_TITLE_STYLE);
+        area.append(ctx.cpuInfo() + "\n\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.info.memory", "Memory Information") + "\n", RESULT_TITLE_STYLE);
+        area.append(ctx.memoryInfo() + "\n\n", RESULT_BODY_STYLE);
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {

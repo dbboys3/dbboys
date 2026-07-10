@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+﻿package com.dbboys.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.ui.component.*;
@@ -196,25 +196,25 @@ public class RemoteCheckEnvUtil {
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.machine", "服务器型号") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.machine", "服务器型号") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.os", "操作系统版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.os", "操作系统版本") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.kernel", "内核版本") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.kernel", "内核版本") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.cpu", "CPU信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.cpu", "CPU信息") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.memory", "内存信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.memory", "内存信息") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.disk", "磁盘信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.disk", "磁盘信息") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-                                            systemInfoArea.append(I18n.t("remote.check.info.filesystem", "文件系统信息") + "\n", "-fx-fill: #569cd6;-fx-font-weight: bold;-fx-font-family:system;");
+                                            systemInfoArea.append(I18n.t("remote.check.info.filesystem", "文件系统信息") + "\n", "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
                                             systemInfoArea.append(snapshot.fileSystemInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
                                             systemInfoArea.showParagraphAtTop(0);
