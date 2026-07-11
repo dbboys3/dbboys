@@ -122,21 +122,21 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
 
     static String inferOracleHome(String packagePath, String currentValue) {
         String home = currentValue == null ? "" : currentValue.trim();
-        if (home.isEmpty() || "/opt/oracle/product/19c/dbhome_1".equals(home)
-                || "/opt/oracle/product/18c/dbhome_1".equals(home)
-                || "/opt/oracle/product/12c/dbhome_1".equals(home)
-                || "/opt/oracle/product/11g/dbhome_1".equals(home)
-                || "/opt/oracle/product/any/dbhome_1".equals(home)) {
+        if (home.isEmpty() || "/u01/app/product/19c/dbhome_1".equals(home)
+                || "/u01/app/product/18c/dbhome_1".equals(home)
+                || "/u01/app/product/12c/dbhome_1".equals(home)
+                || "/u01/app/product/11g/dbhome_1".equals(home)
+                || "/u01/app/product/any/dbhome_1".equals(home)) {
             int[] info = detectOraclePackage(packagePath);
             int major = info[0];
             return switch (major) {
-                case 11 -> "/opt/oracle/product/11g/dbhome_1";
-                case 12 -> "/opt/oracle/product/12c/dbhome_1";
-                case 18 -> "/opt/oracle/product/18c/dbhome_1";
-                case 19 -> "/opt/oracle/product/19c/dbhome_1";
-                case 21 -> "/opt/oracle/product/21c/dbhome_1";
-                case 23 -> "/opt/oracle/product/23ai/dbhome_1";
-                default -> "/opt/oracle/product/any/dbhome_1";
+                case 11 -> "/u01/app/product/11g/dbhome_1";
+                case 12 -> "/u01/app/product/12c/dbhome_1";
+                case 18 -> "/u01/app/product/18c/dbhome_1";
+                case 19 -> "/u01/app/product/19c/dbhome_1";
+                case 21 -> "/u01/app/product/21c/dbhome_1";
+                case 23 -> "/u01/app/product/23ai/dbhome_1";
+                default -> "/u01/app/product/any/dbhome_1";
             };
         }
         return home;
@@ -148,7 +148,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
         double freeDiskGb = hostProfile == null ? 0 : hostProfile.getFreeDiskSizeGb();
 
         int memoryMb = totalMemGb >= 16 ? 4096 : totalMemGb >= 8 ? 2048 : totalMemGb >= 4 ? 1024 : 512;
-        String dataDir = freeDiskGb >= 50 ? "/u01/oradata" : "/opt/oracle/oradata";
+        String dataDir = freeDiskGb >= 50 ? "/u01/oradata" : "/u01/app/oradata";
 
         List<RemoteInstallField> fields = new ArrayList<>();
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ROOT_PASSWORD,
@@ -156,10 +156,10 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 "",
                 I18n.t("remote.install.oracle.cfg.root_password.desc", "The root password of the remote server, used to create the oracle user and configure kernel parameters.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ORACLE_BASE,
-                "ORACLE_BASE", "/opt/oracle",
+                "ORACLE_BASE", "/u01/app",
                 I18n.t("remote.install.oracle.cfg.oracle_base.desc", "Oracle base directory. ORACLE_HOME is created under this.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ORACLE_HOME,
-                "ORACLE_HOME", "/opt/oracle/product/any/dbhome_1",
+                "ORACLE_HOME", "/u01/app/product/any/dbhome_1",
                 I18n.t("remote.install.oracle.cfg.oracle_home.desc", "Oracle home directory where binaries are installed.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_DATA_DIR,
                 I18n.t("remote.install.oracle.cfg.data_dir.name", "Data Directory"),
@@ -199,7 +199,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 I18n.t("remote.install.oracle.cfg.tablespace.desc", "Datafile path for the default permanent tablespace.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_RECOVERY_AREA,
                 I18n.t("remote.install.oracle.cfg.recovery.name", "Recovery Area"),
-                "/opt/oracle/fast_recovery_area",
+                "/u01/app/fast_recovery_area",
                 I18n.t("remote.install.oracle.cfg.recovery.desc", "Fast recovery area for archived logs and backups.")));
         return fields;
     }
@@ -215,7 +215,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                         "Create oracle OS user, oinstall/dba/oper groups, directory structure, and configure kernel parameters.", true, true),
                 new RemoteInstallStepSpec("remote.install.oracle.step3.name", "Prepare Packages",
                         "remote.install.oracle.step3.desc",
-                        "For zip packages, extract Oracle installation files into /opt/oracle/staging. For RPM packages, check yum/dnf repositories and prepare for installation.", true, true),
+                        "For zip packages, extract Oracle installation files into /u01/app/staging. For RPM packages, check yum/dnf repositories and prepare for installation.", true, true),
                 new RemoteInstallStepSpec("remote.install.oracle.step4.name", "Install Binaries",
                         "remote.install.oracle.step4.desc",
                         "Run Oracle Universal Installer in silent mode (11g/12c) or rpm install (18c+).", true, true),
