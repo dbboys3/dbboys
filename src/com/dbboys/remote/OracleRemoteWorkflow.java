@@ -98,16 +98,16 @@ public final class OracleRemoteWorkflow {
         area.append(I18n.t("remote.install.result.charset", "Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.ncharset", "National Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.memory", "Memory Target") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n\n", RESULT_BODY_STYLE);
-
-        // Space config
-        area.append(I18n.t("remote.install.result.space_config", "Space Configuration") + "\n", RESULT_TITLE_STYLE);
         area.append(I18n.t("remote.install.result.data_path", "Data File Path") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.recovery_area", "Recovery Area") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\n\n", RESULT_BODY_STYLE);
+        // Space config
+        area.append(I18n.t("remote.install.result.space_config", "Space Configuration") + "\n", RESULT_TITLE_STYLE);
+
 
         // Data file disk usage
         String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
         try {
-            String diskInfo = ctx.executeCommand("df -h " + q(dd) + " | tail -1");
+            String diskInfo = ctx.executeCommand("df -h " + q(dd));
             area.append(I18n.t("remote.install.result.disk_usage", "Disk Usage") + "：" + diskInfo + "\n\n", RESULT_BODY_STYLE);
         } catch (Exception ignored) {}
 
