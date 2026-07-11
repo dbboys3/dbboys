@@ -138,12 +138,12 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 case 11: ver = "11g"; break;
                 case 12: ver = "12c"; break;
                 case 18: ver = "18c"; break;
-                case 19: ver = (fmt == 2) ? "19c" : "19.3.0"; break;
+                case 19: ver = "19c"; break;
                 case 21: ver = "21c"; break;
                 case 23: ver = "23ai"; break;
                 default: ver = "any"; break;
             }
-            String base = (fmt == 2) ? "/opt/oracle" : "/u01/app/oracle";
+            String base = "/opt/oracle" ;
             return base + "/product/" + ver + "/dbhome_1";
         }
         return home;

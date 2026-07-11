@@ -10,7 +10,7 @@ public final class RemotePasswordUtil {
     private static final String UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     private static final String LOWER = "abcdefghijkmnopqrstuvwxyz";
     private static final String DIGITS = "23456789";
-    private static final String SYMBOLS = "@#%_+-=";
+    private static final String SYMBOLS = "@#_+-=";
     private static final String ALL = UPPER + LOWER + DIGITS + SYMBOLS;
     private static final int DEFAULT_LENGTH = 12;
 

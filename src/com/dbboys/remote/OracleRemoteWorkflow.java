@@ -155,8 +155,8 @@ public final class OracleRemoteWorkflow {
             "usermod -a -G dba,oper oracle 2>/dev/null \necho OK"), "Failed to create oracle user/groups");
 
         check(ctx.executeCommand(
-            "mkdir -p " + q(ob) + " " + q(oh) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
-            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
+            "mkdir -p " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/oracle/staging /opt/oraInventory && " +
+            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/oracle/staging /opt/oraInventory && " +
             "chmod -R 775 " + q(ob) + " && echo OK"), "Failed to create directories");
 
         check(ctx.executeCommand(kernelParams(ctx)), "Failed to set kernel parameters");
@@ -196,7 +196,7 @@ public final class OracleRemoteWorkflow {
 
         switch (fmt) {
             case FMT_ZIP:
-                String staging = "/u01/app/staging";
+                String staging = "/opt/oracle/staging";
                 check(ctx.executeCommand(
                     "cd " + staging + "\n" +
                     "for z in " + pkg + "; do [ -f \"$z\" ] && { echo \"Unzipping $z\"; unzip -qo \"$z\"; } || echo \"SKIP $z\"; done\n" +
@@ -224,7 +224,7 @@ public final class OracleRemoteWorkflow {
     }
 
     private static void installZip(RemoteInstallExecutionContext ctx) throws Exception {
-        String staging = "/u01/app/staging";
+        String staging = "/opt/oracle/staging";
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
@@ -282,7 +282,7 @@ public final class OracleRemoteWorkflow {
             "chmod +x /tmp/runInstaller_" + sid + ".sh && " +
             "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
             "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1");
-        log("runInstaller output:\n" + smartClip(out, 3000));
+        log("runInstaller output:\n" + out);
         // If RC=0 we're good.  If the output contains "root.sh" that's a
         // normal post-install instruction, not an error.  Only fail on actual
         // fatal errors (FATAL, SEVERE with NPE, RC=255, etc.).
@@ -350,7 +350,7 @@ public final class OracleRemoteWorkflow {
         String pkg = ctx.remotePackagePath();
         String oh = resolveOracleHome(ctx);
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String staging = "/u01/app/staging";
+        String staging = "/opt/oracle/staging";
         check(ctx.executeCommand(
             "[ -f " + q(pkg) + " ] || { echo PKG_NOT_FOUND; exit 1; }\n" +
             "cd " + staging + " && tar xf " + q(pkg) + "\n" +
