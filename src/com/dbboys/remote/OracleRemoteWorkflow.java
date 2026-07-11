@@ -42,7 +42,7 @@ public final class OracleRemoteWorkflow {
                "echo OK";
     }
     private static String uninstallStep3Cmd() {
-        return "rpm -qa 2>/dev/null | grep oracle-database | xargs -r rpm -e --nodeps 2>/dev/null; true\n" +
+        return "rpm -qa 2>/dev/null | grep oracle-database | xargs -r rpm -e --noscripts --nodeps  2>>/tmp/oracle_uninstall.log \n" +
                "echo OK";
     }
     private static String uninstallStep4Cmd() {
@@ -50,7 +50,7 @@ public final class OracleRemoteWorkflow {
                "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
                "rm -f /etc/init.d/oracle 2>/dev/null \n" +
                "systemctl daemon-reload 2>/dev/null \n" +
-               "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true\n" +
+               "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; \n" +
                "echo OK";
     }
     private static String uninstallStep5Cmd() {
@@ -418,8 +418,8 @@ public final class OracleRemoteWorkflow {
                 "-templateName General_Purpose.dbc " +
                 "-gdbName " + sid + " " +
                 "-sid " + sid + " " +
-                "-sysPassword " + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD)+ " " +
-                "-systemPassword " + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + " " +
+                "-sysPassword '" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD)+ "' " +
+                "-systemPassword '" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "' " +
                 "-datafileDestination " + q(ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR)) + " " +
                 "-recoveryAreaDestination " + q(ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA)) + " " +
                 "-characterSet " + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + " " +
