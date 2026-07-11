@@ -38,7 +38,8 @@ public final class OracleRemoteWorkflow {
                "echo OK";
     }
     private static String uninstallStep2Cmd() {
-        return "systemctl disable oracle.service 2>/dev/null || true\n" +
+        return "rpm -qa 2>/dev/null | grep oracle-database | xargs -r rpm -e --nodeps 2>/dev/null; true\n" +
+               "systemctl disable oracle.service 2>/dev/null || true\n" +
                "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
                "rm -f /etc/init.d/oracle 2>/dev/null || true\n" +
                "systemctl daemon-reload 2>/dev/null || true\n" +
@@ -388,36 +389,58 @@ public final class OracleRemoteWorkflow {
             "rm -f /etc/oratab && touch /etc/oratab && chown oracle:oinstall /etc/oratab && echo OK"),
             "Failed to create /etc/oratab");
 
-        // 11g DBCA response file keys are ALL UPPERCASE (RESPONSEFILE_VERSION not responseFileVersion).
-        // Also RECOVERYAREADESTINATION and RECOVERYAREASIZE conflict — 11g wants
-        // RECOVERYAREADESTINATION + DB_RECOVERY_FILE_DEST_SIZE inside INITPARAMS.
-        String dbcaRsp = "/tmp/dbca_" + sid + ".rsp";
-        writeFile(ctx, dbcaRsp,
-            "[GENERAL]\n" +
-            "RESPONSEFILE_VERSION = \"11.2.0\"\n" +
-            "OPERATION_TYPE = \"createDatabase\"\n" +
-            "[CREATEDATABASE]\n" +
-            "GDBNAME = \"" + sid + "\"\n" +
-            "SID = \"" + sid + "\"\n" +
-            "TEMPLATENAME = \"General_Purpose.dbc\"\n" +
-            "SYSPASSWORD = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD) + "\"\n" +
-            "SYSTEMPASSWORD = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\"\n" +
-            "CHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\"\n" +
-            "NATIONALCHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\"\n" +
-            "MEMORYPERCENTAGE = \"40\"\n" +
-            "TOTALMEMORY = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + "\"\n" +
-            "DATAFILEDESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\"\n" +
-            "RECOVERYAREADESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\"\n" +
-            "STORAGETYPE = \"FS\"\n" +
-            "DATABASETYPE = \"OLTP\"\n");
-        ctx.executeCommand("chown oracle:oinstall " + q(dbcaRsp));
-
-        check(runOra(ctx,
-            "export ORACLE_HOME=" + q(oh) + "\n" +
-            "export ORACLE_SID=" + q(sid) + "\n" +
-            "export PATH=$ORACLE_HOME/bin:$PATH\n" +
-            "$ORACLE_HOME/bin/dbca -silent -createDatabase -responseFile " + q(dbcaRsp) + " 2>&1\necho DBCA_RC=$?"),
-            "DBCA database creation failed");
+        // 11g/12c uses INI-format response file; 18c+ needs command-line parameters
+        boolean isOldDbca = oh != null && (oh.contains("/11g/") || oh.contains("/12c/"));
+        if (isOldDbca) {
+            String dbcaRsp = "/tmp/dbca_" + sid + ".rsp";
+            writeFile(ctx, dbcaRsp,
+                "[GENERAL]\n" +
+                "RESPONSEFILE_VERSION = \"11.2.0\"\n" +
+                "OPERATION_TYPE = \"createDatabase\"\n" +
+                "[CREATEDATABASE]\n" +
+                "GDBNAME = \"" + sid + "\"\n" +
+                "SID = \"" + sid + "\"\n" +
+                "TEMPLATENAME = \"General_Purpose.dbc\"\n" +
+                "SYSPASSWORD = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD) + "\"\n" +
+                "SYSTEMPASSWORD = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\"\n" +
+                "CHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\"\n" +
+                "NATIONALCHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\"\n" +
+                "MEMORYPERCENTAGE = \"40\"\n" +
+                "TOTALMEMORY = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + "\"\n" +
+                "DATAFILEDESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\"\n" +
+                "RECOVERYAREADESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\"\n" +
+                "STORAGETYPE = \"FS\"\n" +
+                "DATABASETYPE = \"OLTP\"\n");
+            ctx.executeCommand("chown oracle:oinstall " + q(dbcaRsp));
+            check(runOra(ctx,
+                "export ORACLE_HOME=" + q(oh) + "\n" +
+                "export ORACLE_SID=" + q(sid) + "\n" +
+                "export PATH=$ORACLE_HOME/bin:$PATH\n" +
+                "$ORACLE_HOME/bin/dbca -silent -createDatabase -responseFile " + q(dbcaRsp) + " 2>&1\necho DBCA_RC=$?"),
+                "DBCA database creation failed");
+        } else {
+            // 18c+ DBCA uses command-line parameters (no INI response file)
+            check(runOra(ctx,
+                "export ORACLE_HOME=" + q(oh) + "\n" +
+                "export ORACLE_SID=" + q(sid) + "\n" +
+                "export PATH=$ORACLE_HOME/bin:$PATH\n" +
+                "$ORACLE_HOME/bin/dbca -silent -createDatabase " +
+                "-templateName General_Purpose.dbc " +
+                "-gdbName " + sid + " " +
+                "-sid " + sid + " " +
+                "-sysPassword " + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD)+ " " +
+                "-systemPassword " + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + " " +
+                "-datafileDestination " + q(ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR)) + " " +
+                "-recoveryAreaDestination " + q(ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA)) + " " +
+                "-characterSet " + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + " " +
+                "-nationalCharacterSet " + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + " " +
+                "-totalMemory " + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " " +
+                "-storageType FS " +
+                "-databaseType OLTP " +
+                "-createAsContainerDatabase false " +
+                "2>&1\necho DBCA_RC=$?"),
+                "DBCA database creation failed");
+        }
     }
 
     // ============ Step 7: Configure services (listener + profile + systemd) ============
