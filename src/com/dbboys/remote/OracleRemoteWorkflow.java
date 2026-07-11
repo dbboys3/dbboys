@@ -51,10 +51,7 @@ public final class OracleRemoteWorkflow {
                 break;
             case 3:
                 ctx.executeCommandWithExitStatus(
-                    "for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall* /opt/oraInventory /opt/app/oracle; do\n" +
-                    "  for g in $d; do [ -e \"$g\" ] && rm -rf \"$g\"; done\n" +
-                    "done\n" +
-                    "rm -f /etc/oratab /etc/oraInst.loc /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null || true\n" +
+                    "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true\n" +
                     "echo OK");
                 break;
             case 4:
@@ -141,18 +138,16 @@ public final class OracleRemoteWorkflow {
 
     // ============ Step 1: Cleanup (delegates to uninstall workflow) ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
-        // Reuse the uninstall logic: stop DB/listener, wipe config, wipe dirs,
-        // remove oracle user/groups.  This keeps install step 1 and the standalone
-        // uninstall wizard 100% consistent — no duplicated cleanup code.
-        String installOh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        // Kill all oracle processes, wipe all oracle-owned files,
+        // remove oracle user/groups and config files.
+        // Matches executeUninstallStep behavior.
         String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
         String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
 
-        // Shell commands mirror executeUninstallStep exactly, but run over
-        // the same SSH session the install wizard already has open.
-        exec(ctx, "ps -ef | grep -i oracle | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true; systemctl stop oracle.service 2>/dev/null || true");
+
+
         exec(ctx, "systemctl disable oracle.service 2>/dev/null || true; rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc; systemctl daemon-reload 2>/dev/null || true");
-        exec(ctx, "for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall* /opt/oraInventory /opt/app/oracle " + dd + " " + ra + " " + installOh + "; do [ -e \"$d\" ] && rm -rf \"$d\"; done; echo OK");
+        exec(ctx, "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true; rm -rf /tmp/oracle /tmp/OraInstall* /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null || true");
         exec(ctx, "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }; groupdel dba 2>/dev/null || true; groupdel oinstall 2>/dev/null || true; groupdel oper 2>/dev/null || true; echo OK");
     }
 
