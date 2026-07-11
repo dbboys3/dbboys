@@ -3759,22 +3759,27 @@ Text {
 .dialog-pane > .button-bar > .container > .details-button:hover {
   -fx-underline: true;
 }
-
+.alert-body .button,
 .dialog-pane .button {
   -fx-background-color: -color-bg-subtle;
   -fx-border-color: -color-border-default;
   -fx-border-width: 0.5;
   -fx-border-radius: 3;
 }
+.alert-body .button:hover,
 .dialog-pane .button:hover {
   -fx-border-color: -color-accent-emphasis;
 }
+.alert-body .button:default,
+.alert-body .button:accent,
 .dialog-pane .button:default,
 .dialog-pane .button.accent {
   -fx-background-color: -color-accent-emphasis;
   -fx-text-fill: -color-fg-emphasis;
   -fx-border-color: transparent;
 }
+.alert-body .button:default:hover,
+.alert-body .button.accent:hover,
 .dialog-pane .button:default:hover,
 .dialog-pane .button.accent:hover {
   -fx-opacity: 0.85;
@@ -6410,26 +6415,9 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .alert-body .button {
-  -fx-background-color: -color-bg-subtle;
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0.5;
-  -fx-border-radius: 3;
   -fx-padding: 4 16 4 16;
 }
 
-.alert-body .button:hover {
-  -fx-border-color: -color-accent-emphasis;
-}
-.alert-body .button:default,
-.alert-body .button.accent {
-  -fx-background-color: -color-accent-emphasis;
-  -fx-text-fill: -color-fg-emphasis;
-  -fx-border-color: transparent;
-}
-.alert-body .button:default:hover,
-.alert-body .button.accent:hover {
-  -fx-opacity: 0.85;
-}
 
 .alert-root {
   -fx-background-color: -color-bg-default;
