@@ -177,6 +177,31 @@ public final class OracleRemoteWorkflow {
         int[] info = OracleRemoteProvider.detectOraclePackage(pkg);
         int fmt = info[1];
 
+        if (fmt == FMT_RPM) {
+            String repoCheck =
+                "echo 'Checking yum/dnf repositories for Oracle RPM install'\n" +
+                "if command -v yum >/dev/null 2>&1; then\n" +
+                "  yum repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
+                "  cat /tmp/oracle_yum_check.out /tmp/oracle_yum_check.err 2>/dev/null;\n" +
+                "  cnt=$(cat /tmp/oracle_yum_check.out); echo YUM_COUNT=$cnt;\n" +
+                "  [ \"$cnt\" = \"1\" ] && exit 1;\n" +
+                "elif command -v dnf >/dev/null 2>&1; then\n" +
+                "  dnf repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
+                "  cat /tmp/oracle_yum_check.out /tmp/oracle_yum_check.err 2>/dev/null;\n" +
+                "  cnt=$(cat /tmp/oracle_yum_check.out); echo DNF_COUNT=$cnt;\n" +
+                "  [ \"$cnt\" = \"1\" ] && exit 1;\n" +
+                "else\n" +
+                "  echo 'No yum or dnf found';\n" +
+                "  exit 1;\n" +
+                "fi\n" +
+                "echo OK";
+            String out = ctx.executeCommand(repoCheck);
+            if (out == null || !out.contains("OK")) {
+                throw new Exception("Failed to check yum/dnf repositories for Oracle RPM install\n" + (out != null ? clip(out, 4000) : "(no output)"));
+            }
+            return;
+        }
+
         switch (fmt) {
             case FMT_ZIP:
                 String staging = "/opt/oracle/staging";
@@ -186,9 +211,6 @@ public final class OracleRemoteWorkflow {
                     "oraparam=" + staging + "/database/install/oraparam.ini\n" +
                     "[ -f \"$oraparam\" ] && sed -i '/oracle\\.\\(jdk\\|javacompanion\\|ctx\\|precomp\\|sqlj\\|has\\|rdbms\\)/s/^\\(.*\\)unzip/#DISABLED_\\1unzip/' \"$oraparam\" || true\n" +
                     "echo OK"), "Failed to unzip Oracle package");
-                break;
-            case FMT_RPM:
-                // nothing to unpack; rpm install handles it
                 break;
             default:
                 // tarball — unpack in extractAndInstall for now
@@ -291,10 +313,44 @@ public final class OracleRemoteWorkflow {
     private static void installRpm(RemoteInstallExecutionContext ctx) throws Exception {
         String pkg = ctx.remotePackagePath();
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        check(ctx.executeCommand(
-            "[ -f " + q(pkg) + " ] || { echo PKG_NOT_FOUND; exit 1; }\n" +
-            "(yum localinstall -y " + q(pkg) + " 2>&1 || dnf localinstall -y " + q(pkg) + " 2>&1 || rpm -ivh " + q(pkg) + " 2>&1 || true)\necho OK"),
-            "Failed to install Oracle RPM");
+        String installScript =
+            "set -euo pipefail\n" +
+            "echo '--- BEGIN ORACLE RPM INSTALL SCRIPT ---'\n" +
+            "pkg_arg=" + q(pkg) + "\n" +
+            "echo \"pkg_arg=$pkg_arg\"\n" +
+            "set -x\n" +
+            "for pkg_path in $pkg_arg; do\n" +
+            "  echo \"Processing RPM: $pkg_path\"\n" +
+            "  [ -f \"$pkg_path\" ] || { echo \"PKG_NOT_FOUND: $pkg_path\"; exit 1; }\n" +
+            "  dir=$(dirname \"$pkg_path\")\n" +
+            "  pre=$(find \"$dir\" -maxdepth 1 -type f -iname '*preinstall*.rpm' | sort | head -n 1)\n" +
+            "  if [ -n \"$pre\" ]; then\n" +
+            "    echo \"Installing preinstall RPM: $pre\"\n" +
+            "    if command -v yum >/dev/null 2>&1; then\n" +
+            "      yum localinstall -y \"$pre\"\n" +
+            "    elif command -v dnf >/dev/null 2>&1; then\n" +
+            "      dnf localinstall -y \"$pre\"\n" +
+            "    else\n" +
+            "      rpm -ivh \"$pre\"\n" +
+            "    fi\n" +
+            "  fi\n" +
+            "  echo \"Installing RPM: $pkg_path\"\n" +
+            "  if command -v yum >/dev/null 2>&1; then\n" +
+            "    yum localinstall -y \"$pkg_path\"\n" +
+            "  elif command -v dnf >/dev/null 2>&1; then\n" +
+            "    dnf localinstall -y \"$pkg_path\"\n" +
+            "  else\n" +
+            "    rpm -ivh \"$pkg_path\"\n" +
+            "  fi\n" +
+            "done\n" +
+            "echo '--- END ORACLE RPM INSTALL SCRIPT ---'\n" +
+            "echo OK";
+        log("RPM install script:\n" + installScript);
+        String out = ctx.executeCommand(
+            "cat << 'SCRIPT_EOF' > /tmp/install_oracle_rpm.sh\n" + installScript + "\nSCRIPT_EOF\n" +
+            "chmod +x /tmp/install_oracle_rpm.sh && bash -x /tmp/install_oracle_rpm.sh 2>&1");
+        log("RPM install output:\n" + smartClip(out, 4000));
+        check(out, "Failed to install Oracle RPM");
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
 
