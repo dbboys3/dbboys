@@ -251,7 +251,7 @@ public final class OracleRemoteWorkflow {
         // `env -i` starts with an empty environment, then we set only what's needed.
         // The runOra() helper uses `su - oracle` which gives a login shell;
         // we pipe through bash so `env -i` takes effect.
-        String installCmd = b64(
+        String installCmd =
             "#!/bin/bash\n" +
             "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + staging + "/database\n" +
             "export HOME=/home/oracle\n" +
@@ -265,12 +265,14 @@ public final class OracleRemoteWorkflow {
             "-ignorePrereq -ignoreSysPrereqs -waitforcompletion " +
             "-J-Djava.awt.headless=true " +
             "-responseFile " + rspFile + " 2>&1\n" +
-            "echo RC=$?");
+            "echo RC=$?";
         // The runInstaller exits with RC=0 even when it prints "run root.sh".
         // "Please run /opt/oracle/.../root.sh" is NOT a failure — it's just
         // telling you to execute the next step (which we do automatically).
         String out = ctx.executeCommand(
-            "echo " + q(installCmd) + " | base64 -d > /tmp/runInstaller_" + sid + ".sh && " +
+            "cat << 'SCRIPT_EOF' > /tmp/runInstaller_" + sid + ".sh\n" +
+            installCmd + "\n" +
+            "SCRIPT_EOF\n" +
             "chmod +x /tmp/runInstaller_" + sid + ".sh && " +
             "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
             "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1");
@@ -437,12 +439,12 @@ public final class OracleRemoteWorkflow {
     // ============ Helpers ============
 
     private static void writeFile(RemoteInstallExecutionContext ctx, String path, String content) throws Exception {
-        execCheck(ctx, "echo " + q(b64(content)) + " | base64 -d > " + q(path) + " && chmod 644 " + q(path) + " && echo OK",
+        execCheck(ctx, "cat << 'WRITEEOF' > " + q(path) + "\n" + content + "\nWRITEEOF\nchmod 644 " + q(path) + " && echo OK",
             "Failed to write file: " + path);
     }
 
     private static String runOra(RemoteInstallExecutionContext ctx, String cmd) throws Exception {
-        return exec(ctx, "echo " + q(b64(cmd)) + " | base64 -d | su - oracle -s /bin/bash 2>&1");
+        return exec(ctx, "su - oracle -s /bin/bash 2>&1 << 'ORAEOF'\n" + cmd + "\nORAEOF");
     }
 
     private static String log(String msg) {
@@ -479,10 +481,10 @@ public final class OracleRemoteWorkflow {
     private static String runSql(RemoteInstallExecutionContext ctx, String sql) throws Exception {
         String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
-        return exec(ctx, "echo " + q(b64(
+        return exec(ctx, "su - oracle -s /bin/bash 2>/dev/null << 'SQLEOF'\n" +
             "export ORACLE_HOME=" + oh + " ORACLE_SID=" + sid + " PATH=$ORACLE_HOME/bin:$PATH\n" +
-            "$ORACLE_HOME/bin/sqlplus -S / as sysdba <<'EOS'\nset heading off feedback off pagesize 0\n" + sql + ";\nexit;\nEOS"
-        )) + " | base64 -d | su - oracle -s /bin/bash 2>/dev/null");
+            "$ORACLE_HOME/bin/sqlplus -S / as sysdba <<'EOS'\nset heading off feedback off pagesize 0\n" + sql + ";\nexit;\nEOS\n" +
+            "SQLEOF");
     }
 
     private static String ensureOraInstLoc(String ob) {
@@ -508,7 +510,6 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String q(String s) { return s == null ? "''" : "'" + s.replace("'", "'\"'\"'") + "'"; }
-    private static String b64(String s) { return java.util.Base64.getEncoder().encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
     private static String clip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
     private static String cliptail(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
     private static String smartClip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "...(truncated)"; }
