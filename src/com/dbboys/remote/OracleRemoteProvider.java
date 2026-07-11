@@ -86,11 +86,11 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
      */
     static int[] detectOraclePackage(String packagePath) {
         if (packagePath == null || packagePath.isBlank()) {
-            return new int[]{19, 2}; // default to 19c rpm
+            return new int[]{0, 2}; // version unknown, default to rpm format
         }
         String name = new java.io.File(packagePath).getName().toLowerCase();
 
-        int major = 19; // default
+        int major = 0; // version unknown by default
         int format = 2; // default rpm
 
         // Detect major version from name: 11g, 12c, 18c, 19c, 21c, 23ai
@@ -120,6 +120,28 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
         return new int[]{major, format};
     }
 
+    static String inferOracleHome(String packagePath, String currentValue) {
+        String home = currentValue == null ? "" : currentValue.trim();
+        if (home.isEmpty() || "/opt/oracle/product/19c/dbhome_1".equals(home)
+                || "/opt/oracle/product/18c/dbhome_1".equals(home)
+                || "/opt/oracle/product/12c/dbhome_1".equals(home)
+                || "/opt/oracle/product/11g/dbhome_1".equals(home)
+                || "/opt/oracle/product/any/dbhome_1".equals(home)) {
+            int[] info = detectOraclePackage(packagePath);
+            int major = info[0];
+            return switch (major) {
+                case 11 -> "/opt/oracle/product/11g/dbhome_1";
+                case 12 -> "/opt/oracle/product/12c/dbhome_1";
+                case 18 -> "/opt/oracle/product/18c/dbhome_1";
+                case 19 -> "/opt/oracle/product/19c/dbhome_1";
+                case 21 -> "/opt/oracle/product/21c/dbhome_1";
+                case 23 -> "/opt/oracle/product/23ai/dbhome_1";
+                default -> "/opt/oracle/product/any/dbhome_1";
+            };
+        }
+        return home;
+    }
+
     @Override
     public List<RemoteInstallField> buildDefaultInstallFields(RemoteHostProfile hostProfile) {
         double totalMemGb = hostProfile == null ? 0 : hostProfile.getTotalMemoryGb();
@@ -137,7 +159,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 "ORACLE_BASE", "/opt/oracle",
                 I18n.t("remote.install.oracle.cfg.oracle_base.desc", "Oracle base directory. ORACLE_HOME is created under this.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ORACLE_HOME,
-                "ORACLE_HOME", "/opt/oracle/product/19c/dbhome_1",
+                "ORACLE_HOME", "/opt/oracle/product/any/dbhome_1",
                 I18n.t("remote.install.oracle.cfg.oracle_home.desc", "Oracle home directory where binaries are installed.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_DATA_DIR,
                 I18n.t("remote.install.oracle.cfg.data_dir.name", "Data Directory"),

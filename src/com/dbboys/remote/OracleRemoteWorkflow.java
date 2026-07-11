@@ -31,37 +31,37 @@ public final class OracleRemoteWorkflow {
 
     // ---- Uninstall ----
 
+    // ============ Uninstall step commands (shared between cleanup and executeUninstallStep) ============
+    private static String uninstallStep1Cmd() {
+        return "ps -ef | grep -i oracle | grep -v grep | awk '{print \"kill -9 \" $2}' | sh 2>/dev/null || true\n" +
+               "systemctl stop oracle.service 2>/dev/null || true\n" +
+               "echo OK";
+    }
+    private static String uninstallStep2Cmd() {
+        return "systemctl disable oracle.service 2>/dev/null || true\n" +
+               "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
+               "rm -f /etc/init.d/oracle 2>/dev/null || true\n" +
+               "systemctl daemon-reload 2>/dev/null || true\n" +
+               "echo OK";
+    }
+    private static String uninstallStep3Cmd() {
+        return "ipcs -m 2>/dev/null | grep -i oracle | awk '{print \"ipcrm -m \" $2}' | sh 2>/dev/null || true\n" +
+               "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true\n" +
+               "echo OK";
+    }
+    private static String uninstallStep4Cmd() {
+        return "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
+               "groupdel dba 2>/dev/null || true\n" +
+               "groupdel oinstall 2>/dev/null || true\n" +
+               "groupdel oper 2>/dev/null || true\n" +
+               "echo OK";
+    }
     public static void executeUninstallStep(int stepNo, RemoteUninstallExecutionContext ctx) throws Exception {
         switch (stepNo) {
-            case 1:
-                // Best-effort stop: if oracle isn't installed, everything is "|| true".
-                // Never fail this step — the system may be partially or not-at-all installed.
-                ctx.executeCommandWithExitStatus(
-                    "ps -ef | grep -i oracle | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true\n" +
-                    "systemctl stop oracle.service 2>/dev/null || true\n" +
-                    "echo OK");
-                break;
-            case 2:
-                ctx.executeCommandWithExitStatus(
-                    "systemctl disable oracle.service 2>/dev/null || true\n" +
-                    "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
-                    "rm -f /etc/init.d/oracle 2>/dev/null || true\n" +
-                    "systemctl daemon-reload 2>/dev/null || true\n" +
-                    "echo OK");
-                break;
-            case 3:
-                ctx.executeCommandWithExitStatus(
-                    "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true\n" +
-                    "echo OK");
-                break;
-            case 4:
-                ctx.executeCommandWithExitStatus(
-                    "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
-                    "groupdel dba 2>/dev/null || true\n" +
-                    "groupdel oinstall 2>/dev/null || true\n" +
-                    "groupdel oper 2>/dev/null || true\n" +
-                    "echo OK");
-                break;
+            case 1: ctx.executeCommandWithExitStatus(uninstallStep1Cmd()); break;
+            case 2: ctx.executeCommandWithExitStatus(uninstallStep2Cmd()); break;
+            case 3: ctx.executeCommandWithExitStatus(uninstallStep3Cmd()); break;
+            case 4: ctx.executeCommandWithExitStatus(uninstallStep4Cmd()); break;
             default: throw new IllegalArgumentException("Unknown Oracle uninstall step: " + stepNo);
         }
     }
@@ -79,7 +79,7 @@ public final class OracleRemoteWorkflow {
     // ---- Result / Connect ----
 
     public static void populateInstallResult(RemoteInstallExecutionContext ctx, CustomInlineCssTextArea area) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         area.replaceText("");
@@ -97,7 +97,7 @@ public final class OracleRemoteWorkflow {
         area.append(I18n.t("remote.install.result.user_password", "User/Password") + "：system/" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.charset", "Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.ncharset", "National Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
-        area.append(I18n.t("remote.install.result.memory", "Memory Target") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.memory", "Memory Target") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.data_path", "Data File Path") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.recovery_area", "Recovery Area") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\n\n", RESULT_BODY_STYLE);
         // Space config
@@ -138,23 +138,22 @@ public final class OracleRemoteWorkflow {
 
     // ============ Step 1: Cleanup (delegates to uninstall workflow) ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
-        // Kill all oracle processes, wipe all oracle-owned files,
-        // remove oracle user/groups and config files.
-        // Matches executeUninstallStep behavior.
-        String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
-        String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
-
-
-
-        exec(ctx, "systemctl disable oracle.service 2>/dev/null || true; rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc; systemctl daemon-reload 2>/dev/null || true");
-        exec(ctx, "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true; rm -rf /tmp/oracle /tmp/OraInstall* /tmp/dbca_* /tmp/netca_* /tmp/oracle_* 2>/dev/null || true");
-        exec(ctx, "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }; groupdel dba 2>/dev/null || true; groupdel oinstall 2>/dev/null || true; groupdel oper 2>/dev/null || true; echo OK");
+        // Delegate all 4 steps to the uninstall flow (single source of truth)
+        RemoteUninstallExecutionContext uctx = new RemoteUninstallExecutionContext(ctx.getRemoteClient(), ctx.host());
+        for (int step = 1; step <= 4; step++) {
+            try {
+                executeUninstallStep(step, uctx);
+            } catch (Exception e) {
+                // continue despite individual step failures
+            }
+        }
     }
+
 
     // ============ Step 2: Create user & dirs ============
     private static void createUser(RemoteInstallExecutionContext ctx) throws Exception {
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
         String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
 
@@ -215,7 +214,7 @@ public final class OracleRemoteWorkflow {
     private static void installZip(RemoteInstallExecutionContext ctx) throws Exception {
         String staging = "/opt/oracle/staging";
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
 
         String rspFile = "/tmp/oracle_" + sid + ".rsp";
@@ -303,7 +302,7 @@ public final class OracleRemoteWorkflow {
 
     private static void installTar(RemoteInstallExecutionContext ctx) throws Exception {
         String pkg = ctx.remotePackagePath();
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String staging = "/opt/oracle/staging";
         check(ctx.executeCommand(
@@ -317,14 +316,14 @@ public final class OracleRemoteWorkflow {
 
     // ============ Step 5: Run root scripts ============
     private static void runRootScripts(RemoteInstallExecutionContext ctx) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         check(ctx.executeCommand("[ -x " + q(oh + "/root.sh") + " ] && " + q(oh + "/root.sh") + "; echo OK"),
             "root.sh failed");
     }
 
     // ============ Step 6: Create database (DBCA) ============
     private static void createDatabase(RemoteInstallExecutionContext ctx) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
 
         // DBCA requires /etc/oratab to exist and be writable by oracle,
@@ -369,7 +368,7 @@ public final class OracleRemoteWorkflow {
 
     // ============ Step 7: Configure services (listener + profile + systemd) ============
     private static void configureServices(RemoteInstallExecutionContext ctx) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         String port = ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT);
         String sysPw = ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD);
@@ -474,12 +473,16 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String runSql(RemoteInstallExecutionContext ctx, String sql) throws Exception {
-        String oh = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME);
+        String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         return exec(ctx, "su - oracle -s /bin/bash 2>/dev/null << 'SQLEOF'\n" +
             "export ORACLE_HOME=" + oh + " ORACLE_SID=" + sid + " PATH=$ORACLE_HOME/bin:$PATH\n" +
             "$ORACLE_HOME/bin/sqlplus -S / as sysdba <<'EOS'\nset heading off feedback off pagesize 0\n" + sql + ";\nexit;\nEOS\n" +
             "SQLEOF");
+    }
+
+    private static String resolveOracleHome(RemoteInstallExecutionContext ctx) {
+        return OracleRemoteProvider.inferOracleHome(ctx.remotePackagePath(), ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_HOME));
     }
 
     private static String ensureOraInstLoc(String ob) {

@@ -1,4 +1,4 @@
-﻿package com.dbboys.remote;
+package com.dbboys.remote;
 
 import com.jcraft.jsch.JSchException;
 
@@ -66,12 +66,20 @@ public final class RemoteInstallExecutionContext {
         return value == null ? "" : value;
     }
 
+    public void setFieldValue(String id, String value) {
+        fieldValues.put(id, value == null ? "" : value);
+    }
+
     public String executeCommand(String command) throws JSchException, IOException {
         return remoteClient.executeCommand(command);
     }
 
     public int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
         return remoteClient.executeCommandWithExitStatus(command);
+    }
+
+    public RemoteSessionClient getRemoteClient() {
+        return remoteClient;
     }
 
     public String shellQuote(String value) {
