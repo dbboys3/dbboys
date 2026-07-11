@@ -396,7 +396,6 @@ public final class OracleRemoteWorkflow {
                 "SYSTEMPASSWORD = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\"\n" +
                 "CHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\"\n" +
                 "NATIONALCHARACTERSET = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\"\n" +
-                "MEMORYPERCENTAGE = \"40\"\n" +
                 "TOTALMEMORY = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + "\"\n" +
                 "DATAFILEDESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\"\n" +
                 "RECOVERYAREADESTINATION = \"" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\"\n" +
@@ -506,6 +505,7 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String runOra(RemoteInstallExecutionContext ctx, String cmd) throws Exception {
+        System.out.println("[OracleInstall] " + cmd);
         return exec(ctx, "su - oracle -s /bin/bash 2>&1 << 'ORAEOF'\n" + cmd + "\nORAEOF");
     }
 
@@ -534,8 +534,8 @@ public final class OracleRemoteWorkflow {
 
     private static String check(String output, String msg) throws Exception {
         if (output == null || !(output.contains("OK") || output.contains("RC=0") || output.contains("DBCA_RC=0") || output.contains("NETCA_RC=0"))) {
-            String detail = output != null ? clip(output, 3000) : "(no output)";
-            throw new Exception(msg + "\n" + detail);
+            //String detail = output != null ? clip(output, 3000) : "(no output)";
+            throw new Exception(msg + "\n" + output);
         }
         return output;
     }
