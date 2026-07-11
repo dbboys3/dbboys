@@ -195,7 +195,7 @@ public class CustomInstanceTab extends CustomTab {
         Button checkshotButton= new Button();
         checkshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
         checkshotButton.setFocusTraversable(false);
-        checkshotButton.getStyleClass().add("codearea-camera-button");
+        checkshotButton.setId("codearea-camera-button");
         checkStackPane.getChildren().add(checkshotButton);
         checkStackPane.setAlignment(checkshotButton, Pos.TOP_RIGHT);
         checkStackPane.setMargin(checkshotButton, new javafx.geometry.Insets(0, 15, 20, 20));
@@ -278,7 +278,7 @@ public class CustomInstanceTab extends CustomTab {
         Button configshotButton= new Button();
         configshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
         configshotButton.setFocusTraversable(false);
-        configshotButton.getStyleClass().add("codearea-camera-button");
+        configshotButton.setId("codearea-camera-button");
         configStackPane.getChildren().add(configshotButton);
         configStackPane.setAlignment(configshotButton, Pos.TOP_RIGHT);
         configStackPane.setMargin(configshotButton, new javafx.geometry.Insets(0, 15, 20, 20));
@@ -351,7 +351,7 @@ public class CustomInstanceTab extends CustomTab {
         Button spaceshotButton= new Button();
         spaceshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, 0.35));
         spaceshotButton.setFocusTraversable(false);
-        spaceshotButton.getStyleClass().add("codearea-camera-button");
+        spaceshotButton.setId("codearea-camera-button");
         dbspaceStackPane.getChildren().add(spaceshotButton);
         dbspaceStackPane.setAlignment(spaceshotButton, Pos.TOP_RIGHT);
         dbspaceStackPane.setMargin(spaceshotButton, new javafx.geometry.Insets(0, 15, 20, 20));
@@ -1541,7 +1541,7 @@ public class CustomInstanceTab extends CustomTab {
         startTab.setContextMenu(null);
 
         refreshButton = new Button();
-        refreshButton.getStyleClass().add("codearea-camera-button");
+        refreshButton.setId("codearea-camera-button");
         refreshButton.setGraphic(IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.7));
         refreshButton.setFocusTraversable(false);
         refreshButton.setOnAction(e -> {

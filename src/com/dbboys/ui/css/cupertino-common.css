@@ -430,10 +430,10 @@ Text {
 .button.right-pill:hover, .button.right-pill:focused {
   -fx-background-insets: 0, 1px;
 }
+.dialog-pane .button.small:hover,
 .button:hover {
   -fx-background-color:  -color-button-bg-hover;
   -fx-text-fill: -color-button-fg-hover;
-  -fx-opacity: 0.9;
 }
 .button:hover:focused {
   -fx-background-color: -color-button-border-focused, -color-button-bg-hover;
@@ -3766,6 +3766,11 @@ Text {
   -fx-border-width: 0.5;
   -fx-border-radius: 3;
 }
+.dialog-pane .button.small{
+  -fx-background-color: transparent;
+  -fx-border-width: 0;
+}
+
 .alert-body .button:hover,
 .dialog-pane .button:hover {
   -fx-border-color: -color-accent-emphasis;
@@ -6582,3 +6587,30 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .completion-popup .kind-snippet  { -fx-text-fill: -color-code-number; }
 .completion-popup .kind-synonym  { -fx-text-fill: -color-warning-fg; }
 
+
+/* ===== Screenshot button (ID selector, higher specificity than .dialog-pane .button) ===== */
+#codearea-camera-button {
+  -fx-content-display: graphic-only;
+  -fx-padding: 2px;
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-effect: none;
+  -fx-min-width: 26px;
+  -fx-min-height: 26px;
+  -fx-pref-width: -1;
+  -fx-pref-height: -1;
+  -fx-opacity: 0.3;
+  -fx-border-width: 0;
+}
+#codearea-camera-button:hover,
+#codearea-camera-button:focused,
+#codearea-camera-button:focused:hover,
+#codearea-camera-button:armed,
+#codearea-camera-button:pressed {
+  -fx-padding: 2px;
+  -fx-border-width: 0;
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-effect: none;
+  -fx-opacity: 1;
+}

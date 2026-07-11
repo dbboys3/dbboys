@@ -1,4 +1,4 @@
-package com.dbboys.ui.component;
+﻿package com.dbboys.ui.component;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
@@ -73,7 +73,7 @@ public class CustomInfoStackPane extends StackPane {
 
         codeAreaSnapshotButton.setGraphic(IconFactory.group(IconPaths.MAIN_SNAPSHOT, SNAPSHOT_BUTTON_ICON_SCALE));
         codeAreaSnapshotButton.setFocusTraversable(false);
-        codeAreaSnapshotButton.getStyleClass().add("codearea-camera-button");
+        codeAreaSnapshotButton.setId("codearea-camera-button");
         Tooltip snapshotTooltip = new Tooltip();
         snapshotTooltip.textProperty().bind(I18n.bind("main.tooltip.snapshot_to_clipboard"));
         codeAreaSnapshotButton.setTooltip(snapshotTooltip);

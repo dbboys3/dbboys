@@ -1,4 +1,4 @@
-package com.dbboys.ui.component;
+﻿package com.dbboys.ui.component;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.app.AppExecutor;
@@ -47,7 +47,7 @@ public class CustomLockSessionTab extends CustomTab {
         this.databaseName = databaseName == null ? "" : databaseName;
         this.tableName = tableName == null ? "" : tableName;
 
-        refreshButton.getStyleClass().add("codearea-camera-button");
+        refreshButton.setId("codearea-camera-button");
         refreshButton.setGraphic(IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.7));
         refreshButton.setFocusTraversable(false);
         refreshButton.setOnAction(event -> loadLocks());

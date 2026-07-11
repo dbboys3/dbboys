@@ -1,4 +1,4 @@
-package com.dbboys.ui.component;
+﻿package com.dbboys.ui.component;
 
 import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;
@@ -89,7 +89,7 @@ public class CustomMarkdownTab extends CustomTab{
 
         editButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));
         editButton.setFocusTraversable(false);
-        editButton.getStyleClass().add("codearea-camera-button");
+        editButton.setId("codearea-camera-button");
         Tooltip editTooltip = new Tooltip();
         editTooltip.textProperty().bind(I18n.bind("markdown.tab.edit_tooltip", "编辑"));
         editButton.setTooltip(editTooltip);
@@ -108,7 +108,7 @@ public class CustomMarkdownTab extends CustomTab{
         Button previewButton = new Button("");
         previewButton.setGraphic(IconFactory.group(IconPaths.MARKDOWN_SAVE_PREVIEW, 0.5));
         previewButton.setFocusTraversable(false);
-        previewButton.getStyleClass().add("codearea-camera-button");
+        previewButton.setId("codearea-camera-button");
         Tooltip previewTooltip = new Tooltip();
         previewTooltip.textProperty().bind(I18n.bind("markdown.tab.preview_tooltip", "预览"));
         previewButton.setTooltip(previewTooltip);
