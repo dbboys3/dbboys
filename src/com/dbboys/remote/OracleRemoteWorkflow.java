@@ -71,16 +71,6 @@ public final class OracleRemoteWorkflow {
         }
     }
 
-    private static String findOracleHome(RemoteUninstallExecutionContext ctx) throws Exception {
-        String oratab = ctx.executeCommand("cat /etc/oratab 2>/dev/null | grep -v '^#' | grep -v '^$' | head -1 | cut -d: -f2 ").trim();
-        if (!oratab.isEmpty()) return oratab;
-        for (String p : new String[]{"/opt/oracle/product/19.3.0/dbhome_1","/opt/oracle/product/18c/dbhome_1",
-            "/opt/oracle/product/12c/dbhome_1","/opt/oracle/product/11g/dbhome_1"}) {
-            if (ctx.executeCommandWithExitStatus("[ -f '" + p.replace("'","'\\''") + "/bin/sqlplus' ]") == 0) return p;
-        }
-        return null;
-    }
-
     // ---- Result / Connect ----
 
     public static void populateInstallResult(RemoteInstallExecutionContext ctx, CustomInlineCssTextArea area) throws Exception {
@@ -144,11 +134,8 @@ public final class OracleRemoteWorkflow {
         // Delegate all 4 steps to the uninstall flow (single source of truth)
         RemoteUninstallExecutionContext uctx = new RemoteUninstallExecutionContext(ctx.getRemoteClient(), ctx.host());
         for (int step = 1; step <= 5; step++) {
-            try {
                 executeUninstallStep(step, uctx);
-            } catch (Exception e) {
-                // continue despite individual step failures
-            }
+            
         }
     }
 
@@ -168,8 +155,8 @@ public final class OracleRemoteWorkflow {
             "usermod -a -G dba,oper oracle 2>/dev/null \necho OK"), "Failed to create oracle user/groups");
 
         check(ctx.executeCommand(
-            "mkdir -p " + q(ob) + " " + q(oh) + " " + q(dd) + " " + q(ra) + " /opt/staging /opt/oraInventory && " +
-            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/staging /opt/oraInventory && " +
+            "mkdir -p " + q(ob) + " " + q(oh) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
+            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
             "chmod -R 775 " + q(ob) + " && echo OK"), "Failed to create directories");
 
         check(ctx.executeCommand(kernelParams(ctx)), "Failed to set kernel parameters");
@@ -209,7 +196,7 @@ public final class OracleRemoteWorkflow {
 
         switch (fmt) {
             case FMT_ZIP:
-                String staging = "/opt/staging";
+                String staging = "/u01/app/staging";
                 check(ctx.executeCommand(
                     "cd " + staging + "\n" +
                     "for z in " + pkg + "; do [ -f \"$z\" ] && { echo \"Unzipping $z\"; unzip -qo \"$z\"; } || echo \"SKIP $z\"; done\n" +
@@ -237,7 +224,7 @@ public final class OracleRemoteWorkflow {
     }
 
     private static void installZip(RemoteInstallExecutionContext ctx) throws Exception {
-        String staging = "/opt/staging";
+        String staging = "/u01/app/staging";
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
@@ -286,7 +273,7 @@ public final class OracleRemoteWorkflow {
             "-responseFile " + rspFile + " 2>&1\n" +
             "echo RC=$?";
         // The runInstaller exits with RC=0 even when it prints "run root.sh".
-        // "Please run /opt/.../root.sh" is NOT a failure — it's just
+        // "Please run /u01/app/.../root.sh" is NOT a failure — it's just
         // telling you to execute the next step (which we do automatically).
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/runInstaller_" + sid + ".sh\n" +
@@ -363,7 +350,7 @@ public final class OracleRemoteWorkflow {
         String pkg = ctx.remotePackagePath();
         String oh = resolveOracleHome(ctx);
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String staging = "/opt/staging";
+        String staging = "/u01/app/staging";
         check(ctx.executeCommand(
             "[ -f " + q(pkg) + " ] || { echo PKG_NOT_FOUND; exit 1; }\n" +
             "cd " + staging + " && tar xf " + q(pkg) + "\n" +

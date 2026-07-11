@@ -122,22 +122,29 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
 
     static String inferOracleHome(String packagePath, String currentValue) {
         String home = currentValue == null ? "" : currentValue.trim();
-        if (home.isEmpty() || "/opt/oracle/product/19.3.0/dbhome_1".equals(home)
+        if (home.isEmpty()
+                || "/opt/oracle/product/23ai/dbhome_1".equals(home)
+                || "/opt/oracle/product/21c/dbhome_1".equals(home)
+                || "/opt/oracle/product/19c/dbhome_1".equals(home)
                 || "/opt/oracle/product/18c/dbhome_1".equals(home)
                 || "/opt/oracle/product/12c/dbhome_1".equals(home)
                 || "/opt/oracle/product/11g/dbhome_1".equals(home)
                 || "/opt/oracle/product/any/dbhome_1".equals(home)) {
             int[] info = detectOraclePackage(packagePath);
             int major = info[0];
-            return switch (major) {
-                case 11 -> "/opt/oracle/product/11g/dbhome_1";
-                case 12 -> "/opt/oracle/product/12c/dbhome_1";
-                case 18 -> "/opt/oracle/product/18c/dbhome_1";
-                case 19 -> "/opt/oracle/product/19.3.0/dbhome_1";
-                case 21 -> "/opt/oracle/product/21c/dbhome_1";
-                case 23 -> "/opt/oracle/product/23ai/dbhome_1";
-                default -> "/opt/oracle/product/any/dbhome_1";
-            };
+            int fmt = info[1];
+            String ver;
+            switch (major) {
+                case 11: ver = "11g"; break;
+                case 12: ver = "12c"; break;
+                case 18: ver = "18c"; break;
+                case 19: ver = (fmt == 2) ? "19c" : "19.3.0"; break;
+                case 21: ver = "21c"; break;
+                case 23: ver = "23ai"; break;
+                default: ver = "any"; break;
+            }
+            String base = (fmt == 2) ? "/opt/oracle" : "/u01/app/oracle";
+            return base + "/product/" + ver + "/dbhome_1";
         }
         return home;
     }
