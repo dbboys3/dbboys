@@ -38,23 +38,26 @@ public final class OracleRemoteWorkflow {
                "echo OK";
     }
     private static String uninstallStep2Cmd() {
-        return "rpm -qa 2>/dev/null | grep oracle-database | xargs -r rpm -e --nodeps 2>/dev/null; \n" +
-               "systemctl disable oracle.service 2>/dev/null \n" +
-               "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
-               "rm -f /etc/init.d/oracle 2>/dev/null \n" +
-               "systemctl daemon-reload 2>/dev/null \n" +
+        return "ipcs -m 2>/dev/null | grep -i oracle | awk '{print \"ipcrm -m \" $2}' | sh 2>/dev/null \n" +
                "echo OK";
     }
     private static String uninstallStep3Cmd() {
-        return "ipcs -m 2>/dev/null | grep -i oracle | awk '{print \"ipcrm -m \" $2}' | sh 2>/dev/null \n" +
-               "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; \n" +
+        return "rpm -qa 2>/dev/null | grep oracle-database | xargs -r rpm -e --nodeps 2>/dev/null; true\n" +
                "echo OK";
     }
     private static String uninstallStep4Cmd() {
+        return "systemctl disable oracle.service 2>/dev/null \n" +
+               "rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc\n" +
+               "rm -f /etc/init.d/oracle 2>/dev/null \n" +
+               "systemctl daemon-reload 2>/dev/null \n" +
+               "find / -user oracle 2>/dev/null -exec rm -rf {} + 2>/dev/null; true\n" +
+               "echo OK";
+    }
+    private static String uninstallStep5Cmd() {
         return "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }\n" +
-               "groupdel dba 2>/dev/null || true\n" +
-               "groupdel oinstall 2>/dev/null || true\n" +
-               "groupdel oper 2>/dev/null || true\n" +
+               "groupdel dba 2>/dev/null \n" +
+               "groupdel oinstall 2>/dev/null \n" +
+               "groupdel oper 2>/dev/null \n" +
                "echo OK";
     }
     public static void executeUninstallStep(int stepNo, RemoteUninstallExecutionContext ctx) throws Exception {
@@ -63,15 +66,16 @@ public final class OracleRemoteWorkflow {
             case 2: ctx.executeCommandWithExitStatus(uninstallStep2Cmd()); break;
             case 3: ctx.executeCommandWithExitStatus(uninstallStep3Cmd()); break;
             case 4: ctx.executeCommandWithExitStatus(uninstallStep4Cmd()); break;
+            case 5: ctx.executeCommandWithExitStatus(uninstallStep5Cmd()); break;
             default: throw new IllegalArgumentException("Unknown Oracle uninstall step: " + stepNo);
         }
     }
 
     private static String findOracleHome(RemoteUninstallExecutionContext ctx) throws Exception {
-        String oratab = ctx.executeCommand("cat /etc/oratab 2>/dev/null | grep -v '^#' | grep -v '^$' | head -1 | cut -d: -f2 || true").trim();
+        String oratab = ctx.executeCommand("cat /etc/oratab 2>/dev/null | grep -v '^#' | grep -v '^$' | head -1 | cut -d: -f2 ").trim();
         if (!oratab.isEmpty()) return oratab;
-        for (String p : new String[]{"/u01/app/product/19c/dbhome_1","/u01/app/product/18c/dbhome_1",
-            "/u01/app/product/12c/dbhome_1","/u01/app/product/11g/dbhome_1"}) {
+        for (String p : new String[]{"/opt/oracle/product/19.3.0/dbhome_1","/opt/oracle/product/18c/dbhome_1",
+            "/opt/oracle/product/12c/dbhome_1","/opt/oracle/product/11g/dbhome_1"}) {
             if (ctx.executeCommandWithExitStatus("[ -f '" + p.replace("'","'\\''") + "/bin/sqlplus' ]") == 0) return p;
         }
         return null;
@@ -139,7 +143,7 @@ public final class OracleRemoteWorkflow {
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
         // Delegate all 4 steps to the uninstall flow (single source of truth)
         RemoteUninstallExecutionContext uctx = new RemoteUninstallExecutionContext(ctx.getRemoteClient(), ctx.host());
-        for (int step = 1; step <= 4; step++) {
+        for (int step = 1; step <= 5; step++) {
             try {
                 executeUninstallStep(step, uctx);
             } catch (Exception e) {
@@ -157,15 +161,15 @@ public final class OracleRemoteWorkflow {
         String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
 
         check(ctx.executeCommand(
-            "groupadd -f oinstall 2>/dev/null || true\n" +
-            "groupadd -f dba 2>/dev/null || true\n" +
-            "groupadd -f oper 2>/dev/null || true\n" +
+            "groupadd -f oinstall 2>/dev/null \n" +
+            "groupadd -f dba 2>/dev/null \n" +
+            "groupadd -f oper 2>/dev/null \n" +
             "id oracle >/dev/null 2>&1 || useradd -g oinstall -G dba,oper -d /home/oracle -m -s /bin/bash oracle\n" +
-            "usermod -a -G dba,oper oracle 2>/dev/null || true\necho OK"), "Failed to create oracle user/groups");
+            "usermod -a -G dba,oper oracle 2>/dev/null \necho OK"), "Failed to create oracle user/groups");
 
         check(ctx.executeCommand(
-            "mkdir -p " + q(ob) + " " + q(oh) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
-            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /u01/app/staging /opt/oraInventory && " +
+            "mkdir -p " + q(ob) + " " + q(oh) + " " + q(dd) + " " + q(ra) + " /opt/staging /opt/oraInventory && " +
+            "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/staging /opt/oraInventory && " +
             "chmod -R 775 " + q(ob) + " && echo OK"), "Failed to create directories");
 
         check(ctx.executeCommand(kernelParams(ctx)), "Failed to set kernel parameters");
@@ -205,12 +209,12 @@ public final class OracleRemoteWorkflow {
 
         switch (fmt) {
             case FMT_ZIP:
-                String staging = "/u01/app/staging";
+                String staging = "/opt/staging";
                 check(ctx.executeCommand(
                     "cd " + staging + "\n" +
                     "for z in " + pkg + "; do [ -f \"$z\" ] && { echo \"Unzipping $z\"; unzip -qo \"$z\"; } || echo \"SKIP $z\"; done\n" +
                     "oraparam=" + staging + "/database/install/oraparam.ini\n" +
-                    "[ -f \"$oraparam\" ] && sed -i '/oracle\\.\\(jdk\\|javacompanion\\|ctx\\|precomp\\|sqlj\\|has\\|rdbms\\)/s/^\\(.*\\)unzip/#DISABLED_\\1unzip/' \"$oraparam\" || true\n" +
+                    "[ -f \"$oraparam\" ] && sed -i '/oracle\\.\\(jdk\\|javacompanion\\|ctx\\|precomp\\|sqlj\\|has\\|rdbms\\)/s/^\\(.*\\)unzip/#DISABLED_\\1unzip/' \"$oraparam\" \n" +
                     "echo OK"), "Failed to unzip Oracle package");
                 break;
             default:
@@ -233,7 +237,7 @@ public final class OracleRemoteWorkflow {
     }
 
     private static void installZip(RemoteInstallExecutionContext ctx) throws Exception {
-        String staging = "/u01/app/staging";
+        String staging = "/opt/staging";
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
@@ -282,7 +286,7 @@ public final class OracleRemoteWorkflow {
             "-responseFile " + rspFile + " 2>&1\n" +
             "echo RC=$?";
         // The runInstaller exits with RC=0 even when it prints "run root.sh".
-        // "Please run /u01/app/.../root.sh" is NOT a failure — it's just
+        // "Please run /opt/.../root.sh" is NOT a failure — it's just
         // telling you to execute the next step (which we do automatically).
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/runInstaller_" + sid + ".sh\n" +
@@ -350,7 +354,7 @@ public final class OracleRemoteWorkflow {
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/install_oracle_rpm.sh\n" + installScript + "\nSCRIPT_EOF\n" +
             "chmod +x /tmp/install_oracle_rpm.sh && bash -x /tmp/install_oracle_rpm.sh 2>&1");
-        log("RPM install output:\n" + smartClip(out, 4000));
+        log("RPM install output:\n" +out);
         check(out, "Failed to install Oracle RPM");
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
@@ -359,7 +363,7 @@ public final class OracleRemoteWorkflow {
         String pkg = ctx.remotePackagePath();
         String oh = resolveOracleHome(ctx);
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String staging = "/u01/app/staging";
+        String staging = "/opt/staging";
         check(ctx.executeCommand(
             "[ -f " + q(pkg) + " ] || { echo PKG_NOT_FOUND; exit 1; }\n" +
             "cd " + staging + " && tar xf " + q(pkg) + "\n" +
@@ -576,7 +580,7 @@ public final class OracleRemoteWorkflow {
             "kernel.sem = 250 32000 100 128\nnet.ipv4.ip_local_port_range = 9000 65500\n" +
             "net.core.rmem_default = 262144\nnet.core.rmem_max = 4194304\n" +
             "net.core.wmem_default = 262144\nnet.core.wmem_max = 1048576\n" +
-            "SYSCTLEOF\nsysctl -p /etc/sysctl.conf 2>/dev/null || true\n" +
+            "SYSCTLEOF\nsysctl -p /etc/sysctl.conf 2>/dev/null \n" +
             "cat >> /etc/security/limits.conf <<'LIMITSEOF'\n" +
             "oracle soft nproc 2047\noracle hard nproc 16384\n" +
             "oracle soft nofile 1024\noracle hard nofile 65536\n" +
