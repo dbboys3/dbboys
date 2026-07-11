@@ -779,18 +779,10 @@ public class RemoteInstallerUtil {
             fileChooser.setTitle(I18n.t("remote.install.step3.select_package", "选择安装包"));
             selectedFile = fileChooser.showOpenDialog(parent);
             if (selectedFile != null) {
-                installFilePathField.setText(selectedFile.getAbsolutePath());
+                String localPath = selectedFile.getAbsolutePath();
+                installFilePathField.setText(localPath);
                 remoteFilePath = "/tmp/" + selectedFile.getName();
                 remotePathField.setText(remoteFilePath);
-
-                // 自动建议安装命令
-                if (selectedFile.getName().endsWith(".deb")) {
-                    installFilePathField.setText("dpkg -i " + remoteFilePath);
-                } else if (selectedFile.getName().endsWith(".rpm")) {
-                    installFilePathField.setText("rpm -ivh " + remoteFilePath);
-                } else if (selectedFile.getName().endsWith(".sh")) {
-                    installFilePathField.setText("chmod +x " + remoteFilePath + " && ./" + remoteFilePath);
-                }
             }
         });
         StackPane downloadStackPane=new StackPane();
