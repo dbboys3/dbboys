@@ -37,9 +37,7 @@ public final class OracleRemoteWorkflow {
                 // Best-effort stop: if oracle isn't installed, everything is "|| true".
                 // Never fail this step — the system may be partially or not-at-all installed.
                 ctx.executeCommandWithExitStatus(
-                    "pkill -9 -f pmon 2>/dev/null || true\n" +
-                    "pkill -9 -f tns_lsnr 2>/dev/null || true\n" +
-                    "pkill -9 -f 'ora_' 2>/dev/null || true\n" +
+                    "ps -ef | grep -i oracle | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true\n" +
                     "systemctl stop oracle.service 2>/dev/null || true\n" +
                     "echo OK");
                 break;
@@ -152,7 +150,7 @@ public final class OracleRemoteWorkflow {
 
         // Shell commands mirror executeUninstallStep exactly, but run over
         // the same SSH session the install wizard already has open.
-        exec(ctx, "pkill -9 -f pmon 2>/dev/null || true; pkill -9 -f tns_lsnr 2>/dev/null || true; pkill -9 -f 'ora_' 2>/dev/null || true; systemctl stop oracle.service 2>/dev/null || true");
+        exec(ctx, "ps -ef | grep -i oracle | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true; systemctl stop oracle.service 2>/dev/null || true");
         exec(ctx, "systemctl disable oracle.service 2>/dev/null || true; rm -f /etc/systemd/system/oracle.service /etc/oratab /etc/oraInst.loc; systemctl daemon-reload 2>/dev/null || true");
         exec(ctx, "for d in /opt/oracle /u01 /u02 /u03 /u04 /tmp/oracle /tmp/OraInstall* /opt/oraInventory /opt/app/oracle " + dd + " " + ra + " " + installOh + "; do [ -e \"$d\" ] && rm -rf \"$d\"; done; echo OK");
         exec(ctx, "id oracle >/dev/null 2>&1 && { userdel -r -f oracle 2>/dev/null || userdel -f oracle 2>/dev/null; }; groupdel dba 2>/dev/null || true; groupdel oinstall 2>/dev/null || true; groupdel oper 2>/dev/null || true; echo OK");
