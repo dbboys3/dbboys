@@ -2,7 +2,7 @@ package com.dbboys.ui.controller;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
-
+import com.dbboys.ssh.SshConnect;
 import com.dbboys.ui.component.*;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.*;
@@ -13,7 +13,6 @@ import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.ui.dialog.CustomWindowFrameUtil;
 import com.dbboys.remote.RemoteCheckEnvUtil;
 import com.dbboys.remote.RemoteDatabaseProviders;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
@@ -864,41 +863,72 @@ public class MainController {
 
     private void initSshTreeView() {
         try {
-            
+            com.dbboys.infra.db.LocalDbRepository.migrateTConnectTable();
             TreeItem<TreeData> rootItem = new TreeItem<>();
             rootItem.setExpanded(true);
             sshTreeView.setRoot(rootItem);
             sshTreeView.setShowRoot(false);
-            sshTreeView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+            sshTreeView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
-            java.util.List<com.dbboys.ssh.SshConnect> sshConnections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
-            for (com.dbboys.ssh.SshConnect sc : sshConnections) {
-                TreeItem<TreeData> item = new TreeItem<>(sc);
-                rootItem.getChildren().add(item);
+            // Load folders and connections (same pattern as database tree)
+            java.util.List<com.dbboys.model.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
+            java.util.List<com.dbboys.ssh.SshConnect> connections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
+
+            for (com.dbboys.model.SshFolder folder : folders) {
+                TreeItem<TreeData> folderItem = new TreeItem<>(folder);
+                folderItem.setExpanded(folder.getExpand() == 1);
+                rootItem.getChildren().add(folderItem);
+                for (com.dbboys.ssh.SshConnect sc : connections) {
+                    if (sc.getParentId() == folder.getId()) {
+                        folderItem.getChildren().add(new TreeItem<>(sc));
+                    }
+                }
             }
 
-            // Double-click to edit SSH connection
+            // Double-click to open SSH terminal tab
             sshTreeView.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2) {
                     TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                     if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
-                        showSshConnectDialog(sshConnect, false);
+                        TabpaneUtil.addCustomSshTab(sshConnect);
                     }
                 }
             });
 
-            // Context menu for SSH tree
+            // Context menu
             javafx.scene.control.ContextMenu sshCtxMenu = new javafx.scene.control.ContextMenu();
+
+            // --- Folder menu items ---
+            javafx.scene.control.MenuItem newSshFolderItem = new javafx.scene.control.MenuItem();
+            newSshFolderItem.textProperty().bind(I18n.bind("metadata.dialog.create_folder.title", "New Folder"));
+            newSshFolderItem.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
+            newSshFolderItem.setOnAction(e -> createSshFolder());
+            sshCtxMenu.getItems().add(newSshFolderItem);
+
+            // --- Connection menu items ---
             javafx.scene.control.MenuItem editSshItem = new javafx.scene.control.MenuItem();
-            editSshItem.textProperty().bind(I18n.bind("createconnect.button.test", "Edit"));
+            editSshItem.textProperty().bind(I18n.bind("metadata.modify_connect_item", "Edit"));
+            editSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.6));
             editSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
                     showSshConnectDialog(sshConnect, false);
                 }
             });
+
+            javafx.scene.control.MenuItem testSshItem = new javafx.scene.control.MenuItem();
+            testSshItem.textProperty().bind(I18n.bind("createconnect.button.test", "Test Connection"));
+            testSshItem.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.7));
+            testSshItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                    testSshConnection(sshConnect);
+                }
+            });
+
             javafx.scene.control.MenuItem deleteSshItem = new javafx.scene.control.MenuItem();
-            deleteSshItem.textProperty().bind(I18n.bind("createconnect.button.cancel", "Delete"));
+            deleteSshItem.textProperty().bind(I18n.bind("metadata.delete_item", "Delete"));
+            deleteSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, IconFactory.dangerColor()));
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
@@ -907,261 +937,137 @@ public class MainController {
                     }
                 }
             });
-            sshCtxMenu.getItems().addAll(editSshItem, deleteSshItem);
+
+            javafx.scene.control.MenuItem deleteSshFolderItem = new javafx.scene.control.MenuItem();
+            deleteSshFolderItem.textProperty().bind(I18n.bind("metadata.delete_item", "Delete Folder"));
+            deleteSshFolderItem.setGraphic(IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, IconFactory.dangerColor()));
+            deleteSshFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                    if (AlertUtil.CustomAlertConfirm(I18n.t("common.hint"),
+                            I18n.t("metadata.confirm.delete_folder", "Confirm delete folder?"))) {
+                        if (com.dbboys.infra.db.LocalDbRepository.deleteSshFolder(folder)) {
+                            selected.getParent().getChildren().remove(selected);
+                        }
+                    }
+                }
+            });
+
+            javafx.scene.control.SeparatorMenuItem sep = new javafx.scene.control.SeparatorMenuItem();
+            sshCtxMenu.getItems().addAll(editSshItem, testSshItem, deleteSshItem, sep, deleteSshFolderItem);
+
+            // Show context menu on right-click
             sshTreeView.setContextMenu(sshCtxMenu);
-        } catch (Exception e) {
+
+            // Dynamically enable/disable menu items based on selection
+            sshCtxMenu.setOnShowing(e -> {
+                TreeItem<TreeData> sel = sshTreeView.getSelectionModel().getSelectedItem();
+                boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.ssh.SshConnect;
+                boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
+                editSshItem.setVisible(isConnection);
+                testSshItem.setVisible(isConnection);
+                deleteSshItem.setVisible(isConnection);
+                sep.setVisible(isConnection);
+                deleteSshFolderItem.setVisible(isFolder);
+            });
+
+        } catch (Exception ex) {
         }
     }
 
     public void createSshLeaf() {
-        showSshConnectDialog(new com.dbboys.ssh.SshConnect(), true);
+        // Default to first folder, like database connections do
+        SshConnect newConn = new SshConnect();
+        java.util.List<com.dbboys.model.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
+
+        if (!folders.isEmpty()) {
+            newConn.setParentId(folders.get(0).getId());
+        }
+        showSshConnectDialog(newConn, true);
+    }
+
+    private void createSshFolder() {
+
+
+
+        HBox hbox = new HBox();
+        hbox.getChildren().add(new Label(I18n.t("metadata.dialog.create_folder.name", "Enter folder name")));
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        TextField textField = new TextField();
+        textField.setPrefWidth(200);
+        hbox.getChildren().add(textField);
+
+        ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                I18n.t("metadata.dialog.create_folder.title", "New Folder"),
+                hbox, 420, 180, btnOk, btnCancel);
+        Button okBtn = dlg.getButton(btnOk);
+        okBtn.setDisable(true);
+        textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+
+
+        if (dlg.showAndWait() == btnOk) {
+            com.dbboys.model.SshFolder folder = new com.dbboys.model.SshFolder();
+            folder.setName(textField.getText());
+            folder.setExpand(1);
+            com.dbboys.infra.db.LocalDbRepository.createSshFolder(folder);
+            TreeItem<TreeData> item = new TreeItem<>(folder);
+            item.setExpanded(true);
+            sshTreeView.getRoot().getChildren().add(item);
+        }
+    }
+
+    private void testSshConnection(com.dbboys.ssh.SshConnect sc) {
+        AppExecutor.runAsync(() -> {
+            long start = System.currentTimeMillis();
+            try {
+                int port = Integer.parseInt(sc.getPort());
+                var tunnel = SshTunnelUtil.createTunnel(
+                        sc.getHost(), port,
+                        sc.getUsername(), sc.getPassword(),
+                        "127.0.0.1", 1);
+                tunnel.close();
+                long elapsed = System.currentTimeMillis() - start;
+                Platform.runLater(() ->
+                    AlertUtil.CustomAlert(I18n.t("common.hint"),
+                            String.format(I18n.t("createconnect.notice.test_success"), elapsed)));
+            } catch (Exception ex) {
+                log.error("SSH test failed", ex);
+                Platform.runLater(() ->
+                    AlertUtil.CustomAlert(I18n.t("common.error"),
+                            String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage())));
+            }
+        });
     }
 
     private void showSshConnectDialog(com.dbboys.ssh.SshConnect sshConnect, boolean isNew) {
-        VBox contentBox = new VBox();
-        contentBox.setStyle("-fx-padding: 10 18 10 18;");
-
-        // row 0: name (auto-generated if blank)
-        HBox nameRow = row30();
-        Label nameLabel = label80("createconnect.label.name");
-        CustomUserTextField nameField = new CustomUserTextField();
-        nameField.setPrefWidth(260);
-        nameField.setPromptText(I18n.t("ssh.prompt.name", "Optional, default [Host_Port]"));
-        nameField.setText(sshConnect.getName() != null ? sshConnect.getName() : "");
-        nameRow.getChildren().addAll(nameLabel, nameField);
-
-        // row 1: host + port
-        HBox hostRow = row30();
-        Label hostLabel = label80("createconnect.label.ssh_host");
-        CustomUserTextField hostField = new CustomUserTextField();
-        hostField.setPrefWidth(150);
-        hostField.setPromptText(I18n.t("ssh.prompt.host", "SSH server address"));
-        hostField.setText(sshConnect.getHost() != null ? sshConnect.getHost() : "");
-        Label spacer10 = new Label("");
-        spacer10.setPrefWidth(10);
-        Label portLabel = new Label();
-        Label spacer3 = new Label("");
-        spacer3.setPrefWidth(3);
-        portLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_port"));
-        CustomUserTextField portField = new CustomUserTextField();
-        portField.setPrefWidth(48);
-        portField.setPromptText(I18n.t("ssh.prompt.port", "SSH port"));
-        portField.setText(sshConnect.getPort() != null ? sshConnect.getPort() : "22");
-        hostRow.getChildren().addAll(hostLabel, hostField, spacer10, portLabel, spacer3, portField);
-
-        // row 2: user
-        HBox userRow = row30();
-        Label userLabel = label80("createconnect.label.ssh_user");
-        CustomUserTextField userField = new CustomUserTextField();
-        userField.setPrefWidth(150);
-        userField.setPromptText(I18n.t("ssh.prompt.username", "SSH username"));
-        userField.setText(sshConnect.getUsername() != null ? sshConnect.getUsername() : "");
-        userRow.getChildren().addAll(userLabel, userField);
-
-        // row 3: auth type
-        HBox authTypeRow = row30();
-        Label authTypeLabel = label80("ssh.label.auth_type");
-        ChoiceBox<String> authTypeChoiceBox = new ChoiceBox<>();
-        authTypeChoiceBox.setFocusTraversable(false);
-        authTypeChoiceBox.getStyleClass().add("choice-box-with-border");
-        authTypeChoiceBox.getItems().addAll(
-                I18n.t("ssh.label.auth_password", "Password"),
-                I18n.t("ssh.label.auth_key", "Key"));
-        authTypeChoiceBox.getSelectionModel().select(0);
-        authTypeRow.getChildren().addAll(authTypeLabel, authTypeChoiceBox);
-
-        // row 4: password (password auth mode)
-        HBox passwordRow = row30();
-        Label passwordLabel = label80("createconnect.label.ssh_password");
-        CustomPasswordField passwordField = new CustomPasswordField();
-        passwordField.setPrefWidth(170);
-        passwordField.setPromptText(I18n.t("ssh.prompt.password", "SSH login password"));
-        passwordField.setText(sshConnect.isAuthKey() ? "" : (sshConnect.getPassword() != null ? sshConnect.getPassword() : ""));
-        passwordRow.getChildren().addAll(passwordLabel, passwordField);
-
-        // row 4b: key file path (key auth mode) — text field + browse button (search icon, small style)
-        HBox keyPathRow = row30();
-        Label keyPathLabel = label80("ssh.label.key_path");
-        CustomUserTextField keyPathField = new CustomUserTextField();
-        keyPathField.setPrefWidth(160);
-        keyPathField.setPromptText(I18n.t("ssh.prompt.key_path", "Select SSH private key"));
-        keyPathField.setText(sshConnect.isAuthKey() ? (sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "") : "");
-        Label keySpace1 = new Label(" ");
-        Button keyBrowseButton = new Button();
-        keyBrowseButton.setFocusTraversable(false);
-        keyBrowseButton.getStyleClass().addAll("small");
-        keyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
-        keyBrowseButton.setTooltip(new Tooltip(I18n.t("createconnect.tooltip.browse_file", "Browse")));
-        keyPathRow.getChildren().addAll(keyPathLabel, keyPathField, keySpace1, keyBrowseButton);
-
-        contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow,
-                passwordRow, keyPathRow);
-
-        // toggle auth rows
-        Runnable updateAuthRows = () -> {
-            boolean isKeyMode = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-            passwordRow.setVisible(!isKeyMode);
-            passwordRow.setManaged(!isKeyMode);
-            keyPathRow.setVisible(isKeyMode);
-            keyPathRow.setManaged(isKeyMode);
-        };
-        if (sshConnect.isAuthKey()) {
-            authTypeChoiceBox.getSelectionModel().select(1);
+        SshConnectDialogController dlgCtrl = new SshConnectDialogController(sshConnect, isNew);
+        if (dlgCtrl.showAndWait() && isNew) {
+            addSshToTree(sshConnect);
         }
-        updateAuthRows.run();
-        authTypeChoiceBox.getSelectionModel().selectedIndexProperty().addListener((obs, o, n) -> updateAuthRows.run());
-
-        // port numeric filter
-        portField.setTextFormatter(new TextFormatter<String>(change ->
-            change.getControlNewText().matches("\\d*") ? change : null));
-
-        // key browse action
-        keyBrowseButton.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle(I18n.t("ssh.prompt.key_path", "Select SSH Private Key"));
-            File homeDir = new File(System.getProperty("user.home"));
-            if (homeDir.isDirectory()) {
-                File sshDir = new File(homeDir, ".ssh");
-                chooser.setInitialDirectory(sshDir.isDirectory() ? sshDir : homeDir);
-            }
-            File selected = chooser.showOpenDialog(AppState.getWindow());
-            if (selected != null) {
-                keyPathField.setText(selected.getAbsolutePath());
-            }
-        });
-
-        // --- value setter ---
-        Runnable setValues = () -> {
-            if (nameField.getText().isBlank()) {
-                sshConnect.setName("[" + hostField.getText() + "_" + portField.getText() + "]");
-            } else {
-                sshConnect.setName(nameField.getText());
-            }
-            sshConnect.setHost(hostField.getText());
-            sshConnect.setPort(portField.getText());
-            sshConnect.setUsername(userField.getText());
-            boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-            sshConnect.setAuthType(isKey ? com.dbboys.ssh.SshConnect.AUTH_KEY : com.dbboys.ssh.SshConnect.AUTH_PASSWORD);
-            sshConnect.setPassword(isKey ? "" : passwordField.getText());
-            sshConnect.setKeyPath(isKey ? keyPathField.getText() : "");
-        };
-
-        java.util.function.Supplier<Boolean> checkInput = () -> {
-            if (hostField.getText().isBlank()) { hostField.requestFocus(); return false; }
-            if (userField.getText().isBlank()) { userField.requestFocus(); return false; }
-            boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-            if (!isKey && passwordField.getText().isBlank()) { passwordField.requestFocus(); return false; }
-            if (isKey && keyPathField.getText().isBlank()) { keyPathField.requestFocus(); return false; }
-            return true;
-        };
-
-        // --- buttons ---
-        ButtonType testButtonType = new ButtonType(I18n.t("createconnect.button.test"), ButtonBar.ButtonData.NO);
-        ButtonType commitButtonType = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
-        ButtonType cancelButtonType = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
-        // --- connecting overlay ---
-        HBox connectingHBox = new HBox();
-        connectingHBox.setAlignment(Pos.CENTER);
-        connectingHBox.setVisible(false);
-        Label connectingStatusLabel = new Label();
-        connectingStatusLabel.textProperty().bind(I18n.bind("createconnect.status.connecting"));
-        Button connectingStopButton = new Button();
-        connectingStopButton.getStyleClass().add("small");
-        connectingStopButton.setFocusTraversable(false);
-        Tooltip stopTooltip = new Tooltip();
-        stopTooltip.textProperty().bind(I18n.bind("createconnect.tooltip.stop_connecting"));
-        connectingStopButton.setTooltip(stopTooltip);
-        connectingHBox.getChildren().addAll(connectingStatusLabel, connectingStopButton);
-
-        StackPane contentStack = new StackPane(contentBox, connectingHBox);
-
-        // Use same dialog pattern as install/uninstall panel (DialogPane + CustomWindowFrameUtil)
-        Stage sshDialogStage = new Stage();
-        DialogPane dialogPane = new DialogPane();
-        dialogPane.getButtonTypes().addAll(testButtonType, commitButtonType, cancelButtonType);
-        dialogPane.setHeader(null);
-        dialogPane.setMinSize(440, 250 - 28);
-        dialogPane.setPrefSize(440, 250 - 28);
-        dialogPane.setMaxSize(440, 250 - 28);
-        dialogPane.setContent(contentStack);
-        // Test button
-        Button testButton = (Button) dialogPane.lookupButton(testButtonType);
-        testButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (!checkInput.get()) { event.consume(); return; }
-            setValues.run();
-            AppExecutor.runAsync(() -> {
-                long start = System.currentTimeMillis();
-                try {
-                    int port = Integer.parseInt(sshConnect.getPort());
-                    var tunnel = SshTunnelUtil.createTunnel(
-                            sshConnect.getHost(), port,
-                            sshConnect.getUsername(), sshConnect.getPassword(),
-                            "127.0.0.1", 1);
-                    tunnel.close();
-                    long elapsed = System.currentTimeMillis() - start;
-                    Platform.runLater(() ->
-                        AlertUtil.CustomAlert(I18n.t("common.hint"),
-                                String.format(I18n.t("createconnect.notice.test_success"), elapsed)));
-                } catch (Exception ex) {
-                    log.error("SSH test failed", ex);
-                    Platform.runLater(() ->
-                        AlertUtil.CustomAlert(I18n.t("common.error"),
-                                String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage())));
-                }
-            });
-            event.consume();
-        });
-
-        // Commit button
-        Button commitButton = (Button) dialogPane.lookupButton(commitButtonType);
-        commitButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (!checkInput.get()) { event.consume(); return; }
-            setValues.run();
-            if (isNew) {
-                com.dbboys.infra.db.LocalDbRepository.createSsh(sshConnect);
-                TreeItem<TreeData> newItem = new TreeItem<>(sshConnect);
-                sshTreeView.getRoot().getChildren().add(newItem);
-            } else {
-                com.dbboys.infra.db.LocalDbRepository.updateSsh(sshConnect);
-            }
-            event.consume();
-        });
-
-        // Cancel button
-        Button cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
-        cancelButton.setOnAction(e -> sshDialogStage.close());
-
-        // Custom window frame (same as install/uninstall panel)
-        sshDialogStage.titleProperty().set(I18n.t(isNew ? "ssh.title.new" : "ssh.title.edit",
-            isNew ? "New SSH Connection" : "Edit SSH Connection"));
-        CustomWindowFrameUtil.Frame sshFrame = CustomWindowFrameUtil.createModalPopup(
-                sshDialogStage, sshDialogStage.titleProperty(), dialogPane, 440, 250, false);
-
-        // connecting stop
-        connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
-
-        // 相对主窗口居中
-        Window sshOwner = sshDialogStage.getOwner();
-        if (sshOwner != null && sshOwner.isShowing()) {
-            sshDialogStage.setX(sshOwner.getX() + (sshOwner.getWidth() - 440) / 2);
-            sshDialogStage.setY(sshOwner.getY() + (sshOwner.getHeight() - 250) / 2);
-        }
-        sshDialogStage.showAndWait();
         sshTreeView.refresh();
     }
 
-    private static HBox row30() {
-        HBox row = new HBox();
-        row.setPrefHeight(30);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
-    }
-
-    private static Label label80(String i18nKey) {
-        Label label = new Label();
-        label.textProperty().bind(I18n.bind(i18nKey));
-        label.setPrefWidth(80);
-        return label;
+    private void addSshToTree(com.dbboys.ssh.SshConnect sc) {
+        // Find parent folder item and add the new connection
+        TreeItem<TreeData> folderItem = null;
+        for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
+            if (child.getValue() instanceof com.dbboys.model.SshFolder f
+                    && f.getId() == sc.getParentId()) {
+                folderItem = child;
+                break;
+            }
+        }
+        TreeItem<TreeData> newItem = new TreeItem<>(sc);
+        if (folderItem != null) {
+            folderItem.getChildren().add(newItem);
+            if (!folderItem.isExpanded()) {
+                folderItem.setExpanded(true);
+            }
+        } else {
+            sshTreeView.getRoot().getChildren().add(newItem);
+        }
     }
 
     private void initStatusBar() {
@@ -1352,5 +1258,4 @@ public class MainController {
         AppState.setCurrentTheme(theme);
         NotificationUtil.showMainNotification(I18n.t(noticeKey));
     }
-
 }

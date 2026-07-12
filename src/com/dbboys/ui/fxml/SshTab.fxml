@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import java.lang.*?>
+<?import java.util.*?>
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import com.dbboys.ui.component.CustomSqlEditCodeArea?>
+<?import org.fxmisc.flowless.VirtualizedScrollPane?>
+<VBox fx:id="sshTab" fx:controller="com.dbboys.ui.controller.SshTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
+    <HBox alignment="CENTER_LEFT">
+        <Button fx:id="connectButton" styleClass="custom-button" focusTraversable="false">
+            <tooltip>
+                <Tooltip />
+            </tooltip>
+        </Button>
+        <Button fx:id="disconnectButton" styleClass="custom-button" focusTraversable="false">
+            <tooltip>
+                <Tooltip />
+            </tooltip>
+        </Button>
+        <Label fx:id="connectionLabel" />
+        <Region HBox.hgrow="ALWAYS" />
+        <Button fx:id="runButton" styleClass="custom-button" focusTraversable="false">
+            <tooltip>
+                <Tooltip />
+            </tooltip>
+        </Button>
+        <Button fx:id="stopButton" styleClass="custom-button" focusTraversable="false">
+            <tooltip>
+                <Tooltip />
+            </tooltip>
+        </Button>
+    </HBox>
+    <SplitPane fx:id="splitPane" prefHeight="30000" orientation="VERTICAL">
+        <StackPane>
+            <VirtualizedScrollPane fx:id="commandScrollPane">
+                <content>
+                    <CustomSqlEditCodeArea fx:id="commandInput">
+                    </CustomSqlEditCodeArea>
+                </content>
+            </VirtualizedScrollPane>
+        </StackPane>
+        <StackPane>
+            <VirtualizedScrollPane fx:id="outputScrollPane">
+                <content>
+                    <CustomSqlEditCodeArea fx:id="outputArea" editable="false">
+                    </CustomSqlEditCodeArea>
+                </content>
+            </VirtualizedScrollPane>
+        </StackPane>
+    </SplitPane>
+</VBox>

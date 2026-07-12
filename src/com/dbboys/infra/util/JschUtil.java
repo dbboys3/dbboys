@@ -1,6 +1,7 @@
 package com.dbboys.infra.util;
 
 import com.dbboys.model.Connect;
+import com.dbboys.ssh.SshConnect;
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
@@ -152,5 +153,49 @@ public class JschUtil {
         int exitStatus = channelExec.getExitStatus();
         channelExec.disconnect();
         return exitStatus;
+    }
+
+    /**
+     * Create a JSch Session directly from an SshConnect model.
+     * Supports both password and key-based authentication.
+     *
+     * @param sc the SSH connection configuration
+     * @return an authenticated JSch Session
+     * @throws JSchException if connection or authentication fails
+     */
+    public static Session getSshSession(SshConnect sc) throws JSchException {
+        JSch jsch = new JSch();
+        int port;
+        try {
+            port = Integer.parseInt(sc.getPort());
+        } catch (NumberFormatException e) {
+            port = 22;
+        }
+        Session session = jsch.getSession(sc.getUsername(), sc.getHost(), port);
+        if (sc.isAuthKey()) {
+            if (sc.getKeyPassphrase() != null && !sc.getKeyPassphrase().isBlank()) {
+                jsch.addIdentity(sc.getKeyPath(), sc.getKeyPassphrase());
+            } else {
+                jsch.addIdentity(sc.getKeyPath());
+            }
+        } else {
+            session.setPassword(sc.getPassword());
+        }
+        Properties config = new Properties();
+        config.put("StrictHostKeyChecking", "no");
+        session.setConfig(config);
+        session.connect(5000); // 5-second timeout
+        return session;
+    }
+
+    /**
+     * Safely disconnect a JSch session if it is connected.
+     *
+     * @param session the session to disconnect (may be null)
+     */
+    public static void disconnectSession(Session session) {
+        if (session != null && session.isConnected()) {
+            session.disconnect();
+        }
     }
 }

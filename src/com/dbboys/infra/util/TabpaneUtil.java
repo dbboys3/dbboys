@@ -3,6 +3,7 @@ package com.dbboys.infra.util;
 import com.dbboys.core.ConnectionService;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppExecutor;
+import com.dbboys.ssh.SshConnect;
 import com.dbboys.app.AppState;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.ui.component.*;
@@ -35,6 +36,7 @@ public class TabpaneUtil {
     private static final String TAB_KEY_INSTANCE = "instance:";
     private static final String TAB_KEY_TABLE = "table:";
     private static final String TAB_KEY_LOCK_SESSION = "lockSession:";
+    private static final String TAB_KEY_SSH = "ssh:";
 
     private TabpaneUtil() {
     }
@@ -88,6 +90,21 @@ public class TabpaneUtil {
         if (connect != null) {
             newtab.sqlTabController.sqlConnectChoiceBox.setValue(connect);
         }
+    }
+
+    /**
+     * Open an SSH terminal tab for the given SSH connection.
+     * If a tab for this connection already exists, select it instead of creating a new one.
+     */
+    public static void addCustomSshTab(SshConnect sshConnect) {
+        Tab existing = findTabByUserData(TAB_KEY_SSH + sshConnect.getId());
+        if (existing != null) {
+            tabPane().getSelectionModel().select(existing);
+            return;
+        }
+        CustomSshTab tab = new CustomSshTab(sshConnect);
+        tabPane().getTabs().add(tab);
+        tabPane().getSelectionModel().select(tab);
     }
 
 
