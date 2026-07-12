@@ -154,7 +154,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
         double totalMemGb = hostProfile == null ? 0 : hostProfile.getTotalMemoryGb();
         double freeDiskGb = hostProfile == null ? 0 : hostProfile.getFreeDiskSizeGb();
 
-        int memoryMb = totalMemGb >= 16 ? 4096 : totalMemGb >= 8 ? 2048 : totalMemGb >= 4 ? 1024 : 512;
+        int memoryMb = totalMemGb >= 16 ? 8192 : totalMemGb >= 8 ? 4096 : totalMemGb >= 4 ? 2048 : 1024;
         String dataDir = freeDiskGb >= 50 ? "/u01/oradata" : "/opt/oracle/oradata";
 
         List<RemoteInstallField> fields = new ArrayList<>();
@@ -206,7 +206,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 I18n.t("remote.install.oracle.cfg.tablespace.desc", "Datafile path for the default permanent tablespace.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_RECOVERY_AREA,
                 I18n.t("remote.install.oracle.cfg.recovery.name", "Recovery Area"),
-                "/opt/fast_recovery_area",
+                "/opt/oracle/fast_recovery_area",
                 I18n.t("remote.install.oracle.cfg.recovery.desc", "Fast recovery area for archived logs and backups.")));
         return fields;
     }
