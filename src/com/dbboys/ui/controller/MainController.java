@@ -1079,9 +1079,9 @@ public class MainController {
         DialogPane dialogPane = new DialogPane();
         dialogPane.getButtonTypes().addAll(testButtonType, commitButtonType, cancelButtonType);
         dialogPane.setHeader(null);
-        dialogPane.setMinSize(440, 320 - 28);
-        dialogPane.setPrefSize(440, 320 - 28);
-        dialogPane.setMaxSize(440, 320 - 28);
+        dialogPane.setMinSize(440, 250 - 28);
+        dialogPane.setPrefSize(440, 250 - 28);
+        dialogPane.setMaxSize(440, 250 - 28);
         dialogPane.setContent(contentStack);
         // Test button
         Button testButton = (Button) dialogPane.lookupButton(testButtonType);
@@ -1134,7 +1134,7 @@ public class MainController {
         sshDialogStage.titleProperty().set(I18n.t(isNew ? "ssh.title.new" : "ssh.title.edit",
             isNew ? "New SSH Connection" : "Edit SSH Connection"));
         CustomWindowFrameUtil.Frame sshFrame = CustomWindowFrameUtil.createModalPopup(
-                sshDialogStage, sshDialogStage.titleProperty(), dialogPane, 440, 320, false);
+                sshDialogStage, sshDialogStage.titleProperty(), dialogPane, 440, 250, false);
 
         // connecting stop
         connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
