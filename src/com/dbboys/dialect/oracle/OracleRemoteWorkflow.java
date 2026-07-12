@@ -1,8 +1,9 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.oracle;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import com.dbboys.remote.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -36,8 +37,6 @@ public final class OracleRemoteWorkflow {
     public static void afterInstallSteps(RemoteInstallExecutionContext ctx) {}
 
     // ---- Uninstall ----
-
-    // ============ Install step commands ============
 
     private static String uninstallStep1Cmd() {
         return "ps -ef | grep -i oracle | grep -v grep | awk '{print \"kill -9 \" $2}' | sh 2>/dev/null\n" +
@@ -86,11 +85,9 @@ public final class OracleRemoteWorkflow {
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         area.replaceText("");
 
-        // Database version
         area.append(I18n.t("remote.install.result.db_version", "Database version") + "\n", RESULT_TITLE_STYLE);
         try { area.append(runSql(ctx, "select banner from v$version where rownum=1") + "\n\n", RESULT_BODY_STYLE); } catch (Exception ignored) {}
 
-        // Instance info
         area.append(I18n.t("remote.install.result.db_instance_info", "Instance Information") + "\n", RESULT_TITLE_STYLE);
         area.append(I18n.t("remote.install.result.oracle_home", "ORACLE_HOME") + "：" + oh + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.oracle_base", "ORACLE_BASE") + "：" + ob + "\n", RESULT_BODY_STYLE);
@@ -104,15 +101,11 @@ public final class OracleRemoteWorkflow {
         area.append(I18n.t("remote.install.result.data_path", "Data File Path") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.recovery_area", "Recovery Area") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\n\n", RESULT_BODY_STYLE);
 
-
-        // Data file disk usage
-        // Disk usage (full df -h output)
         try {
             String diskInfo = ctx.executeCommand("df -h");
             area.append(I18n.t("remote.install.result.disk_usage", "Disk Usage") + "\n", RESULT_TITLE_STYLE);
             area.append(diskInfo + "\n\n", RESULT_BODY_STYLE);
         } catch (Exception ignored) {}
-        // System info
         area.append(I18n.t("remote.install.info.machine", "Server Model") + "\n", RESULT_TITLE_STYLE);
         area.append(ctx.machineInfo() + "\n\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.info.os", "Operating System") + "\n", RESULT_TITLE_STYLE);
@@ -137,7 +130,7 @@ public final class OracleRemoteWorkflow {
         return c;
     }
 
-    // ============ Step 1: Cleanup (reuse uninstall workflow) ============
+    // ============ Step 1: Cleanup ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
         RemoteUninstallExecutionContext uctx = new RemoteUninstallExecutionContext(ctx.getRemoteClient(), ctx.host());
         for (int step = 1; step <= 5; step++) {
@@ -155,7 +148,6 @@ public final class OracleRemoteWorkflow {
 
     // ============ Step 3: Check yum repos and install dependencies ============
     private static void checkYumAndInstallDeps(RemoteInstallExecutionContext ctx) throws Exception {
-        // Install Oracle dependencies via yum/dnf
         check(ctx.executeCommand(
             "if command -v yum >/dev/null 2>&1; then\n" +
             "  PKG_MGR=yum\n" +
@@ -167,7 +159,6 @@ public final class OracleRemoteWorkflow {
             "$PKG_MGR install -y bc binutils compat-libcap1 gcc gcc-c++ glibc glibc-devel ksh libaio libstdc++ libstdc++-devel make net-tools smartmontools sysstat unixODBC unzip 2>&1\n" +
             "echo OK"), "Failed to install Oracle dependencies via yum/dnf");
 
-        // Check yum/dnf repositories are available
         check(ctx.executeCommand(
             "echo 'Checking yum/dnf repositories'\n" +
             "if command -v yum >/dev/null 2>&1; then\n" +
@@ -211,7 +202,6 @@ public final class OracleRemoteWorkflow {
         int[] info = OracleRemoteProvider.detectOraclePackage(pkg);
         int fmt = info[1];
 
-        // RPM packages don't need unpacking
         if (fmt == FMT_RPM) {
             return;
         }
@@ -227,7 +217,6 @@ public final class OracleRemoteWorkflow {
                     "echo OK"), "Failed to unzip Oracle package");
                 break;
             default:
-                // tarball — unpack in installBinaries for now
                 break;
         }
     }
@@ -244,7 +233,6 @@ public final class OracleRemoteWorkflow {
             default:       installTar(ctx); break;
         }
 
-        // Run root.sh after binary install
         String oh = resolveOracleHome(ctx);
         check(ctx.executeCommand("[ -x " + q(oh + "/root.sh") + " ] && " + q(oh + "/root.sh") + "; echo OK"),
             "root.sh failed");
@@ -278,12 +266,6 @@ public final class OracleRemoteWorkflow {
             "SECURITY_UPDATES_VIA_MYORACLESUPPORT=false\n" +
             "DECLINE_SECURITY_UPDATES=true");
 
-        // Run the silent installer with a CLEAN environment.
-        // Oracle 11g's internal JVM crashes with NPE when it encounters
-        // garbage env vars like %j %@dPP %mxhsV that leak from the shell.
-        // `env -i` starts with an empty environment, then we set only what's needed.
-        // The runOra() helper uses `su - oracle` which gives a login shell;
-        // we pipe through bash so `env -i` takes effect.
         String installCmd =
             "#!/bin/bash\n" +
             "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + staging + "/database\n" +
@@ -299,9 +281,6 @@ public final class OracleRemoteWorkflow {
             "-J-Djava.awt.headless=true " +
             "-responseFile " + rspFile + " 2>&1\n" +
             "echo RC=$?";
-        // The runInstaller exits with RC=0 even when it prints "run root.sh".
-        // "Please run /u01/app/.../root.sh" is NOT a failure — it's just
-        // telling you to execute the next step (which we do automatically).
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/runInstaller_" + sid + ".sh\n" +
             installCmd + "\n" +
@@ -310,20 +289,14 @@ public final class OracleRemoteWorkflow {
             "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
             "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1");
         log.info("runInstaller output:\n{}", out);
-        // If RC=0 we're good.  If the output contains "root.sh" that's a
-        // normal post-install instruction, not an error.  Only fail on actual
-        // fatal errors (FATAL, SEVERE with NPE, RC=255, etc.).
         if (out == null) {
             throw new Exception("Oracle runInstaller produced no output");
         }
         if (out.contains("RC=0") || out.contains("successful") || out.contains("Successfully")) {
-            // Expected success path
         } else if (out.contains("root.sh") && !out.contains("FATAL") && !out.contains("SEVERE") && !out.contains("RC=255")) {
-            // Normal: installer succeeded and is reminding us to run root.sh (next step)
         } else if (out.contains("FATAL") || out.contains("RC=255") || out.contains("RC=254") || out.contains("NullPointerException")) {
             throw new Exception("Oracle runInstaller failed:\n" + out);
         } else if (!out.contains("RC=0")) {
-            // Unknown outcome — probably failed
             throw new Exception("Oracle runInstaller failed:\n" + out);
         }
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
@@ -392,15 +365,10 @@ public final class OracleRemoteWorkflow {
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
 
-        // DBCA requires /etc/oratab to exist and be writable by oracle,
-        // but it must NOT contain any entry for this SID or this ORACLE_HOME.
-        // Step 1 (cleanup) already wiped all Oracle files, so we just create
-        // a fresh empty oratab here.
         check(ctx.executeCommand(
             "rm -f /etc/oratab && touch /etc/oratab && chown oracle:oinstall /etc/oratab && echo OK"),
             "Failed to create /etc/oratab");
 
-        // 11g/12c uses INI-format response file; 18c+ needs command-line parameters
         boolean isOldDbca = oh != null && (oh.contains("/11g/") || oh.contains("/12c/"));
         if (isOldDbca) {
             String dbcaRsp = "/tmp/dbca_" + sid + ".rsp";
@@ -429,7 +397,6 @@ public final class OracleRemoteWorkflow {
                 "$ORACLE_HOME/bin/dbca -silent -createDatabase -responseFile " + q(dbcaRsp) + " 2>&1\necho DBCA_RC=$?"),
                 "DBCA database creation failed");
         } else {
-            // 18c+ DBCA uses command-line parameters (no INI response file)
             check(runOra(ctx,
                 "export ORACLE_HOME=" + q(oh) + "\n" +
                 "export ORACLE_SID=" + q(sid) + "\n" +
@@ -459,11 +426,6 @@ public final class OracleRemoteWorkflow {
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         String port = ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT);
 
-        // netca — SILENT mode.  Oracle 11g netca IS a GUI tool; -silent
-        // suppresses the GUI but still requires the response file syntax exactly.
-        // The response file must use the [General] / [oracle.net.ca] section
-        // headers that the silent parser expects.  Also unset DISPLAY so the
-        // JVM doesn't even try to init AWT.
         String netcaRsp = "/tmp/netca_" + sid + ".rsp";
         writeFile(ctx, netcaRsp,
             "[General]\n" +
@@ -486,13 +448,12 @@ public final class OracleRemoteWorkflow {
             "netca failed");
     }
 
-    // ============ Step 10: Register service (bash_profile + systemd unit + orapwd) ============
+    // ============ Step 10: Register service ============
     private static void registerService(RemoteInstallExecutionContext ctx) throws Exception {
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         String sysPw = ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD);
 
-        // bash_profile
         check(runOra(ctx,
             "touch ~/.bash_profile\n" +
             "grep -q 'ORACLE_HOME=' ~/.bash_profile 2>/dev/null || echo 'export ORACLE_HOME=" + oh + "' >> ~/.bash_profile\n" +
@@ -501,7 +462,6 @@ public final class OracleRemoteWorkflow {
             "grep -q 'LD_LIBRARY_PATH=' ~/.bash_profile 2>/dev/null || echo 'export LD_LIBRARY_PATH=" + oh + "/lib:$LD_LIBRARY_PATH' >> ~/.bash_profile\n" +
             "echo OK"), "Failed to configure bash_profile");
 
-        // systemd service unit
         writeFile(ctx, "/etc/systemd/system/oracle.service",
             "[Unit]\nDescription=Oracle Database Service\nAfter=network.target\n\n" +
             "[Service]\nType=forking\nUser=oracle\nGroup=oinstall\n" +
@@ -513,7 +473,6 @@ public final class OracleRemoteWorkflow {
             "[Install]\nWantedBy=multi-user.target");
         check(ctx.executeCommand("chmod 644 /etc/systemd/system/oracle.service && echo OK"), "Failed to create systemd service");
 
-        // orapwd
         runOra(ctx, oh + "/bin/orapwd file=" + oh + "/dbs/orapw" + sid + " password=" + q(sysPw) + " 2>/dev/null; echo OK");
     }
 
@@ -554,7 +513,6 @@ public final class OracleRemoteWorkflow {
 
     private static String check(String output, String msg) throws Exception {
         if (output == null || !(output.contains("OK") || output.contains("RC=0") || output.contains("DBCA_RC=0") || output.contains("NETCA_RC=0"))) {
-            //String detail = output != null ? clip(output, 3000) : "(no output)";
             throw new Exception(msg + "\n" + output);
         }
         return output;

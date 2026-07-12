@@ -1,9 +1,10 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.oracle;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import javafx.stage.Stage;
+import com.dbboys.remote.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,12 +71,10 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
         if (systemInfoText != null && systemInfoText.contains("aarch64")) {
             return false;
         }
-        // Accept any Oracle package format
         if (lower.endsWith(".zip") || lower.endsWith(".rpm") || lower.endsWith(".tar")
                 || lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
             return true;
         }
-        // Also accept the download URL filenames
         return lower.contains("oracle") || lower.contains("latest");
     }
 
@@ -86,14 +85,13 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
      */
     static int[] detectOraclePackage(String packagePath) {
         if (packagePath == null || packagePath.isBlank()) {
-            return new int[]{0, 2}; // version unknown, default to rpm format
+            return new int[]{0, 2};
         }
         String name = new java.io.File(packagePath).getName().toLowerCase();
 
-        int major = 0; // version unknown by default
-        int format = 2; // default rpm
+        int major = 0;
+        int format = 2;
 
-        // Detect major version from name: 11g, 12c, 18c, 19c, 21c, 23ai
         if (name.contains("11g") || name.contains("11.") || name.contains("11r") || name.contains("11gr")) {
             major = 11;
         } else if (name.contains("12c") || name.contains("12.") || name.contains("12r")) {
@@ -108,13 +106,12 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
             major = 23;
         }
 
-        // Detect package format
         if (name.endsWith(".zip")) {
-            format = 1; // zip — runInstaller (11g, 12c)
+            format = 1;
         } else if (name.endsWith(".rpm")) {
-            format = 2; // rpm — yum/dnf install (18c+)
+            format = 2;
         } else {
-            format = 3; // tarball — pre-installed binaries
+            format = 3;
         }
 
         return new int[]{major, format};
@@ -132,7 +129,6 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                 || "/opt/oracle/product/any/dbhome_1".equals(home)) {
             int[] info = detectOraclePackage(packagePath);
             int major = info[0];
-            int fmt = info[1];
             String ver;
             switch (major) {
                 case 11: ver = "11g"; break;

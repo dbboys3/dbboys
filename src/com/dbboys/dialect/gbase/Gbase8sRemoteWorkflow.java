@@ -1,9 +1,10 @@
-﻿package com.dbboys.remote;
+package com.dbboys.dialect.gbase;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.dialect.gbase.GbaseDialect;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import com.dbboys.remote.*;
 
 import java.io.File;
 

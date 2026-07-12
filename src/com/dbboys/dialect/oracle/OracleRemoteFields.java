@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.oracle;
 
 public final class OracleRemoteFields {
     // Installation paths

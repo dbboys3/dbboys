@@ -1,10 +1,10 @@
 package com.dbboys.remote;
 
 public final class RemoteDatabaseProviders {
-    private static final RemoteDatabaseProvider GBASE_8S = new Gbase8sRemoteProvider();
-    private static final RemoteDatabaseProvider INFORMIX = new InformixRemoteProvider();
-    private static final RemoteDatabaseProvider MYSQL = new MysqlRemoteProvider();
-    private static final RemoteDatabaseProvider ORACLE = new OracleRemoteProvider();
+    private static final RemoteDatabaseProvider GBASE_8S = new com.dbboys.dialect.gbase.Gbase8sRemoteProvider();
+    private static final RemoteDatabaseProvider INFORMIX = new com.dbboys.dialect.informix.InformixRemoteProvider();
+    private static final RemoteDatabaseProvider MYSQL = new com.dbboys.dialect.mysql.MysqlRemoteProvider();
+    private static final RemoteDatabaseProvider ORACLE = new com.dbboys.dialect.oracle.OracleRemoteProvider();
 
     private RemoteDatabaseProviders() {
     }

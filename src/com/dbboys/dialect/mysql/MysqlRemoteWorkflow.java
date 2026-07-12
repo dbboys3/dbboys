@@ -1,9 +1,10 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.mysql;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.dialect.mysql.MysqlDialect;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import com.dbboys.remote.*;
 
 import java.io.File;
 

@@ -1,10 +1,10 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.informix;
 
-public final class Gbase8sRemoteFields {
-    public static final String LOGIN_USERNAME = "gbasedbt";
-    public static final String GBASEDBT_PASSWORD = "gbasedbt_password";
-    public static final String GBASEDBTDIR = "gbasedbtdir";
-    public static final String GBASEDBTSERVER = "gbasedbtserver";
+public final class InformixRemoteFields {
+    public static final String LOGIN_USERNAME = "informix";
+    public static final String INFORMIX_PASSWORD = "informix_password";
+    public static final String INFORMIXDIR = "informixdir";
+    public static final String INFORMIXSERVER = "informixserver";
     public static final String DB_LOCALE = "db_locale";
     public static final String GL_USEGLU = "gl_useglu";
     public static final String DATA_FILE_PATH = "data_file_path";
@@ -28,6 +28,6 @@ public final class Gbase8sRemoteFields {
     public static final String BUFFERPOOL_16K = "bufferpool_16k";
     public static final String BACKUP_PATH = "backup_path";
 
-    private Gbase8sRemoteFields() {
+    private InformixRemoteFields() {
     }
 }

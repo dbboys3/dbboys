@@ -1,4 +1,4 @@
-package com.dbboys.remote;
+package com.dbboys.dialect.mysql;
 
 public final class MysqlRemoteFields {
     public static final String MYSQL_ROOT_PASSWORD = "mysql_root_password";
