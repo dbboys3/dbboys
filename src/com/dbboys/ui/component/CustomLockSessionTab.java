@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.component;
+package com.dbboys.ui.component;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.app.AppExecutor;

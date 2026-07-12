@@ -1,4 +1,4 @@
-﻿package com.dbboys.dialect.oracle;
+package com.dbboys.dialect.oracle;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.model.SpaceUsage;

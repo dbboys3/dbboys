@@ -13,6 +13,7 @@ import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
+import com.dbboys.ui.dialog.CustomWindowFrameUtil;
 import com.dbboys.remote.RemoteCheckEnvUtil;
 import com.dbboys.remote.RemoteDatabaseProviders;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
@@ -938,12 +939,14 @@ public class MainController {
         Label spacer10 = new Label("");
         spacer10.setPrefWidth(10);
         Label portLabel = new Label();
+        Label spacer3 = new Label("");
+        spacer3.setPrefWidth(3);
         portLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_port"));
         CustomUserTextField portField = new CustomUserTextField();
         portField.setPrefWidth(48);
         portField.setPromptText(I18n.t("ssh.prompt.port", "SSH port"));
         portField.setText(sshConnect.getPort() != null ? sshConnect.getPort() : "22");
-        hostRow.getChildren().addAll(hostLabel, hostField, spacer10, portLabel, portField);
+        hostRow.getChildren().addAll(hostLabel, hostField, spacer10, portLabel, spacer3, portField);
 
         // row 2: user
         HBox userRow = row30();
@@ -985,7 +988,7 @@ public class MainController {
         Label keySpace1 = new Label(" ");
         Button keyBrowseButton = new Button();
         keyBrowseButton.setFocusTraversable(false);
-        keyBrowseButton.getStyleClass().add("small");
+        keyBrowseButton.getStyleClass().addAll("small");
         keyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         keyBrowseButton.setTooltip(new Tooltip(I18n.t("createconnect.tooltip.browse_file", "Browse")));
         keyPathRow.getChildren().addAll(keyPathLabel, keyPathField, keySpace1, keyBrowseButton);
@@ -1055,15 +1058,33 @@ public class MainController {
         ButtonType testButtonType = new ButtonType(I18n.t("createconnect.button.test"), ButtonBar.ButtonData.NO);
         ButtonType commitButtonType = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
-        String title = I18n.t(isNew ? "ssh.title.new" : "ssh.title.edit",
-                               isNew ? "New SSH Connection" : "Edit SSH Connection");
+        // --- connecting overlay ---
+        HBox connectingHBox = new HBox();
+        connectingHBox.setAlignment(Pos.CENTER);
+        connectingHBox.setVisible(false);
+        Label connectingStatusLabel = new Label();
+        connectingStatusLabel.textProperty().bind(I18n.bind("createconnect.status.connecting"));
+        Button connectingStopButton = new Button();
+        connectingStopButton.getStyleClass().add("small");
+        connectingStopButton.setFocusTraversable(false);
+        Tooltip stopTooltip = new Tooltip();
+        stopTooltip.textProperty().bind(I18n.bind("createconnect.tooltip.stop_connecting"));
+        connectingStopButton.setTooltip(stopTooltip);
+        connectingHBox.getChildren().addAll(connectingStatusLabel, connectingStopButton);
 
-        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                title, contentBox, 430, Region.USE_COMPUTED_SIZE,
-                testButtonType, commitButtonType, cancelButtonType);
+        StackPane contentStack = new StackPane(contentBox, connectingHBox);
 
+        // Use same dialog pattern as install/uninstall panel (DialogPane + CustomWindowFrameUtil)
+        Stage sshDialogStage = new Stage();
+        DialogPane dialogPane = new DialogPane();
+        dialogPane.getButtonTypes().addAll(testButtonType, commitButtonType, cancelButtonType);
+        dialogPane.setHeader(null);
+        dialogPane.setMinSize(440, 320 - 28);
+        dialogPane.setPrefSize(440, 320 - 28);
+        dialogPane.setMaxSize(440, 320 - 28);
+        dialogPane.setContent(contentStack);
         // Test button
-        Button testButton = dialog.getButton(testButtonType);
+        Button testButton = (Button) dialogPane.lookupButton(testButtonType);
         testButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (!checkInput.get()) { event.consume(); return; }
             setValues.run();
@@ -1091,7 +1112,7 @@ public class MainController {
         });
 
         // Commit button
-        Button commitButton = dialog.getButton(commitButtonType);
+        Button commitButton = (Button) dialogPane.lookupButton(commitButtonType);
         commitButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (!checkInput.get()) { event.consume(); return; }
             setValues.run();
@@ -1105,7 +1126,21 @@ public class MainController {
             event.consume();
         });
 
-        dialog.showAndWait();
+        // Cancel button
+        Button cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
+        cancelButton.setOnAction(e -> sshDialogStage.close());
+
+        // Custom window frame (same as install/uninstall panel)
+        sshDialogStage.titleProperty().set(I18n.t(isNew ? "ssh.title.new" : "ssh.title.edit",
+            isNew ? "New SSH Connection" : "Edit SSH Connection"));
+        CustomWindowFrameUtil.Frame sshFrame = CustomWindowFrameUtil.createModalPopup(
+                sshDialogStage, sshDialogStage.titleProperty(), dialogPane, 440, 320, false);
+
+        // connecting stop
+        connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
+
+        sshDialogStage.showAndWait();
+        sshTreeView.refresh();
     }
 
     private static HBox row30() {

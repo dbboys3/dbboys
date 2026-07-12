@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.component;
+package com.dbboys.ui.component;
 
 import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;

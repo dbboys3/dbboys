@@ -128,7 +128,7 @@ public final class AlertUtil {
         );
 
         frame.root.setMinWidth(width);
-        frame.root.getStyleClass().add("alert-root");
+        frame.root.getStyleClass().addAll("alert-root", "dialog-pane");
         if (autoHeight) {
             body.setMinHeight(Region.USE_PREF_SIZE);
             body.setPrefHeight(Region.USE_COMPUTED_SIZE);

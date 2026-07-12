@@ -1,4 +1,4 @@
-﻿package com.dbboys.remote;
+package com.dbboys.remote;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.ui.component.*;

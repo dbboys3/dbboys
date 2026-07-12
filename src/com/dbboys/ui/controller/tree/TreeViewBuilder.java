@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.controller.tree;
+package com.dbboys.ui.controller.tree;
 
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.app.AppState;
