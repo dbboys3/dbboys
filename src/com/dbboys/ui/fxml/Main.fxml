@@ -154,6 +154,28 @@
                                 <TreeView fx:id="databaseMetaTreeView" prefHeight="2000"></TreeView>
                             </VBox>
                         </CustomTreeviewTab>
+                        <CustomTreeviewTab fx:id="sshTab" closable="false">
+                            <VBox>
+                                <HBox minHeight="30" alignment="CENTER_LEFT">
+                                    <Button fx:id="create_ssh" focusTraversable="false" onAction="#createSshLeaf">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </Button>
+                                    <CustomUserTextField fx:id="sshSearchTextField" prefWidth="2000">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </CustomUserTextField>
+                                    <Button fx:id="sshSearchButton" focusTraversable="false" styleClass="small" disable="true">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </Button>
+                                </HBox>
+                                <TreeView fx:id="sshTreeView" prefHeight="2000"></TreeView>
+                            </VBox>
+                        </CustomTreeviewTab>
                         <CustomTreeviewTab fx:id="markdownTab" closable="false">
                             <VBox fx:id="markdownTreeViewVBox" >
                                 <HBox minHeight="30" alignment="CENTER_LEFT">
