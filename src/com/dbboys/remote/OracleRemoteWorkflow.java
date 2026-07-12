@@ -3,26 +3,18 @@ package com.dbboys.remote;
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public final class OracleRemoteWorkflow {
+    private static final Logger log = LogManager.getLogger(OracleRemoteWorkflow.class);
     private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;";
     private static final String RESULT_BODY_STYLE = "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;";
     private static final int FMT_ZIP = 1, FMT_RPM = 2, FMT_TAR = 3;
 
     private OracleRemoteWorkflow() {}
 
-    // ---- Install steps (11 steps) ----
-    // Step  1: Uninstall (uninstall)
-    // Step  2: Check /opt space >= 10GB
-    // Step  3: Check yum repos and install dependencies
-    // Step  4: Create user and groups
-    // Step  5: Configure kernel parameters
-    // Step  6: Unpack zip
-    // Step  7: Install binaries + run root scripts
-    // Step  8: Create database [optional]
-    // Step  9: Configure listener [optional]
-    // Step 10: Register service [optional]
-    // Step 11: Enable autostart [optional]
+    // ---- Install steps (11 steps; 1-7 mandatory, 8-11 selectable) ----
 
     public static void executeInstallStep(int stepNo, RemoteInstallExecutionContext ctx) throws Exception {
         switch (stepNo) {
@@ -105,6 +97,7 @@ public final class OracleRemoteWorkflow {
         area.append(I18n.t("remote.install.result.instance_name", "Instance Name") + "：" + sid + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.listener_port", "Listener Port") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.user_password", "User/Password") + "：system/" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYSTEM_PASSWORD) + "\n", RESULT_BODY_STYLE);
+        area.append(I18n.t("remote.install.result.sys_user_password", "SYS User/Password") + "：sys/" + ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.charset", "Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.ncharset", "National Charset") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_NATIONAL_CHARACTER_SET) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.memory", "Memory Target") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_MEMORY_MB) + " MB\n", RESULT_BODY_STYLE);
@@ -320,7 +313,7 @@ public final class OracleRemoteWorkflow {
             "chmod +x /tmp/runInstaller_" + sid + ".sh && " +
             "chown oracle:oinstall /tmp/runInstaller_" + sid + ".sh && " +
             "su - oracle -s /bin/bash /tmp/runInstaller_" + sid + ".sh 2>&1");
-        log("runInstaller output:\n" + out);
+        log.info("runInstaller output:\n{}", out);
         // If RC=0 we're good.  If the output contains "root.sh" that's a
         // normal post-install instruction, not an error.  Only fail on actual
         // fatal errors (FATAL, SEVERE with NPE, RC=255, etc.).
@@ -332,10 +325,10 @@ public final class OracleRemoteWorkflow {
         } else if (out.contains("root.sh") && !out.contains("FATAL") && !out.contains("SEVERE") && !out.contains("RC=255")) {
             // Normal: installer succeeded and is reminding us to run root.sh (next step)
         } else if (out.contains("FATAL") || out.contains("RC=255") || out.contains("RC=254") || out.contains("NullPointerException")) {
-            throw new Exception("Oracle runInstaller failed:\n" + smartClip(out, 2000));
+            throw new Exception("Oracle runInstaller failed:\n" + out);
         } else if (!out.contains("RC=0")) {
             // Unknown outcome — probably failed
-            throw new Exception("Oracle runInstaller failed:\n" + smartClip(out, 2000));
+            throw new Exception("Oracle runInstaller failed:\n" + out);
         }
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
@@ -375,11 +368,11 @@ public final class OracleRemoteWorkflow {
             "done\n" +
             "echo '--- END ORACLE RPM INSTALL SCRIPT ---'\n" +
             "echo OK";
-        log("RPM install script:\n" + installScript);
+        log.info("RPM install script:\n{}", installScript);
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/install_oracle_rpm.sh\n" + installScript + "\nSCRIPT_EOF\n" +
             "chmod +x /tmp/install_oracle_rpm.sh && bash -x /tmp/install_oracle_rpm.sh 2>&1");
-        log("RPM install output:\n" + out);
+        log.info("RPM install output:\n{}", out);
         check(out, "Failed to install Oracle RPM");
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
@@ -542,29 +535,23 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String runOra(RemoteInstallExecutionContext ctx, String cmd) throws Exception {
-        System.out.println("[OracleInstall] " + cmd);
+        log.info("[OracleInstall] {}", cmd);
         return exec(ctx, "su - oracle -s /bin/bash 2>&1 << 'ORAEOF'\n" + cmd + "\nORAEOF");
     }
 
-    private static String log(String msg) {
-        System.out.println("[OracleInstall] " + msg);
-        return msg;
-    }
-
     private static String exec(RemoteInstallExecutionContext ctx, String cmd) throws Exception {
-        log("EXEC: " + cliptail(cmd, 200));
+        log.info("EXEC: {}", cmd);
         long t0 = System.currentTimeMillis();
         String out = ctx.executeCommand(cmd);
         long ms = System.currentTimeMillis() - t0;
-        log("OUTPUT (" + ms + "ms):\n" + (out != null ? cliptail(out, 2000) : "(null)"));
+        log.info("OUTPUT ({}ms):\n{}", ms, out);
         return out;
     }
 
     private static String execCheck(RemoteInstallExecutionContext ctx, String cmd, String errMsg) throws Exception {
         String out = exec(ctx, cmd);
         if (out == null || !(out.contains("OK") || out.contains("RC=0") || out.contains("DBCA_RC=0") || out.contains("NETCA_RC=0"))) {
-            String detail = out != null ? clip(out, 3000) : "(no output)";
-            throw new Exception(errMsg + "\n" + detail);
+            throw new Exception(errMsg + "\n" + out);
         }
         return out;
     }
@@ -613,7 +600,4 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String q(String s) { return s == null ? "''" : "'" + s.replace("'", "'\"'\"'") + "'"; }
-    private static String clip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
-    private static String cliptail(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "..."; }
-    private static String smartClip(String s, int max) { return s.length() <= max ? s : s.substring(0, max) + "...(truncated)"; }
 }

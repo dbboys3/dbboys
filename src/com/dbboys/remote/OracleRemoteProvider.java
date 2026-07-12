@@ -222,7 +222,7 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                         "Verify that /opt has at least 10GB of free disk space.", true, true),
                 new RemoteInstallStepSpec("remote.install.oracle.step3.name", "Check Yum And Install Dependencies",
                         "remote.install.oracle.step3.desc",
-                        "Check yum/dnf repositories, install required system packages (binutils, libaio, ksh, gcc, make, sysstat, unzip, etc.).", true, true),
+                        "Check yum/dnf repositories and install required system packages.", true, true),
                 new RemoteInstallStepSpec("remote.install.oracle.step4.name", "Create User And Groups",
                         "remote.install.oracle.step4.desc",
                         "Create oracle OS user, oinstall/dba/oper groups, and directory structure.", true, true),
@@ -237,16 +237,16 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
                         "Run Oracle Universal Installer in silent mode (11g/12c) or rpm install (18c+), then run root.sh.", true, true),
                 new RemoteInstallStepSpec("remote.install.oracle.step8.name", "Create Database",
                         "remote.install.oracle.step8.desc",
-                        "Create the database using DBCA in silent mode.", false, false),
+                        "Create the database using DBCA in silent mode.", true, false),
                 new RemoteInstallStepSpec("remote.install.oracle.step9.name", "Configure Listener",
                         "remote.install.oracle.step9.desc",
-                        "Configure Oracle Net Listener using netca.", false, false),
+                        "Configure Oracle Net Listener using netca.", true, false),
                 new RemoteInstallStepSpec("remote.install.oracle.step10.name", "Register Service",
                         "remote.install.oracle.step10.desc",
-                        "Configure oracle user bash_profile, create systemd service unit, and generate orapwd file.", false, false),
+                        "Configure oracle user bash_profile, create systemd service unit, and generate orapwd file.", true, false),
                 new RemoteInstallStepSpec("remote.install.oracle.step11.name", "Enable Autostart",
                         "remote.install.oracle.step11.desc",
-                        "Enable systemd oracle.service for automatic startup on system boot.", false, false)
+                        "Enable systemd oracle.service for automatic startup on system boot.", true, false)
         );
     }
 
