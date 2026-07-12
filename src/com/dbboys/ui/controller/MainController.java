@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.controller;
+package com.dbboys.ui.controller;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
@@ -994,19 +994,9 @@ public class MainController {
         keyBrowseButton.setTooltip(new Tooltip(I18n.t("createconnect.tooltip.browse_file", "Browse")));
         keyPathRow.getChildren().addAll(keyPathLabel, keyPathField, keySpace1, keyBrowseButton);
 
-        // row 4c: key passphrase (key mode, optional)
-        HBox keyPassRow = row30();
-        Label keyPassLabel = new Label();
-        keyPassLabel.textProperty().bind(I18n.bind("ssh.label.key_passphrase"));
-        keyPassLabel.setPrefWidth(80);
-        CustomPasswordField keyPassField = new CustomPasswordField();
-        keyPassField.setPrefWidth(200);
-        keyPassField.setPromptText("...");
-        keyPassField.setText(sshConnect.isAuthKey() ? (sshConnect.getKeyPassphrase() != null ? sshConnect.getKeyPassphrase() : "") : "");
-        keyPassRow.getChildren().addAll(keyPassLabel, keyPassField);
 
         contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow,
-                passwordRow, keyPathRow, keyPassRow);
+                passwordRow, keyPathRow);
 
         // toggle auth rows
         Runnable updateAuthRows = () -> {
@@ -1015,8 +1005,6 @@ public class MainController {
             passwordRow.setManaged(!isKeyMode);
             keyPathRow.setVisible(isKeyMode);
             keyPathRow.setManaged(isKeyMode);
-            keyPassRow.setVisible(isKeyMode);
-            keyPassRow.setManaged(isKeyMode);
         };
         if (sshConnect.isAuthKey()) {
             authTypeChoiceBox.getSelectionModel().select(1);
@@ -1057,8 +1045,6 @@ public class MainController {
             sshConnect.setAuthType(isKey ? com.dbboys.ssh.SshConnect.AUTH_KEY : com.dbboys.ssh.SshConnect.AUTH_PASSWORD);
             sshConnect.setPassword(isKey ? "" : passwordField.getText());
             sshConnect.setKeyPath(isKey ? keyPathField.getText() : "");
-            sshConnect.setKeyPassphrase(isKey ? keyPassField.getText() : "");
-            sshConnect.setInfo("");
         };
 
         java.util.function.Supplier<Boolean> checkInput = () -> {
@@ -1124,7 +1110,6 @@ public class MainController {
         });
 
         dialog.showAndWait();
-        sshTreeView.refresh();
     }
 
     private static HBox row30() {
