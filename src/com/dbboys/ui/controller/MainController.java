@@ -919,12 +919,12 @@ public class MainController {
         VBox contentBox = new VBox();
         contentBox.setStyle("-fx-padding: 10 18 10 18;");
 
-        // row 0: name
+        // row 0: name (auto-generated if blank)
         HBox nameRow = row30();
         Label nameLabel = label80("createconnect.label.name");
         CustomUserTextField nameField = new CustomUserTextField();
-        nameField.setPrefWidth(315);
-        nameField.setPromptText("[Host_Port]");
+        nameField.setPrefWidth(260);
+        nameField.setPromptText(I18n.t("ssh.prompt.name", "Optional, default [Host_Port]"));
         nameField.setText(sshConnect.getName() != null ? sshConnect.getName() : "");
         nameRow.getChildren().addAll(nameLabel, nameField);
 
@@ -932,8 +932,8 @@ public class MainController {
         HBox hostRow = row30();
         Label hostLabel = label80("createconnect.label.ssh_host");
         CustomUserTextField hostField = new CustomUserTextField();
-        hostField.setPrefWidth(200);
-        hostField.setPromptText("192.168.1.1");
+        hostField.setPrefWidth(150);
+        hostField.setPromptText(I18n.t("ssh.prompt.host", "SSH server address"));
         hostField.setText(sshConnect.getHost() != null ? sshConnect.getHost() : "");
         Label spacer10 = new Label("");
         spacer10.setPrefWidth(10);
@@ -941,7 +941,7 @@ public class MainController {
         portLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_port"));
         CustomUserTextField portField = new CustomUserTextField();
         portField.setPrefWidth(48);
-        portField.setPromptText("22");
+        portField.setPromptText(I18n.t("ssh.prompt.port", "SSH port"));
         portField.setText(sshConnect.getPort() != null ? sshConnect.getPort() : "22");
         hostRow.getChildren().addAll(hostLabel, hostField, spacer10, portLabel, portField);
 
@@ -949,42 +949,38 @@ public class MainController {
         HBox userRow = row30();
         Label userLabel = label80("createconnect.label.ssh_user");
         CustomUserTextField userField = new CustomUserTextField();
-        userField.setPrefWidth(200);
-        userField.setPromptText("root");
+        userField.setPrefWidth(150);
+        userField.setPromptText(I18n.t("ssh.prompt.username", "SSH username"));
         userField.setText(sshConnect.getUsername() != null ? sshConnect.getUsername() : "");
         userRow.getChildren().addAll(userLabel, userField);
 
         // row 3: auth type
         HBox authTypeRow = row30();
-        Label authTypeLabel = new Label();
-        authTypeLabel.textProperty().bind(I18n.bind("ssh.label.auth_type"));
-        authTypeLabel.setPrefWidth(80);
+        Label authTypeLabel = label80("ssh.label.auth_type");
         ChoiceBox<String> authTypeChoiceBox = new ChoiceBox<>();
         authTypeChoiceBox.setFocusTraversable(false);
         authTypeChoiceBox.getStyleClass().add("choice-box-with-border");
         authTypeChoiceBox.getItems().addAll(
-                I18n.t("createconnect.label.ssh_password", "Password"),
-                I18n.t("createconnect.label.ssh", "Key"));
+                I18n.t("ssh.label.auth_password", "Password"),
+                I18n.t("ssh.label.auth_key", "Key"));
         authTypeChoiceBox.getSelectionModel().select(0);
         authTypeRow.getChildren().addAll(authTypeLabel, authTypeChoiceBox);
 
-        // row 4: password (password mode)
+        // row 4: password (password auth mode)
         HBox passwordRow = row30();
         Label passwordLabel = label80("createconnect.label.ssh_password");
         CustomPasswordField passwordField = new CustomPasswordField();
-        passwordField.setPrefWidth(200);
-        passwordField.setPromptText("...");
+        passwordField.setPrefWidth(170);
+        passwordField.setPromptText(I18n.t("ssh.prompt.password", "SSH login password"));
         passwordField.setText(sshConnect.isAuthKey() ? "" : (sshConnect.getPassword() != null ? sshConnect.getPassword() : ""));
         passwordRow.getChildren().addAll(passwordLabel, passwordField);
 
-        // row 4b: key file path (key mode) — text field + browse button with MAIN_SEARCH icon, small style
+        // row 4b: key file path (key auth mode) — text field + browse button (search icon, small style)
         HBox keyPathRow = row30();
-        Label keyPathLabel = new Label();
-        keyPathLabel.textProperty().bind(I18n.bind("ssh.label.key_path"));
-        keyPathLabel.setPrefWidth(80);
+        Label keyPathLabel = label80("ssh.label.key_path");
         CustomUserTextField keyPathField = new CustomUserTextField();
-        keyPathField.setPrefWidth(170);
-        keyPathField.setPromptText("~/.ssh/id_rsa");
+        keyPathField.setPrefWidth(160);
+        keyPathField.setPromptText(I18n.t("ssh.prompt.key_path", "Select SSH private key"));
         keyPathField.setText(sshConnect.isAuthKey() ? (sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "") : "");
         Label keySpace1 = new Label(" ");
         Button keyBrowseButton = new Button();
@@ -993,7 +989,6 @@ public class MainController {
         keyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         keyBrowseButton.setTooltip(new Tooltip(I18n.t("createconnect.tooltip.browse_file", "Browse")));
         keyPathRow.getChildren().addAll(keyPathLabel, keyPathField, keySpace1, keyBrowseButton);
-
 
         contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow,
                 passwordRow, keyPathRow);
@@ -1019,7 +1014,7 @@ public class MainController {
         // key browse action
         keyBrowseButton.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
-            chooser.setTitle(I18n.t("createconnect.label.ssh", "Select SSH Private Key"));
+            chooser.setTitle(I18n.t("ssh.prompt.key_path", "Select SSH Private Key"));
             File homeDir = new File(System.getProperty("user.home"));
             if (homeDir.isDirectory()) {
                 File sshDir = new File(homeDir, ".ssh");
@@ -1060,7 +1055,8 @@ public class MainController {
         ButtonType testButtonType = new ButtonType(I18n.t("createconnect.button.test"), ButtonBar.ButtonData.NO);
         ButtonType commitButtonType = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
-        String title = I18n.t("createconnect.label.ssh", "SSH Connection");
+        String title = I18n.t(isNew ? "ssh.title.new" : "ssh.title.edit",
+                               isNew ? "New SSH Connection" : "Edit SSH Connection");
 
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
                 title, contentBox, 430, Region.USE_COMPUTED_SIZE,
