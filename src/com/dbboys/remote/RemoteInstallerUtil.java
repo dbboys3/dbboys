@@ -37,6 +37,11 @@ import org.apache.logging.log4j.Logger;
 
 import javax.swing.filechooser.FileSystemView;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -229,7 +234,10 @@ public class RemoteInstallerUtil {
             }
             event.consume();
         });
-        cancelBtn.setOnAction(event -> mainDialog.close());
+        cancelBtn.setOnAction(event -> {
+            saveInstallResultToDesktop();
+            mainDialog.close();
+        });
 
         progress.addListener((obs, old, val) -> {
             int percentage = (int) (val.doubleValue() * 100);
@@ -611,6 +619,7 @@ public class RemoteInstallerUtil {
 
 
         finishBtn.setOnAction(e -> {
+            saveInstallResultToDesktop();
             remoteClient.disconnect();
             mainDialog.close();
             Connect installedConnect = activeProvider.buildInstalledConnect(buildInstallExecutionContext());
@@ -1327,6 +1336,37 @@ public class RemoteInstallerUtil {
             fields.add(new RemoteInstallField(item.id, item.name, item.value, item.description));
         }
         return fields;
+    }
+
+
+    private static void saveInstallResultToDesktop() {
+        try {
+            if (databaseInfoArea == null) return;
+            String text = databaseInfoArea.getText();
+            if (text == null || text.isBlank()) return;
+
+            String desktopPath = System.getProperty("user.home") + File.separator + "Desktop";
+            File desktopDir = new File(desktopPath);
+            if (!desktopDir.exists()) {
+                desktopPath = FileSystemView.getFileSystemView().getHomeDirectory().getAbsolutePath();
+            }
+
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String fileName = activeProviderName() + "_" + I18n.t("remote.install.result.file_suffix", "install_info")
+                    + "_" + timestamp + ".txt";
+            File saveFile = new File(desktopPath, fileName);
+
+            Files.writeString(Paths.get(saveFile.getAbsolutePath()), text, StandardCharsets.UTF_8);
+
+            Platform.runLater(() -> {
+                String msg = I18n.t("remote.install.result.saved_to_desktop",
+                        "Install info saved to desktop: %s").formatted(saveFile.getName());
+                AlertUtil.showAlert(I18n.t("remote.install.title.product.format",
+                        "%s Install Wizard").formatted(activeProviderName()), msg);
+            });
+        } catch (Exception e) {
+            log.error("Failed to save install result to desktop", e);
+        }
     }
 
 

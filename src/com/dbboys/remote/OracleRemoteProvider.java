@@ -158,10 +158,6 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
         String dataDir = freeDiskGb >= 50 ? "/u01/oradata" : "/opt/oracle/oradata";
 
         List<RemoteInstallField> fields = new ArrayList<>();
-        fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ROOT_PASSWORD,
-                I18n.t("remote.install.oracle.cfg.root_password.name", "Root Password"),
-                "",
-                I18n.t("remote.install.oracle.cfg.root_password.desc", "The root password of the remote server, used to create the oracle user and configure kernel parameters.")));
         fields.add(new RemoteInstallField(OracleRemoteFields.ORACLE_ORACLE_BASE,
                 "ORACLE_BASE", "/opt/oracle",
                 I18n.t("remote.install.oracle.cfg.oracle_base.desc", "Oracle base directory. ORACLE_HOME is created under this.")));

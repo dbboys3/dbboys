@@ -121,12 +121,13 @@
   -color-resultset-pending-danger-bg: rgba(255, 92, 82, 0.36);
   -color-resultset-pending-danger-bg-strong: rgba(255, 130, 122, 0.52);
   -color-resultset-delete-icon-fg: -color-danger-fg;
+  /*安装进度条*/
   -color-modal-pane-overlay-bg: rgba(255, 255, 255, 0.2);
   -color-modal-progress-overlay: rgba(0, 0, 0, 0.3);
   -color-modal-progress-overlay-strong: rgba(0, 0, 0, 0.35);
   -color-modal-progress-card-bg: rgb(58, 58, 60);
   -color-modal-progress-stop-icon: -color-danger-fg;
-  -color-modal-progress-stop-icon-hover: -color-danger-5;
+  -color-modal-progress-stop-icon-hover: -color-danger-6;
   -color-install-step-current-icon: -color-accent-fg;
   -color-cell-border-selected-focused: -color-fg-default;
   -fx-background-radius: inherit;
