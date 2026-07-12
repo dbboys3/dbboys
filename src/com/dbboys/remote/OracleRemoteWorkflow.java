@@ -1,4 +1,4 @@
-﻿package com.dbboys.remote;
+package com.dbboys.remote;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
@@ -11,18 +11,32 @@ public final class OracleRemoteWorkflow {
 
     private OracleRemoteWorkflow() {}
 
-    // ---- Install steps (8 steps) ----
+    // ---- Install steps (11 steps) ----
+    // Step  1: Uninstall (uninstall)
+    // Step  2: Check /opt space >= 10GB
+    // Step  3: Check yum repos and install dependencies
+    // Step  4: Create user and groups
+    // Step  5: Configure kernel parameters
+    // Step  6: Unpack zip
+    // Step  7: Install binaries + run root scripts
+    // Step  8: Create database [optional]
+    // Step  9: Configure listener [optional]
+    // Step 10: Register service [optional]
+    // Step 11: Enable autostart [optional]
 
     public static void executeInstallStep(int stepNo, RemoteInstallExecutionContext ctx) throws Exception {
         switch (stepNo) {
-            case 1: cleanup(ctx); break;
-            case 2: createUser(ctx); break;
-            case 3: unpack(ctx); break;
-            case 4: installBinaries(ctx); break;
-            case 5: runRootScripts(ctx); break;
-            case 6: createDatabase(ctx); break;
-            case 7: configureServices(ctx); break;
-            case 8: autostart(ctx); break;
+            case 1:  cleanup(ctx); break;
+            case 2:  checkDiskSpace(ctx); break;
+            case 3:  checkYumAndInstallDeps(ctx); break;
+            case 4:  createUser(ctx); break;
+            case 5:  configureKernel(ctx); break;
+            case 6:  unpack(ctx); break;
+            case 7:  installBinaries(ctx); break;
+            case 8:  createDatabase(ctx); break;
+            case 9:  configureListener(ctx); break;
+            case 10: registerService(ctx); break;
+            case 11: autostart(ctx); break;
             default: throw new IllegalArgumentException("Unknown Oracle install step: " + stepNo);
         }
     }
@@ -31,7 +45,8 @@ public final class OracleRemoteWorkflow {
 
     // ---- Uninstall ----
 
-    // ============ Uninstall step commands (shared between cleanup and executeUninstallStep) ============
+    // ============ Install step commands ============
+
     private static String uninstallStep1Cmd() {
         return "ps -ef | grep -i oracle | grep -v grep | awk '{print \"kill -9 \" $2}' | sh 2>/dev/null\n" +
                "systemctl stop oracle.service 2>/dev/null \n" +
@@ -129,21 +144,56 @@ public final class OracleRemoteWorkflow {
         return c;
     }
 
-    // ============ Step 1: Cleanup (delegates to uninstall workflow) ============
+    // ============ Step 1: Cleanup (reuse uninstall workflow) ============
     private static void cleanup(RemoteInstallExecutionContext ctx) throws Exception {
-        // Delegate all 4 steps to the uninstall flow (single source of truth)
         RemoteUninstallExecutionContext uctx = new RemoteUninstallExecutionContext(ctx.getRemoteClient(), ctx.host());
         for (int step = 1; step <= 5; step++) {
                 executeUninstallStep(step, uctx);
-            
         }
     }
 
+    // ============ Step 2: Check /opt space >= 10GB ============
+    private static void checkDiskSpace(RemoteInstallExecutionContext ctx) throws Exception {
+        check(ctx.executeCommand(
+            "avail_kb=$(df /opt | awk 'NR==2{print $4}')\n" +
+            "[ \"$avail_kb\" -ge 10485760 ] || { echo \"ERROR: /opt has only $((avail_kb/1024/1024))GB free, need at least 10GB\"; exit 1; }\n" +
+            "echo OK"), "/opt free space check failed (need >= 10GB)");
+    }
 
-    // ============ Step 2: Create user & dirs ============
+    // ============ Step 3: Check yum repos and install dependencies ============
+    private static void checkYumAndInstallDeps(RemoteInstallExecutionContext ctx) throws Exception {
+        // Install Oracle dependencies via yum/dnf
+        check(ctx.executeCommand(
+            "if command -v yum >/dev/null 2>&1; then\n" +
+            "  PKG_MGR=yum\n" +
+            "elif command -v dnf >/dev/null 2>&1; then\n" +
+            "  PKG_MGR=dnf\n" +
+            "else\n" +
+            "  echo 'No yum or dnf package manager found'; exit 1;\n" +
+            "fi\n" +
+            "$PKG_MGR install -y bc binutils compat-libcap1 gcc gcc-c++ glibc glibc-devel ksh libaio libstdc++ libstdc++-devel make net-tools smartmontools sysstat unixODBC unzip 2>&1\n" +
+            "echo OK"), "Failed to install Oracle dependencies via yum/dnf");
+
+        // Check yum/dnf repositories are available (needed for RPM installs)
+        check(ctx.executeCommand(
+            "echo 'Checking yum/dnf repositories'\n" +
+            "if command -v yum >/dev/null 2>&1; then\n" +
+            "  yum repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
+            "  cnt=$(cat /tmp/oracle_yum_check.out); echo REPO_COUNT=$cnt;\n" +
+            "  [ \"$cnt\" = \"1\" ] && { cat /tmp/oracle_yum_check.err 2>/dev/null; exit 1; }\n" +
+            "elif command -v dnf >/dev/null 2>&1; then\n" +
+            "  dnf repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
+            "  cnt=$(cat /tmp/oracle_yum_check.out); echo REPO_COUNT=$cnt;\n" +
+            "  [ \"$cnt\" = \"1\" ] && { cat /tmp/oracle_yum_check.err 2>/dev/null; exit 1; }\n" +
+            "else\n" +
+            "  echo 'No yum or dnf found'; exit 1;\n" +
+            "fi\n" +
+            "echo OK"), "Failed to verify yum/dnf repositories");
+    }
+
+    // ============ Step 4: Create user and groups ============
     private static void createUser(RemoteInstallExecutionContext ctx) throws Exception {
         String ob = ctx.fieldValue(OracleRemoteFields.ORACLE_ORACLE_BASE);
-        String oh = resolveOracleHome(ctx);
         String dd = ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR);
         String ra = ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA);
 
@@ -158,39 +208,22 @@ public final class OracleRemoteWorkflow {
             "mkdir -p " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/oracle/staging /opt/oraInventory && " +
             "chown -R oracle:oinstall " + q(ob) + " " + q(dd) + " " + q(ra) + " /opt/oracle/staging /opt/oraInventory && " +
             "chmod -R 775 " + q(ob) + " && echo OK"), "Failed to create directories");
+    }
 
+    // ============ Step 5: Configure kernel parameters ============
+    private static void configureKernel(RemoteInstallExecutionContext ctx) throws Exception {
         check(ctx.executeCommand(kernelParams(ctx)), "Failed to set kernel parameters");
     }
 
-    // ============ Step 3: Unpack ============
+    // ============ Step 6: Unpack ============
     private static void unpack(RemoteInstallExecutionContext ctx) throws Exception {
         String pkg = ctx.remotePackagePath();
         if (pkg == null || pkg.isBlank()) throw new Exception("Package path is empty");
         int[] info = OracleRemoteProvider.detectOraclePackage(pkg);
         int fmt = info[1];
 
+        // RPM packages don't need unpacking
         if (fmt == FMT_RPM) {
-            String repoCheck =
-                "echo 'Checking yum/dnf repositories for Oracle RPM install'\n" +
-                "if command -v yum >/dev/null 2>&1; then\n" +
-                "  yum repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
-                "  cat /tmp/oracle_yum_check.out /tmp/oracle_yum_check.err 2>/dev/null;\n" +
-                "  cnt=$(cat /tmp/oracle_yum_check.out); echo YUM_COUNT=$cnt;\n" +
-                "  [ \"$cnt\" = \"1\" ] && exit 1;\n" +
-                "elif command -v dnf >/dev/null 2>&1; then\n" +
-                "  dnf repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
-                "  cat /tmp/oracle_yum_check.out /tmp/oracle_yum_check.err 2>/dev/null;\n" +
-                "  cnt=$(cat /tmp/oracle_yum_check.out); echo DNF_COUNT=$cnt;\n" +
-                "  [ \"$cnt\" = \"1\" ] && exit 1;\n" +
-                "else\n" +
-                "  echo 'No yum or dnf found';\n" +
-                "  exit 1;\n" +
-                "fi\n" +
-                "echo OK";
-            String out = ctx.executeCommand(repoCheck);
-            if (out == null || !out.contains("OK")) {
-                throw new Exception("Failed to check yum/dnf repositories for Oracle RPM install\n" + (out != null ? clip(out, 4000) : "(no output)"));
-            }
             return;
         }
 
@@ -205,12 +238,12 @@ public final class OracleRemoteWorkflow {
                     "echo OK"), "Failed to unzip Oracle package");
                 break;
             default:
-                // tarball — unpack in extractAndInstall for now
+                // tarball — unpack in installBinaries for now
                 break;
         }
     }
 
-    // ============ Step 4: Install binaries ============
+    // ============ Step 7: Install binaries + run root scripts ============
     private static void installBinaries(RemoteInstallExecutionContext ctx) throws Exception {
         String pkg = ctx.remotePackagePath();
         int[] info = OracleRemoteProvider.detectOraclePackage(pkg);
@@ -221,6 +254,11 @@ public final class OracleRemoteWorkflow {
             case FMT_RPM:  installRpm(ctx);  break;
             default:       installTar(ctx); break;
         }
+
+        // Run root.sh after binary install
+        String oh = resolveOracleHome(ctx);
+        check(ctx.executeCommand("[ -x " + q(oh + "/root.sh") + " ] && " + q(oh + "/root.sh") + "; echo OK"),
+            "root.sh failed");
     }
 
     private static void installZip(RemoteInstallExecutionContext ctx) throws Exception {
@@ -341,7 +379,7 @@ public final class OracleRemoteWorkflow {
         String out = ctx.executeCommand(
             "cat << 'SCRIPT_EOF' > /tmp/install_oracle_rpm.sh\n" + installScript + "\nSCRIPT_EOF\n" +
             "chmod +x /tmp/install_oracle_rpm.sh && bash -x /tmp/install_oracle_rpm.sh 2>&1");
-        log("RPM install output:\n" +out);
+        log("RPM install output:\n" + out);
         check(out, "Failed to install Oracle RPM");
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
@@ -360,14 +398,7 @@ public final class OracleRemoteWorkflow {
         check(ctx.executeCommand(ensureOraInstLoc(ob)), "Failed to create oraInst.loc");
     }
 
-    // ============ Step 5: Run root scripts ============
-    private static void runRootScripts(RemoteInstallExecutionContext ctx) throws Exception {
-        String oh = resolveOracleHome(ctx);
-        check(ctx.executeCommand("[ -x " + q(oh + "/root.sh") + " ] && " + q(oh + "/root.sh") + "; echo OK"),
-            "root.sh failed");
-    }
-
-    // ============ Step 6: Create database (DBCA) ============
+    // ============ Step 8: Create database (DBCA) ============
     private static void createDatabase(RemoteInstallExecutionContext ctx) throws Exception {
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
@@ -433,12 +464,11 @@ public final class OracleRemoteWorkflow {
         }
     }
 
-    // ============ Step 7: Configure services (listener + profile + systemd) ============
-    private static void configureServices(RemoteInstallExecutionContext ctx) throws Exception {
+    // ============ Step 9: Configure listener (netca) ============
+    private static void configureListener(RemoteInstallExecutionContext ctx) throws Exception {
         String oh = resolveOracleHome(ctx);
         String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
         String port = ctx.fieldValue(OracleRemoteFields.ORACLE_LISTENER_PORT);
-        String sysPw = ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD);
 
         // netca — SILENT mode.  Oracle 11g netca IS a GUI tool; -silent
         // suppresses the GUI but still requires the response file syntax exactly.
@@ -465,6 +495,13 @@ public final class OracleRemoteWorkflow {
             "$ORACLE_HOME/bin/netca /silent /responseFile " + q(netcaRsp) + " 2>&1\n" +
             "echo NETCA_RC=$?"),
             "netca failed");
+    }
+
+    // ============ Step 10: Register service (bash_profile + systemd unit + orapwd) ============
+    private static void registerService(RemoteInstallExecutionContext ctx) throws Exception {
+        String oh = resolveOracleHome(ctx);
+        String sid = ctx.fieldValue(OracleRemoteFields.ORACLE_SID);
+        String sysPw = ctx.fieldValue(OracleRemoteFields.ORACLE_SYS_PASSWORD);
 
         // bash_profile
         check(runOra(ctx,
@@ -491,7 +528,7 @@ public final class OracleRemoteWorkflow {
         runOra(ctx, oh + "/bin/orapwd file=" + oh + "/dbs/orapw" + sid + " password=" + q(sysPw) + " 2>/dev/null; echo OK");
     }
 
-    // ============ Step 8: Autostart ============
+    // ============ Step 11: Autostart ============
     private static void autostart(RemoteInstallExecutionContext ctx) throws Exception {
         check(ctx.executeCommand("systemctl daemon-reload && systemctl enable oracle.service 2>&1; echo OK"),
             "Failed to enable autostart");
@@ -554,7 +591,7 @@ public final class OracleRemoteWorkflow {
     }
 
     private static String ensureOraInstLoc(String ob) {
-        return "mkdir -p " + q(ob + "/oraInventory") + " && echo 'inventory_loc=" + ob + "/oraInventory' > /etc/oraInst.loc && echo 'inst_group=oinstall' >> /etc/oraInst.loc && chmod 644 /etc/oraInst.loc && echo OK";
+        return "mkdir -p " + q(ob + "/oraInventory") + " && echo 'inventory_loc=" + ob + "/oraInventory" + "' > /etc/oraInst.loc && echo 'inst_group=oinstall' >> /etc/oraInst.loc && chmod 644 /etc/oraInst.loc && echo OK";
     }
 
     private static String kernelParams(RemoteInstallExecutionContext ctx) {
