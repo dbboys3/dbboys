@@ -167,21 +167,17 @@ public final class OracleRemoteWorkflow {
             "$PKG_MGR install -y bc binutils compat-libcap1 gcc gcc-c++ glibc glibc-devel ksh libaio libstdc++ libstdc++-devel make net-tools smartmontools sysstat unixODBC unzip 2>&1\n" +
             "echo OK"), "Failed to install Oracle dependencies via yum/dnf");
 
-        // Check yum/dnf repositories are available (needed for RPM installs)
+        // Check yum/dnf repositories are available
         check(ctx.executeCommand(
             "echo 'Checking yum/dnf repositories'\n" +
             "if command -v yum >/dev/null 2>&1; then\n" +
-            "  yum repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
-            "  cnt=$(cat /tmp/oracle_yum_check.out); echo REPO_COUNT=$cnt;\n" +
-            "  [ \"$cnt\" = \"1\" ] && { cat /tmp/oracle_yum_check.err 2>/dev/null; exit 1; }\n" +
+            "  yum repolist 2>/dev/null | grep -q 'repolist: 0' && { echo 'ERROR: No enabled yum repositories found.'; exit 1; }\n" +
             "elif command -v dnf >/dev/null 2>&1; then\n" +
-            "  dnf repolist 2>/tmp/oracle_yum_check.err | grep -c 'repolist: 0' >/tmp/oracle_yum_check.out\n" +
-            "  cnt=$(cat /tmp/oracle_yum_check.out); echo REPO_COUNT=$cnt;\n" +
-            "  [ \"$cnt\" = \"1\" ] && { cat /tmp/oracle_yum_check.err 2>/dev/null; exit 1; }\n" +
+            "  dnf repolist 2>/dev/null | grep -q 'repolist: 0' && { echo 'ERROR: No enabled dnf repositories found.'; exit 1; }\n" +
             "else\n" +
-            "  echo 'No yum or dnf found'; exit 1;\n" +
+            "  echo 'ERROR: No yum or dnf package manager found.'; exit 1;\n" +
             "fi\n" +
-            "echo OK"), "Failed to verify yum/dnf repositories");
+            "echo OK"), I18n.t("remote.install.oracle.error.no_yum_repos", "No enabled yum repositories found. Please configure a yum source first."));
     }
 
     // ============ Step 4: Create user and groups ============
