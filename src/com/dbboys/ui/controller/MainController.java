@@ -33,6 +33,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -1139,6 +1140,12 @@ public class MainController {
         // connecting stop
         connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
 
+        // 相对主窗口居中
+        Window sshOwner = sshDialogStage.getOwner();
+        if (sshOwner != null && sshOwner.isShowing()) {
+            sshDialogStage.setX(sshOwner.getX() + (sshOwner.getWidth() - 440) / 2);
+            sshDialogStage.setY(sshOwner.getY() + (sshOwner.getHeight() - 250) / 2);
+        }
         sshDialogStage.showAndWait();
         sshTreeView.refresh();
     }
