@@ -754,7 +754,7 @@ public class MainController {
         bindTabText(aiTab, "main.sidebar.ai");
 
         bindPrompt(connectSearchTextField, "main.prompt.search_objects");
-        bindPrompt(sshSearchTextField, "main.prompt.search_objects");
+        bindPrompt(sshSearchTextField, "main.prompt.search_ssh");
         bindPrompt(markdownSearchTextField, "main.prompt.search_knowledge");
 
         bindTooltip(create_connect, "main.tooltip.new_connection");
@@ -916,144 +916,99 @@ public class MainController {
     }
 
     private void showSshConnectDialog(com.dbboys.ssh.SshConnect sshConnect, boolean isNew) {
-        // --- build dialog pane matching CreateConnect.fxml style ---
-        DialogPane dialogPane = new DialogPane();
-
-        ButtonType testButtonType = new ButtonType(I18n.t("createconnect.button.test"), ButtonBar.ButtonData.NO);
-        ButtonType commitButtonType = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
-        ButtonType cancelButtonType = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialogPane.getButtonTypes().addAll(testButtonType, commitButtonType, cancelButtonType);
-
-        // --- content: VBox style="-fx-padding: 10 18 10 18;" ---
         VBox contentBox = new VBox();
         contentBox.setStyle("-fx-padding: 10 18 10 18;");
 
-        // row 0: name (identical to CreateConnect basic tab)
-        HBox nameRow = new HBox();
-        nameRow.setPrefHeight(30);
-        nameRow.setAlignment(Pos.CENTER_LEFT);
-        Label nameLabel = new Label();
-        nameLabel.textProperty().bind(I18n.bind("createconnect.label.name"));
-        nameLabel.setPrefWidth(80);
+        // row 0: name
+        HBox nameRow = row30();
+        Label nameLabel = label80("createconnect.label.name");
         CustomUserTextField nameField = new CustomUserTextField();
         nameField.setPrefWidth(315);
         nameField.setPromptText("[Host_Port]");
         nameField.setText(sshConnect.getName() != null ? sshConnect.getName() : "");
         nameRow.getChildren().addAll(nameLabel, nameField);
 
-        // row 1: host + port (same layout as CreateConnect ip+port row)
-        HBox hostRow = new HBox();
-        hostRow.setPrefHeight(30);
-        hostRow.setAlignment(Pos.CENTER_LEFT);
-        Label hostLabel = new Label();
-        hostLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_host"));
-        hostLabel.setPrefWidth(80);
+        // row 1: host + port
+        HBox hostRow = row30();
+        Label hostLabel = label80("createconnect.label.ssh_host");
         CustomUserTextField hostField = new CustomUserTextField();
         hostField.setPrefWidth(200);
+        hostField.setPromptText("192.168.1.1");
         hostField.setText(sshConnect.getHost() != null ? sshConnect.getHost() : "");
-        Label spacer = new Label("");
-        spacer.setPrefWidth(10);
+        Label spacer10 = new Label("");
+        spacer10.setPrefWidth(10);
         Label portLabel = new Label();
         portLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_port"));
         CustomUserTextField portField = new CustomUserTextField();
         portField.setPrefWidth(48);
+        portField.setPromptText("22");
         portField.setText(sshConnect.getPort() != null ? sshConnect.getPort() : "22");
-        hostRow.getChildren().addAll(hostLabel, hostField, spacer, portLabel, portField);
+        hostRow.getChildren().addAll(hostLabel, hostField, spacer10, portLabel, portField);
 
         // row 2: user
-        HBox userRow = new HBox();
-        userRow.setPrefHeight(30);
-        userRow.setAlignment(Pos.CENTER_LEFT);
-        Label userLabel = new Label();
-        userLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_user"));
-        userLabel.setPrefWidth(80);
+        HBox userRow = row30();
+        Label userLabel = label80("createconnect.label.ssh_user");
         CustomUserTextField userField = new CustomUserTextField();
         userField.setPrefWidth(200);
+        userField.setPromptText("root");
         userField.setText(sshConnect.getUsername() != null ? sshConnect.getUsername() : "");
         userRow.getChildren().addAll(userLabel, userField);
 
-        // row 3: auth type choice (ChoiceBox like dbTypeChoiceBox)
-        HBox authTypeRow = new HBox();
-        authTypeRow.setPrefHeight(30);
-        authTypeRow.setAlignment(Pos.CENTER_LEFT);
+        // row 3: auth type
+        HBox authTypeRow = row30();
         Label authTypeLabel = new Label();
-        authTypeLabel.textProperty().bind(I18n.bind("createconnect.label.driver"));
+        authTypeLabel.textProperty().bind(I18n.bind("ssh.label.auth_type"));
         authTypeLabel.setPrefWidth(80);
         ChoiceBox<String> authTypeChoiceBox = new ChoiceBox<>();
         authTypeChoiceBox.setFocusTraversable(false);
         authTypeChoiceBox.getStyleClass().add("choice-box-with-border");
         authTypeChoiceBox.getItems().addAll(
                 I18n.t("createconnect.label.ssh_password", "Password"),
-                I18n.t("createconnect.label.ssh", "Private Key"));
+                I18n.t("createconnect.label.ssh", "Key"));
         authTypeChoiceBox.getSelectionModel().select(0);
         authTypeRow.getChildren().addAll(authTypeLabel, authTypeChoiceBox);
 
-        // row 4: password
-        HBox passwordRow = new HBox();
-        passwordRow.setPrefHeight(30);
-        passwordRow.setAlignment(Pos.CENTER_LEFT);
-        Label passwordLabel = new Label();
-        passwordLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_password"));
-        passwordLabel.setPrefWidth(80);
+        // row 4: password (password mode)
+        HBox passwordRow = row30();
+        Label passwordLabel = label80("createconnect.label.ssh_password");
         CustomPasswordField passwordField = new CustomPasswordField();
         passwordField.setPrefWidth(200);
-        passwordField.setText(sshConnect.getPassword() != null ? sshConnect.getPassword() : "");
+        passwordField.setPromptText("...");
+        passwordField.setText(sshConnect.isAuthKey() ? "" : (sshConnect.getPassword() != null ? sshConnect.getPassword() : ""));
         passwordRow.getChildren().addAll(passwordLabel, passwordField);
 
-        // row 4b: key file path (+ browse button like addDriverButton)
-        HBox keyPathRow = new HBox();
-        keyPathRow.setPrefHeight(30);
-        keyPathRow.setAlignment(Pos.CENTER_LEFT);
+        // row 4b: key file path (key mode) — text field + browse button with MAIN_SEARCH icon, small style
+        HBox keyPathRow = row30();
         Label keyPathLabel = new Label();
-        keyPathLabel.textProperty().bind(I18n.bind("createconnect.label.ssh"));
+        keyPathLabel.textProperty().bind(I18n.bind("ssh.label.key_path"));
         keyPathLabel.setPrefWidth(80);
         CustomUserTextField keyPathField = new CustomUserTextField();
-        keyPathField.setPrefWidth(200);
-        keyPathField.setText(sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "");
+        keyPathField.setPrefWidth(170);
+        keyPathField.setPromptText("~/.ssh/id_rsa");
+        keyPathField.setText(sshConnect.isAuthKey() ? (sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "") : "");
         Label keySpace1 = new Label(" ");
         Button keyBrowseButton = new Button();
         keyBrowseButton.setFocusTraversable(false);
-        keyBrowseButton.setMaxHeight(14);
-        keyBrowseButton.setMaxWidth(14);
-        keyBrowseButton.getStyleClass().add("custom-button-with-radius");
-        keyBrowseButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.7));
-        Tooltip browseTooltip = new Tooltip("Select private key");
-        keyBrowseButton.setTooltip(browseTooltip);
+        keyBrowseButton.getStyleClass().add("small");
+        keyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
+        keyBrowseButton.setTooltip(new Tooltip(I18n.t("createconnect.tooltip.browse_file", "Browse")));
         keyPathRow.getChildren().addAll(keyPathLabel, keyPathField, keySpace1, keyBrowseButton);
 
-        // row 4c: key passphrase
-        HBox keyPassRow = new HBox();
-        keyPassRow.setPrefHeight(30);
-        keyPassRow.setAlignment(Pos.CENTER_LEFT);
+        // row 4c: key passphrase (key mode, optional)
+        HBox keyPassRow = row30();
         Label keyPassLabel = new Label();
-        keyPassLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_password"));
+        keyPassLabel.textProperty().bind(I18n.bind("ssh.label.key_passphrase"));
         keyPassLabel.setPrefWidth(80);
         CustomPasswordField keyPassField = new CustomPasswordField();
         keyPassField.setPrefWidth(200);
-        keyPassField.setText(sshConnect.getKeyPassphrase() != null ? sshConnect.getKeyPassphrase() : "");
+        keyPassField.setPromptText("...");
+        keyPassField.setText(sshConnect.isAuthKey() ? (sshConnect.getKeyPassphrase() != null ? sshConnect.getKeyPassphrase() : "") : "");
         keyPassRow.getChildren().addAll(keyPassLabel, keyPassField);
 
-        // row 5: info (TextArea)
-        HBox infoRow = new HBox();
-        infoRow.setPrefHeight(60);
-        infoRow.setAlignment(Pos.TOP_LEFT);
-        Label infoLabel = new Label();
-        infoLabel.textProperty().bind(I18n.bind("createconnect.label.info"));
-        infoLabel.setPrefWidth(80);
-        TextArea infoArea = new TextArea();
-        infoArea.setPrefWidth(315);
-        infoArea.setPrefHeight(60);
-        infoArea.setWrapText(true);
-        infoArea.setText(sshConnect.getInfo() != null ? sshConnect.getInfo() : "");
-        infoRow.getChildren().addAll(infoLabel, infoArea);
+        contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow,
+                passwordRow, keyPathRow, keyPassRow);
 
-        // assemble: password row and key rows stacked, toggled by auth type
-        contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow);
-        // password / key path / key passphrase stacked after auth row
-        // insert them all, toggle visibility
-        contentBox.getChildren().addAll(passwordRow, keyPathRow, keyPassRow, infoRow);
-
-        // --- toggle auth type visibility ---
+        // toggle auth rows
         Runnable updateAuthRows = () -> {
             boolean isKeyMode = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
             passwordRow.setVisible(!isKeyMode);
@@ -1063,21 +1018,20 @@ public class MainController {
             keyPassRow.setVisible(isKeyMode);
             keyPassRow.setManaged(isKeyMode);
         };
-        // init from existing data
         if (sshConnect.isAuthKey()) {
             authTypeChoiceBox.getSelectionModel().select(1);
         }
         updateAuthRows.run();
         authTypeChoiceBox.getSelectionModel().selectedIndexProperty().addListener((obs, o, n) -> updateAuthRows.run());
 
-        // --- port numeric filter ---
+        // port numeric filter
         portField.setTextFormatter(new TextFormatter<String>(change ->
             change.getControlNewText().matches("\\d*") ? change : null));
 
-        // --- key browse action ---
+        // key browse action
         keyBrowseButton.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
-            chooser.setTitle("Select SSH Private Key");
+            chooser.setTitle(I18n.t("createconnect.label.ssh", "Select SSH Private Key"));
             File homeDir = new File(System.getProperty("user.home"));
             if (homeDir.isDirectory()) {
                 File sshDir = new File(homeDir, ".ssh");
@@ -1089,43 +1043,48 @@ public class MainController {
             }
         });
 
-        // --- connecting overlay ---
-        HBox connectingHBox = new HBox();
-        connectingHBox.setAlignment(Pos.CENTER);
-        connectingHBox.setVisible(false);
-        Label connectingStatusLabel = new Label();
-        connectingStatusLabel.textProperty().bind(I18n.bind("createconnect.status.connecting"));
-        Button connectingStopButton = new Button();
-        connectingStopButton.getStyleClass().add("small");
-        connectingStopButton.setFocusTraversable(false);
-        Tooltip stopTooltip = new Tooltip();
-        stopTooltip.textProperty().bind(I18n.bind("createconnect.tooltip.stop_connecting"));
-        connectingStopButton.setTooltip(stopTooltip);
-        connectingHBox.getChildren().addAll(connectingStatusLabel, connectingStopButton);
-
-        StackPane contentStack = new StackPane(contentBox, connectingHBox);
-        dialogPane.setContent(contentStack);
-
-        // --- Dialog ---
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setDialogPane(dialogPane);
-
-        // --- Test button ---
-        Button testButton = (Button) dialogPane.lookupButton(testButtonType);
-        testButton.disableProperty().bind(connectingHBox.visibleProperty());
-        testButton.addEventFilter(ActionEvent.ACTION, event -> {
-            // basic input check
-            if (hostField.getText().isBlank()) { hostField.requestFocus(); event.consume(); return; }
-            if (userField.getText().isBlank()) { userField.requestFocus(); event.consume(); return; }
+        // --- value setter ---
+        Runnable setValues = () -> {
+            if (nameField.getText().isBlank()) {
+                sshConnect.setName("[" + hostField.getText() + "_" + portField.getText() + "]");
+            } else {
+                sshConnect.setName(nameField.getText());
+            }
+            sshConnect.setHost(hostField.getText());
+            sshConnect.setPort(portField.getText());
+            sshConnect.setUsername(userField.getText());
             boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-            if (!isKey && passwordField.getText().isBlank()) { passwordField.requestFocus(); event.consume(); return; }
-            if (isKey && keyPathField.getText().isBlank()) { keyPathField.requestFocus(); event.consume(); return; }
+            sshConnect.setAuthType(isKey ? com.dbboys.ssh.SshConnect.AUTH_KEY : com.dbboys.ssh.SshConnect.AUTH_PASSWORD);
+            sshConnect.setPassword(isKey ? "" : passwordField.getText());
+            sshConnect.setKeyPath(isKey ? keyPathField.getText() : "");
+            sshConnect.setKeyPassphrase(isKey ? keyPassField.getText() : "");
+            sshConnect.setInfo("");
+        };
 
-            // set values for test
-            setSshValues(sshConnect, nameField, hostField, portField, userField, passwordField,
-                    authTypeChoiceBox, keyPathField, keyPassField, infoArea);
+        java.util.function.Supplier<Boolean> checkInput = () -> {
+            if (hostField.getText().isBlank()) { hostField.requestFocus(); return false; }
+            if (userField.getText().isBlank()) { userField.requestFocus(); return false; }
+            boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
+            if (!isKey && passwordField.getText().isBlank()) { passwordField.requestFocus(); return false; }
+            if (isKey && keyPathField.getText().isBlank()) { keyPathField.requestFocus(); return false; }
+            return true;
+        };
 
-            connectingHBox.setVisible(true);
+        // --- buttons ---
+        ButtonType testButtonType = new ButtonType(I18n.t("createconnect.button.test"), ButtonBar.ButtonData.NO);
+        ButtonType commitButtonType = new ButtonType(I18n.t("createconnect.button.confirm"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType(I18n.t("createconnect.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        String title = I18n.t("createconnect.label.ssh", "SSH Connection");
+
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                title, contentBox, 430, Region.USE_COMPUTED_SIZE,
+                testButtonType, commitButtonType, cancelButtonType);
+
+        // Test button
+        Button testButton = dialog.getButton(testButtonType);
+        testButton.addEventFilter(ActionEvent.ACTION, event -> {
+            if (!checkInput.get()) { event.consume(); return; }
+            setValues.run();
             AppExecutor.runAsync(() -> {
                 long start = System.currentTimeMillis();
                 try {
@@ -1136,34 +1095,24 @@ public class MainController {
                             "127.0.0.1", 1);
                     tunnel.close();
                     long elapsed = System.currentTimeMillis() - start;
-                    Platform.runLater(() -> {
-                        connectingHBox.setVisible(false);
+                    Platform.runLater(() ->
                         AlertUtil.CustomAlert(I18n.t("common.hint"),
-                                String.format(I18n.t("createconnect.notice.test_success"), elapsed));
-                    });
+                                String.format(I18n.t("createconnect.notice.test_success"), elapsed)));
                 } catch (Exception ex) {
                     log.error("SSH test failed", ex);
-                    Platform.runLater(() -> {
-                        connectingHBox.setVisible(false);
+                    Platform.runLater(() ->
                         AlertUtil.CustomAlert(I18n.t("common.error"),
-                                String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage()));
-                    });
+                                String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage())));
                 }
             });
             event.consume();
         });
 
-        // --- Commit button ---
-        Button commitButton = (Button) dialogPane.lookupButton(commitButtonType);
-        commitButton.disableProperty().bind(connectingHBox.visibleProperty());
+        // Commit button
+        Button commitButton = dialog.getButton(commitButtonType);
         commitButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (hostField.getText().isBlank()) { hostField.requestFocus(); event.consume(); return; }
-            if (userField.getText().isBlank()) { userField.requestFocus(); event.consume(); return; }
-            boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-            if (!isKey && passwordField.getText().isBlank()) { passwordField.requestFocus(); event.consume(); return; }
-            if (isKey && keyPathField.getText().isBlank()) { keyPathField.requestFocus(); event.consume(); return; }
-            setSshValues(sshConnect, nameField, hostField, portField, userField, passwordField,
-                    authTypeChoiceBox, keyPathField, keyPassField, infoArea);
+            if (!checkInput.get()) { event.consume(); return; }
+            setValues.run();
             if (isNew) {
                 SshRepository.create(sshConnect);
                 TreeItem<TreeData> newItem = new TreeItem<>(sshConnect);
@@ -1174,38 +1123,22 @@ public class MainController {
             event.consume();
         });
 
-        // --- Cancel button ---
-        Button cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
-        cancelButton.setOnAction(e -> dialog.close());
-
-        // --- connecting stop ---
-        connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
-
-        AppState.applyAppStylesheet(dialogPane.getScene());
         dialog.showAndWait();
-        // refresh after dialog closes
         sshTreeView.refresh();
     }
 
-    private void setSshValues(com.dbboys.ssh.SshConnect sc,
-            TextField nameField, TextField hostField, TextField portField,
-            TextField userField, PasswordField passwordField,
-            ChoiceBox<String> authTypeChoiceBox,
-            TextField keyPathField, PasswordField keyPassField, TextArea infoArea) {
-        if (nameField.getText().isBlank()) {
-            sc.setName("[" + hostField.getText() + "_" + portField.getText() + "]");
-        } else {
-            sc.setName(nameField.getText());
-        }
-        sc.setHost(hostField.getText());
-        sc.setPort(portField.getText());
-        sc.setUsername(userField.getText());
-        boolean isKey = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
-        sc.setAuthType(isKey ? com.dbboys.ssh.SshConnect.AUTH_KEY : com.dbboys.ssh.SshConnect.AUTH_PASSWORD);
-        sc.setPassword(isKey ? "" : passwordField.getText());
-        sc.setKeyPath(isKey ? keyPathField.getText() : "");
-        sc.setKeyPassphrase(isKey ? keyPassField.getText() : "");
-        sc.setInfo(infoArea.getText());
+    private static HBox row30() {
+        HBox row = new HBox();
+        row.setPrefHeight(30);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private static Label label80(String i18nKey) {
+        Label label = new Label();
+        label.textProperty().bind(I18n.bind(i18nKey));
+        label.setPrefWidth(80);
+        return label;
     }
 
     private void initStatusBar() {
