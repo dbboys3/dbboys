@@ -2,7 +2,7 @@ package com.dbboys.ui.controller;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
-import com.dbboys.ssh.SshRepository;
+
 import com.dbboys.ui.component.*;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.*;
@@ -864,14 +864,14 @@ public class MainController {
 
     private void initSshTreeView() {
         try {
-            com.dbboys.ssh.SshRepository.initTable();
+            
             TreeItem<TreeData> rootItem = new TreeItem<>();
             rootItem.setExpanded(true);
             sshTreeView.setRoot(rootItem);
             sshTreeView.setShowRoot(false);
             sshTreeView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
 
-            java.util.List<com.dbboys.ssh.SshConnect> sshConnections = com.dbboys.ssh.SshRepository.getAll();
+            java.util.List<com.dbboys.ssh.SshConnect> sshConnections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
             for (com.dbboys.ssh.SshConnect sc : sshConnections) {
                 TreeItem<TreeData> item = new TreeItem<>(sc);
                 rootItem.getChildren().add(item);
@@ -902,7 +902,7 @@ public class MainController {
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
-                    if (com.dbboys.ssh.SshRepository.delete(sshConnect)) {
+                    if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(sshConnect)) {
                         selected.getParent().getChildren().remove(selected);
                     }
                 }
@@ -1118,11 +1118,11 @@ public class MainController {
             if (!checkInput.get()) { event.consume(); return; }
             setValues.run();
             if (isNew) {
-                SshRepository.create(sshConnect);
+                com.dbboys.infra.db.LocalDbRepository.createSsh(sshConnect);
                 TreeItem<TreeData> newItem = new TreeItem<>(sshConnect);
                 sshTreeView.getRoot().getChildren().add(newItem);
             } else {
-                SshRepository.update(sshConnect);
+                com.dbboys.infra.db.LocalDbRepository.updateSsh(sshConnect);
             }
             event.consume();
         });

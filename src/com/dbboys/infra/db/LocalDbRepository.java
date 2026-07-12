@@ -3,6 +3,7 @@ package com.dbboys.infra.db;
 import com.dbboys.model.ConnectFolder;
 import com.dbboys.model.Connect;
 import com.dbboys.model.UpdateResult;
+import com.dbboys.ssh.SshConnect;
 import com.dbboys.core.ConnectionService;
 
 import org.apache.logging.log4j.LogManager;
@@ -22,6 +23,19 @@ public  class LocalDbRepository {
 
     //初始化数据库，在恢复出厂设置时调用
     public static void migrateTConnectTable() {
+        try (java.sql.Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_ssh ("
+                    + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    + "c_parentid INTEGER DEFAULT 0,"
+                    + "c_name VARCHAR(100),"
+                    + "c_host VARCHAR(100),"
+                    + "c_port VARCHAR(10),"
+                    + "c_username VARCHAR(100),"
+                    + "c_password VARCHAR(100),"
+                    + "c_auth_type VARCHAR(10),"
+                    + "c_key_path VARCHAR(500))");
+        } catch (Exception e) {
+        }
         String[][] sshColumns = {
             {"c_ssh_host", "varchar(100)"},
             {"c_ssh_port", "varchar(10)"},
@@ -647,5 +661,89 @@ public  class LocalDbRepository {
         return return_val;
     }
 
+
+
+    // ---- SSH CRUD ----
+    public static java.util.List<SshConnect> getAllSsh() {
+        java.util.List<SshConnect> list = new java.util.ArrayList<>();
+        String sql = "SELECT c_id, c_parentid, c_name, c_host, c_port, c_username, c_password, "
+                + "c_auth_type, c_key_path FROM t_ssh ORDER BY c_name";
+        try (java.sql.Statement stmt = conn.createStatement();
+             java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                SshConnect sc = new SshConnect();
+                sc.setId(rs.getInt("c_id"));
+                sc.setParentId(rs.getInt("c_parentid"));
+                sc.setName(rs.getString("c_name"));
+                sc.setHost(rs.getString("c_host"));
+                sc.setPort(rs.getString("c_port"));
+                sc.setUsername(rs.getString("c_username"));
+                sc.setPassword(rs.getString("c_password"));
+                sc.setAuthType(rs.getString("c_auth_type") != null ? rs.getString("c_auth_type") : SshConnect.AUTH_PASSWORD);
+                sc.setKeyPath(rs.getString("c_key_path") != null ? rs.getString("c_key_path") : "");
+                list.add(sc);
+            }
+        } catch (Exception e) {
+            log.error("Failed to load SSH connections", e);
+        }
+        return list;
+    }
+
+    public static String createSsh(SshConnect sc) {
+        String sql = "INSERT INTO t_ssh (c_parentid, c_name, c_host, c_port, c_username, c_password, "
+                + "c_auth_type, c_key_path) VALUES (?,?,?,?,?,?,?,?)";
+        try (java.sql.PreparedStatement ps = conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, sc.getParentId());
+            ps.setString(2, sc.getName());
+            ps.setString(3, sc.getHost());
+            ps.setString(4, sc.getPort());
+            ps.setString(5, sc.getUsername());
+            ps.setString(6, sc.getPassword());
+            ps.setString(7, sc.getAuthType());
+            ps.setString(8, sc.getKeyPath());
+            ps.executeUpdate();
+            try (java.sql.ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    sc.setId(keys.getInt(1));
+                }
+            }
+            return "";
+        } catch (Exception e) {
+            log.error("Failed to create SSH connection", e);
+            return e.getMessage();
+        }
+    }
+
+    public static String updateSsh(SshConnect sc) {
+        String sql = "UPDATE t_ssh SET c_parentid=?, c_name=?, c_host=?, c_port=?, c_username=?, c_password=?, "
+                + "c_auth_type=?, c_key_path=? WHERE c_id=?";
+        try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sc.getParentId());
+            ps.setString(2, sc.getName());
+            ps.setString(3, sc.getHost());
+            ps.setString(4, sc.getPort());
+            ps.setString(5, sc.getUsername());
+            ps.setString(6, sc.getPassword());
+            ps.setString(7, sc.getAuthType());
+            ps.setString(8, sc.getKeyPath());
+            ps.setInt(9, sc.getId());
+            ps.executeUpdate();
+            return "";
+        } catch (Exception e) {
+            log.error("Failed to update SSH connection", e);
+            return e.getMessage();
+        }
+    }
+
+    public static boolean deleteSsh(SshConnect sc) {
+        try (java.sql.PreparedStatement ps = conn.prepareStatement("DELETE FROM t_ssh WHERE c_id=?")) {
+            ps.setInt(1, sc.getId());
+            ps.executeUpdate();
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete SSH connection", e);
+            return false;
+        }
+    }
 
 }
