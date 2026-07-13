@@ -989,8 +989,10 @@ public class MainController {
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
-                    if (AlertUtil.CustomAlertConfirm(I18n.t("common.hint"),
-                            I18n.t("metadata.confirm.delete_connect", "Confirm delete connection?"))) {
+                    if (AlertUtil.CustomAlertConfirm(
+                            I18n.t("metadata.alert.delete_connection.title", "删除连接"),
+                            I18n.t("metadata.alert.delete_connection.content", "确定要删除连接\"%s\"吗？")
+                                    .formatted(sshConnect.getName()))) {
                         if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(sshConnect)) {
                             selected.getParent().getChildren().remove(selected);
                         }
@@ -1046,8 +1048,17 @@ public class MainController {
             deleteSshFolderItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
-                    if (AlertUtil.CustomAlertConfirm(I18n.t("common.hint"),
-                            I18n.t("metadata.confirm.delete_folder", "Confirm delete folder?"))) {
+                    if (selected.getChildren().size() > 0) {
+                        if (AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.alert.delete_folder.title", "删除连接分类"),
+                                I18n.t("metadata.alert.delete_folder.content",
+                                        "删除连接分类\"%s\"将删除该分类下【%d】个连接，确定要删除该分类吗？")
+                                        .formatted(folder.getName(), selected.getChildren().size()))) {
+                            if (com.dbboys.infra.db.LocalDbRepository.deleteSshFolder(folder)) {
+                                selected.getParent().getChildren().remove(selected);
+                            }
+                        }
+                    } else {
                         if (com.dbboys.infra.db.LocalDbRepository.deleteSshFolder(folder)) {
                             selected.getParent().getChildren().remove(selected);
                         }
@@ -1056,6 +1067,13 @@ public class MainController {
             });
 
 
+
+            // Hide context menu on single left click (same pattern as database tree)
+            sshTreeView.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+                if (event.getButton().equals(javafx.scene.input.MouseButton.PRIMARY) && event.getClickCount() == 1) {
+                    sshCtxMenu.hide();
+                }
+            });
 
             // Right-click: walk up from event target to find the TreeItem, select it,
             // then manually show the context menu (same pattern as database tree).
