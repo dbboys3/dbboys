@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Controller for the SSH terminal tab (SshTab.fxml).
- * Uses a continuous shell channel (interactive terminal mode) ï¿½?
+ * Uses a continuous shell channel (interactive terminal mode) ï¿?
  * mimicking mainstream SSH clients. Enter key sends the current input line
  * to the shell, output is streamed back in real time.
  */
@@ -55,8 +55,8 @@ public class SshTabController {
 
     public void initialize() {
         // Icons
-        connectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.GREEN));
-        disconnectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.RED));
+        connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.GREEN));
+        disconnectButton.setGraphic(IconFactory.group(IconPaths.SSH_DISCONNECT, 0.65, Color.RED));
 
         // Tooltips
         connectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.connect", "Connect")));
@@ -85,7 +85,7 @@ public class SshTabController {
             } else if (event.getCode() == KeyCode.LEFT || event.getCode() == KeyCode.UP
                     || event.getCode() == KeyCode.RIGHT || event.getCode() == KeyCode.DOWN
                     || event.getCode() == KeyCode.PAGE_UP || event.getCode() == KeyCode.PAGE_DOWN) {
-                // Block all arrow key navigation â€” keep cursor locked
+                // Block all arrow key navigation â€?keep cursor locked
                 event.consume();
             } else if (event.getCode() == KeyCode.HOME) {
                 terminalArea.moveTo(inputStartPosition);
