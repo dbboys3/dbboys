@@ -14,9 +14,12 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -52,15 +55,17 @@ public class SshConnectDialogController {
 
     // Connecting overlay
     private HBox connectingHBox;
+    private Label connectingStatusLabel;
     private Button connectingStopButton;
+    private Stage dialogStage;
+    private Button cancelButton;
+
+    // Current task for cancellation
+    private Task<Void> currentTask;
 
     public SshConnectDialogController(SshConnect sshConnect, boolean isNew) {
         this.sshConnect = sshConnect;
         this.isNew = isNew;
-    }
-
-    public boolean isCommitted() {
-        return committed;
     }
 
     /**
@@ -72,7 +77,7 @@ public class SshConnectDialogController {
 
         DialogPane dialogPane = buildDialogPane();
 
-        Stage stage = new Stage();
+        dialogStage = new Stage();
         int dialogW = 460;
         int dialogH = 250;
         int titleBarHeight = 28;
@@ -83,18 +88,25 @@ public class SshConnectDialogController {
 
         SimpleStringProperty titleProp = new SimpleStringProperty(title);
         CustomWindowFrameUtil.createModalPopup(
-                stage, titleProp, dialogPane, dialogW, dialogH, false);
-        stage.setResizable(false);
-        stage.sizeToScene();
+                dialogStage, titleProp, dialogPane, dialogW, dialogH, false);
+        dialogStage.setResizable(false);
+        dialogStage.sizeToScene();
+
+        // Cancel running task when window is closed
+        dialogStage.setOnCloseRequest(e -> {
+            if (currentTask != null && currentTask.isRunning()) {
+                currentTask.cancel();
+            }
+        });
 
         // Center relative to owner window
         Window owner = AppState.getWindow();
         if (owner != null && owner.isShowing()) {
-            stage.setX(owner.getX() + (owner.getWidth() - dialogW) / 2);
-            stage.setY(owner.getY() + (owner.getHeight() - dialogH) / 2);
+            dialogStage.setX(owner.getX() + (owner.getWidth() - dialogW) / 2);
+            dialogStage.setY(owner.getY() + (owner.getHeight() - dialogH) / 2);
         }
 
-        stage.showAndWait();
+        dialogStage.showAndWait();
         return committed;
     }
 
@@ -206,21 +218,47 @@ public class SshConnectDialogController {
         authTypeChoiceBox.getSelectionModel().selectedIndexProperty()
                 .addListener((obs, o, n) -> updateAuthRows.run());
 
-        // --- Connecting overlay ---
+        // --- Connecting overlay (matches CreateConnect.fxml pattern) ---
         connectingHBox = new HBox();
         connectingHBox.setAlignment(Pos.CENTER);
-        connectingHBox.setStyle("-fx-background-color: rgba(0,0,0,0.4);");
         connectingHBox.setVisible(false);
-        Label connectingStatusLabel = new Label();
+        connectingHBox.getStyleClass().add("modal-progress-overlay");
+
+        HBox connectingStatusBox = new HBox();
+        connectingStatusBox.setMaxWidth(100);
+        connectingStatusBox.setMaxHeight(15);
+        connectingStatusBox.setAlignment(Pos.CENTER);
+        connectingStatusBox.getStyleClass().add("modal-progress-card");
+
+        ImageView connectingLoadingImageView = new ImageView(new Image(IconPaths.LOADING_GIF));
+        connectingLoadingImageView.setFitHeight(12);
+        connectingLoadingImageView.setFitWidth(12);
+
+        connectingStatusLabel = new Label();
         connectingStatusLabel.textProperty().bind(I18n.bind("createconnect.status.connecting"));
+
         connectingStopButton = new Button();
         connectingStopButton.getStyleClass().add("small");
         connectingStopButton.setFocusTraversable(false);
+        // Use the same icon-danger style class so CSS applies correctly
+        javafx.scene.shape.SVGPath stopIcon = new javafx.scene.shape.SVGPath();
+        stopIcon.setContent(IconPaths.SQL_STOP);
+        stopIcon.getStyleClass().add("icon-danger");
+        stopIcon.setScaleX(0.7);
+        stopIcon.setScaleY(0.7);
+        connectingStopButton.setGraphic(stopIcon);
         Tooltip stopTooltip = new Tooltip();
         stopTooltip.textProperty().bind(I18n.bind("createconnect.tooltip.stop_connecting"));
         connectingStopButton.setTooltip(stopTooltip);
-        connectingStopButton.setOnAction(e -> connectingHBox.setVisible(false));
-        connectingHBox.getChildren().addAll(connectingStatusLabel, connectingStopButton);
+        connectingStopButton.setOnAction(e -> {
+            if (currentTask != null && currentTask.isRunning()) {
+                currentTask.cancel();
+            }
+            setConnectingVisible(false);
+        });
+
+        connectingStatusBox.getChildren().addAll(connectingLoadingImageView, connectingStatusLabel, connectingStopButton);
+        connectingHBox.getChildren().add(connectingStatusBox);
 
         StackPane contentStack = new StackPane(contentBox, connectingHBox);
 
@@ -237,6 +275,7 @@ public class SshConnectDialogController {
 
         // --- Wire buttons ---
         Button testButton = (Button) dialogPane.lookupButton(testButtonType);
+        testButton.disableProperty().bind(connectingHBox.visibleProperty());
         testButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (!checkInput()) {
                 event.consume();
@@ -248,6 +287,7 @@ public class SshConnectDialogController {
         });
 
         Button commitButton = (Button) dialogPane.lookupButton(commitButtonType);
+        commitButton.disableProperty().bind(connectingHBox.visibleProperty());
         commitButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (!checkInput()) {
                 event.consume();
@@ -256,6 +296,14 @@ public class SshConnectDialogController {
             setValues();
             doCommit();
             event.consume();
+        });
+
+        cancelButton = (Button) dialogPane.lookupButton(cancelButtonType);
+        cancelButton.setOnAction(e -> {
+            if (currentTask != null && currentTask.isRunning()) {
+                currentTask.cancel();
+            }
+            dialogStage.close();
         });
 
         return dialogPane;
@@ -285,7 +333,6 @@ public class SshConnectDialogController {
     }
 
     private void setValues() {
-        // Auto-generate name if blank
         if (nameField.getText().isBlank()) {
             sshConnect.setName("[" + hostField.getText() + "_" + portField.getText() + "]");
         } else {
@@ -300,52 +347,116 @@ public class SshConnectDialogController {
         sshConnect.setKeyPath(isKey ? keyPathField.getText() : "");
     }
 
-    // ---- Test connection ----
+    // ---- Connecting overlay visibility ----
+
+    private void setConnectingVisible(boolean visible) {
+        if (Platform.isFxApplicationThread()) {
+            connectingHBox.setVisible(visible);
+        } else {
+            Platform.runLater(() -> connectingHBox.setVisible(visible));
+        }
+    }
+
+    // ---- Test connection (using Task for proper cancellation) ----
 
     private void doTest() {
-        connectingHBox.setVisible(true);
-        AppExecutor.runAsync(() -> {
-            long start = System.currentTimeMillis();
-            try {
-                int port = Integer.parseInt(sshConnect.getPort());
-                var tunnel = SshTunnelUtil.createTunnel(
-                        sshConnect.getHost(), port,
-                        sshConnect.getUsername(), sshConnect.getPassword(),
-                        "127.0.0.1", 1);
-                tunnel.close();
-                long elapsed = System.currentTimeMillis() - start;
-                Platform.runLater(() -> {
-                    connectingHBox.setVisible(false);
-                    AlertUtil.CustomAlert(I18n.t("common.hint"),
-                            String.format(I18n.t("createconnect.notice.test_success"), elapsed));
-                });
-            } catch (Exception ex) {
-                log.error("SSH test failed", ex);
-                Platform.runLater(() -> {
-                    connectingHBox.setVisible(false);
-                    AlertUtil.CustomAlert(I18n.t("common.error"),
-                            String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage()));
-                });
+        setConnectingVisible(true);
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                long start = System.currentTimeMillis();
+                try {
+                    int port = Integer.parseInt(sshConnect.getPort());
+                    var tunnel = SshTunnelUtil.createTunnel(
+                            sshConnect.getHost(), port,
+                            sshConnect.getUsername(), sshConnect.getPassword(),
+                            "127.0.0.1", 1);
+                    tunnel.close();
+                    if (isCancelled()) return null;
+                    long elapsed = System.currentTimeMillis() - start;
+                    Platform.runLater(() -> {
+                        setConnectingVisible(false);
+                        AlertUtil.CustomAlert(I18n.t("common.hint"),
+                                String.format(I18n.t("createconnect.notice.test_success"), elapsed));
+                    });
+                } catch (Exception ex) {
+                    if (isCancelled()) return null;
+                    log.error("SSH test failed", ex);
+                    Platform.runLater(() -> {
+                        setConnectingVisible(false);
+                        AlertUtil.CustomAlert(I18n.t("common.error"),
+                                String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage()));
+                    });
+                }
+                return null;
             }
+        };
+        task.setOnFailed(e -> {
+            setConnectingVisible(false);
+            Throwable ex = task.getException();
+            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : "Failed";
+            AlertUtil.CustomAlert(I18n.t("common.error"), msg);
         });
+        currentTask = task;
+        AppExecutor.runTask(task);
     }
 
     // ---- Commit (save) ----
 
     private void doCommit() {
+        setConnectingVisible(true);
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                long start = System.currentTimeMillis();
+                try {
+                    int port = Integer.parseInt(sshConnect.getPort());
+                    var tunnel = SshTunnelUtil.createTunnel(
+                            sshConnect.getHost(), port,
+                            sshConnect.getUsername(), sshConnect.getPassword(),
+                            "127.0.0.1", 1);
+                    tunnel.close();
+                    if (isCancelled()) return null;
+                    long elapsed = System.currentTimeMillis() - start;
+                    Platform.runLater(() -> {
+                        setConnectingVisible(false);
+                        AlertUtil.CustomAlert(I18n.t("common.hint"),
+                                String.format(I18n.t("createconnect.notice.test_success"), elapsed));
+                        doSave();
+                    });
+                } catch (Exception ex) {
+                    if (isCancelled()) return null;
+                    log.error("SSH connect failed", ex);
+                    Platform.runLater(() -> {
+                        setConnectingVisible(false);
+                        AlertUtil.CustomAlert(I18n.t("common.error"),
+                                String.format(I18n.t("createconnect.error.ssh_tunnel_failed"), ex.getMessage()));
+                    });
+                }
+                return null;
+            }
+        };
+        task.setOnFailed(e -> {
+            setConnectingVisible(false);
+            Throwable ex = task.getException();
+            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : "Failed";
+            AlertUtil.CustomAlert(I18n.t("common.error"), msg);
+        });
+        currentTask = task;
+        AppExecutor.runTask(task);
+    }
+
+    private void doSave() {
         if (isNew) {
             LocalDbRepository.createSsh(sshConnect);
         } else {
             LocalDbRepository.updateSsh(sshConnect);
         }
         committed = true;
-        // Close the dialog stage
-        if (connectingHBox.getScene() != null && connectingHBox.getScene().getWindow() != null) {
-            ((Stage) connectingHBox.getScene().getWindow()).close();
-        }
+        dialogStage.close();
     }
 
-    // ---- Layout helpers (matching original MainController helpers) ----
+    // ---- Layout helpers ----
 
     private static HBox row30() {
         HBox row = new HBox();
