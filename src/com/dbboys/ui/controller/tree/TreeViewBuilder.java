@@ -1,4 +1,4 @@
-package com.dbboys.ui.controller.tree;
+﻿package com.dbboys.ui.controller.tree;
 
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.app.AppState;
@@ -60,7 +60,7 @@ public class TreeViewBuilder {
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                I18n.t("metadata.dialog.create_folder.title", "新建连接分类"),
+                I18n.t("metadata.dialog.create_folder.title", "创建数据库连接分类"),
                 hbox,
                 420,
                 180,
