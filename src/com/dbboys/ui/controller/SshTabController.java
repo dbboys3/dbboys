@@ -110,6 +110,8 @@ public class SshTabController {
                 event.consume();
                 return;
             }
+            // Snap caret to end before sending — user is typing now
+            terminalArea.moveTo(terminalArea.getLength());
             sendToShell(ch);
             event.consume();
         });
@@ -242,9 +244,26 @@ public class SshTabController {
 
     // ---- Mouse ----
 
+    /**
+     * Record caret position on press to distinguish click (no movement)
+     * from drag-select (movement). A plain click is undone so the caret
+     * stays pinned at the live prompt; a drag keeps the selection.
+     */
+    private int mousePressCaretPos = -1;
+
     private void setupMouseHandling() {
         terminalArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
             terminalArea.requestFocus();
+            mousePressCaretPos = terminalArea.getCaretPosition();
+        });
+
+        terminalArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, event -> {
+            int newPos = terminalArea.getCaretPosition();
+            if (mousePressCaretPos >= 0 && newPos == mousePressCaretPos) {
+                // Plain click, no drag — snap back to end
+                Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
+            }
+            mousePressCaretPos = -1;
         });
     }
 
