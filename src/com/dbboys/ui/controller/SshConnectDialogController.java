@@ -5,6 +5,7 @@ import com.dbboys.app.AppState;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.SshTunnelUtil;
+import com.dbboys.model.SshFolder;
 import com.dbboys.ssh.SshConnect;
 import com.dbboys.ui.component.CustomPasswordField;
 import com.dbboys.ui.component.CustomUserTextField;
@@ -14,6 +15,8 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.geometry.Pos;
@@ -43,6 +46,7 @@ public class SshConnectDialogController {
 
     // Form fields
     private CustomUserTextField nameField;
+    private ChoiceBox<SshFolder> folderChoiceBox;
     private CustomUserTextField hostField;
     private CustomUserTextField portField;
     private CustomUserTextField userField;
@@ -79,7 +83,7 @@ public class SshConnectDialogController {
 
         dialogStage = new Stage();
         int dialogW = 460;
-        int dialogH = 250;
+        int dialogH = 285;
         int titleBarHeight = 28;
         int contentH = dialogH - titleBarHeight;
         dialogPane.setMinSize(dialogW, contentH);
@@ -126,7 +130,33 @@ public class SshConnectDialogController {
         nameField.setText(sshConnect.getName() != null ? sshConnect.getName() : "");
         nameRow.getChildren().addAll(label80("createconnect.label.name"), nameField);
 
-        // row 1: host + port
+        // row 1: folder
+        HBox folderRow = row30();
+        folderChoiceBox = new ChoiceBox<>();
+        folderChoiceBox.setFocusTraversable(false);
+        folderChoiceBox.getStyleClass().add("choice-box-with-border");
+        ObservableList<SshFolder> folderList = FXCollections.observableArrayList(LocalDbRepository.getSshFolders());
+        folderChoiceBox.setItems(folderList);
+        if (!folderList.isEmpty()) {
+            // Select the folder matching the connection's parentId
+            int targetId = sshConnect.getParentId();
+            int selectedIdx = 0;
+            for (int i = 0; i < folderList.size(); i++) {
+                if (folderList.get(i).getId() == targetId) {
+                    selectedIdx = i;
+                    break;
+                }
+            }
+            folderChoiceBox.getSelectionModel().select(selectedIdx);
+        }
+        folderChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n != null) {
+                sshConnect.setParentId(n.getId());
+            }
+        });
+        folderRow.getChildren().addAll(label80("createconnect.label.folder"), folderChoiceBox);
+
+        // row 2: host + port
         HBox hostRow = row30();
         hostField = new CustomUserTextField();
         hostField.setPrefWidth(150);
@@ -203,7 +233,7 @@ public class SshConnectDialogController {
         keyPathRow.getChildren().addAll(label80("ssh.label.key_path"), keyPathField,
                 new Label(" "), keyBrowseButton);
 
-        contentBox.getChildren().addAll(nameRow, hostRow, userRow, authTypeRow,
+        contentBox.getChildren().addAll(nameRow, folderRow, hostRow, userRow, authTypeRow,
                 passwordRow, keyPathRow);
 
         // --- Toggle auth rows ---
@@ -417,11 +447,8 @@ public class SshConnectDialogController {
                             "127.0.0.1", 1);
                     tunnel.close();
                     if (isCancelled()) return null;
-                    long elapsed = System.currentTimeMillis() - start;
                     Platform.runLater(() -> {
                         setConnectingVisible(false);
-                        AlertUtil.CustomAlert(I18n.t("common.hint"),
-                                String.format(I18n.t("createconnect.notice.test_success"), elapsed));
                         doSave();
                     });
                 } catch (Exception ex) {

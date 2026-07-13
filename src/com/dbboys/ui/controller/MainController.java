@@ -19,6 +19,7 @@ import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.collections.FXCollections;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
@@ -885,6 +886,9 @@ public class MainController {
                 }
             }
 
+            // Apply CustomSshTreeCell for SSH-specific rendering
+            sshTreeView.setCellFactory(param -> new com.dbboys.ui.component.CustomSshTreeCell());
+
             // Double-click to open SSH terminal tab
             sshTreeView.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2) {
@@ -895,24 +899,53 @@ public class MainController {
                 }
             });
 
-            // Context menu
+            // Context menu items
             javafx.scene.control.ContextMenu sshCtxMenu = new javafx.scene.control.ContextMenu();
 
-            // --- Folder menu items ---
+            // --- Always-visible item ---
             javafx.scene.control.MenuItem newSshFolderItem = new javafx.scene.control.MenuItem();
             newSshFolderItem.textProperty().bind(I18n.bind("metadata.dialog.create_folder.title", "New Folder"));
             newSshFolderItem.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
             newSshFolderItem.setOnAction(e -> createSshFolder());
-            sshCtxMenu.getItems().add(newSshFolderItem);
 
             // --- Connection menu items ---
+            javafx.scene.control.MenuItem openSshItem = new javafx.scene.control.MenuItem();
+            openSshItem.textProperty().bind(I18n.bind("metadata.menu.connect", "Open"));
+            openSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_CONNECT_ITEM, 0.65));
+            openSshItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                    TabpaneUtil.addCustomSshTab(sshConnect);
+                }
+            });
+
             javafx.scene.control.MenuItem editSshItem = new javafx.scene.control.MenuItem();
-            editSshItem.textProperty().bind(I18n.bind("metadata.modify_connect_item", "Edit"));
-            editSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.6));
+            editSshItem.textProperty().bind(I18n.bind("metadata.menu.modify_connection", "Edit"));
+            editSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.7));
             editSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
                     showSshConnectDialog(sshConnect, false);
+                }
+            });
+
+            javafx.scene.control.MenuItem copySshItem = new javafx.scene.control.MenuItem();
+            copySshItem.textProperty().bind(I18n.bind("metadata.menu.copy_connection", "Copy"));
+            copySshItem.setGraphic(IconFactory.group(IconPaths.METADATA_COPY_CONNECT_ITEM, 0.7));
+            copySshItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect orig) {
+                    com.dbboys.ssh.SshConnect copy = new com.dbboys.ssh.SshConnect();
+                    copy.setName(orig.getName() + " - Copy");
+                    copy.setParentId(orig.getParentId());
+                    copy.setHost(orig.getHost());
+                    copy.setPort(orig.getPort());
+                    copy.setUsername(orig.getUsername());
+                    copy.setPassword(orig.getPassword());
+                    copy.setAuthType(orig.getAuthType());
+                    copy.setKeyPath(orig.getKeyPath());
+                    copy.setKeyPassphrase(orig.getKeyPassphrase());
+                    showSshConnectDialog(copy, true);
                 }
             });
 
@@ -926,17 +959,72 @@ public class MainController {
                 }
             });
 
+            javafx.scene.control.MenuItem moveSshItem = new javafx.scene.control.MenuItem();
+            moveSshItem.textProperty().bind(I18n.bind("metadata.menu.move_to", "Move To..."));
+            moveSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_MOVE_ITEM, 0.7));
+            moveSshItem.setOnAction(e -> sshMoveConnection());
+
+            javafx.scene.control.MenuItem renameSshItem = new javafx.scene.control.MenuItem();
+            renameSshItem.textProperty().bind(I18n.bind("metadata.menu.rename", "Rename"));
+            renameSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7));
+            renameSshItem.setOnAction(e -> sshRenameItem());
+
             javafx.scene.control.MenuItem deleteSshItem = new javafx.scene.control.MenuItem();
             deleteSshItem.textProperty().bind(I18n.bind("metadata.delete_item", "Delete"));
             deleteSshItem.setGraphic(IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, IconFactory.dangerColor()));
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
-                    if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(sshConnect)) {
-                        selected.getParent().getChildren().remove(selected);
+                    if (AlertUtil.CustomAlertConfirm(I18n.t("common.hint"),
+                            I18n.t("metadata.confirm.delete_connect", "Confirm delete connection?"))) {
+                        if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(sshConnect)) {
+                            selected.getParent().getChildren().remove(selected);
+                        }
                     }
                 }
             });
+
+            // --- Folder menu items ---
+            javafx.scene.control.MenuItem createSshConnectItem = new javafx.scene.control.MenuItem();
+            createSshConnectItem.textProperty().bind(I18n.bind("metadata.menu.create_connection", "New Connection"));
+            createSshConnectItem.setGraphic(IconFactory.group(IconPaths.METADATA_CREATE_CONNECT_ITEM, 0.6));
+            createSshConnectItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                com.dbboys.ssh.SshConnect newConn = new com.dbboys.ssh.SshConnect();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                    newConn.setParentId(folder.getId());
+                }
+                showSshConnectDialog(newConn, true);
+            });
+
+            javafx.scene.control.MenuItem expandSshFolderItem = new javafx.scene.control.MenuItem();
+            expandSshFolderItem.textProperty().bind(I18n.bind("metadata.menu.expand_default", "Expand"));
+            expandSshFolderItem.setGraphic(IconFactory.group(IconPaths.METADATA_EXPAND_FOLDER_ITEM, 0.5));
+            expandSshFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                    folder.setExpand(1);
+                    com.dbboys.infra.db.LocalDbRepository.updateSshFolder(folder);
+                    selected.setExpanded(true);
+                }
+            });
+
+            javafx.scene.control.MenuItem collapseSshFolderItem = new javafx.scene.control.MenuItem();
+            collapseSshFolderItem.textProperty().bind(I18n.bind("metadata.menu.collapse_default", "Collapse"));
+            collapseSshFolderItem.setGraphic(IconFactory.group(IconPaths.METADATA_FOLD_FOLDER_ITEM, 0.75));
+            collapseSshFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                    folder.setExpand(0);
+                    com.dbboys.infra.db.LocalDbRepository.updateSshFolder(folder);
+                    selected.setExpanded(false);
+                }
+            });
+
+            javafx.scene.control.MenuItem renameSshFolderItem = new javafx.scene.control.MenuItem();
+            renameSshFolderItem.textProperty().bind(I18n.bind("metadata.menu.rename", "Rename"));
+            renameSshFolderItem.setGraphic(IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7));
+            renameSshFolderItem.setOnAction(e -> sshRenameItem());
 
             javafx.scene.control.MenuItem deleteSshFolderItem = new javafx.scene.control.MenuItem();
             deleteSshFolderItem.textProperty().bind(I18n.bind("metadata.delete_item", "Delete Folder"));
@@ -953,22 +1041,63 @@ public class MainController {
                 }
             });
 
-            javafx.scene.control.SeparatorMenuItem sep = new javafx.scene.control.SeparatorMenuItem();
-            sshCtxMenu.getItems().addAll(editSshItem, testSshItem, deleteSshItem, sep, deleteSshFolderItem);
+            // Right-click: walk up from event target to find the TreeItem, select it,
+            // then manually show the context menu (same pattern as database tree).
+            sshTreeView.setOnContextMenuRequested(event -> {
+                // Walk up from event target to find TreeCell's TreeItem
+                javafx.scene.Node node = null;
+                if (event.getTarget() instanceof javafx.scene.Node) {
+                    node = (javafx.scene.Node) event.getTarget();
+                }
+                // Climb up the scene graph to find a TreeCell
+                javafx.scene.Node current = node;
+                while (current != null) {
+                    if (current instanceof javafx.scene.control.TreeCell) {
+                        break;
+                    }
+                    current = current.getParent();
+                }
+                // If we found a TreeCell, extract its TreeItem and select it
+                if (current instanceof javafx.scene.control.TreeCell) {
+                    javafx.scene.control.TreeCell<?> cell = (javafx.scene.control.TreeCell<?>) current;
+                    Object treeItemObj = cell.getTreeItem();
+                    if (treeItemObj != null) {
+                        sshTreeView.getSelectionModel().clearSelection();
+                        sshTreeView.getSelectionModel().select((TreeItem<TreeData>) treeItemObj);
+                    }
+                }
 
-            // Show context menu on right-click
-            sshTreeView.setContextMenu(sshCtxMenu);
-
-            // Dynamically enable/disable menu items based on selection
-            sshCtxMenu.setOnShowing(e -> {
+                // Build menu based on the (now selected) item
+                sshCtxMenu.getItems().clear();
                 TreeItem<TreeData> sel = sshTreeView.getSelectionModel().getSelectedItem();
                 boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.ssh.SshConnect;
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
-                editSshItem.setVisible(isConnection);
-                testSshItem.setVisible(isConnection);
-                deleteSshItem.setVisible(isConnection);
-                sep.setVisible(isConnection);
-                deleteSshFolderItem.setVisible(isFolder);
+
+                // New Folder is always shown
+                sshCtxMenu.getItems().add(newSshFolderItem);
+
+                if (isConnection) {
+                    sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+                    sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem, testSshItem,
+                            moveSshItem, renameSshItem,
+                            new javafx.scene.control.SeparatorMenuItem(),
+                            deleteSshItem);
+                    moveSshItem.setDisable(sshTreeView.getRoot().getChildren().size() <= 1);
+                } else if (isFolder) {
+                    com.dbboys.model.SshFolder folder = (com.dbboys.model.SshFolder) sel.getValue();
+                    sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+                    sshCtxMenu.getItems().addAll(createSshConnectItem, renameSshFolderItem);
+                    expandSshFolderItem.setDisable(folder.getExpand() == 1);
+                    collapseSshFolderItem.setDisable(folder.getExpand() != 1);
+                    sshCtxMenu.getItems().addAll(expandSshFolderItem, collapseSshFolderItem);
+                    deleteSshFolderItem.setDisable(sshTreeView.getRoot().getChildren().size() <= 1);
+                    sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+                    sshCtxMenu.getItems().add(deleteSshFolderItem);
+                }
+
+                if (!sshCtxMenu.getItems().isEmpty()) {
+                    sshCtxMenu.show(sshTreeView, event.getScreenX(), event.getScreenY());
+                }
             });
 
         } catch (Exception ex) {
@@ -1042,9 +1171,44 @@ public class MainController {
     }
 
     private void showSshConnectDialog(com.dbboys.ssh.SshConnect sshConnect, boolean isNew) {
+        int oldParentId = sshConnect.getParentId();
         SshConnectDialogController dlgCtrl = new SshConnectDialogController(sshConnect, isNew);
-        if (dlgCtrl.showAndWait() && isNew) {
-            addSshToTree(sshConnect);
+        if (dlgCtrl.showAndWait()) {
+            // Re-parent the tree item if the folder changed (edit case)
+            if (!isNew && sshConnect.getParentId() != oldParentId) {
+                for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
+                    if (child.getValue() instanceof com.dbboys.model.SshFolder f
+                            && f.getId() == oldParentId) {
+                        // Find and remove the item from old folder
+                        TreeItem<TreeData> toRemove = null;
+                        for (TreeItem<TreeData> conn : child.getChildren()) {
+                            if (conn.getValue() instanceof com.dbboys.ssh.SshConnect sc
+                                    && sc.getId() == sshConnect.getId()) {
+                                toRemove = conn;
+                                break;
+                            }
+                        }
+                        if (toRemove != null) {
+                            child.getChildren().remove(toRemove);
+                            // Add to new folder
+                            for (TreeItem<TreeData> target : sshTreeView.getRoot().getChildren()) {
+                                if (target.getValue() instanceof com.dbboys.model.SshFolder tf
+                                        && tf.getId() == sshConnect.getParentId()) {
+                                    target.getChildren().add(toRemove);
+                                    if (!target.isExpanded()) {
+                                        target.setExpanded(true);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            if (isNew) {
+                addSshToTree(sshConnect);
+            }
         }
         sshTreeView.refresh();
     }
@@ -1067,6 +1231,118 @@ public class MainController {
             }
         } else {
             sshTreeView.getRoot().getChildren().add(newItem);
+        }
+    }
+
+    /** Move SSH connection to a different folder (matching database connection "Move To"). */
+    private void sshMoveConnection() {
+        TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.ssh.SshConnect sc)) {
+            return;
+        }
+
+        HBox hbox = new HBox();
+        hbox.getChildren().add(new Label(I18n.t("metadata.dialog.move_connection.target", "请选择移动到  ")));
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        ChoiceBox<TreeData> choiceBox = new ChoiceBox<>();
+        List<TreeData> list = new ArrayList<>();
+        for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
+            if (treeItem.getValue() instanceof com.dbboys.model.SshFolder f
+                    && f.getId() != sc.getParentId()) {
+                list.add(treeItem.getValue());
+            }
+        }
+        if (list.isEmpty()) {
+            AlertUtil.CustomAlert(I18n.t("common.hint"), I18n.t("metadata.notice.no_target_folder", "No other folder available."));
+            return;
+        }
+        choiceBox.setItems(FXCollections.observableArrayList(list));
+        choiceBox.getSelectionModel().select(0);
+        hbox.getChildren().add(choiceBox);
+
+        ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                I18n.t("metadata.dialog.move_connection.title", "移动连接"),
+                hbox, 430, 180, buttonTypeOk, buttonTypeCancel);
+        choiceBox.setPrefWidth(150);
+        choiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n instanceof com.dbboys.model.SshFolder f) {
+                sc.setParentId(f.getId());
+            }
+        });
+
+        if (dialog.showAndWait() == buttonTypeOk) {
+            com.dbboys.infra.db.LocalDbRepository.updateSsh(sc);
+            selected.getParent().getChildren().remove(selected);
+            // Add to target folder
+            for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
+                if (child.getValue() instanceof com.dbboys.model.SshFolder f
+                        && f.getId() == sc.getParentId()) {
+                    child.getChildren().add(selected);
+                    if (!child.isExpanded()) {
+                        child.setExpanded(true);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Rename the selected SSH connect or folder. */
+    private void sshRenameItem() {
+        TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+        TreeData data = selected.getValue();
+        if (data == null) {
+            return;
+        }
+        if (data instanceof com.dbboys.ssh.SshConnect sc) {
+            HBox hbox = new HBox();
+            hbox.getChildren().add(new Label(I18n.t("metadata.dialog.rename.title", "Enter new name") + "  "));
+            hbox.setAlignment(Pos.CENTER_LEFT);
+            TextField textField = new TextField(sc.getName());
+            textField.setPrefWidth(200);
+            hbox.getChildren().add(textField);
+
+            ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+            ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+            AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                    I18n.t("metadata.menu.rename", "Rename"),
+                    hbox, 420, 180, btnOk, btnCancel);
+            Button okBtn = dlg.getButton(btnOk);
+            okBtn.setDisable(textField.getText().isBlank());
+            textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+
+            if (dlg.showAndWait() == btnOk) {
+                sc.setName(textField.getText());
+                com.dbboys.infra.db.LocalDbRepository.updateSsh(sc);
+                sshTreeView.refresh();
+            }
+        } else if (data instanceof com.dbboys.model.SshFolder folder) {
+            HBox hbox = new HBox();
+            hbox.getChildren().add(new Label(I18n.t("metadata.dialog.rename.title", "Enter new name") + "  "));
+            hbox.setAlignment(Pos.CENTER_LEFT);
+            TextField textField = new TextField(folder.getName());
+            textField.setPrefWidth(200);
+            hbox.getChildren().add(textField);
+
+            ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+            ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+            AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                    I18n.t("metadata.menu.rename", "Rename"),
+                    hbox, 420, 180, btnOk, btnCancel);
+            Button okBtn = dlg.getButton(btnOk);
+            okBtn.setDisable(textField.getText().isBlank());
+            textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+
+            if (dlg.showAndWait() == btnOk) {
+                folder.setName(textField.getText());
+                com.dbboys.infra.db.LocalDbRepository.updateSshFolder(folder);
+                sshTreeView.refresh();
+            }
         }
     }
 
