@@ -21,11 +21,6 @@
         </Button>
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
-        <Button fx:id="clearButton" styleClass="custom-button" focusTraversable="false">
-            <tooltip>
-                <Tooltip />
-            </tooltip>
-        </Button>
     </HBox>
     <StackPane VBox.vgrow="ALWAYS">
         <VirtualizedScrollPane fx:id="terminalScrollPane" VBox.vgrow="ALWAYS">

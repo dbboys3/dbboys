@@ -40,8 +40,6 @@ public class SshTabController {
     @FXML
     public Button disconnectButton;
     @FXML
-    public Button clearButton;
-    @FXML
     public Label connectionLabel;
     @FXML
     public VBox sshTab;
@@ -59,19 +57,16 @@ public class SshTabController {
         // Icons
         connectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.GREEN));
         disconnectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.RED));
-        clearButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.6));
 
         // Tooltips
         connectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.connect", "Connect")));
         disconnectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.disconnect", "Disconnect")));
-        clearButton.setTooltip(new Tooltip(I18n.t("ssh.tab.clear_output", "Clear")));
 
         disconnectButton.setDisable(true);
 
         // Connect / disconnect buttons
         connectButton.setOnAction(e -> doConnect());
         disconnectButton.setOnAction(e -> doDisconnect());
-        clearButton.setOnAction(e -> terminalArea.clear());
 
         // Terminal area: monospace, dark background, read-only appearance with interactive input
         terminalArea.setEditable(true);
@@ -87,15 +82,23 @@ public class SshTabController {
                 if (terminalArea.getCaretPosition() <= inputStartPosition) {
                     event.consume();
                 }
-            } else if (event.getCode() == KeyCode.LEFT || event.getCode() == KeyCode.UP) {
-                // Don't allow moving cursor before the input start position
-                if (terminalArea.getCaretPosition() <= inputStartPosition) {
-                    event.consume();
-                }
+            } else if (event.getCode() == KeyCode.LEFT || event.getCode() == KeyCode.UP
+                    || event.getCode() == KeyCode.RIGHT || event.getCode() == KeyCode.DOWN
+                    || event.getCode() == KeyCode.PAGE_UP || event.getCode() == KeyCode.PAGE_DOWN) {
+                // Block all arrow key navigation — keep cursor locked
+                event.consume();
             } else if (event.getCode() == KeyCode.HOME) {
                 terminalArea.moveTo(inputStartPosition);
                 event.consume();
+            } else if (event.getCode() == KeyCode.END) {
+                terminalArea.moveTo(terminalArea.getLength());
+                event.consume();
             }
+        });
+
+        // Disable mouse click cursor movement: always move cursor to end after any mouse click
+        terminalArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
         });
 
         // Always keep cursor at the end (prevent arbitrary cursor movement)
