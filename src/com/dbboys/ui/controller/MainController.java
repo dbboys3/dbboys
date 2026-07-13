@@ -20,6 +20,7 @@ import com.dbboys.model.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
@@ -876,7 +877,12 @@ public class MainController {
             java.util.List<com.dbboys.ssh.SshConnect> connections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
 
             for (com.dbboys.model.SshFolder folder : folders) {
-                TreeItem<TreeData> folderItem = new TreeItem<>(folder);
+                TreeItem<TreeData> folderItem = new TreeItem<>(folder) {
+                    @Override
+                    public boolean isLeaf() {
+                        return false;
+                    }
+                };
                 folderItem.setExpanded(folder.getExpand() == 1);
                 rootItem.getChildren().add(folderItem);
                 for (com.dbboys.ssh.SshConnect sc : connections) {
@@ -899,8 +905,8 @@ public class MainController {
                 }
             });
 
-            // Context menu items
-            javafx.scene.control.ContextMenu sshCtxMenu = new javafx.scene.control.ContextMenu();
+            // Context menu (use CustomContextMenu for consistent width)
+            javafx.scene.control.ContextMenu sshCtxMenu = new com.dbboys.ui.component.CustomContextMenu();
 
             // --- Always-visible item ---
             javafx.scene.control.MenuItem newSshFolderItem = new javafx.scene.control.MenuItem();
@@ -1073,11 +1079,7 @@ public class MainController {
                 boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.ssh.SshConnect;
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
 
-                // New Folder is always shown
-                sshCtxMenu.getItems().add(newSshFolderItem);
-
                 if (isConnection) {
-                    sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
                     sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem, testSshItem,
                             moveSshItem, renameSshItem,
                             new javafx.scene.control.SeparatorMenuItem(),
@@ -1085,7 +1087,6 @@ public class MainController {
                     moveSshItem.setDisable(sshTreeView.getRoot().getChildren().size() <= 1);
                 } else if (isFolder) {
                     com.dbboys.model.SshFolder folder = (com.dbboys.model.SshFolder) sel.getValue();
-                    sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
                     sshCtxMenu.getItems().addAll(createSshConnectItem, renameSshFolderItem);
                     expandSshFolderItem.setDisable(folder.getExpand() == 1);
                     collapseSshFolderItem.setDisable(folder.getExpand() != 1);
@@ -1093,6 +1094,9 @@ public class MainController {
                     deleteSshFolderItem.setDisable(sshTreeView.getRoot().getChildren().size() <= 1);
                     sshCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
                     sshCtxMenu.getItems().add(deleteSshFolderItem);
+                } else {
+                    // Right-click on empty area: only show New Folder
+                    sshCtxMenu.getItems().add(newSshFolderItem);
                 }
 
                 if (!sshCtxMenu.getItems().isEmpty()) {
@@ -1141,7 +1145,12 @@ public class MainController {
             folder.setName(textField.getText());
             folder.setExpand(1);
             com.dbboys.infra.db.LocalDbRepository.createSshFolder(folder);
-            TreeItem<TreeData> item = new TreeItem<>(folder);
+            TreeItem<TreeData> item = new TreeItem<>(folder) {
+                @Override
+                public boolean isLeaf() {
+                    return false;
+                }
+            };
             item.setExpanded(true);
             sshTreeView.getRoot().getChildren().add(item);
         }
@@ -1244,33 +1253,37 @@ public class MainController {
         HBox hbox = new HBox();
         hbox.getChildren().add(new Label(I18n.t("metadata.dialog.move_connection.target", "请选择移动到  ")));
         hbox.setAlignment(Pos.CENTER_LEFT);
-        ChoiceBox<TreeData> choiceBox = new ChoiceBox<>();
-        List<TreeData> list = new ArrayList<>();
+        ChoiceBox<com.dbboys.model.SshFolder> choiceBox = new ChoiceBox<>();
+        ObservableList<com.dbboys.model.SshFolder> folderList = FXCollections.observableArrayList();
         for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
             if (treeItem.getValue() instanceof com.dbboys.model.SshFolder f
                     && f.getId() != sc.getParentId()) {
-                list.add(treeItem.getValue());
+                folderList.add(f);
             }
         }
-        if (list.isEmpty()) {
+        if (folderList.isEmpty()) {
             AlertUtil.CustomAlert(I18n.t("common.hint"), I18n.t("metadata.notice.no_target_folder", "No other folder available."));
             return;
         }
-        choiceBox.setItems(FXCollections.observableArrayList(list));
+        choiceBox.setItems(folderList);
         choiceBox.getSelectionModel().select(0);
+        choiceBox.setPrefWidth(150);
         hbox.getChildren().add(choiceBox);
+
+        // Set the target folder id into the SshConnect on selection change
+        choiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n != null) {
+                sc.setParentId(n.getId());
+            }
+        });
+        // Also set it immediately for the default selection
+        sc.setParentId(choiceBox.getSelectionModel().getSelectedItem().getId());
 
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
                 I18n.t("metadata.dialog.move_connection.title", "移动连接"),
                 hbox, 430, 180, buttonTypeOk, buttonTypeCancel);
-        choiceBox.setPrefWidth(150);
-        choiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
-            if (n instanceof com.dbboys.model.SshFolder f) {
-                sc.setParentId(f.getId());
-            }
-        });
 
         if (dialog.showAndWait() == buttonTypeOk) {
             com.dbboys.infra.db.LocalDbRepository.updateSsh(sc);

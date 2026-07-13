@@ -52,6 +52,8 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
 
     private void renderSshFolder(TreeData item) {
         javafx.scene.control.TreeItem<TreeData> treeItem = getTreeItem();
+        // Always show disclosure arrow for folders (even empty ones),
+        // matching ConnectFolder behavior in TreeViewBuilder.createTreeItem().
         if (treeItem != null && treeItem.isExpanded()) {
             nodeIcon.setContent(IconPaths.TREECELL_CONNECT_FOLDER_OPEN);
             nodeIcon.setScaleX(0.62);
