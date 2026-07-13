@@ -899,9 +899,9 @@ public class MainController {
             // Apply CustomSshTreeCell for SSH-specific rendering
             sshTreeView.setCellFactory(param -> new com.dbboys.ui.component.CustomSshTreeCell());
 
-            // Double-click to open SSH terminal tab
+            // Double-click (left button only) to open SSH terminal tab
             sshTreeView.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2) {
+                if (event.getButton().equals(javafx.scene.input.MouseButton.PRIMARY) && event.getClickCount() == 2) {
                     TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                     if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
                         TabpaneUtil.addCustomSshTab(sshConnect);

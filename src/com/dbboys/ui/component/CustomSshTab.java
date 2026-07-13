@@ -60,9 +60,6 @@ public class CustomSshTab extends CustomTab {
     @Override
     protected void toggleMaximize() {
         super.toggleMaximize();
-        if (controller != null && controller.splitPane != null) {
-            // Same pattern as CustomSqlTab for vertical split adjustment
-        }
     }
 
     @Override

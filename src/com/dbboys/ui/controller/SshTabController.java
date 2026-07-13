@@ -4,14 +4,14 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
 import com.dbboys.ssh.SshConnect;
-import com.dbboys.ui.component.CustomSqlEditCodeArea;
+import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
+import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.Session;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
-import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
@@ -21,99 +21,104 @@ import javafx.scene.paint.Color;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.concurrent.Future;
+import java.io.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Controller for the SSH terminal tab (SshTab.fxml).
- * Manages SSH session lifecycle and command execution.
+ * Uses a continuous shell channel (interactive terminal mode) �?
+ * mimicking mainstream SSH clients. Enter key sends the current input line
+ * to the shell, output is streamed back in real time.
  */
 public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
 
     @FXML
-    public CustomSqlEditCodeArea commandInput;
-    @FXML
-    public CustomSqlEditCodeArea outputArea;
+    public CustomInlineCssTextArea terminalArea;
     @FXML
     public Button connectButton;
     @FXML
     public Button disconnectButton;
     @FXML
-    public Button runButton;
-    @FXML
-    public Button stopButton;
+    public Button clearButton;
     @FXML
     public Label connectionLabel;
-    @FXML
-    public SplitPane splitPane;
     @FXML
     public VBox sshTab;
 
     private SshConnect sshConnect;
     private Session session;
-    private Future<?> currentExecution;
+    private ChannelShell shellChannel;
+    private OutputStream shellOut;
     private final StringProperty connectStatus = new SimpleStringProperty();
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private Thread readThread;
+    private int inputStartPosition = 0; // position in terminalArea where current input line starts
 
     public void initialize() {
         // Icons
         connectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.GREEN));
         disconnectButton.setGraphic(IconFactory.group(IconPaths.CONNECTION_LINK, 0.65, Color.RED));
-        runButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.6, Color.GREEN));
-        stopButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.6, Color.RED));
+        clearButton.setGraphic(IconFactory.group(IconPaths.SQL_STOP, 0.6));
 
         // Tooltips
         connectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.connect", "Connect")));
         disconnectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.disconnect", "Disconnect")));
-        runButton.setTooltip(new Tooltip(I18n.t("ssh.tab.execute", "Execute (Ctrl+Enter)")));
-        stopButton.setTooltip(new Tooltip(I18n.t("ssh.tab.stop", "Stop")));
+        clearButton.setTooltip(new Tooltip(I18n.t("ssh.tab.clear_output", "Clear")));
 
         disconnectButton.setDisable(true);
-        stopButton.setDisable(true);
 
-        // Connect button
+        // Connect / disconnect buttons
         connectButton.setOnAction(e -> doConnect());
-
-        // Disconnect button
         disconnectButton.setOnAction(e -> doDisconnect());
+        clearButton.setOnAction(e -> terminalArea.clear());
 
-        // Run button
-        runButton.setOnAction(e -> executeCommand());
+        // Terminal area: monospace, dark background, read-only appearance with interactive input
+        terminalArea.setEditable(true);
+        terminalArea.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; -fx-font-size: 13px;");
 
-        // Stop button
-        stopButton.setOnAction(e -> stopExecution());
-
-        // Output area: read-only, monospace-like styling
-        outputArea.setEditable(false);
-
-        // Ctrl+Enter handler on command input
-        commandInput.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
-            if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
-                executeCommand();
+        // Enter key sends the current input line (cursor always at end)
+        terminalArea.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                sendCurrentLine();
                 event.consume();
+            } else if (event.getCode() == KeyCode.BACK_SPACE) {
+                // Don't allow deleting before the input start position
+                if (terminalArea.getCaretPosition() <= inputStartPosition) {
+                    event.consume();
+                }
+            } else if (event.getCode() == KeyCode.LEFT || event.getCode() == KeyCode.UP) {
+                // Don't allow moving cursor before the input start position
+                if (terminalArea.getCaretPosition() <= inputStartPosition) {
+                    event.consume();
+                }
+            } else if (event.getCode() == KeyCode.HOME) {
+                terminalArea.moveTo(inputStartPosition);
+                event.consume();
+            }
+        });
+
+        // Always keep cursor at the end (prevent arbitrary cursor movement)
+        terminalArea.caretPositionProperty().addListener((obs, o, n) -> {
+            if (n.intValue() < inputStartPosition) {
+                Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
             }
         });
 
         // Connection status binding
         connectStatus.addListener((obs, o, n) -> connectionLabel.setText(n));
         connectStatus.set(I18n.t("ssh.tab.disconnected", "Disconnected"));
-
-        // Default split pane divider
-        splitPane.setDividerPositions(0.6);
-
-        // Output area context menu for clearing
-        ContextMenu outputMenu = new ContextMenu();
-        MenuItem clearItem = new MenuItem(I18n.t("ssh.tab.clear_output", "Clear Output"));
-        clearItem.setOnAction(e -> outputArea.clear());
-        outputMenu.getItems().add(clearItem);
-        outputArea.setContextMenu(outputMenu);
     }
 
     /**
      * Initialize with an SSH connection configuration.
+     * Automatically connects on open.
      */
     public void init(SshConnect sc) {
         this.sshConnect = sc;
         connectStatus.set(sc.getUsername() + "@" + sc.getHost() + ":" + sc.getPort());
+        // Auto-connect
+        doConnect();
     }
 
     // ---- Connection management ----
@@ -122,18 +127,35 @@ public class SshTabController {
         if (sshConnect == null) return;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
+        appendTerminal("Connecting to " + sshConnect.getUsername() + "@"
+                + sshConnect.getHost() + ":" + sshConnect.getPort() + "...\n");
+
         AppExecutor.runAsync(() -> {
             try {
                 session = JschUtil.getSshSession(sshConnect);
+                shellChannel = (ChannelShell) session.openChannel("shell");
+                shellChannel.setPty(true);
+
+                // Connect shell and get streams
+                shellChannel.connect();
+                shellOut = shellChannel.getOutputStream();
+                InputStream shellIn = shellChannel.getInputStream();
+
+                running.set(true);
+                inputStartPosition = terminalArea.getLength();
+
+                // Start reading thread
+                readThread = new Thread(() -> readShellOutput(shellIn), "ssh-shell-reader");
+                readThread.setDaemon(true);
+                readThread.start();
+
                 Platform.runLater(() -> {
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connected", "Connected") + "]");
-                    appendOutput("[" + I18n.t("ssh.tab.connected", "Connected") + " to "
-                            + sshConnect.getUsername() + "@" + sshConnect.getHost()
-                            + ":" + sshConnect.getPort() + "]\n");
+                    appendTerminal(I18n.t("ssh.tab.connected", "Connected") + "\n");
                 });
             } catch (Exception ex) {
                 log.error("SSH connect failed", ex);
@@ -143,15 +165,24 @@ public class SshTabController {
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connect_failed", "Connect Failed") + "]");
-                    appendOutput("[ERROR] " + ex.getMessage() + "\n");
+                    appendTerminal("[ERROR] " + ex.getMessage() + "\n");
                 });
             }
         });
     }
 
     private void doDisconnect() {
+        running.set(false);
+        if (readThread != null) {
+            readThread.interrupt();
+        }
+        if (shellChannel != null && shellChannel.isConnected()) {
+            shellChannel.disconnect();
+        }
         JschUtil.disconnectSession(session);
         session = null;
+        shellChannel = null;
+        shellOut = null;
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
         if (sshConnect != null) {
@@ -159,98 +190,76 @@ public class SshTabController {
                     + ":" + sshConnect.getPort() + " ["
                     + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
         }
-        appendOutput("[" + I18n.t("ssh.tab.disconnected", "Disconnected") + "]\n");
+        appendTerminal("\n--- " + I18n.t("ssh.tab.disconnected", "Disconnected") + " ---\n");
     }
 
-    // ---- Command execution ----
+    // ---- Shell communication ----
 
-    private void executeCommand() {
-        if (session == null || !session.isConnected()) {
-            appendOutput("[ERROR] " + I18n.t("ssh.tab.not_connected",
-                    "Not connected to SSH server.") + "\n");
+    /**
+     * Continuously reads from the shell's input stream and appends to the terminal.
+     */
+    private void readShellOutput(InputStream shellIn) {
+        byte[] buf = new byte[8192];
+        try {
+            int len;
+            while (running.get() && (len = shellIn.read(buf)) != -1) {
+                String output = new String(buf, 0, len, "UTF-8");
+                Platform.runLater(() -> {
+                    appendTerminal(output);
+                    // Update the input start position to always be at the end
+                    inputStartPosition = terminalArea.getLength();
+                    // Move cursor to end
+                    terminalArea.moveTo(inputStartPosition);
+                });
+            }
+        } catch (IOException e) {
+            if (running.get()) {
+                log.error("Shell read error", e);
+                Platform.runLater(() -> appendTerminal("\n[ERROR] " + e.getMessage() + "\n"));
+            }
+        }
+    }
+
+    /**
+     * Sends the current input line (text after inputStartPosition) to the shell.
+     */
+    private void sendCurrentLine() {
+        if (shellOut == null || !running.get()) {
+            appendTerminal("\n[ERROR] " + I18n.t("ssh.tab.not_connected",
+                    "Not connected.") + "\n");
             return;
         }
 
-        // Get text: selected text, or current line
-        String command = commandInput.getSelectedText();
-        if (command == null || command.isEmpty()) {
-            // Get current line at caret
-            int caretPos = commandInput.getCaretPosition();
-            String text = commandInput.getText();
-            if (text == null || text.isEmpty()) return;
+        String fullText = terminalArea.getText();
+        if (fullText == null || fullText.isEmpty()) return;
 
-            // Find line boundaries
-            int lineStart = text.lastIndexOf('\n', caretPos - 1) + 1;
-            int lineEnd = text.indexOf('\n', caretPos);
-            if (lineEnd == -1) lineEnd = text.length();
-            command = text.substring(lineStart, lineEnd).trim();
+        // Get the current line text (from inputStartPosition to end)
+        String inputLine = "";
+        if (inputStartPosition < fullText.length()) {
+            inputLine = fullText.substring(inputStartPosition);
+        }
+
+        // Append newline to terminal
+        appendTerminal("\n");
+
+        try {
+            // Send the input + newline to the shell
+            shellOut.write((inputLine + "\n").getBytes("UTF-8"));
+            shellOut.flush();
+        } catch (IOException e) {
+            log.error("Failed to send command", e);
+            appendTerminal("[ERROR] " + e.getMessage() + "\n");
+        }
+    }
+
+    // ---- Terminal helpers ----
+
+    private void appendTerminal(String text) {
+        if (Platform.isFxApplicationThread()) {
+            terminalArea.appendText(text);
         } else {
-            command = command.trim();
+            Platform.runLater(() -> terminalArea.appendText(text));
         }
-
-        if (command.isEmpty()) return;
-
-        final String cmd = command;
-        appendOutput("$ " + cmd + "\n");
-
-        runButton.setDisable(true);
-        stopButton.setDisable(false);
-
-        Task<String> task = new Task<>() {
-            @Override
-            protected String call() throws Exception {
-                return JschUtil.executeCommand(session, cmd, true);
-            }
-        };
-
-        task.setOnSucceeded(e -> {
-            String result = task.getValue();
-            if (result != null && !result.isEmpty()) {
-                appendOutput(result + "\n");
-            }
-            runButton.setDisable(false);
-            stopButton.setDisable(true);
-        });
-
-        task.setOnFailed(e -> {
-            Throwable ex = task.getException();
-            log.error("SSH command failed", ex);
-            appendOutput("[ERROR] " + ex.getMessage() + "\n");
-            runButton.setDisable(false);
-            stopButton.setDisable(true);
-        });
-
-        task.setOnCancelled(e -> {
-            appendOutput("[STOPPED]\n");
-            runButton.setDisable(false);
-            stopButton.setDisable(true);
-        });
-
-        currentExecution = AppExecutor.runTask(task);
-    }
-
-    private void stopExecution() {
-        if (currentExecution != null && !currentExecution.isDone()) {
-            currentExecution.cancel(true);
-            // Force disconnect and reconnect to kill the running command
-            if (session != null && session.isConnected()) {
-                try {
-                    session.disconnect();
-                } catch (Exception ignored) {}
-                session = null;
-            }
-            appendOutput("[" + I18n.t("ssh.tab.stopped", "Stopped") + "]\n");
-        }
-        runButton.setDisable(false);
-        stopButton.setDisable(true);
-        connectButton.setDisable(false);
-        disconnectButton.setDisable(true);
-    }
-
-    // ---- Output helpers ----
-
-    private void appendOutput(String text) {
-        Platform.runLater(() -> outputArea.appendText(text));
     }
 
     // ---- Cleanup ----
@@ -259,7 +268,6 @@ public class SshTabController {
      * Called when the tab is closed. Disconnects the SSH session.
      */
     public void closeSession() {
-        stopExecution();
-        JschUtil.disconnectSession(session);
+        doDisconnect();
     }
 }
