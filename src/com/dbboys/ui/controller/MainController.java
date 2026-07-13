@@ -944,10 +944,19 @@ public class MainController {
                     com.dbboys.ssh.SshConnect copy = new com.dbboys.ssh.SshConnect();
                     // Generate unique copy name
                     String baseName = orig.getName();
-                    String copyName = baseName + " - Copy";
+                    String copyName = baseName + "_1";
                     int suffix = 2;
-                    while (sshNameExistsInTree(copyName)) {
-                        copyName = baseName + " - Copy (" + suffix + ")";
+                    java.util.List<com.dbboys.ssh.SshConnect> allSshInDb = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
+                    while (true) {
+                        boolean nameExists = false;
+                        for (com.dbboys.ssh.SshConnect existing : allSshInDb) {
+                            if (existing.getName().equals(copyName)) {
+                                nameExists = true;
+                                break;
+                            }
+                        }
+                        if (!nameExists) break;
+                        copyName = baseName + "_" + suffix;
                         suffix++;
                     }
                     copy.setName(copyName);
@@ -963,15 +972,6 @@ public class MainController {
                 }
             });
 
-            javafx.scene.control.MenuItem testSshItem = MenuItemUtil.createMenuItemI18n(
-                    "createconnect.button.test",
-                    IconFactory.group(IconPaths.CONNECTION_LINK, 0.7, 0.7));
-            testSshItem.setOnAction(e -> {
-                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
-                    testSshConnection(sshConnect);
-                }
-            });
 
             javafx.scene.control.MenuItem moveSshItem = MenuItemUtil.createMenuItemI18n(
                     "metadata.menu.move_to",
@@ -984,7 +984,7 @@ public class MainController {
             renameSshItem.setOnAction(e -> sshRenameItem());
 
             javafx.scene.control.MenuItem deleteSshItem = MenuItemUtil.createMenuItemI18n(
-                    "metadata.delete_item",
+                    "metadata.menu.delete",
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
@@ -1041,7 +1041,7 @@ public class MainController {
             renameSshFolderItem.setOnAction(e -> sshRenameItem());
 
             javafx.scene.control.MenuItem deleteSshFolderItem = MenuItemUtil.createMenuItemI18n(
-                    "metadata.delete_item",
+                    "metadata.menu.delete",
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteSshFolderItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
@@ -1090,7 +1090,7 @@ public class MainController {
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
 
                 if (isConnection) {
-                    sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem, testSshItem,
+                    sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem,
                             moveSshItem, renameSshItem,
                             new javafx.scene.control.SeparatorMenuItem(),
                             deleteSshItem);
@@ -1119,18 +1119,6 @@ public class MainController {
     }
 
 
-    /** Check if an SSH connection name already exists in the tree (across all folders). */
-    private boolean sshNameExistsInTree(String name) {
-        for (TreeItem<TreeData> folderChild : sshTreeView.getRoot().getChildren()) {
-            for (TreeItem<TreeData> connChild : folderChild.getChildren()) {
-                if (connChild.getValue() instanceof com.dbboys.ssh.SshConnect existing
-                        && existing.getName().equals(name)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     public void createSshLeaf() {
         // Default to first folder, like database connections do
