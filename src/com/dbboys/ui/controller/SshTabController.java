@@ -23,6 +23,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.fxmisc.flowless.VirtualizedScrollPane;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,6 +56,7 @@ public class SshTabController {
     @FXML public Button disconnectButton;
     @FXML public Label connectionLabel;
     @FXML public VBox sshTab;
+    @FXML public VirtualizedScrollPane<CustomInlineCssTextArea> terminalScrollPane;
 
     // ---- State ----
 
@@ -524,7 +526,12 @@ public class SshTabController {
 
     /** Always scroll to the very bottom. */
     private void scrollToBottom() {
-        Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
+        Platform.runLater(() -> {
+            terminalArea.moveTo(terminalArea.getLength());
+            if (terminalScrollPane != null) {
+                terminalScrollPane.scrollYToPixel(Double.MAX_VALUE);
+            }
+        });
     }
 
     // ---- PTY resize ----
