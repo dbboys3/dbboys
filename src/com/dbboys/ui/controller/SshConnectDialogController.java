@@ -324,6 +324,13 @@ public class SshConnectDialogController {
                 return;
             }
             setValues();
+            // Check for duplicate SSH connection name
+            if (sshNameExists(sshConnect.getName(), sshConnect.getId())) {
+                AlertUtil.CustomAlert(I18n.t("common.error"),
+                        String.format(I18n.t("createconnect.error.name_exists"), sshConnect.getName()));
+                event.consume();
+                return;
+            }
             doCommit();
             event.consume();
         });
@@ -438,7 +445,6 @@ public class SshConnectDialogController {
         Task<Void> task = new Task<>() {
             @Override
             protected Void call() throws Exception {
-                long start = System.currentTimeMillis();
                 try {
                     int port = Integer.parseInt(sshConnect.getPort());
                     var tunnel = SshTunnelUtil.createTunnel(
@@ -481,6 +487,17 @@ public class SshConnectDialogController {
         }
         committed = true;
         dialogStage.close();
+    }
+
+    /** Check if an SSH connection name already exists (across all folders, excluding self). */
+    private static boolean sshNameExists(String name, int selfId) {
+        java.util.List<SshConnect> allSsh = LocalDbRepository.getAllSsh();
+        for (SshConnect existing : allSsh) {
+            if (existing.getId() != selfId && name.equals(existing.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- Layout helpers ----

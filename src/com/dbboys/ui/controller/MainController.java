@@ -1121,8 +1121,6 @@ public class MainController {
 
     private void createSshFolder() {
 
-
-
         HBox hbox = new HBox();
         hbox.getChildren().add(new Label(I18n.t("metadata.dialog.create_folder.name", "Enter folder name")));
         hbox.setAlignment(Pos.CENTER_LEFT);
@@ -1137,7 +1135,23 @@ public class MainController {
                 hbox, 420, 180, btnOk, btnCancel);
         Button okBtn = dlg.getButton(btnOk);
         okBtn.setDisable(true);
-        textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+        textField.textProperty().addListener((obs, o, n) -> {
+            textField.setText(n.replace(" ", ""));
+            if (n.isBlank()) {
+                okBtn.setDisable(true);
+            } else {
+                // Check for duplicate folder name
+                boolean exists = false;
+                for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
+                    if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+                            && existing.getName().equals(n)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                okBtn.setDisable(exists);
+            }
+        });
 
 
         if (dlg.showAndWait() == btnOk) {
@@ -1326,8 +1340,27 @@ public class MainController {
                     I18n.t("metadata.menu.rename", "Rename"),
                     hbox, 420, 180, btnOk, btnCancel);
             Button okBtn = dlg.getButton(btnOk);
-            okBtn.setDisable(textField.getText().isBlank());
-            textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+            okBtn.setDisable(true);
+            textField.textProperty().addListener((obs, o, n) -> {
+                textField.setText(n.replace(" ", ""));
+                if (n.isBlank() || n.equals(sc.getName())) {
+                    okBtn.setDisable(true);
+                } else {
+                    // Check for duplicate name across all SSH connections
+                    boolean exists = false;
+                    for (TreeItem<TreeData> folderChild : sshTreeView.getRoot().getChildren()) {
+                        for (TreeItem<TreeData> connChild : folderChild.getChildren()) {
+                            if (connChild.getValue() instanceof com.dbboys.ssh.SshConnect existing
+                                    && existing.getName().equals(n)) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (exists) break;
+                    }
+                    okBtn.setDisable(exists);
+                }
+            });
 
             if (dlg.showAndWait() == btnOk) {
                 sc.setName(textField.getText());
@@ -1348,8 +1381,24 @@ public class MainController {
                     I18n.t("metadata.menu.rename", "Rename"),
                     hbox, 420, 180, btnOk, btnCancel);
             Button okBtn = dlg.getButton(btnOk);
-            okBtn.setDisable(textField.getText().isBlank());
-            textField.textProperty().addListener((obs, o, n) -> okBtn.setDisable(n.isBlank()));
+            okBtn.setDisable(true);
+            textField.textProperty().addListener((obs, o, n) -> {
+                textField.setText(n.replace(" ", ""));
+                if (n.isBlank() || n.equals(folder.getName())) {
+                    okBtn.setDisable(true);
+                } else {
+                    // Check for duplicate folder name
+                    boolean exists = false;
+                    for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
+                        if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+                                && existing.getName().equals(n)) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    okBtn.setDisable(exists);
+                }
+            });
 
             if (dlg.showAndWait() == btnOk) {
                 folder.setName(textField.getText());
@@ -1357,6 +1406,32 @@ public class MainController {
                 sshTreeView.refresh();
             }
         }
+    }
+
+    /** Check if an SSH connection name already exists (excluding the one being edited). */
+    private boolean sshNameExists(com.dbboys.ssh.SshConnect sc) {
+        for (TreeItem<TreeData> folderChild : sshTreeView.getRoot().getChildren()) {
+            for (TreeItem<TreeData> connChild : folderChild.getChildren()) {
+                if (connChild.getValue() instanceof com.dbboys.ssh.SshConnect existing
+                        && existing.getName().equals(sc.getName())
+                        && existing.getId() != sc.getId()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Check if an SSH folder name already exists (excluding the one being edited). */
+    private boolean sshFolderNameExists(com.dbboys.model.SshFolder folder) {
+        for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
+            if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+                    && existing.getName().equals(folder.getName())
+                    && existing.getId() != folder.getId()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void initStatusBar() {
