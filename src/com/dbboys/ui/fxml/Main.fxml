@@ -25,6 +25,8 @@
                         <items>
                             <CustomShortcutMenuItem fx:id="menuFileAddFolder" mnemonicParsing="false" onAction="#createConnectFolder">
                             </CustomShortcutMenuItem>
+                            <CustomShortcutMenuItem fx:id="menuFileAddSshFolder" mnemonicParsing="false" onAction="#createSshConnectFolder">
+                            </CustomShortcutMenuItem>
                             <CustomShortcutMenuItem fx:id="menuFileNewConnection" mnemonicParsing="false" id="fileMenu" onAction="#createConnectLeaf">
                             </CustomShortcutMenuItem>
 

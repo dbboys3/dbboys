@@ -96,6 +96,8 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuFileAddFolder;
     @FXML
+    private CustomShortcutMenuItem menuFileAddSshFolder;
+    @FXML
     private CustomShortcutMenuItem menuFileNewConnection;
     @FXML
     private CustomShortcutMenuItem menuFileDisconnectAll;
@@ -265,6 +267,7 @@ public class MainController {
     private void setupMainIcons() {
         appLogoLabel.setGraphic(IconFactory.imageView(IconPaths.MAIN_LOGO, 18, 18, false));
         menuFileAddFolder.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
+        menuFileAddSshFolder.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
         menuFileNewConnection.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_NEW_CONNECTION, 0.65));
         menuFileDisconnectAll.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_DISCONNECT_ALL, 0.6));
         newSqlFileMenuItem.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_NEW_SQL, 0.55));
@@ -687,7 +690,8 @@ public class MainController {
 
     private void initI18nBindings() {
         bindText(menuFile, "main.menu.file");
-        bindText(menuFileAddFolder, "main.menu.file.add_folder");
+        bindText(menuFileAddFolder, "main.menu.file.add_database_folder");
+        bindText(menuFileAddSshFolder, "main.menu.file.add_ssh_folder");
         bindText(menuFileNewConnection, "main.menu.file.new_connection");
         bindText(menuFileDisconnectAll, "main.menu.file.disconnect_all");
         bindText(newSqlFileMenuItem, "main.menu.file.new_sql");
@@ -910,7 +914,7 @@ public class MainController {
 
             // --- Always-visible item ---
             javafx.scene.control.MenuItem newSshFolderItem = MenuItemUtil.createMenuItemI18n(
-                    "metadata.dialog.create_folder.title",
+                    "main.menu.file.add_ssh_folder",
                     IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65, 0.65));
             newSshFolderItem.setOnAction(e -> createSshFolder());
 
@@ -1161,7 +1165,7 @@ public class MainController {
         ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
-                I18n.t("metadata.dialog.create_folder.title", "New Folder"),
+                I18n.t("main.menu.file.add_ssh_folder", "新建SSH连接分类"),
                 hbox, 420, 180, btnOk, btnCancel);
         Button okBtn = dlg.getButton(btnOk);
         okBtn.setDisable(true);
@@ -1537,10 +1541,16 @@ public class MainController {
         }
     }
 
-    //文件-新建连接分类响应函数
+    //文件-新建数据库连接分类响应函数
 
     public void createConnectFolder() {
         TreeViewUtil.createConnectFolder(databaseMetaTreeView);
+    }
+
+    //文件-新建SSH连接分类响应函数
+
+    public void createSshConnectFolder() {
+        createSshFolder();
     }
 
 
