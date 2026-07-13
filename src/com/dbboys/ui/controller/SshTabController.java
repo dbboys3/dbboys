@@ -25,52 +25,38 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.*;
-import java.util.regex.Pattern;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Controller for the SSH terminal tab (SshTab.fxml).
  * Uses raw keystroke forwarding: every keystroke is sent immediately
  * to the remote shell, and the display is driven entirely by remote
- * echo ¡ª matching mainstream SSH clients (PuTTY, SecureCRT, Termius).
+ * echo â€” matching mainstream SSH clients (PuTTY, SecureCRT, Termius).
  */
 public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
 
-    /** Strips ANSI/VT100 escape sequences from shell output. */
-    private static final Pattern ANSI_PATTERN = Pattern.compile(
-            "\u001B\\[[\\d;]*[A-Za-z]" +           // CSI sequences  e.g. \e[32m, \e[K, \e[A
-            "|\u001B\\][^\\u0007]*\\u0007" +        // OSC sequences terminated by BEL
-            "|\u001B[PX^_].*?\u001B\\\\" +          // DCS / SOS / PM / APC (ST terminated)
-            "|\u001B[^\\[\\]]"                      // single-char escapes  e.g. \e7, \e8
-    );
+    // ---- ANSI / VT100 handling ----
 
-
-    /** Font used for terminal display (must match the CSS style below). */
     private static final Font TERMINAL_FONT = Font.font("Consolas", 13);
-
-    /** Estimated character width for PTY column calculation. */
     private static final double CHAR_WIDTH;
-
-    /** Estimated line height for PTY row calculation. */
     private static final double LINE_HEIGHT;
-
     static {
         Text m = new Text("W");
         m.setFont(TERMINAL_FONT);
         CHAR_WIDTH = m.getLayoutBounds().getWidth();
         LINE_HEIGHT = 13 * 1.4;
     }
-    @FXML
-    public CustomInlineCssTextArea terminalArea;
-    @FXML
-    public Button connectButton;
-    @FXML
-    public Button disconnectButton;
-    @FXML
-    public Label connectionLabel;
-    @FXML
-    public VBox sshTab;
+
+    // ---- FXML injections ----
+
+    @FXML public CustomInlineCssTextArea terminalArea;
+    @FXML public Button connectButton;
+    @FXML public Button disconnectButton;
+    @FXML public Label connectionLabel;
+    @FXML public VBox sshTab;
+
+    // ---- State ----
 
     private SshConnect sshConnect;
     private Session session;
@@ -80,12 +66,11 @@ public class SshTabController {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread readThread;
 
+    // ---- Initialisation ----
+
     public void initialize() {
-        // Icons
         connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.GREEN));
         disconnectButton.setGraphic(IconFactory.group(IconPaths.SSH_DISCONNECT, 0.65, Color.RED));
-
-        // Tooltips
         connectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.connect", "Connect")));
         disconnectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.disconnect", "Disconnect")));
         disconnectButton.setDisable(true);
@@ -93,37 +78,32 @@ public class SshTabController {
         connectButton.setOnAction(e -> doConnect());
         disconnectButton.setOnAction(e -> doDisconnect());
 
-        // Terminal: monospace, editable so KEY_TYPED fires, but we consume events
-        // so typed text is never inserted locally ¡ª only remote echo builds the display.
         terminalArea.setEditable(true);
-        terminalArea.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; -fx-font-size: 13px;");
+        terminalArea.setStyle(
+                "-fx-font-family: 'Consolas','Courier New',monospace; -fx-font-size: 13px;");
 
         setupKeyHandling();
         setupMouseHandling();
 
-        // PTY resize on container size change
         terminalArea.widthProperty().addListener((obs, o, n) -> updatePtySize());
         terminalArea.heightProperty().addListener((obs, o, n) -> updatePtySize());
 
-        // Connection status
         connectStatus.addListener((obs, o, n) -> connectionLabel.setText(n));
         connectStatus.set(I18n.t("ssh.tab.disconnected", "Disconnected"));
     }
 
-    // ======== Keyboard ¡ª raw keystroke forwarding ========
+    // ---- Keyboard â€” raw keystroke forwarding ----
 
     private void setupKeyHandling() {
         /*
-         * KEY_TYPED carries the composed (locale-aware) character for printable keys.
-         * We consume it so the text area never inserts typed text locally;
-         * instead the remote shell echoes it back.
+         * KEY_TYPED â€” printable characters are sent to the remote shell and
+         * never inserted locally. The remote echo builds the display.
          */
         terminalArea.addEventFilter(KeyEvent.KEY_TYPED, event -> {
             if (!running.get() || shellOut == null) return;
             String ch = event.getCharacter();
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
-            // Control characters (0x00-0x1F, DEL) are handled in KEY_PRESSED
             if (c < 0x20 || c == 0x7F) {
                 event.consume();
                 return;
@@ -133,105 +113,82 @@ public class SshTabController {
         });
 
         /*
-         * KEY_PRESSED handles all non?printable keys: function keys, arrows,
-         * control?letter combos, Enter, Backspace, Tab, etc.
+         * KEY_PRESSED â€” nonâ€‘printable keys: arrows, Enter, Backspace, Ctrlâ€‘X, etc.
          */
         terminalArea.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             KeyCode code = event.getCode();
 
-            // When disconnected, allow basic system shortcuts but block everything else
             if (!running.get() || shellOut == null) {
-                if (event.isShortcutDown() &&
-                    (code == KeyCode.C || code == KeyCode.A)) {
-                    return;  // let default copy / select?all through
+                if (event.isShortcutDown()
+                        && (code == KeyCode.C || code == KeyCode.A)) {
+                    return;   // allow copy / selectâ€‘all when disconnected
                 }
                 event.consume();
                 return;
             }
 
-            // Always lock cursor to end on any keystroke
+            // Keep caret at end on every keystroke
             Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
 
-            // Ctrl+Shift+C/V  ¡ª system clipboard integration
+            // Ctrl+Shift+C/V â€” system clipboard
             if (event.isShortcutDown() && event.isShiftDown()) {
-                if (code == KeyCode.C) {
-                    terminalArea.copy();
-                    event.consume();
-                    return;
-                }
-                if (code == KeyCode.V) {
-                    pasteClipboard();
-                    event.consume();
-                    return;
-                }
+                if (code == KeyCode.C) { terminalArea.copy();   event.consume(); return; }
+                if (code == KeyCode.V) { pasteClipboard();      event.consume(); return; }
             }
 
-            // Ctrl+letter ¡ª terminal control characters
+            // Ctrl+letter â€” terminal control chars
             if (event.isControlDown() && !event.isShiftDown()
                     && !event.isAltDown() && !event.isMetaDown()) {
-                // Ctrl+C  ¡ú  copy if selection exists, else SIGINT
                 if (code == KeyCode.C && !terminalArea.getSelectedText().isEmpty()) {
-                    terminalArea.copy();
-                    event.consume();
-                    return;
+                    terminalArea.copy(); event.consume(); return;
                 }
-                // Ctrl+V  ¡ú  paste from clipboard
-                if (code == KeyCode.V) {
-                    pasteClipboard();
-                    event.consume();
-                    return;
-                }
+                if (code == KeyCode.V) { pasteClipboard(); event.consume(); return; }
                 sendControlByte(code);
                 event.consume();
                 return;
             }
 
-            // Special / navigation keys ¡ª send terminal escape sequences
-            if (sendSpecialKey(code)) {
-                event.consume();
-                return;
-            }
+            // Special / navigation keys
+            if (sendSpecialKey(code)) { event.consume(); return; }
 
-            // Printable keys (letter, digit, symbol, space) ¡ª let KEY_TYPED handle them
+            // Printable keys (let KEY_TYPED handle them)
             if (code.isLetterKey() || code.isDigitKey()
                     || code == KeyCode.SPACE || isPunctuationKey(code)) {
                 return;
             }
 
-            // Everything else consumed (e.g. CapsLock, PrintScreen, etc.)
             event.consume();
         });
     }
 
-    /** Send one of the well?known terminal escape sequences. */
     private boolean sendSpecialKey(KeyCode code) {
         switch (code) {
-            case ENTER:       sendToShell("\n");        return true;
-            case BACK_SPACE:  sendToShell("\u007F");    return true;  // DEL
-            case TAB:         sendToShell("\t");        return true;
-            case ESCAPE:      sendToShell("\u001B");    return true;
-            case UP:          sendToShell("\u001B[A");  return true;
-            case DOWN:        sendToShell("\u001B[B");  return true;
-            case RIGHT:       sendToShell("\u001B[C");  return true;
-            case LEFT:        sendToShell("\u001B[D");  return true;
-            case HOME:        sendToShell("\u001B[H");  return true;
-            case END:         sendToShell("\u001B[F");  return true;
-            case DELETE:      sendToShell("\u001B[3~"); return true;
-            case PAGE_UP:     sendToShell("\u001B[5~"); return true;
-            case PAGE_DOWN:   sendToShell("\u001B[6~"); return true;
-            case F1:          sendToShell("\u001BOP");  return true;
-            case F2:          sendToShell("\u001BOQ");  return true;
-            case F3:          sendToShell("\u001BOR");  return true;
-            case F4:          sendToShell("\u001BOS");  return true;
-            case F5:          sendToShell("\u001B[15~"); return true;
-            case F6:          sendToShell("\u001B[17~"); return true;
-            case F7:          sendToShell("\u001B[18~"); return true;
-            case F8:          sendToShell("\u001B[19~"); return true;
-            case F9:          sendToShell("\u001B[20~"); return true;
-            case F10:         sendToShell("\u001B[21~"); return true;
-            case F11:         sendToShell("\u001B[23~"); return true;
-            case F12:         sendToShell("\u001B[24~"); return true;
-            default:          return false;
+            case ENTER:      sendToShell("\n");         return true;
+            case BACK_SPACE: sendToShell("");     return true;  // DEL
+            case TAB:        sendToShell("\t");         return true;
+            case ESCAPE:     sendToShell("");     return true;
+            case UP:         sendToShell("[A");   return true;
+            case DOWN:       sendToShell("[B");   return true;
+            case RIGHT:      sendToShell("[C");   return true;
+            case LEFT:       sendToShell("[D");   return true;
+            case HOME:       sendToShell("[H");   return true;
+            case END:        sendToShell("[F");   return true;
+            case DELETE:     sendToShell("[3~");  return true;
+            case PAGE_UP:    sendToShell("[5~");  return true;
+            case PAGE_DOWN:  sendToShell("[6~");  return true;
+            case F1:  sendToShell("OP");   return true;
+            case F2:  sendToShell("OQ");   return true;
+            case F3:  sendToShell("OR");   return true;
+            case F4:  sendToShell("OS");   return true;
+            case F5:  sendToShell("[15~"); return true;
+            case F6:  sendToShell("[17~"); return true;
+            case F7:  sendToShell("[18~"); return true;
+            case F8:  sendToShell("[19~"); return true;
+            case F9:  sendToShell("[20~"); return true;
+            case F10: sendToShell("[21~"); return true;
+            case F11: sendToShell("[23~"); return true;
+            case F12: sendToShell("[24~"); return true;
+            default:   return false;
         }
     }
 
@@ -244,41 +201,33 @@ public class SshTabController {
             || code == KeyCode.CLOSE_BRACKET;
     }
 
-    /** Map Ctrl+letter ¡ú ASCII control character (0x01¨C0x1A). */
     private void sendControlByte(KeyCode code) {
         int v;
         switch (code) {
-            case A: v = 0x01; break; case B: v = 0x02; break;
-            case C: v = 0x03; break; // SIGINT
-            case D: v = 0x04; break; // EOF
-            case E: v = 0x05; break; case F: v = 0x06; break;
-            case G: v = 0x07; break; case H: v = 0x08; break;
-            case I: v = 0x09; break; case J: v = 0x0A; break;
-            case K: v = 0x0B; break; case L: v = 0x0C; break; // FF (clear screen)
-            case M: v = 0x0D; break; case N: v = 0x0E; break;
-            case O: v = 0x0F; break; case P: v = 0x10; break;
-            case Q: v = 0x11; break; case R: v = 0x12; break;
-            case S: v = 0x13; break; case T: v = 0x14; break;
-            case U: v = 0x15; break; case V: v = 0x16; break;
-            case W: v = 0x17; break; case X: v = 0x18; break;
-            case Y: v = 0x19; break; case Z: v = 0x1A; break; // SIGTSTP
+            // @formatter:off
+            case A: v=0x01; break; case B: v=0x02; break; case C: v=0x03; break;
+            case D: v=0x04; break; case E: v=0x05; break; case F: v=0x06; break;
+            case G: v=0x07; break; case H: v=0x08; break; case I: v=0x09; break;
+            case J: v=0x0A; break; case K: v=0x0B; break; case L: v=0x0C; break;
+            case M: v=0x0D; break; case N: v=0x0E; break; case O: v=0x0F; break;
+            case P: v=0x10; break; case Q: v=0x11; break; case R: v=0x12; break;
+            case S: v=0x13; break; case T: v=0x14; break; case U: v=0x15; break;
+            case V: v=0x16; break; case W: v=0x17; break; case X: v=0x18; break;
+            case Y: v=0x19; break; case Z: v=0x1A; break;
+            // @formatter:on
             default: return;
         }
         sendToShell(new String(new byte[]{(byte) v}));
     }
 
-    /** Paste clipboard text directly to the remote shell (as if typed). */
     private void pasteClipboard() {
         Clipboard cb = Clipboard.getSystemClipboard();
         if (cb.hasString()) {
             String text = cb.getString();
-            if (text != null && !text.isEmpty()) {
-                sendToShell(text);
-            }
+            if (text != null && !text.isEmpty()) sendToShell(text);
         }
     }
 
-    /** Write bytes to the shell output stream. */
     private void sendToShell(String text) {
         if (shellOut == null || !running.get()) return;
         try {
@@ -289,31 +238,16 @@ public class SshTabController {
         }
     }
 
-    // ======== Mouse & caret ========
+    // ---- Mouse ----
 
     private void setupMouseHandling() {
         terminalArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
             terminalArea.requestFocus();
-            // Don't move caret ¡ª let the user click anywhere to select text
-            // or position the cursor when reading history.
         });
     }
 
+    // ---- Connection management ----
 
-
-    /**
-     * True when the caret was near the text end before the current append.
-     * Used to decide whether to auto-scroll ¡ª if the user is reading history
-     * (caret far from the bottom) we should not fight their scroll position.
-     */
-    private boolean wasNearEndBeforeAppend() {
-        return terminalArea.getCaretPosition() >= terminalArea.getLength() - 8;
-    }
-    // ======== Connection management ========
-
-    /**
-     * Initialize with an SSH connection configuration and auto-connect.
-     */
     public void init(SshConnect sc) {
         this.sshConnect = sc;
         connectStatus.set(sc.getUsername() + "@" + sc.getHost() + ":" + sc.getPort());
@@ -338,11 +272,9 @@ public class SshTabController {
                 shellOut = shellChannel.getOutputStream();
                 InputStream shellIn = shellChannel.getInputStream();
 
-                // Apply initial PTY size after channel is connected
                 Platform.runLater(() -> updatePtySize());
 
                 running.set(true);
-
                 readThread = new Thread(() -> readShellOutput(shellIn), "ssh-shell-reader");
                 readThread.setDaemon(true);
                 readThread.start();
@@ -372,12 +304,8 @@ public class SshTabController {
 
     private void doDisconnect() {
         running.set(false);
-        if (readThread != null) {
-            readThread.interrupt();
-        }
-        if (shellChannel != null && shellChannel.isConnected()) {
-            shellChannel.disconnect();
-        }
+        if (readThread != null) readThread.interrupt();
+        if (shellChannel != null && shellChannel.isConnected()) shellChannel.disconnect();
         JschUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
@@ -392,7 +320,7 @@ public class SshTabController {
         appendTerminal("\n--- " + I18n.t("ssh.tab.disconnected", "Disconnected") + " ---\n");
     }
 
-    // ======== Shell output ¡ª read, strip ANSI, handle \r ========
+    // ---- Shell output â€” streaming read ----
 
     private void readShellOutput(InputStream shellIn) {
         byte[] buf = new byte[8192];
@@ -408,7 +336,6 @@ public class SshTabController {
                 Platform.runLater(() -> appendTerminal("\n[ERROR] " + e.getMessage() + "\n"));
             }
         } finally {
-            // Clean-up when the read loop exits (remote closed connection)
             if (running.getAndSet(false)) {
                 Platform.runLater(() -> {
                     disconnectButton.setDisable(true);
@@ -427,86 +354,205 @@ public class SshTabController {
         }
     }
 
+    // ---- Process output â€” state-machine walker operating directly on text area ----
+
     /**
-     * Process raw shell output for display:
-     * <ol>
-     *   <li>Strip ANSI/VT100 escape sequences</li>
-     *   <li>Normalize {@code \r\n} ¡ú {@code \n}</li>
-     *   <li>Handle bare {@code \r} as "overwrite current line" (for progress bars,
-     *       readline history navigation, etc.)</li>
-     *   <li>Auto-scroll to bottom</li>
-     * </ol>
+     * Process raw shell output as a stream, applying VT100 editing commands
+     * directly against {@code terminalArea} so that {@code \e[K}, {@code \b},
+     * and {@code \r} have the correct visual effect.
      */
     private void processOutput(String raw) {
-        String clean = ANSI_PATTERN.matcher(raw).replaceAll("");
-        if (clean.isEmpty()) return;
-        // Strip non-printable control chars (keep \n, \t, \r)
-        clean = clean.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]", "");
-
-        // Treat \r\n as a plain newline (not an overwrite)
-        clean = clean.replace("\r\n", "\n");
-
-        if (!clean.contains("\r")) {
-            terminalArea.appendText(clean);
-            if (wasNearEndBeforeAppend()) {
-                terminalArea.moveTo(terminalArea.getLength());
+        // Append-mode: write printable characters directly, but intercept each
+        // control byte / escape sequence and mutate the text area accordingly.
+        StringBuilder accum = new StringBuilder(128);
+        for (int i = 0, n = raw.length(); i < n; i++) {
+            char c = raw.charAt(i);
+            if (c == 0x1B) {                 // ESC â€” starts a control sequence
+                flushAccum(accum);
+                i = consumeEscape(raw, i + 1);
+            } else if (c == '\b') {         // BS
+                flushAccum(accum);
+                doBackspace();
+            } else if (c == '\r') {         // CR
+                flushAccum(accum);
+                // \r\n is handled by the \n path (next char)
+                if (i + 1 < n && raw.charAt(i + 1) == '\n') {
+                    accum.append('\n');
+                    i++;  // skip the \n â€” write both as a single newline
+                } else {
+                    doCarriageReturn();
+                }
+            } else if (c == '\n') {         // LF (standalone â€” rare from PTY)
+                accum.append('\n');
+            } else if (c < 0x20 || c == 0x7F) {
+                // Other control chars: drop silently
+                flushAccum(accum);
+            } else {
+                accum.append(c);
             }
-            return;
         }
+        flushAccum(accum);
+        scrollToBottom();
+    }
 
-        // Walk through, handling each \r as a line-overwrite
-        int pos = 0;
-        int cr;
-        while ((cr = clean.indexOf('\r', pos)) >= 0) {
-            if (cr > pos) {
-                terminalArea.appendText(clean.substring(pos, cr));
-            }
-            // Delete from last \n (or start) to end ¡ª simulating carriage return
-            String text = terminalArea.getText();
-            int lastNl = text.lastIndexOf('\n');
-            int lineStart = (lastNl == -1) ? 0 : lastNl + 1;
-            terminalArea.deleteText(lineStart, terminalArea.getLength());
-            pos = cr + 1;
-        }
-        if (pos < clean.length()) {
-            terminalArea.appendText(clean.substring(pos));
-        }
-        if (wasNearEndBeforeAppend()) {
-            terminalArea.moveTo(terminalArea.getLength());
+    /** Flush accumulated printable text to the text area. */
+    private void flushAccum(StringBuilder accum) {
+        if (accum.length() > 0) {
+            terminalArea.appendText(accum.toString());
+            accum.setLength(0);
         }
     }
 
-    // ======== PTY resize ========
+    /** Consume one ESC-prefixed VT100 sequence starting at raw[pos]. */
+    private int consumeEscape(String raw, int pos) {
+        if (pos >= raw.length()) return pos;
+        char c = raw.charAt(pos);
+        if (c == '[') {                     // CSI:  ESC [ ... final
+            return consumeCSI(raw, pos + 1);
+        } else if (c == ']') {              // OSC â€” skip until BEL or ST
+            return skipOSC(raw, pos + 1);
+        } else if (c == 'P' || c == 'X' || c == '^' || c == '_') {
+            // DCS / SOS / PM / APC â€” skip until ST  ESC \
+            return skipUntilST(raw, pos + 1);
+        } else {
+            // Single-char escape (e.g. ESC 7, ESC 8) â€” ignore
+            return pos;  // consumed the single char
+        }
+    }
+
+    /** Consume CSI sequence: raw[pos] is the first char after ESC[. */
+    private int consumeCSI(String raw, int pos) {
+        // Scan parameter bytes (digits, semicolons)
+        while (pos < raw.length()) {
+            char c = raw.charAt(pos);
+            if (c >= '0' && c <= '9' || c == ';') {
+                pos++;
+            } else if (c >= '@' && c <= '~') {
+                // Final byte â€” check command
+                if (c == 'K') {
+                    doEraseToEndOfLine();
+                } else if (c == 'J') {
+                    doEraseToEndOfDisplay();
+                }
+                // All other CSI commands (SGR colors, cursor movement, etc.)
+                // are ignored â€” the text area renders them as nothing.
+                return pos; // consumed the final byte
+            } else {
+                // Malformed â€” treat the whole thing as consumed
+                return pos;
+            }
+        }
+        return pos;
+    }
+
+    /** Skip OSC sequence (ESC ] ... BEL or ST). */
+    private int skipOSC(String raw, int pos) {
+        while (pos < raw.length()) {
+            char c = raw.charAt(pos);
+            if (c == 0x07) return pos;             // BEL â€” terminates
+            if (c == 0x1B && pos + 1 < raw.length() && raw.charAt(pos + 1) == '\\')
+                return pos + 1;                     // ST â€” terminates
+            pos++;
+        }
+        return pos;
+    }
+
+    /** Skip DCS/SOS/PM/APC sequence (ESC P/X/^/_ ... ESC \) */
+    private int skipUntilST(String raw, int pos) {
+        while (pos < raw.length() - 1) {
+            if (raw.charAt(pos) == 0x1B && raw.charAt(pos + 1) == '\\')
+                return pos + 1;
+            pos++;
+        }
+        return pos;
+    }
+
+    // ---- Text-area editing primitives ----
+
+    /** Delete one character to the left of the cursor on the current line. */
+    private void doBackspace() {
+        int len = terminalArea.getLength();
+        if (len <= 0) return;
+        // Don't backspace past a newline
+        String text = terminalArea.getText();
+        if (len > 0 && text.charAt(len - 1) == '\n') return;
+        terminalArea.deleteText(len - 1, len);
+    }
+
+    /** Erase from cursor (end of text) to end of current line. */
+    private void doEraseToEndOfLine() {
+        // In our simplified model where cursor == end of text, \e[K means
+        // "erase from end to end" â€” a no-op. The real line-erase happens
+        // in doCarriageReturn(), which deletes the current line before
+        // new text is appended.
+    }
+
+    /** Erase from cursor to end of display. */
+    private void doEraseToEndOfDisplay() {
+        // Equivalent to deleting everything after the current line.
+        int len = terminalArea.getLength();
+        if (len <= 0) return;
+        String text = terminalArea.getText();
+        int lastNl = text.lastIndexOf('\n', len - 1);
+        int lineStart = (lastNl == -1) ? 0 : lastNl + 1;
+        if (lineStart < len) {
+            terminalArea.deleteText(lineStart, len);
+        }
+    }
 
     /**
-     * Forward the current terminal-area pixel dimensions to the remote PTY
-     * so the shell (bash, zsh, etc.) knows the correct column/row count.
+     * Handle bare CR (not part of \r\n):
+     * rewind to start of current line so subsequent output overwrites it.
+     *
+     * <p>readline uses: {@code \r} (go to col 0), then new text, then
+     * {@code \e[K} (erase any leftover chars from previous longer line).
+     * We simulate this by deleting the current line's content so the text
+     * area walks backwards, then appending flows as usual.
      */
+    private void doCarriageReturn() {
+        int len = terminalArea.getLength();
+        if (len <= 0) return;
+        String text = terminalArea.getText();
+        int lastNl = text.lastIndexOf('\n', len - 1);
+        int lineStart = (lastNl == -1) ? 0 : lastNl + 1;
+        // Delete current line content â€” the new text (after \r) will
+        // be appended by subsequent accumulate/flush steps.
+        if (lineStart < len) {
+            terminalArea.deleteText(lineStart, len);
+        }
+    }
+
+    /** Always scroll to the very bottom. */
+    private void scrollToBottom() {
+        Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
+    }
+
+    // ---- PTY resize ----
+
     private void updatePtySize() {
         if (shellChannel == null || !shellChannel.isConnected()) return;
         if (terminalArea.getWidth() <= 0 || terminalArea.getHeight() <= 0) return;
         try {
             int cols = Math.max(40, (int) (terminalArea.getWidth() / CHAR_WIDTH));
             int rows = Math.max(10, (int) (terminalArea.getHeight() / LINE_HEIGHT));
-            shellChannel.setPtySize(cols, rows, cols * (int) CHAR_WIDTH, rows * (int) LINE_HEIGHT);
+            shellChannel.setPtySize(cols, rows,
+                    cols * (int) CHAR_WIDTH, rows * (int) LINE_HEIGHT);
         } catch (Exception e) {
             log.debug("Failed to update PTY size", e);
         }
     }
 
-    // ======== Helpers ========
+    // ---- Helpers ----
 
     private void appendTerminal(String text) {
-        Runnable op = () -> {
-            terminalArea.appendText(text);
-            if (wasNearEndBeforeAppend()) {
-                terminalArea.moveTo(terminalArea.getLength());
-            }
-        };
         if (Platform.isFxApplicationThread()) {
-            op.run();
+            terminalArea.appendText(text);
+            terminalArea.moveTo(terminalArea.getLength());
         } else {
-            Platform.runLater(op);
+            Platform.runLater(() -> {
+                terminalArea.appendText(text);
+                terminalArea.moveTo(terminalArea.getLength());
+            });
         }
     }
 
@@ -514,5 +560,3 @@ public class SshTabController {
         doDisconnect();
     }
 }
-
-
