@@ -136,21 +136,13 @@ public class SshTabController {
                 int max = Math.max(0, buffer.size() - rows);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
-                int visAmount = Math.max(12, rows / 2);
-                scrollBar.setMax(max > 0 ? max + visAmount : 0);
+                                int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
+                                scrollBar.setMax(max);
                 scrollBar.setVisibleAmount(visAmount);
                 scrollBar.setValue(scrollOff);
                 updatingScrollBar = false;
             });
         };
-
-        terminalPane.addEventFilter(ScrollEvent.SCROLL, e -> {
-            int maxOff = Math.max(0, buffer.size() - rows);
-            scrollOff = clamp(
-                    scrollOff + (int)(e.getDeltaY() / 40), 0, maxOff);
-            draw();
-            fireScrollChanged();
-        });
 
         // Resize listeners
         terminalPane.widthProperty().addListener((obs, o, n) -> {
@@ -629,7 +621,16 @@ public class SshTabController {
                 e.consume();
             }
         });
-        canvas.setOnScroll(null);
+        canvas.setOnScroll(e -> {
+            int dir = -(int)Math.signum(e.getDeltaY());
+            if (dir != 0) {
+                int maxOff = Math.max(0, buffer.size() - rows);
+                scrollOff = clamp(scrollOff + dir, 0, maxOff);
+                draw();
+                fireScrollChanged();
+            }
+            e.consume();
+        });
     }
 
     private static int clamp(int v, int lo, int hi) {
