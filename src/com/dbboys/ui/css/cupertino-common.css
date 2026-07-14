@@ -4710,13 +4710,24 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .ssh-scroll-bar {
-  -fx-pref-width: 10px;
-  -fx-opacity: 0.3;
+  -fx-pref-width: 12px;
+  -fx-opacity: 1.0;
+  -fx-background-color: transparent;
+}
+.ssh-scroll-bar > .thumb {
+  -fx-background-color: rgba(255, 255, 255, 0.35);
+  -fx-background-radius: 4px;
+}
+.ssh-scroll-bar > .thumb:hover,
+.ssh-scroll-bar > .thumb:pressed {
+  -fx-background-color: rgba(255, 255, 255, 0.6);
+}
+.ssh-scroll-bar > .track {
   -fx-background-color: transparent;
 }
 .ssh-scroll-bar:hover,
 .ssh-scroll-bar:pressed {
-  -fx-opacity: 0.7;
+  -fx-opacity: 1.0;
 }
 .scroll-bar:hover, .scroll-bar:pressed, .scroll-bar:focused {
   -fx-opacity: 1;

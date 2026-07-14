@@ -68,6 +68,29 @@ public class TerminalCanvas extends Canvas {
     // ---- Focus-aware blink ----
     private boolean focused = true;
 
+    // ---- CJK fullwidth detection ----
+
+    /**
+     * Returns true if the character is a CJK fullwidth character that
+     * occupies 2 columns in a terminal.
+     */
+    private static boolean isFullwidth(char ch) {
+        if (ch >= 0x1100 && ch <= 0x115F) return true; // Hangul Jamo
+        if (ch >= 0x2E80 && ch <= 0xA4CF) {
+            if (ch >= 0x2E80 && ch <= 0x303F) return true; // CJK Radicals, Symbols
+            if (ch >= 0x3040 && ch <= 0x30FF) return true; // Hiragana, Katakana
+            if (ch >= 0x3100 && ch <= 0xA4CF) return true; // CJK Ideographs, Yi, etc.
+        }
+        if (ch >= 0xA960 && ch <= 0xA97F) return true; // Hangul Jamo Extended-A
+        if (ch >= 0xAC00 && ch <= 0xD7AF) return true; // Hangul Syllables
+        if (ch >= 0xF900 && ch <= 0xFAFF) return true; // CJK Compatibility Ideographs
+        if (ch >= 0xFE10 && ch <= 0xFE1F) return true; // Vertical Forms
+        if (ch >= 0xFE30 && ch <= 0xFE6F) return true; // CJK Compatibility Forms
+        if (ch >= 0xFF01 && ch <= 0xFF60) return true; // Fullwidth ASCII
+        if (ch >= 0xFFE0 && ch <= 0xFFE6) return true; // Fullwidth Symbols
+        return false;
+    }
+
     public TerminalCanvas() {
         this(80, 24);
     }
@@ -187,8 +210,14 @@ public class TerminalCanvas extends Canvas {
         StringBuilder line = buffer.get(cursorRow);
         while (line.length() <= cursorCol) line.append(' ');
         line.setCharAt(cursorCol, c);
-        cursorCol++;
-        if (cursorCol >= cols) { cursorCol = 0; cursorRow++; }
+        int w = isFullwidth(c) ? 2 : 1;
+        // For fullwidth char, mark the following column as a continuation cell
+        if (w == 2 && cursorCol + 1 < cols) {
+            while (line.length() <= cursorCol + 1) line.append(' ');
+            line.setCharAt(cursorCol + 1, '\0');
+        }
+        cursorCol += w;
+        while (cursorCol >= cols) { cursorCol -= cols; cursorRow++; }
         while (buffer.size() <= cursorRow) buffer.add(new StringBuilder());
     }
 
@@ -340,6 +369,12 @@ public class TerminalCanvas extends Canvas {
             String line = buffer.get(r).toString();
 
             for (int col = 0; col < line.length(); col++) {
+                char ch = line.charAt(col);
+                // Skip continuation cells of double-width characters
+                if (ch == '\0') continue;
+                boolean isFw = isFullwidth(ch);
+                double cellW = isFw ? CHAR_W * 2 : CHAR_W;
+
                 boolean inSel = false;
                 if (hasSel) {
                     if (r > selMinR && r < selMaxR) inSel = true;
@@ -354,19 +389,19 @@ public class TerminalCanvas extends Canvas {
 
                 if (inSel) {
                     g.setFill(Color.rgb(200, 200, 200));
-                    g.fillRect(x, y, CHAR_W, LINE_H);
+                    g.fillRect(x, y, cellW, LINE_H);
                     g.setFill(Color.BLACK);
                 } else {
                     g.setFill(bg);
-                    g.fillRect(x, y, CHAR_W, LINE_H);
+                    g.fillRect(x, y, cellW, LINE_H);
                     g.setFill(fg);
                 }
-                g.fillText(String.valueOf(line.charAt(col)), x, y + LINE_H - 3);
+                g.fillText(String.valueOf(ch), x, y + LINE_H - 3);
 
                 if (inSel || sgrUnderline) {
                     g.setStroke(inSel ? Color.BLACK : fg);
                     g.setLineWidth(1);
-                    g.strokeLine(x, y + LINE_H - 2, x + CHAR_W, y + LINE_H - 2);
+                    g.strokeLine(x, y + LINE_H - 2, x + cellW, y + LINE_H - 2);
                 }
             }
         }
@@ -377,11 +412,14 @@ public class TerminalCanvas extends Canvas {
             if (visR >= 0 && visR < rows) {
                 double cx = cursorCol * CHAR_W;
                 double cy = visR * LINE_H;
+                char atCursor = (cursorRow < buffer.size() && cursorCol < buffer.get(cursorRow).length())
+                        ? buffer.get(cursorRow).charAt(cursorCol) : ' ';
+                double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
                 g.setFill(Color.rgb(200, 200, 200, 0.7));
-                g.fillRect(cx, cy, CHAR_W, LINE_H);
-                if (cursorRow < buffer.size() && cursorCol < buffer.get(cursorRow).length()) {
+                g.fillRect(cx, cy, cursorW, LINE_H);
+                if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
-                    g.fillText(String.valueOf(buffer.get(cursorRow).charAt(cursorCol)), cx, cy + LINE_H - 3);
+                    g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);
                 }
             }
         }

@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.controller;
+package com.dbboys.ui.controller;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
@@ -134,8 +134,8 @@ public class SshTabController {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
                 updatingScrollBar = true;
-                scrollBar.setMax(max);
-                scrollBar.setVisibleAmount(max > 0 ? 1 : 0);
+                scrollBar.setMax(max > 0 ? max + rows : 0);
+                scrollBar.setVisibleAmount(max > 0 ? rows : 1);
                 scrollBar.setValue(scrollOff);
                 updatingScrollBar = false;
             });
@@ -308,7 +308,18 @@ public class SshTabController {
         StringBuilder ln = ensureBuf(curRow);
         while (ln.length() <= curCol) ln.append(' ');
         ln.setCharAt(curCol, c);
-        if (++curCol >= cols) { curCol = 0; curRow++; ensureBuf(curRow); }
+        int w = isFullwidth(c) ? 2 : 1;
+        // For fullwidth char, mark the following column as a continuation cell
+        if (w == 2 && curCol + 1 < cols) {
+            while (ln.length() <= curCol + 1) ln.append(' ');
+            ln.setCharAt(curCol + 1, '\0');
+        }
+        curCol += w;
+        while (curCol >= cols) {
+            curCol -= cols;
+            curRow++;
+            ensureBuf(curRow);
+        }
     }
 
     private StringBuilder ensureBuf(int r) {
@@ -403,6 +414,29 @@ public class SshTabController {
         }
     }
 
+    // ---- CJK fullwidth detection ----
+
+    /**
+     * Returns true if the character is a CJK fullwidth character that
+     * occupies 2 columns in a terminal.
+     */
+    private static boolean isFullwidth(char ch) {
+        if (ch >= 0x1100 && ch <= 0x115F) return true; // Hangul Jamo
+        if (ch >= 0x2E80 && ch <= 0xA4CF) {
+            if (ch >= 0x2E80 && ch <= 0x303F) return true; // CJK Radicals, Symbols
+            if (ch >= 0x3040 && ch <= 0x30FF) return true; // Hiragana, Katakana
+            if (ch >= 0x3100 && ch <= 0xA4CF) return true; // CJK Ideographs, Yi, etc.
+        }
+        if (ch >= 0xA960 && ch <= 0xA97F) return true; // Hangul Jamo Extended-A
+        if (ch >= 0xAC00 && ch <= 0xD7AF) return true; // Hangul Syllables
+        if (ch >= 0xF900 && ch <= 0xFAFF) return true; // CJK Compatibility Ideographs
+        if (ch >= 0xFE10 && ch <= 0xFE1F) return true; // Vertical Forms
+        if (ch >= 0xFE30 && ch <= 0xFE6F) return true; // CJK Compatibility Forms
+        if (ch >= 0xFF01 && ch <= 0xFF60) return true; // Fullwidth ASCII
+        if (ch >= 0xFFE0 && ch <= 0xFFE6) return true; // Fullwidth Symbols
+        return false;
+    }
+
     // ---- Rendering ----
 
     private static Color c(int code) {
@@ -455,6 +489,12 @@ public class SshTabController {
             double y = sy * LINE_H;
             String l = buffer.get(r).toString();
             for (int col = 0; col < l.length(); col++) {
+                char ch = l.charAt(col);
+                // Skip continuation cells of double-width characters
+                if (ch == '\0') continue;
+                boolean isFw = isFullwidth(ch);
+                double cellW = isFw ? CHAR_W * 2 : CHAR_W;
+
                 boolean in = hs && ((r > mr && r < Mr)
                         || (r == mr && r == Mr && col >= sl && col < sr2)
                         || (r == mr && r != Mr && col >= sl)
@@ -463,14 +503,14 @@ public class SshTabController {
                 Color bg = c(sgrBg), fg = c(sgrFg);
                 if (in) {
                     g.setFill(Color.rgb(200,200,200));
-                    g.fillRect(x, y, CHAR_W, LINE_H);
+                    g.fillRect(x, y, cellW, LINE_H);
                     g.setFill(Color.BLACK);
                 } else {
                     g.setFill(bg);
-                    g.fillRect(x, y, CHAR_W, LINE_H);
+                    g.fillRect(x, y, cellW, LINE_H);
                     g.setFill(fg);
                 }
-                g.fillText(String.valueOf(l.charAt(col)), x, y + LINE_H - 3);
+                g.fillText(String.valueOf(ch), x, y + LINE_H - 3);
             }
         }
 
@@ -478,11 +518,14 @@ public class SshTabController {
             int vr = curRow - scrollOff;
             if (vr >= 0 && vr < rows) {
                 double cx = curCol * CHAR_W, cy = vr * LINE_H;
+                char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).length())
+                        ? buffer.get(curRow).charAt(curCol) : ' ';
+                double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
                 g.setFill(Color.rgb(200,200,200,0.7));
-                g.fillRect(cx, cy, CHAR_W, LINE_H);
-                if (curRow < buffer.size() && curCol < buffer.get(curRow).length()) {
+                g.fillRect(cx, cy, cursorW, LINE_H);
+                if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
-                    g.fillText(String.valueOf(buffer.get(curRow).charAt(curCol)), cx, cy + LINE_H - 3);
+                    g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);
                 }
             }
         }
@@ -587,7 +630,9 @@ public class SshTabController {
     }
 
     private boolean isWordChar(char c) {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.';
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'
+                || isFullwidth(c);
     }
 
     private byte[] key(KeyEvent e) {
