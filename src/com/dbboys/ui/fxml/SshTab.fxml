@@ -5,8 +5,6 @@
 <?import javafx.scene.*?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<?import com.dbboys.ui.component.CustomInlineCssTextArea?>
-<?import org.fxmisc.flowless.VirtualizedScrollPane?>
 <VBox fx:id="sshTab" fx:controller="com.dbboys.ui.controller.SshTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
     <HBox alignment="CENTER_LEFT">
         <Button fx:id="connectButton" styleClass="custom-button" focusTraversable="false">
@@ -22,12 +20,5 @@
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
     </HBox>
-    <StackPane fx:id="terminalStackPane" VBox.vgrow="ALWAYS">
-        <VirtualizedScrollPane fx:id="terminalScrollPane" VBox.vgrow="ALWAYS">
-            <content>
-                <CustomInlineCssTextArea fx:id="terminalArea" editable="false">
-                </CustomInlineCssTextArea>
-            </content>
-        </VirtualizedScrollPane>
-    </StackPane>
+    <StackPane fx:id="terminalPane" VBox.vgrow="ALWAYS" />
 </VBox>
