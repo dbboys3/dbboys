@@ -48,6 +48,7 @@ public class SimpleTerminalWidget extends Canvas {
     private JSchTtyConnector conn;
     private Thread readThread;
     private int scrollOff, maxScroll = 5000;
+    private Runnable onScrollChanged;
 
     public SimpleTerminalWidget() { this(80, 24); }
 
@@ -67,6 +68,10 @@ public class SimpleTerminalWidget extends Canvas {
 
     public void setConnector(JSchTtyConnector c) { conn = c; }
     public int cols() { return cols; } public int rows() { return rows; }
+    public int getScrollOffset() { return scrollOff; }
+    public int getMaxScrollOffset() { return Math.max(0, buffer.size() - rows); }
+    public void setScrollOffset(int off) { scrollOff = clamp(off, 0, Math.max(0, buffer.size() - rows)); draw(); }
+    public void setOnScrollChanged(Runnable r) { this.onScrollChanged = r; }
 
     public void setTermSize(int c, int r) {
         if (c != cols || r != rows) { cols = c; rows = r; resizeCanvas(); }
@@ -92,7 +97,7 @@ public class SimpleTerminalWidget extends Canvas {
     /** Status message (like "Connected") */
     public void status(String s) {
         for (char c : s.toCharArray()) { if (c == '\n') nl(); else if (c == '\r') curCol = 0; else put(c); }
-        nl(); draw();
+        nl(); draw(); fireScrollChanged();
     }
 
     /** Process remote output */
@@ -105,7 +110,7 @@ public class SimpleTerminalWidget extends Canvas {
             else if (c == '\n') nl();
             else if (c >= 0x20 && c != 0x7F) put(c);
         }
-        draw();
+        draw(); fireScrollChanged();
     }
 
     public String selectedText() {
@@ -126,7 +131,8 @@ public class SimpleTerminalWidget extends Canvas {
 
     // ---- Text buffer ----
 
-    private void nl() { curRow++; curCol = 0; ensureBuf(curRow); while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; } if (curRow - scrollOff >= rows) scrollOff = curRow - rows + 1; }
+    private void nl() { curRow++; curCol = 0; ensureBuf(curRow); while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; } if (curRow - scrollOff >= rows) { scrollOff = curRow - rows + 1; } fireScrollChanged(); }
+    private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
     private void put(char c) {
         StringBuilder ln = ensureBuf(curRow); while (ln.length() <= curCol) ln.append(' '); ln.setCharAt(curCol, c);
         if (++curCol >= cols) { curCol = 0; curRow++; ensureBuf(curRow); }
@@ -222,12 +228,13 @@ public class SimpleTerminalWidget extends Canvas {
 
     private void setupInput() {
         setFocusTraversable(true);
-        setOnMousePressed(e -> { requestFocus(); selecting = true; selStartCol = selEndCol = (int)(e.getX()/CHAR_W); selStartRow = selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); });
+        setOnMousePressed(e -> { requestFocus(); if (e.getButton() == MouseButton.PRIMARY) { selecting = true; selStartCol = selEndCol = (int)(e.getX()/CHAR_W); selStartRow = selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); } });
         setOnMouseDragged(e -> { if (!selecting) return; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); draw(); });
         setOnMouseReleased(e -> { requestFocus(); selecting = false; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); if (selStartRow == selEndRow && selStartCol == selEndCol) selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); });
+        setOnContextMenuRequested(e -> { String s = selectedText(); if (!s.isEmpty()) { Clipboard.getSystemClipboard().setContent(java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, s)); selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); } e.consume(); });
         setOnKeyPressed(e -> { if (conn == null || !conn.isConnected()) { e.consume(); return; } byte[] b = key(e); if (b != null) { try { conn.write(b); } catch (Exception x) {} e.consume(); } });
         setOnKeyTyped(e -> { if (conn == null || !conn.isConnected()) return; String ch = e.getCharacter(); if (ch == null || ch.isEmpty()) return; char c = ch.charAt(0); if (c == '\r' || c == '\n') { try { conn.write(String.valueOf(c)); } catch (Exception x) {} e.consume(); } else if (c >= 0x20 && c != 0x7F) { try { conn.write(ch); } catch (Exception x) {} e.consume(); } });
-        setOnScroll(e -> { scrollOff = clamp(scrollOff + (int)(e.getDeltaY()/40), 0, Math.max(0,buffer.size()-rows)); draw(); });
+        setOnScroll(e -> { scrollOff = clamp(scrollOff + (int)(e.getDeltaY()/40), 0, Math.max(0,buffer.size()-rows)); draw(); fireScrollChanged(); });
     }
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
 

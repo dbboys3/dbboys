@@ -4708,6 +4708,16 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .scroll-bar:vertical {
   -fx-pref-width: 8px;
 }
+
+.ssh-scroll-bar {
+  -fx-pref-width: 10px;
+  -fx-opacity: 0.3;
+  -fx-background-color: transparent;
+}
+.ssh-scroll-bar:hover,
+.ssh-scroll-bar:pressed {
+  -fx-opacity: 0.7;
+}
 .scroll-bar:hover, .scroll-bar:pressed, .scroll-bar:focused {
   -fx-opacity: 1;
 }

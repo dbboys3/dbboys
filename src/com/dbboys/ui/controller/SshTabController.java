@@ -15,6 +15,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.control.ScrollBar;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -41,6 +42,8 @@ public class SshTabController {
     private JSchTtyConnector connector;
     private final StringProperty connectStatus = new SimpleStringProperty();
     private SimpleTerminalWidget terminal;
+    private ScrollBar scrollBar;
+    private boolean updatingScrollBar;
 
     public void initialize() {
         connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.GREEN));
@@ -56,6 +59,41 @@ public class SshTabController {
 
         terminal = new SimpleTerminalWidget(80, 24);
         terminalPane.getChildren().add(terminal);
+
+        scrollBar = new ScrollBar();
+        scrollBar.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        scrollBar.setMin(0);
+        scrollBar.setMax(0);
+        scrollBar.setVisibleAmount(1);
+        scrollBar.setUnitIncrement(1);
+        scrollBar.setBlockIncrement(10);
+        scrollBar.getStyleClass().add("ssh-scroll-bar");
+        scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
+        StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
+        terminalPane.getChildren().add(scrollBar);
+
+        scrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (!updatingScrollBar) {
+                int v = newVal.intValue();
+                if (v != terminal.getScrollOffset()) {
+                    terminal.setScrollOffset(v);
+                }
+            }
+        });
+
+        terminal.setOnScrollChanged(() -> {
+            Platform.runLater(() -> {
+                int max = terminal.getMaxScrollOffset();
+                int val = terminal.getScrollOffset();
+                updatingScrollBar = true;
+                scrollBar.setMax(max);
+                if (max > 0) {
+                    scrollBar.setVisibleAmount(1);
+                }
+                scrollBar.setValue(val);
+                updatingScrollBar = false;
+            });
+        });
         terminalPane.widthProperty().addListener((obs, o, n) -> {
             if (n.doubleValue() > 0) {
                 terminal.setTermSize((int) (n.doubleValue() / SimpleTerminalWidget.CHAR_W), terminal.rows());
