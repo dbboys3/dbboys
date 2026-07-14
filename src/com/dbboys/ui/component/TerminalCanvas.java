@@ -430,7 +430,7 @@ public class TerminalCanvas extends Canvas {
                 g.fillRect(cx, cy, cursorW, cursorH);
                 if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
-                    g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);
+                    g.fillText(String.valueOf(atCursor), cx, visR * LINE_H + LINE_H - 3);
                 }
             }
         }

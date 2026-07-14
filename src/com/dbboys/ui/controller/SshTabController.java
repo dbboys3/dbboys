@@ -754,7 +754,9 @@ public class SshTabController {
                 g.fillRect(cx, cy, cursorW, cursorHeight);
                 if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
-                    g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);
+                    // Render text at the normal text baseline for this row
+                    double textBaseline = vr * LINE_H + LINE_H - 3;
+                    g.fillText(String.valueOf(atCursor), cx, textBaseline);
                 }
             }
         }
