@@ -8,6 +8,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.input.*;
 import javafx.scene.paint.Color;
+import com.dbboys.ui.notification.NotificationUtil;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
@@ -230,13 +231,15 @@ public class SimpleTerminalWidget extends Canvas {
         setFocusTraversable(true);
         setOnMousePressed(e -> { requestFocus(); if (e.getButton() == MouseButton.PRIMARY) { selecting = true; selStartCol = selEndCol = (int)(e.getX()/CHAR_W); selStartRow = selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); } });
         setOnMouseDragged(e -> { if (!selecting) return; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); draw(); });
-        setOnMouseReleased(e -> { requestFocus(); selecting = false; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); if (selStartRow == selEndRow && selStartCol == selEndCol) selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); });
-        setOnContextMenuRequested(e -> { String s = selectedText(); if (!s.isEmpty()) { Clipboard.getSystemClipboard().setContent(java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, s)); selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); } e.consume(); });
+        setOnMouseReleased(e -> { requestFocus(); selecting = false; if (e.getButton() == MouseButton.PRIMARY) { selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); } if (selStartRow == selEndRow && selStartCol == selEndCol) selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); });
+        setOnMouseClicked(e -> { if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) { int row = clamp(scrollOff + (int)(e.getY()/LINE_H), 0, Math.max(0, buffer.size()-1)); int col = clamp((int)(e.getX()/CHAR_W), 0, cols-1); String ln = line(row); int start = col, end = col; int ll = ln.length(); while (start > 0 && start <= ll && isWordChar(ln.charAt(start-1))) start--; while (end < ll && isWordChar(ln.charAt(end))) end++; selStartRow = selEndRow = row; selStartCol = start; selEndCol = end; draw(); } });
+        setOnContextMenuRequested(e -> { String s = selectedText(); if (!s.isEmpty()) { Clipboard.getSystemClipboard().setContent(java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, s)); selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); NotificationUtil.showMainNotification("Copied"); } e.consume(); });
         setOnKeyPressed(e -> { if (conn == null || !conn.isConnected()) { e.consume(); return; } byte[] b = key(e); if (b != null) { try { conn.write(b); } catch (Exception x) {} e.consume(); } });
         setOnKeyTyped(e -> { if (conn == null || !conn.isConnected()) return; String ch = e.getCharacter(); if (ch == null || ch.isEmpty()) return; char c = ch.charAt(0); if (c == '\r' || c == '\n') { try { conn.write(String.valueOf(c)); } catch (Exception x) {} e.consume(); } else if (c >= 0x20 && c != 0x7F) { try { conn.write(ch); } catch (Exception x) {} e.consume(); } });
         setOnScroll(e -> { scrollOff = clamp(scrollOff + (int)(e.getDeltaY()/40), 0, Math.max(0,buffer.size()-rows)); draw(); fireScrollChanged(); });
     }
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
+    private boolean isWordChar(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'; }
 
     private byte[] key(KeyEvent e) {
         KeyCode k = e.getCode(); boolean ct = e.isControlDown() && !e.isShiftDown() && !e.isAltDown() && !e.isMetaDown();
