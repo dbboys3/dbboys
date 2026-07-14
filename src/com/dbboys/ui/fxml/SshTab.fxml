@@ -22,7 +22,7 @@
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
     </HBox>
-    <StackPane VBox.vgrow="ALWAYS">
+    <StackPane fx:id="terminalStackPane" VBox.vgrow="ALWAYS">
         <VirtualizedScrollPane fx:id="terminalScrollPane" VBox.vgrow="ALWAYS">
             <content>
                 <CustomInlineCssTextArea fx:id="terminalArea" editable="false">

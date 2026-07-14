@@ -10,9 +10,14 @@ import com.dbboys.ui.icon.IconPaths;
 import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.Session;
 import javafx.application.Platform;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.fxml.FXML;
+import javafx.geometry.Bounds;
+import javafx.geometry.Point2D;
 import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.KeyCode;
@@ -21,9 +26,11 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
+import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.fxmisc.richtext.Caret;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -57,6 +64,7 @@ public class SshTabController {
     @FXML public Label connectionLabel;
     @FXML public VBox sshTab;
     @FXML public VirtualizedScrollPane<CustomInlineCssTextArea> terminalScrollPane;
+    @FXML public javafx.scene.layout.StackPane terminalStackPane;
 
     // ---- State ----
 
@@ -67,6 +75,11 @@ public class SshTabController {
     private final StringProperty connectStatus = new SimpleStringProperty();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread readThread;
+
+    // ---- Blinking terminal cursor ----
+
+    private Text cursorNode;
+    private Timeline cursorBlink;
 
     // ---- Initialisation ----
 
@@ -83,9 +96,13 @@ public class SshTabController {
         terminalArea.setEditable(true);
         terminalArea.setStyle(
                 "-fx-font-family: 'Consolas','Courier New',monospace; -fx-font-size: 13px;");
+        terminalArea.getStyleClass().add("ssh-terminal");
+        // Hide the native RichTextFX caret — we render our own blinking block
+        terminalArea.getCaretSelectionBind().setShowCaret(Caret.CaretVisibility.OFF);
 
         setupKeyHandling();
         setupMouseHandling();
+        setupCursorBlink();
 
         terminalArea.widthProperty().addListener((obs, o, n) -> updatePtySize());
         terminalArea.heightProperty().addListener((obs, o, n) -> updatePtySize());
@@ -112,6 +129,7 @@ public class SshTabController {
             }
             // Snap caret to end before sending — user is typing now
             terminalArea.moveTo(terminalArea.getLength());
+            repositionCursor();
             sendToShell(ch);
             event.consume();
         });
@@ -131,8 +149,11 @@ public class SshTabController {
                 return;
             }
 
-            // Keep caret at end on every keystroke
-            Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
+            // Keep caret at end on every keystroke, reposition our custom cursor
+            Platform.runLater(() -> {
+                terminalArea.moveTo(terminalArea.getLength());
+                repositionCursor();
+            });
 
             // Ctrl+Shift+C/V — system clipboard
             if (event.isShortcutDown() && event.isShiftDown()) {
@@ -261,9 +282,99 @@ public class SshTabController {
             int newPos = terminalArea.getCaretPosition();
             if (mousePressCaretPos >= 0 && newPos == mousePressCaretPos) {
                 // Plain click, no drag — snap back to end
-                Platform.runLater(() -> terminalArea.moveTo(terminalArea.getLength()));
+                Platform.runLater(() -> {
+                    terminalArea.moveTo(terminalArea.getLength());
+                    repositionCursor();
+                });
             }
             mousePressCaretPos = -1;
+        });
+    }
+
+    /**
+     * Replace the native text cursor with a blinking block (▌) that
+     * sits at the end of the text. This lets the user select text with
+     * the mouse and copy normally, while all keyboard input goes to the
+     * live prompt at the end — matching standard terminal behaviour.
+     */
+    private void setupCursorBlink() {
+        // Create a block cursor the same size as a text cell
+        cursorNode = new Text("▌"); // LEFT HALF BLOCK — narrower & softer than FULL BLOCK
+        cursorNode.setFont(TERMINAL_FONT);
+        cursorNode.setFill(Color.WHITE);
+        cursorNode.setMouseTransparent(true); // don't block text selection
+        cursorNode.setManaged(false);          // don't participate in layout
+
+        // Overlay the cursor on top of the terminal
+        terminalStackPane.getChildren().add(cursorNode);
+
+        // Blink: visible → invisible → visible …
+        cursorBlink = new Timeline(
+                new KeyFrame(Duration.ZERO,
+                        new KeyValue(cursorNode.opacityProperty(), 1.0)),
+                new KeyFrame(Duration.millis(530),
+                        new KeyValue(cursorNode.opacityProperty(), 0.0)),
+                new KeyFrame(Duration.millis(1060),
+                        new KeyValue(cursorNode.opacityProperty(), 1.0)));
+        cursorBlink.setCycleCount(Timeline.INDEFINITE);
+
+        // Reposition the cursor whenever the terminal content changes
+        terminalArea.textProperty().addListener((obs, old, n) -> repositionCursor());
+        terminalArea.heightProperty().addListener((obs, old, n) -> repositionCursor());
+        terminalArea.widthProperty().addListener((obs, old, n) -> repositionCursor());
+
+        // Pause blink when terminal loses focus, resume on focus
+        terminalArea.focusedProperty().addListener((obs, old, focused) -> {
+            if (focused) {
+                cursorNode.setOpacity(1.0);
+                cursorBlink.playFromStart();
+            } else {
+                cursorBlink.stop();
+                cursorNode.setOpacity(0.3);
+            }
+        });
+
+        // Start blinking immediately
+        cursorBlink.play();
+    }
+
+    /**
+     * Reposition the blinking block cursor to exactly where the last
+     * character sits on the last line of the terminal.
+     *
+     * <p>Uses RichTextFX's {@code getCaretBounds()} (which accounts for
+     * the line-number gutter, CSS padding, and the virtualised viewport)
+     * then converts through the scene graph into StackPane coordinates.
+     */
+    private void repositionCursor() {
+        if (cursorNode == null) return;
+
+        Platform.runLater(() -> {
+            try {
+                // Move the RichTextFX caret to end so getCaretBounds()
+                // reflects the last input position
+                terminalArea.moveTo(terminalArea.getLength());
+
+                final Bounds caretLocal = terminalArea
+                        .getCaretSelectionBind().getCaretBounds()
+                        .orElse(null);
+                if (caretLocal == null) return;
+
+                // caretLocal is in terminalArea's own coordinate system.
+                // Step 1: into scene coordinates
+                final javafx.geometry.Bounds caretInScene =
+                        terminalArea.localToScene(caretLocal);
+                // Step 2: into the StackPane that owns our cursor overlay
+                final javafx.geometry.Point2D local =
+                        terminalStackPane.sceneToLocal(
+                                caretInScene.getMinX(),
+                                caretInScene.getMinY());
+
+                cursorNode.setX(local.getX());
+                cursorNode.setY(local.getY());
+            } catch (Exception ignored) {
+                // Layout may not be ready — retry next output pulse
+            }
         });
     }
 
@@ -543,13 +654,14 @@ public class SshTabController {
         }
     }
 
-    /** Always scroll to the very bottom. */
+    /** Always scroll to the very bottom and reposition custom cursor. */
     private void scrollToBottom() {
         Platform.runLater(() -> {
             terminalArea.moveTo(terminalArea.getLength());
             if (terminalScrollPane != null) {
                 terminalScrollPane.scrollYToPixel(Double.MAX_VALUE);
             }
+            repositionCursor();
         });
     }
 
