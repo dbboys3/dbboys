@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 public class JSchTtyConnector {
 
     private final ChannelShell channel;
+    private final OutputStream outputStream;
     private final Reader reader;
     private final Writer writer;
     private final Charset charset;
@@ -28,8 +29,9 @@ public class JSchTtyConnector {
     public JSchTtyConnector(ChannelShell channel, Charset charset) throws IOException {
         this.channel = channel;
         this.charset = charset;
+        this.outputStream = channel.getOutputStream();
         this.reader = new InputStreamReader(channel.getInputStream(), charset);
-        this.writer = new OutputStreamWriter(channel.getOutputStream(), charset);
+        this.writer = new OutputStreamWriter(outputStream, charset);
     }
 
     /** Read from remote shell — called by the JediTerm emulator thread. */
@@ -44,8 +46,8 @@ public class JSchTtyConnector {
     }
 
     public void write(byte[] bytes) throws IOException {
-        channel.getOutputStream().write(bytes);
-        channel.getOutputStream().flush();
+        outputStream.write(bytes);
+        outputStream.flush();
     }
 
     public boolean isConnected() {
