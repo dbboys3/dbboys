@@ -117,7 +117,6 @@ public class SshTabController {
         scrollBar.setBlockIncrement(10);
         scrollBar.getStyleClass().add("ssh-scroll-bar");
         scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
-        scrollBar.setMouseTransparent(true);
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
 
@@ -144,6 +143,14 @@ public class SshTabController {
                 updatingScrollBar = false;
             });
         };
+
+        terminalPane.addEventFilter(ScrollEvent.SCROLL, e -> {
+            int maxOff = Math.max(0, buffer.size() - rows);
+            scrollOff = clamp(
+                    scrollOff + (int)(e.getDeltaY() / 40), 0, maxOff);
+            draw();
+            fireScrollChanged();
+        });
 
         // Resize listeners
         terminalPane.widthProperty().addListener((obs, o, n) -> {
@@ -622,11 +629,7 @@ public class SshTabController {
                 e.consume();
             }
         });
-        canvas.setOnScroll(e -> {
-            scrollOff = clamp(scrollOff + (int)(e.getDeltaY() / 40), 0, Math.max(0, buffer.size() - rows));
-            draw();
-            fireScrollChanged();
-        });
+        canvas.setOnScroll(null);
     }
 
     private static int clamp(int v, int lo, int hi) {
