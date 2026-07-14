@@ -20,5 +20,5 @@
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
     </HBox>
-    <StackPane fx:id="terminalPane" VBox.vgrow="ALWAYS" />
+    <StackPane fx:id="terminalPane" VBox.vgrow="ALWAYS" style="-fx-background-color: black;" />
 </VBox>
