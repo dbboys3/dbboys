@@ -117,14 +117,16 @@ public class SshTabController {
         scrollBar.setBlockIncrement(10);
         scrollBar.getStyleClass().add("ssh-scroll-bar");
         scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
+        scrollBar.setMouseTransparent(true);
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
 
         scrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (!updatingScrollBar) {
                 int v = newVal.intValue();
+                int maxScroll = Math.max(0, buffer.size() - rows);
                 if (v != scrollOff) {
-                    scrollOff = clamp(v, 0, Math.max(0, buffer.size() - rows));
+                    scrollOff = clamp(v, 0, maxScroll);
                     draw();
                 }
             }
@@ -134,8 +136,10 @@ public class SshTabController {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
                 updatingScrollBar = true;
-                scrollBar.setMax(max > 0 ? max + rows : 0);
-                scrollBar.setVisibleAmount(max > 0 ? rows : 1);
+                // Fixed visible amount keeps thumb at a minimum readable size
+                int visAmount = Math.max(12, rows / 2);
+                scrollBar.setMax(max > 0 ? max + visAmount : 0);
+                scrollBar.setVisibleAmount(visAmount);
                 scrollBar.setValue(scrollOff);
                 updatingScrollBar = false;
             });
@@ -705,12 +709,27 @@ public class SshTabController {
         int sc = selStartCol, ec = selEndCol;
         if (selStartRow > selEndRow || (selStartRow == selEndRow && selStartCol > selEndCol)) { sc = selEndCol; ec = selStartCol; }
         if (sc > ec) { int t = sc; sc = ec; ec = t; }
-        if (sr == er) { String l = line(sr); sc = Math.min(sc, l.length()); ec = Math.min(ec, l.length()); return sc < ec ? l.substring(sc, ec) : ""; }
+        if (sr == er) {
+            String l = stripContinuationChars(line(sr));
+            sc = Math.min(sc, l.length()); ec = Math.min(ec, l.length());
+            return sc < ec ? l.substring(sc, ec) : "";
+        }
         StringBuilder sb = new StringBuilder();
         for (int r = sr; r <= er && r < buffer.size(); r++) {
-            String l = line(r); int a = r == sr ? sc : 0, b2 = r == er ? Math.min(ec, l.length()) : l.length();
+            String l = stripContinuationChars(line(r));
+            int a = r == sr ? sc : 0, b2 = r == er ? Math.min(ec, l.length()) : l.length();
             if (a < b2) sb.append(l, a, b2);
             if (r < er) sb.append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** Strip continuation cells (\0) left by fullwidth characters. */
+    private static String stripContinuationChars(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != '\0') sb.append(c);
         }
         return sb.toString();
     }

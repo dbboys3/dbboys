@@ -180,7 +180,7 @@ public class TerminalCanvas extends Canvas {
         int ec = swapped ? selStartCol : selEndCol;
         if (sc > ec) { int t = sc; sc = ec; ec = t; }
         if (sr == er) {
-            String line = buffer.get(sr).toString();
+            String line = stripContinuation(buffer.get(sr).toString());
             sc = Math.min(sc, line.length());
             ec = Math.min(ec, line.length());
             if (sc >= ec) return "";
@@ -188,13 +188,23 @@ public class TerminalCanvas extends Canvas {
         }
         StringBuilder sb = new StringBuilder();
         for (int r = sr; r <= er && r < buffer.size(); r++) {
-            String line = buffer.get(r).toString();
+            String line = stripContinuation(buffer.get(r).toString());
             int c1 = (r == sr) ? sc : 0;
             int c2 = (r == er) ? Math.min(ec, line.length()) : line.length();
             if (c1 < c2) sb.append(line, c1, c2);
             if (r < er) sb.append('\n');
         }
         return sb.toString().replaceAll("\n$", "");
+    }
+
+    /** Strip continuation cells (\0) left by fullwidth characters. */
+    private static String stripContinuation(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != '\0') sb.append(c);
+        }
+        return sb.toString();
     }
 
     // ---- Internal: text buffer ----
