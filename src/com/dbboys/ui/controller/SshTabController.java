@@ -78,7 +78,7 @@ public class SshTabController {
     private Runnable onScrollChanged;
 
     private Timeline autoScrollTimeline;
-    private boolean autoScrolling;
+    private int autoScrollDirection = 0;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
@@ -552,21 +552,22 @@ public class SshTabController {
         canvas.setOnMouseDragged(e -> {
             if (!selecting) return;
             double ey = e.getY();
-            double cw = canvas.getWidth(), ch = canvas.getHeight();
+            double ch = canvas.getHeight();
             int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
+            int maxOff = Math.max(0, buffer.size() - rows);
             int row;
             if (ey < 0) {
-                // Dragged above ¡ª scroll up (show older content)
+                // Dragged above canvas: jump toward older lines, then auto-scroll
                 int lines = (int)(-ey / LINE_H) + 1;
-                scrollOff = clamp(scrollOff + lines, 0, Math.max(0, buffer.size() - rows));
+                scrollOff = clamp(scrollOff - lines, 0, maxOff);
                 row = scrollOff;
-                startAutoScroll(1);
-            } else if (ey > ch) {
-                // Dragged below ¡ª scroll down (show newer content)
-                int lines = (int)((ey - ch) / LINE_H) + 1;
-                scrollOff = clamp(scrollOff - lines, 0, Math.max(0, buffer.size() - rows));
-                row = scrollOff + rows - 1;
                 startAutoScroll(-1);
+            } else if (ey > ch) {
+                // Dragged below canvas: jump toward newer lines, then auto-scroll
+                int lines = (int)((ey - ch) / LINE_H) + 1;
+                scrollOff = clamp(scrollOff + lines, 0, maxOff);
+                row = scrollOff + rows - 1;
+                startAutoScroll(1);
             } else {
                 stopAutoScroll();
                 row = scrollOff + (int)(ey / LINE_H);
@@ -661,12 +662,19 @@ public class SshTabController {
 
 
     private void startAutoScroll(int dir) {
-        if (autoScrolling && autoScrollTimeline != null) return;
-        autoScrolling = true;
+        if (autoScrollDirection == dir) return;
+        autoScrollDirection = dir;
         if (autoScrollTimeline == null) {
             autoScrollTimeline = new Timeline(new KeyFrame(Duration.millis(50), ev -> {
-                if (!autoScrolling) return;
-                scrollOff = clamp(scrollOff + dir, 0, Math.max(0, buffer.size() - rows));
+                if (autoScrollDirection == 0) return;
+                int maxOff = Math.max(0, buffer.size() - rows);
+                scrollOff = clamp(scrollOff + autoScrollDirection, 0, maxOff);
+                // Keep selection endpoint pinned to the edge in scroll direction
+                if (autoScrollDirection < 0) {
+                    selEndRow = scrollOff;
+                } else {
+                    selEndRow = clamp(scrollOff + rows - 1, 0, Math.max(0, buffer.size() - 1));
+                }
                 draw();
                 fireScrollChanged();
             }));
@@ -676,7 +684,7 @@ public class SshTabController {
     }
 
     private void stopAutoScroll() {
-        autoScrolling = false;
+        autoScrollDirection = 0;
         if (autoScrollTimeline != null) autoScrollTimeline.stop();
     }
     private static int clamp(int v, int lo, int hi) {
