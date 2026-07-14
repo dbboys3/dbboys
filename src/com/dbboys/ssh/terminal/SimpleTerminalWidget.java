@@ -61,7 +61,7 @@ public class SimpleTerminalWidget extends Canvas {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> { cursorVis = !cursorVis; if (focused) draw(); }));
         blink.setCycleCount(Timeline.INDEFINITE); blink.play();
 
-        focusedProperty().addListener((o, ov, n) -> { focused = n; cursorVis = true; draw(); });
+        focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
         resizeCanvas(); setupInput();
     }
 
