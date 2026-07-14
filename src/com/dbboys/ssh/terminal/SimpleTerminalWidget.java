@@ -59,7 +59,7 @@ public class SimpleTerminalWidget extends Canvas {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> { cursorVis = !cursorVis; if (focused) draw(); }));
         blink.setCycleCount(Timeline.INDEFINITE); blink.play();
 
-        focusedProperty().addListener((o, ov, n) -> { focused = n; if (!n) { cursorVis = true; draw(); } });
+        focusedProperty().addListener((o, ov, n) -> { focused = n; cursorVis = true; draw(); });
         resizeCanvas(); setupInput();
     }
 
@@ -222,9 +222,9 @@ public class SimpleTerminalWidget extends Canvas {
 
     private void setupInput() {
         setFocusTraversable(true);
-        setOnMousePressed(e -> { requestFocus(); selecting = true; selStartCol = selEndCol = (int)(e.getX()/CHAR_W); selStartRow = selEndRow = scrollOff + (int)(e.getY()/LINE_H); });
+        setOnMousePressed(e -> { requestFocus(); selecting = true; selStartCol = selEndCol = (int)(e.getX()/CHAR_W); selStartRow = selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); });
         setOnMouseDragged(e -> { if (!selecting) return; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); draw(); });
-        setOnMouseReleased(e -> { selecting = false; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); if (selStartRow == selEndRow && selStartCol == selEndCol) selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); });
+        setOnMouseReleased(e -> { requestFocus(); selecting = false; selEndCol = clamp((int)(e.getX()/CHAR_W), 0, cols-1); selEndRow = clamp(scrollOff+(int)(e.getY()/LINE_H), 0, Math.max(0,buffer.size()-1)); if (selStartRow == selEndRow && selStartCol == selEndCol) selStartCol = selEndCol = selStartRow = selEndRow = -1; draw(); });
         setOnKeyPressed(e -> { if (conn == null || !conn.isConnected()) { e.consume(); return; } byte[] b = key(e); if (b != null) { try { conn.write(b); } catch (Exception x) {} e.consume(); } });
         setOnKeyTyped(e -> { if (conn == null || !conn.isConnected()) return; String ch = e.getCharacter(); if (ch == null || ch.isEmpty()) return; char c = ch.charAt(0); if (c == '\r' || c == '\n') { try { conn.write(String.valueOf(c)); } catch (Exception x) {} e.consume(); } else if (c >= 0x20 && c != 0x7F) { try { conn.write(ch); } catch (Exception x) {} e.consume(); } });
         setOnScroll(e -> { scrollOff = clamp(scrollOff + (int)(e.getDeltaY()/40), 0, Math.max(0,buffer.size()-rows)); draw(); });
