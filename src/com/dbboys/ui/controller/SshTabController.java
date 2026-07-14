@@ -77,6 +77,8 @@ public class SshTabController {
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
 
+    private Timeline autoScrollTimeline;
+    private boolean autoScrolling;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
@@ -116,6 +118,7 @@ public class SshTabController {
         scrollBar.setUnitIncrement(1);
         scrollBar.setBlockIncrement(10);
         scrollBar.getStyleClass().add("ssh-scroll-bar");
+        scrollBar.setVisible(false);
         scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
@@ -134,6 +137,7 @@ public class SshTabController {
         onScrollChanged = () -> {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
+                scrollBar.setVisible(max > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
                                 int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
@@ -547,13 +551,35 @@ public class SshTabController {
         });
         canvas.setOnMouseDragged(e -> {
             if (!selecting) return;
-            selEndCol = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
-            selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
+            double ey = e.getY();
+            double cw = canvas.getWidth(), ch = canvas.getHeight();
+            int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
+            int row;
+            if (ey < 0) {
+                // Dragged above ¡ª scroll up (show older content)
+                int lines = (int)(-ey / LINE_H) + 1;
+                scrollOff = clamp(scrollOff + lines, 0, Math.max(0, buffer.size() - rows));
+                row = scrollOff;
+                startAutoScroll(1);
+            } else if (ey > ch) {
+                // Dragged below ¡ª scroll down (show newer content)
+                int lines = (int)((ey - ch) / LINE_H) + 1;
+                scrollOff = clamp(scrollOff - lines, 0, Math.max(0, buffer.size() - rows));
+                row = scrollOff + rows - 1;
+                startAutoScroll(-1);
+            } else {
+                stopAutoScroll();
+                row = scrollOff + (int)(ey / LINE_H);
+            }
+            selEndCol = col;
+            selEndRow = clamp(row, 0, Math.max(0, buffer.size() - 1));
             draw();
+            fireScrollChanged();
         });
         canvas.setOnMouseReleased(e -> {
             canvas.requestFocus();
             selecting = false;
+            stopAutoScroll();
             if (e.getButton() == MouseButton.PRIMARY) {
                 selEndCol = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
                 selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
@@ -633,6 +659,26 @@ public class SshTabController {
         });
     }
 
+
+    private void startAutoScroll(int dir) {
+        if (autoScrolling && autoScrollTimeline != null) return;
+        autoScrolling = true;
+        if (autoScrollTimeline == null) {
+            autoScrollTimeline = new Timeline(new KeyFrame(Duration.millis(50), ev -> {
+                if (!autoScrolling) return;
+                scrollOff = clamp(scrollOff + dir, 0, Math.max(0, buffer.size() - rows));
+                draw();
+                fireScrollChanged();
+            }));
+            autoScrollTimeline.setCycleCount(Timeline.INDEFINITE);
+        }
+        autoScrollTimeline.play();
+    }
+
+    private void stopAutoScroll() {
+        autoScrolling = false;
+        if (autoScrollTimeline != null) autoScrollTimeline.stop();
+    }
     private static int clamp(int v, int lo, int hi) {
         return Math.max(lo, Math.min(hi, v));
     }
