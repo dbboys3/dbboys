@@ -533,12 +533,13 @@ public class SshTabController {
         if (cursorVis && focused) {
             int vr = curRow - scrollOff;
             if (vr >= 0 && vr < rows) {
-                double cx = curCol * CHAR_W, cy = vr * LINE_H;
+                double cx = curCol * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
+                double cursorHeight = LINE_H * 0.8;
                 char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).length())
                         ? buffer.get(curRow).charAt(curCol) : ' ';
                 double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
                 g.setFill(Color.rgb(200,200,200,0.7));
-                g.fillRect(cx, cy, cursorW, LINE_H);
+                g.fillRect(cx, cy, cursorW, cursorHeight);
                 if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
                     g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);

@@ -421,12 +421,13 @@ public class TerminalCanvas extends Canvas {
             int visR = cursorRow - scrollOffset;
             if (visR >= 0 && visR < rows) {
                 double cx = cursorCol * CHAR_W;
-                double cy = visR * LINE_H;
+                double cy = visR * LINE_H + LINE_H * 0.2;
+                double cursorH = LINE_H * 0.8;
                 char atCursor = (cursorRow < buffer.size() && cursorCol < buffer.get(cursorRow).length())
                         ? buffer.get(cursorRow).charAt(cursorCol) : ' ';
                 double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
                 g.setFill(Color.rgb(200, 200, 200, 0.7));
-                g.fillRect(cx, cy, cursorW, LINE_H);
+                g.fillRect(cx, cy, cursorW, cursorH);
                 if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
                     g.fillText(String.valueOf(atCursor), cx, cy + LINE_H - 3);
