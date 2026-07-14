@@ -338,6 +338,15 @@ public class SshTabController {
         return r < buffer.size() ? buffer.get(r).toString() : "";
     }
 
+    private void jumpToBottom() {
+        int maxOff = Math.max(0, buffer.size() - rows);
+        if (scrollOff != maxOff) {
+            scrollOff = maxOff;
+            draw();
+            fireScrollChanged();
+        }
+    }
+
     // ---- ANSI ----
 
     private int esc(String s, int p, int e) {
@@ -617,6 +626,8 @@ public class SshTabController {
         });
         canvas.setOnKeyPressed(e -> {
             if (shellChannel == null || !shellChannel.isConnected()) { e.consume(); return; }
+            // Auto-jump to bottom before sending input
+            jumpToBottom();
             byte[] b = key(e);
             if (b != null) {
                 try {
@@ -632,6 +643,8 @@ public class SshTabController {
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
+            // Auto-jump to bottom before sending input
+            jumpToBottom();
             if (c == '\r' || c == '\n') {
                 try {
                     OutputStream os = shellChannel.getOutputStream();
