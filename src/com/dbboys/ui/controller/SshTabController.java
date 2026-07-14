@@ -6,7 +6,6 @@ import com.dbboys.infra.util.JschUtil;
 import com.dbboys.ssh.SshConnect;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.ui.notification.NotificationUtil;
 import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.Session;
 import javafx.animation.KeyFrame;
@@ -808,9 +807,14 @@ public class SshTabController {
             if (e.getButton() == MouseButton.PRIMARY) {
                 selEndCol = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
                 selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
-            }
-            if (selStartRow == selEndRow && selStartCol == selEndCol) {
-                selStartCol = selEndCol = selStartRow = selEndRow = -1;
+                // Copy selection to clipboard on mouse release (drag-select)
+                String sel = selectedText();
+                if (!sel.isEmpty()) {
+                    Clipboard.getSystemClipboard().setContent(
+                            java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, sel));
+                } else {
+                    selStartCol = selEndCol = selStartRow = selEndRow = -1;
+                }
             }
             draw();
         });
@@ -826,16 +830,30 @@ public class SshTabController {
                 selStartRow = selEndRow = row;
                 selStartCol = start;
                 selEndCol = end;
+                // Copy double-clicked word to clipboard (silent)
+                String word = selectedText();
+                if (!word.isEmpty()) {
+                    Clipboard.getSystemClipboard().setContent(
+                            java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, word));
+                }
                 draw();
             }
         });
         canvas.setOnContextMenuRequested(e -> {
-            String s = selectedText();
-            if (!s.isEmpty()) {
-                Clipboard.getSystemClipboard().setContent(java.util.Collections.singletonMap(DataFormat.PLAIN_TEXT, s));
-                selStartCol = selEndCol = selStartRow = selEndRow = -1;
-                draw();
-                NotificationUtil.showMainNotification("Copied");
+            // Right-click: paste from clipboard (\\n -> \\r for terminal)
+            if (shellChannel == null || !shellChannel.isConnected()) { e.consume(); return; }
+            Clipboard cb = Clipboard.getSystemClipboard();
+            if (cb.hasString()) {
+                String text = cb.getString();
+                if (text != null && !text.isEmpty()) {
+                    // Replace \\n with \\r as terminals expect \\r for Enter
+                    text = text.replace("\n", "\r");
+                    try {
+                        OutputStream os = shellChannel.getOutputStream();
+                        os.write(text.getBytes(StandardCharsets.UTF_8));
+                        os.flush();
+                    } catch (Exception ignored) {}
+                }
             }
             e.consume();
         });
