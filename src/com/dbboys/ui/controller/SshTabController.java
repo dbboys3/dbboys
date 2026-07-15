@@ -200,7 +200,7 @@ public class SshTabController {
                 session = JschUtil.getSshSession(sshConnect);
                 shellChannel = (ChannelShell) session.openChannel("shell");
                 shellChannel.setPty(true);
-                shellChannel.setPtyType("linux");
+                shellChannel.setPtyType("vt100");
                 shellChannel.connect();
 
                 start();
