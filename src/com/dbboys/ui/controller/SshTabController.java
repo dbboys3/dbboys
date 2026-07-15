@@ -84,6 +84,7 @@ public class SshTabController {
     private Thread readThread;
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
+    private String pendingEsc;
 
     private Timeline autoScrollTimeline;
     private int autoScrollDirection = 0;
@@ -199,7 +200,7 @@ public class SshTabController {
                 session = JschUtil.getSshSession(sshConnect);
                 shellChannel = (ChannelShell) session.openChannel("shell");
                 shellChannel.setPty(true);
-                shellChannel.setPtyType("xterm-256color");
+                shellChannel.setPtyType("linux");
                 shellChannel.connect();
 
                 start();
@@ -296,9 +297,18 @@ public class SshTabController {
     }
 
     private void write(String raw) {
+        // prepend any incomplete escape sequence from the previous chunk
+        if (pendingEsc != null) {
+            raw = pendingEsc + raw;
+            pendingEsc = null;
+        }
         for (int i = 0, n = raw.length(); i < n; i++) {
             char c = raw.charAt(i);
-            if (c == 0x1B && i + 1 < n) i = esc(raw, i + 1, n);
+            if (c == 0x1B) {
+                int ni = esc(raw, i + 1, n);
+                if (ni < 0) { pendingEsc = raw.substring(i); return; }
+                i = ni;
+            }
             else if (c == '\b') { if (curCol > 0) curCol--; }
             else if (c == '\r') curCol = 0;
             else if (c == '\n') {
@@ -377,11 +387,11 @@ public class SshTabController {
     // ---- ANSI ----
 
     private int esc(String s, int p, int e) {
-        if (p >= e) return e - 1;
+        if (p >= e) return -1;
         char c = s.charAt(p);
-        if (c == '[') return csi(s, p + 1, e);
-        if (c == ']') return osc(s, p + 1, e);
-        if (c == '(' || c == ')') return consumeCharset(s, p + 1, e);
+        if (c == '[') { int r = csi(s, p + 1, e); return r < 0 ? -1 : r; }
+        if (c == ']') { int r = osc(s, p + 1, e); return r < 0 ? -1 : r; }
+        if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e); return r < 0 ? -1 : r; }
         // ESC 7 / ESC 8 — save/restore cursor (DECSC/DECRC)
         if (c == '7') { saveCursor(); return p; }
         if (c == '8') { restoreCursor(); return p; }
@@ -404,7 +414,7 @@ public class SshTabController {
 
     private int consumeCharset(String s, int p, int e) {
         if (p < e) return p; // skip one char
-        return e - 1;
+        return -1;
     }
 
     private void saveCursor() {
@@ -514,6 +524,7 @@ public class SshTabController {
                         if (originMode && row >= 0) row += scrollTop;
                         curRow = Math.max(0, row);
                         curCol = Math.max(0, col);
+                        if (row == 0 && col == 0) scrollOff = 0; // top refresh resets viewport
                     } break;
                     case 'L': { // insert lines
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
@@ -571,7 +582,7 @@ public class SshTabController {
                 return p;
             } else return p - 1;
         }
-        return e - 1;
+        return -1;
     }
 
     private int osc(String s, int p, int e) {
@@ -581,7 +592,7 @@ public class SshTabController {
             if (c == 0x1B && p + 1 < e && s.charAt(p + 1) == '\\') return p + 1;
             p++;
         }
-        return e - 1;
+        return -1;
     }
 
     private void eraseEOL() {
