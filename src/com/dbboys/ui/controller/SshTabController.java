@@ -85,6 +85,8 @@ public class SshTabController {
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
     private String pendingEsc;
+    private List<StringBuilder> altSavedBuffer;
+    private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
 
     private Timeline autoScrollTimeline;
     private int autoScrollDirection = 0;
@@ -291,7 +293,7 @@ public class SshTabController {
             else if (c == '\r') curCol = 0;
             else put(c);
         }
-        nl();
+        if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
         draw();
         fireScrollChanged();
     }
@@ -352,11 +354,11 @@ public class SshTabController {
             curCol = 0;
             curRow++;
             pendingWrap = true;
-            if (curRow > (scrollBottom < 0 ? buffer.size() - 1 : scrollBottom)) {
+            if (curRow > (scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1)) {
                 // scroll region is full — scroll up one line
                 int top = scrollTop;
-                int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                bottom = Math.max(top, Math.min(bottom, Math.max(0, buffer.size() - 1)));
+                int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+                bottom = Math.max(scrollTop, bottom);
                 deleteLine(top, bottom);
                 ensureBuf(bottom);
                 buffer.get(bottom).setLength(0);
@@ -439,8 +441,7 @@ public class SshTabController {
     }
 
     private void indexDown() {
-        int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-        bottom = Math.min(bottom, Math.max(0, buffer.size() - 1));
+        int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         if (curRow == bottom) {
             deleteLine(scrollTop, bottom);
             // fill new blank line at bottom
@@ -452,8 +453,7 @@ public class SshTabController {
     }
 
     private void insertLine(int at) {
-        int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-        bottom = Math.min(bottom, Math.max(0, buffer.size() - 1));
+        int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         ensureBuf(bottom + 1);
         buffer.add(at, new StringBuilder());
         if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
@@ -486,7 +486,30 @@ public class SshTabController {
                 if (isPrivate) {
                     switch (c) {
                         case 'h': case 'l':
-                            if (ps.equals("25")) cursorShown = (c == 'h'); break; // DECTCEM
+                            if (ps.equals("25")) { cursorShown = (c == 'h'); break; }
+                            // DECSET ?1049h/?1049l -- alternate screen buffer
+                            if (ps.equals("1049")) {
+                                if (c == 'h') {
+                                    altSavedBuffer = new ArrayList<>(buffer.size());
+                                    for (StringBuilder sb : buffer) {
+                                        altSavedBuffer.add(new StringBuilder(sb.toString()));
+                                    }
+                                    altSavedCurCol = curCol; altSavedCurRow = curRow;
+                                    altSavedScrollOff = scrollOff;
+                                    buffer.clear(); buffer.add(new StringBuilder());
+                                    curCol = curRow = scrollOff = 0;
+                                } else {
+                                    if (altSavedBuffer != null) {
+                                        buffer.clear();
+                                        buffer.addAll(altSavedBuffer);
+                                        curCol = altSavedCurCol; curRow = altSavedCurRow;
+                                        scrollOff = altSavedScrollOff;
+                                        altSavedBuffer = null;
+                                    }
+                                }
+                                break;
+                            }
+                            break;
                         case 'r': break; // DECSTBM — handled below
                         case 's': break; // DECSC
                         case 'u': break; // DECRC
