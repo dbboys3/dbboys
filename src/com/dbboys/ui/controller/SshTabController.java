@@ -76,6 +76,7 @@ public class SshTabController {
     private boolean cursorShown = true; // DECTCEM
     private int scrollTop, scrollBottom = -1; // DECSTBM scroll region
     private boolean originMode; // DECOM
+    private boolean pendingWrap; // auto-wrap happened, skip next \n
     private int savedCurCol, savedCurRow; // DECSC/DECRC
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold;
@@ -283,7 +284,9 @@ public class SshTabController {
 
     private void status(String s) {
         for (char c : s.toCharArray()) {
-            if (c == '\n') nl();
+            if (c == '\n') {
+                if (pendingWrap) pendingWrap = false; else nl();
+            }
             else if (c == '\r') curCol = 0;
             else put(c);
         }
@@ -298,7 +301,13 @@ public class SshTabController {
             if (c == 0x1B && i + 1 < n) i = esc(raw, i + 1, n);
             else if (c == '\b') { if (curCol > 0) curCol--; }
             else if (c == '\r') curCol = 0;
-            else if (c == '\n') nl();
+            else if (c == '\n') {
+                if (pendingWrap) {
+                    pendingWrap = false; // auto-wrap already moved cursor, skip
+                } else {
+                    nl();
+                }
+            }
             else if (c >= 0x20 && c != 0x7F) put(c);
         }
         draw();
@@ -319,6 +328,7 @@ public class SshTabController {
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
 
     private void put(char c) {
+        pendingWrap = false;
         StringBuilder ln = ensureBuf(curRow);
         while (ln.length() <= curCol) ln.append(' ');
         ln.setCharAt(curCol, c);
@@ -331,6 +341,7 @@ public class SshTabController {
         if (curCol >= cols) {
             curCol = 0;
             curRow++;
+            pendingWrap = true;
             if (curRow > (scrollBottom < 0 ? buffer.size() - 1 : scrollBottom)) {
                 // scroll region is full — scroll up one line
                 int top = scrollTop;
