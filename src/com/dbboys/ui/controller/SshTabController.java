@@ -85,6 +85,7 @@ public class SshTabController {
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
     private String pendingEsc;
+    private boolean scrollLock;
     private List<StringBuilder> altSavedBuffer;
     private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
 
@@ -140,6 +141,7 @@ public class SshTabController {
                 int maxScroll = Math.max(0, buffer.size() - rows);
                 if (v != scrollOff) {
                     scrollOff = clamp(v, 0, maxScroll);
+                    scrollLock = false;
                     draw();
                 }
             }
@@ -148,7 +150,7 @@ public class SshTabController {
         onScrollChanged = () -> {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
-                scrollBar.setVisible(max > 0);
+                scrollBar.setVisible(max > 0 && !scrollLock);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
                                 int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
@@ -333,7 +335,7 @@ public class SshTabController {
         curCol = 0;
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
-        if (curRow - scrollOff >= rows) scrollOff = curRow - rows + 1;
+        if (!scrollLock && curRow - scrollOff >= rows) scrollOff = curRow - rows + 1;
         fireScrollChanged();
     }
 
@@ -354,7 +356,7 @@ public class SshTabController {
             curCol = 0;
             curRow++;
             pendingWrap = true;
-            if (curRow > (scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1)) {
+            if (!scrollLock && curRow > (scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1)) {
                 // scroll region is full — scroll up one line
                 int top = scrollTop;
                 int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
@@ -381,6 +383,7 @@ public class SshTabController {
         int maxOff = Math.max(0, buffer.size() - rows);
         if (scrollOff != maxOff) {
             scrollOff = maxOff;
+            scrollLock = false;
             draw();
             fireScrollChanged();
         }
@@ -547,7 +550,7 @@ public class SshTabController {
                         if (originMode && row >= 0) row += scrollTop;
                         curRow = Math.max(0, row);
                         curCol = Math.max(0, col);
-                        if (row == 0 && col == 0) scrollOff = 0; // top refresh resets viewport
+                        if (row == 0 && col == 0) { scrollOff = 0; scrollLock = true; } // top refresh resets viewport
                     } break;
                     case 'L': { // insert lines
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
@@ -944,6 +947,7 @@ public class SshTabController {
             if (dir != 0) {
                 int maxOff = Math.max(0, buffer.size() - rows);
                 scrollOff = clamp(scrollOff + dir, 0, maxOff);
+                scrollLock = false;
                 draw();
                 fireScrollChanged();
             }
