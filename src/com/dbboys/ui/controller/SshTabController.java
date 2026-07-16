@@ -50,6 +50,24 @@ public class SshTabController {
         LINE_H = 13 * 1.4;
     }
 
+    // ---- Terminal cell with per-character SGR attributes ----
+
+    /** A single character cell storing both the glyph and its SGR styling. */
+    private static class Cell {
+        char ch = ' ';
+        int fg = 37, bg = 40;   // SGR color codes (30-37/39 foreground, 40-47/49 background)
+        boolean bold, underline, reverse;
+
+        void reset() { ch = ' '; fg = 37; bg = 40; bold = underline = reverse = false; }
+
+        Cell copy() {
+            Cell c = new Cell();
+            c.ch = this.ch; c.fg = this.fg; c.bg = this.bg;
+            c.bold = this.bold; c.underline = this.underline; c.reverse = this.reverse;
+            return c;
+        }
+    }
+
     @FXML public StackPane terminalPane;
     @FXML public Button connectButton;
     @FXML public Button disconnectButton;
@@ -66,7 +84,7 @@ public class SshTabController {
     // Terminal state
     private Canvas canvas;
     private int cols = 80, rows = 24;
-    private final List<StringBuilder> buffer = new ArrayList<>();
+    private final List<List<Cell>> buffer = new ArrayList<>();
     private int curCol, curRow;
     private int selStartCol = -1, selStartRow = -1, selEndCol = -1, selEndRow = -1;
     private boolean selecting, cursorVis = true, focused = true;
@@ -79,22 +97,27 @@ public class SshTabController {
     private boolean pendingWrap; // auto-wrap happened, skip next \n
     private int savedCurCol, savedCurRow; // DECSC/DECRC
     private int savedSgrFg, savedSgrBg;
-    private boolean savedSgrReverse, savedSgrBold;
+    private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
 
     private Thread readThread;
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
     private String pendingEsc;
     private boolean scrollLock;
-    private List<StringBuilder> altSavedBuffer;
+    private List<List<Cell>> altSavedBuffer;
     private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
+    private boolean inAltScreen; // whether alternate screen buffer (?1049h) is active
+
+    // Deferred draw: coalesce rapid write() calls into a single draw,
+    // preventing the blink timer from rendering partially-updated screens.
+    private volatile boolean drawPending;
 
     private Timeline autoScrollTimeline;
     private int autoScrollDirection = 0;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
-            if (focused && canvas != null) draw();
+            if (focused && canvas != null && !drawPending) draw();
         }));
         blink.setCycleCount(Timeline.INDEFINITE);
         blink.play();
@@ -114,7 +137,7 @@ public class SshTabController {
         connectStatus.set(I18n.t("ssh.tab.disconnected", "Disconnected"));
 
         // Canvas terminal
-        buffer.add(new StringBuilder());
+        buffer.add(new ArrayList<>());
         canvas = new Canvas(cols * CHAR_W, rows * LINE_H);
         canvas.setFocusTraversable(true);
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
@@ -287,6 +310,20 @@ public class SshTabController {
         }
     }
 
+    /** Request a deferred draw. Coalesces rapid write() calls to prevent
+     *  the blink timer rendering a partially-updated screen during full-screen
+     *  program refreshes (top, nmon, etc.). */
+    private void requestDraw() {
+        if (!drawPending) {
+            drawPending = true;
+            Platform.runLater(() -> {
+                drawPending = false;
+                draw();
+                fireScrollChanged();
+            });
+        }
+    }
+
     private void status(String s) {
         for (char c : s.toCharArray()) {
             if (c == '\n') {
@@ -296,8 +333,7 @@ public class SshTabController {
             else put(c);
         }
         if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
-        draw();
-        fireScrollChanged();
+        requestDraw();
     }
 
     private void write(String raw) {
@@ -322,10 +358,10 @@ public class SshTabController {
                     nl();
                 }
             }
-            else if (c >= 0x20 && c != 0x7F) put(c);
+            else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace (top uses this)
+            else if (c >= 0x20) put(c);
         }
-        draw();
-        fireScrollChanged();
+        requestDraw();
     }
 
     // ---- Buffer ----
@@ -336,47 +372,62 @@ public class SshTabController {
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
         if (!scrollLock && curRow - scrollOff >= rows) scrollOff = curRow - rows + 1;
-        fireScrollChanged();
     }
 
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
 
     private void put(char c) {
         pendingWrap = false;
-        StringBuilder ln = ensureBuf(curRow);
-        while (ln.length() <= curCol) ln.append(' ');
-        ln.setCharAt(curCol, c);
+        List<Cell> ln = ensureBuf(curRow);
+        // Extend row to accommodate curCol
+        while (ln.size() <= curCol) ln.add(new Cell());
+        Cell cell = ln.get(curCol);
+        cell.ch = c;
+        cell.fg = sgrFg; cell.bg = sgrBg;
+        cell.bold = sgrBold; cell.underline = sgrUnderline; cell.reverse = sgrReverse;
         int w = isFullwidth(c) ? 2 : 1;
         if (w == 2 && curCol + 1 < cols) {
-            while (ln.length() <= curCol + 1) ln.append(' ');
-            ln.setCharAt(curCol + 1, '\0');
+            while (ln.size() <= curCol + 1) ln.add(new Cell());
+            Cell cont = ln.get(curCol + 1);
+            cont.ch = '\0';
+            cont.fg = sgrFg; cont.bg = sgrBg;
+            cont.bold = sgrBold; cont.underline = sgrUnderline; cont.reverse = sgrReverse;
         }
         curCol += w;
         if (curCol >= cols) {
             curCol = 0;
             curRow++;
             pendingWrap = true;
-            if (!scrollLock && curRow > (scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1)) {
+            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+            if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
                 // scroll region is full — scroll up one line
                 int top = scrollTop;
                 int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
                 bottom = Math.max(scrollTop, bottom);
                 deleteLine(top, bottom);
                 ensureBuf(bottom);
-                buffer.get(bottom).setLength(0);
+                // blank the bottom line
+                List<Cell> bottomLn = buffer.get(bottom);
+                for (Cell cl : bottomLn) cl.reset();
                 curRow = bottom;
             }
             ensureBuf(curRow);
         }
     }
 
-    private StringBuilder ensureBuf(int r) {
-        while (buffer.size() <= r) buffer.add(new StringBuilder());
+    private List<Cell> ensureBuf(int r) {
+        while (buffer.size() <= r) buffer.add(new ArrayList<>());
         return buffer.get(r);
     }
 
     private String line(int r) {
-        return r < buffer.size() ? buffer.get(r).toString() : "";
+        if (r >= buffer.size()) return "";
+        List<Cell> row = buffer.get(r);
+        StringBuilder sb = new StringBuilder(row.size());
+        for (Cell c : row) {
+            if (c.ch != '\0') sb.append(c.ch);
+        }
+        return sb.toString();
     }
 
     private void jumpToBottom() {
@@ -411,9 +462,7 @@ public class SshTabController {
         // ESC > — alternate keypad numeric; ESC = — alternate keypad application
         if (c == '>' || c == '=') return p;
         // ESC c — RIS (reset to initial state)
-        if (c == 'c') { buffer.clear(); buffer.add(new StringBuilder()); curCol = curRow = scrollOff = 0;
-                        scrollTop = 0; scrollBottom = -1; originMode = false;
-                        sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false; draw(); return p; }
+        if (c == 'c') { resetTerminal(); return p; }
         return p;
     }
 
@@ -422,16 +471,27 @@ public class SshTabController {
         return -1;
     }
 
+    private void resetTerminal() {
+        buffer.clear(); buffer.add(new ArrayList<>());
+        curCol = curRow = scrollOff = 0;
+        scrollTop = 0; scrollBottom = -1; originMode = false;
+        sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
+        inAltScreen = false; altSavedBuffer = null;
+        draw();
+    }
+
     private void saveCursor() {
         savedCurCol = curCol; savedCurRow = curRow;
         savedSgrFg = sgrFg; savedSgrBg = sgrBg;
         savedSgrReverse = sgrReverse; savedSgrBold = sgrBold;
+        savedSgrUnderline = sgrUnderline;
     }
 
     private void restoreCursor() {
         curCol = savedCurCol; curRow = savedCurRow;
         sgrFg = savedSgrFg; sgrBg = savedSgrBg;
         sgrReverse = savedSgrReverse; sgrBold = savedSgrBold;
+        sgrUnderline = savedSgrUnderline;
         ensureBuf(curRow);
     }
 
@@ -448,8 +508,7 @@ public class SshTabController {
         if (curRow == bottom) {
             deleteLine(scrollTop, bottom);
             // fill new blank line at bottom
-            ensureBuf(bottom);
-            buffer.get(bottom).setLength(0);
+            ensureBuf(bottom).clear();
         } else {
             curRow = Math.min(bottom, curRow + 1);
         }
@@ -458,7 +517,7 @@ public class SshTabController {
     private void insertLine(int at) {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         ensureBuf(bottom + 1);
-        buffer.add(at, new StringBuilder());
+        buffer.add(at, new ArrayList<>());
         if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
     }
 
@@ -466,9 +525,6 @@ public class SshTabController {
         if (from >= buffer.size()) return;
         buffer.remove(from);
         ensureBuf(to);
-        if (buffer.size() > to + 1) {
-            // shift was implicit in remove
-        }
     }
 
     private void deleteLines(int from, int count) {
@@ -482,7 +538,8 @@ public class SshTabController {
         boolean isPrivate = false; // CSI ? prefix
         while (p < e) {
             char c = s.charAt(p);
-            if ((c >= '0' && c <= '9') || c == ';' || c == ' ' || c == '>') p++;
+            if ((c >= '0' && c <= '9') || c == ';' || c == ' ') p++;
+            else if (c == '>' && p == st) p++; // scrolls
             else if (c == '?' && p == st) { isPrivate = true; st = ++p; }
             else if (c >= '@' && c <= '~') {
                 String ps = s.substring(st, p);
@@ -493,15 +550,22 @@ public class SshTabController {
                             // DECSET ?1049h/?1049l -- alternate screen buffer
                             if (ps.equals("1049")) {
                                 if (c == 'h') {
+                                    // Save current buffer and SGR state
                                     altSavedBuffer = new ArrayList<>(buffer.size());
-                                    for (StringBuilder sb : buffer) {
-                                        altSavedBuffer.add(new StringBuilder(sb.toString()));
+                                    for (List<Cell> row : buffer) {
+                                        List<Cell> savedRow = new ArrayList<>(row.size());
+                                        for (Cell cl : row) savedRow.add(cl.copy());
+                                        altSavedBuffer.add(savedRow);
                                     }
                                     altSavedCurCol = curCol; altSavedCurRow = curRow;
                                     altSavedScrollOff = scrollOff;
-                                    buffer.clear(); buffer.add(new StringBuilder());
+                                    inAltScreen = true;
+                                    buffer.clear(); buffer.add(new ArrayList<>());
                                     curCol = curRow = scrollOff = 0;
+                                    // Lock scroll region to the visible area in alt screen
+                                    scrollTop = 0; scrollBottom = rows - 1;
                                 } else {
+                                    // Restore saved buffer
                                     if (altSavedBuffer != null) {
                                         buffer.clear();
                                         buffer.addAll(altSavedBuffer);
@@ -509,15 +573,22 @@ public class SshTabController {
                                         scrollOff = altSavedScrollOff;
                                         altSavedBuffer = null;
                                     }
+                                    inAltScreen = false;
+                                    scrollTop = 0; scrollBottom = -1;
                                 }
                                 break;
                             }
                             break;
-                        case 'r': break; // DECSTBM — handled below
+                        case 'r': // DECSTBM — handled below in standard CSI
+                            if (inAltScreen && ps.isEmpty()) {
+                                // ?r without params: restore default scroll region
+                                scrollTop = 0; scrollBottom = rows - 1;
+                            }
+                            break;
                         case 's': break; // DECSC
                         case 'u': break; // DECRC
                         case 'J':
-                            if (ps.equals("2")) { buffer.clear(); buffer.add(new StringBuilder()); curCol = curRow = 0; }
+                            if (ps.equals("2")) { clearBuffer(); }
                             break;
                     }
                     return p;
@@ -531,8 +602,12 @@ public class SshTabController {
                     case 'J':
                         if (ps.isEmpty() || ps.equals("0")) eraseEOD();
                         else if (ps.equals("1")) eraseDOS();
-                        else if (ps.equals("2")) { buffer.clear(); buffer.add(new StringBuilder()); curCol = curRow = 0; scrollOff = 0;
-                                                  scrollTop = 0; scrollBottom = -1; originMode = false; }
+                        else if (ps.equals("2")) {
+                            clearBuffer();
+                            if (!inAltScreen) {
+                                scrollOff = 0; scrollTop = 0; scrollBottom = -1; originMode = false;
+                            }
+                        }
                         break;
                     case 'm': sgr(ps); break;
                     case 'A': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
@@ -550,45 +625,59 @@ public class SshTabController {
                         if (originMode && row >= 0) row += scrollTop;
                         curRow = Math.max(0, row);
                         curCol = Math.max(0, col);
-                        if (row == 0 && col == 0) { scrollOff = 0; scrollLock = true; } // top refresh resets viewport
+                        // Only reset viewport on home in normal screen (not alt screen)
+                        if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = true; }
                     } break;
-                    case 'L': { // insert lines
+                    case 'L': { // insert lines at current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i = 0; i < n; i++) { ensureBuf(bottom + 1); buffer.add(scrollTop, new StringBuilder()); if (buffer.size() > bottom + 2) buffer.remove(bottom + 1); }
+                        int insAt = Math.max(scrollTop, curRow);
+                        for (int i = 0; i < n; i++) {
+                            ensureBuf(bottom + 1);
+                            buffer.add(insAt, new ArrayList<>());
+                            if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
+                        }
                     } break;
-                    case 'M': { // delete lines
+                    case 'M': { // delete lines from current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i = 0; i < n && buffer.size() > scrollTop; i++) { buffer.remove(scrollTop); }
-                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new StringBuilder());
+                        int delFrom = Math.max(scrollTop, curRow);
+                        for (int i = 0; i < n && delFrom < buffer.size() && delFrom <= bottom; i++) {
+                            buffer.remove(delFrom);
+                        }
+                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new ArrayList<>());
                     } break;
                     case 'P': { // delete characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
-                        StringBuilder ln = ensureBuf(curRow);
-                        if (curCol < ln.length()) ln.delete(curCol, Math.min(ln.length(), curCol + n));
+                        List<Cell> ln = ensureBuf(curRow);
+                        if (curCol < ln.size()) {
+                            for (int i = 0; i < n && curCol < ln.size(); i++) ln.remove(curCol);
+                        }
                     } break;
                     case '@': { // insert characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
-                        StringBuilder ln = ensureBuf(curRow);
-                        for (int i2 = 0; i2 < n; i2++) ln.insert(curCol, ' ');
+                        List<Cell> ln = ensureBuf(curRow);
+                        for (int i2 = 0; i2 < n; i2++) ln.add(curCol, new Cell());
                     } break;
                     case 'X': { // erase characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
-                        StringBuilder ln = ensureBuf(curRow);
-                        int end = Math.min(ln.length(), curCol + n);
-                        for (int i2 = curCol; i2 < end; i2++) { if (i2 < ln.length()) ln.setCharAt(i2, ' '); }
+                        List<Cell> ln = ensureBuf(curRow);
+                        int end = Math.min(ln.size(), curCol + n);
+                        while (ln.size() <= end) ln.add(new Cell());
+                        for (int i2 = curCol; i2 < end; i2++) {
+                            if (i2 < ln.size()) ln.get(i2).reset();
+                        }
                     } break;
                     case 'S': { // scroll up
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n; i3++) { buffer.add(top, new StringBuilder()); if (buffer.size() > bottom + 2) buffer.remove(bottom + 1); }
+                        for (int i3 = 0; i3 < n; i3++) { buffer.add(top, new ArrayList<>()); if (buffer.size() > bottom + 2) buffer.remove(bottom + 1); }
                     } break;
                     case 'T': { // scroll down
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         for (int i3 = 0; i3 < n && buffer.size() > top; i3++) buffer.remove(top);
-                        for (int i3 = buffer.size(); i3 <= bottom; i3++) buffer.add(new StringBuilder());
+                        for (int i3 = buffer.size(); i3 <= bottom; i3++) buffer.add(new ArrayList<>());
                     } break;
                     case 'r': { // DECSTBM — set scroll region
                         String[] sr_ = ps.split(";");
@@ -598,7 +687,6 @@ public class SshTabController {
                     } break;
                     case 'h': case 'l':
                         if (ps.equals("6")) originMode = (c == 'h'); // DECOM
-                        // DECSET/DECRST 25 (cursor visibility) handled in private case above
                         break;
                     case 's': saveCursor(); break;
                     case 'u': restoreCursor(); break;
@@ -606,7 +694,10 @@ public class SshTabController {
                     case 'q': break; // DECSCUSR — ignore cursor style
                 }
                 return p;
-            } else return p - 1;
+            } else {
+                // Unrecognized char in CSI sequence — skip it silently instead of
+                // backtracking (which could feed garbage to put())
+            }
         }
         return -1;
     }
@@ -621,28 +712,33 @@ public class SshTabController {
         return -1;
     }
 
+    private void clearBuffer() {
+        buffer.clear(); buffer.add(new ArrayList<>());
+        curCol = curRow = 0;
+    }
+
     private void eraseEOL() {
-        StringBuilder ln = ensureBuf(curRow);
-        if (curCol < ln.length()) ln.delete(curCol, ln.length());
+        List<Cell> ln = ensureBuf(curRow);
+        while (ln.size() > curCol) ln.remove(ln.size() - 1);
     }
 
     private void eraseBOL() {
-        StringBuilder ln = ensureBuf(curRow);
-        int end = Math.min(curCol + 1, ln.length());
-        if (end > 0) ln.delete(0, end);
+        List<Cell> ln = ensureBuf(curRow);
+        int end = Math.min(curCol, ln.size() - 1);
+        for (int i = 0; i <= end && !ln.isEmpty(); i++) ln.remove(0);
     }
 
     private void eraseLine() {
-        if (curRow < buffer.size()) buffer.get(curRow).setLength(0);
+        if (curRow < buffer.size()) buffer.get(curRow).clear();
     }
 
     private void eraseEOD() {
         eraseEOL();
-        for (int r = curRow + 1; r < buffer.size(); r++) buffer.get(r).setLength(0);
+        for (int r = curRow + 1; r < buffer.size(); r++) buffer.get(r).clear();
     }
 
     private void eraseDOS() {
-        for (int r = 0; r < curRow && r < buffer.size(); r++) buffer.get(r).setLength(0);
+        for (int r = 0; r < curRow && r < buffer.size(); r++) buffer.get(r).clear();
         eraseBOL();
     }
 
@@ -657,7 +753,7 @@ public class SshTabController {
                 switch (n) {
                     case 1: sgrBold = true; break;
                     case 2: sgrBold = false; break;  // dim/faint — treat as unbold for now
-                    case 3: sgrBold = false; break;  // italic — ignore
+                    case 3: break; // italic — ignore
                     case 4: sgrUnderline = true; break;
                     case 5: case 6: break; // blink — ignore
                     case 7: sgrReverse = true; break;
@@ -752,11 +848,11 @@ public class SshTabController {
         for (int r = sr; r < er && r < buffer.size(); r++) {
             int sy = r - sr;
             double y = sy * LINE_H;
-            String l = buffer.get(r).toString();
-            for (int col = 0; col < l.length(); col++) {
-                char ch = l.charAt(col);
-                if (ch == '\0') continue;
-                boolean isFw = isFullwidth(ch);
+            List<Cell> rowCells = buffer.get(r);
+            for (int col = 0; col < rowCells.size(); col++) {
+                Cell cell = rowCells.get(col);
+                if (cell.ch == '\0') continue;
+                boolean isFw = isFullwidth(cell.ch);
                 double cellW = isFw ? CHAR_W * 2 : CHAR_W;
 
                 boolean in = hs && ((r > mr && r < Mr)
@@ -764,8 +860,8 @@ public class SshTabController {
                         || (r == mr && r != Mr && col >= sl)
                         || (r == Mr && r != mr && col < sr2));
                 double x = col * CHAR_W;
-                Color fg = c(sgrFg), bg = c(sgrBg);
-                if (sgrReverse) { Color t = fg; fg = bg; bg = t; }
+                Color fg = c(cell.fg), bg = c(cell.bg);
+                if (cell.reverse) { Color t = fg; fg = bg; bg = t; }
                 if (in) {
                     g.setFill(Color.rgb(200,200,200));
                     g.fillRect(x, y, cellW, LINE_H);
@@ -775,13 +871,13 @@ public class SshTabController {
                     g.fillRect(x, y, cellW, LINE_H);
                     g.setFill(fg);
                 }
-                if (sgrBold) {
-                    g.fillText(String.valueOf(ch), x, y + LINE_H - 3);
-                    g.fillText(String.valueOf(ch), x + 0.5, y + LINE_H - 3);
+                if (cell.bold) {
+                    g.fillText(String.valueOf(cell.ch), x, y + LINE_H - 3);
+                    g.fillText(String.valueOf(cell.ch), x + 0.5, y + LINE_H - 3);
                 } else {
-                    g.fillText(String.valueOf(ch), x, y + LINE_H - 3);
+                    g.fillText(String.valueOf(cell.ch), x, y + LINE_H - 3);
                 }
-                if (sgrUnderline) {
+                if (cell.underline) {
                     g.setStroke(fg);
                     g.setLineWidth(1);
                     g.strokeLine(x, y + LINE_H - 2, x + cellW, y + LINE_H - 2);
@@ -794,8 +890,8 @@ public class SshTabController {
             if (vr >= 0 && vr < rows) {
                 double cx = curCol * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
                 double cursorHeight = LINE_H * 0.8;
-                char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).length())
-                        ? buffer.get(curRow).charAt(curCol) : ' ';
+                char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).size())
+                        ? buffer.get(curRow).get(curCol).ch : ' ';
                 double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
                 g.setFill(Color.rgb(200,200,200,0.7));
                 g.fillRect(cx, cy, cursorW, cursorHeight);
@@ -888,13 +984,13 @@ public class SshTabController {
             }
         });
         canvas.setOnContextMenuRequested(e -> {
-            // Right-click: paste from clipboard (\\n -> \\r for terminal)
+            // Right-click: paste from clipboard (\n -> \r for terminal)
             if (shellChannel == null || !shellChannel.isConnected()) { e.consume(); return; }
             Clipboard cb = Clipboard.getSystemClipboard();
             if (cb.hasString()) {
                 String text = cb.getString();
                 if (text != null && !text.isEmpty()) {
-                    // Replace \\n with \\r as terminals expect \\r for Enter
+                    // Replace \n with \r as terminals expect \r for Enter
                     text = text.replace("\n", "\r");
                     try {
                         OutputStream os = shellChannel.getOutputStream();
@@ -1030,28 +1126,28 @@ public class SshTabController {
             case ENTER:return null;
             case BACK_SPACE:return new byte[]{0x7F};
             case TAB:return "\t".getBytes(StandardCharsets.UTF_8);
-            case ESCAPE:return "\u001B".getBytes(StandardCharsets.UTF_8);
-            case UP:return "\u001B[A".getBytes(StandardCharsets.UTF_8);
-            case DOWN:return "\u001B[B".getBytes(StandardCharsets.UTF_8);
-            case RIGHT:return "\u001B[C".getBytes(StandardCharsets.UTF_8);
-            case LEFT:return "\u001B[D".getBytes(StandardCharsets.UTF_8);
-            case HOME:return "\u001B[H".getBytes(StandardCharsets.UTF_8);
-            case END:return "\u001B[F".getBytes(StandardCharsets.UTF_8);
-            case DELETE:return "\u001B[3~".getBytes(StandardCharsets.UTF_8);
-            case PAGE_UP:return "\u001B[5~".getBytes(StandardCharsets.UTF_8);
-            case PAGE_DOWN:return "\u001B[6~".getBytes(StandardCharsets.UTF_8);
-            case F1:return "\u001BOP".getBytes(StandardCharsets.UTF_8);
-            case F2:return "\u001BOQ".getBytes(StandardCharsets.UTF_8);
-            case F3:return "\u001BOR".getBytes(StandardCharsets.UTF_8);
-            case F4:return "\u001BOS".getBytes(StandardCharsets.UTF_8);
-            case F5:return "\u001B[15~".getBytes(StandardCharsets.UTF_8);
-            case F6:return "\u001B[17~".getBytes(StandardCharsets.UTF_8);
-            case F7:return "\u001B[18~".getBytes(StandardCharsets.UTF_8);
-            case F8:return "\u001B[19~".getBytes(StandardCharsets.UTF_8);
-            case F9:return "\u001B[20~".getBytes(StandardCharsets.UTF_8);
-            case F10:return "\u001B[21~".getBytes(StandardCharsets.UTF_8);
-            case F11:return "\u001B[23~".getBytes(StandardCharsets.UTF_8);
-            case F12:return "\u001B[24~".getBytes(StandardCharsets.UTF_8);
+            case ESCAPE:return "".getBytes(StandardCharsets.UTF_8);
+            case UP:return "[A".getBytes(StandardCharsets.UTF_8);
+            case DOWN:return "[B".getBytes(StandardCharsets.UTF_8);
+            case RIGHT:return "[C".getBytes(StandardCharsets.UTF_8);
+            case LEFT:return "[D".getBytes(StandardCharsets.UTF_8);
+            case HOME:return "[H".getBytes(StandardCharsets.UTF_8);
+            case END:return "[F".getBytes(StandardCharsets.UTF_8);
+            case DELETE:return "[3~".getBytes(StandardCharsets.UTF_8);
+            case PAGE_UP:return "[5~".getBytes(StandardCharsets.UTF_8);
+            case PAGE_DOWN:return "[6~".getBytes(StandardCharsets.UTF_8);
+            case F1:return "OP".getBytes(StandardCharsets.UTF_8);
+            case F2:return "OQ".getBytes(StandardCharsets.UTF_8);
+            case F3:return "OR".getBytes(StandardCharsets.UTF_8);
+            case F4:return "OS".getBytes(StandardCharsets.UTF_8);
+            case F5:return "[15~".getBytes(StandardCharsets.UTF_8);
+            case F6:return "[17~".getBytes(StandardCharsets.UTF_8);
+            case F7:return "[18~".getBytes(StandardCharsets.UTF_8);
+            case F8:return "[19~".getBytes(StandardCharsets.UTF_8);
+            case F9:return "[20~".getBytes(StandardCharsets.UTF_8);
+            case F10:return "[21~".getBytes(StandardCharsets.UTF_8);
+            case F11:return "[23~".getBytes(StandardCharsets.UTF_8);
+            case F12:return "[24~".getBytes(StandardCharsets.UTF_8);
             default:return null;
         }
     }
