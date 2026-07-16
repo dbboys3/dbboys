@@ -97,6 +97,9 @@ public class SshTabController {
     private boolean pendingWrap; // auto-wrap happened, skip next
     private boolean wrapPendingEraseSuppress; // suppress eraseEOL on wrap
     private int savedCurCol, savedCurRow; // DECSC/DECRC
+    private char g0Charset = 'B';  // G0 charset: 'B'=ASCII, '0'=DEC Special Graphics
+    private char g1Charset = 'B';  // G1 charset
+    private boolean useG1;          // true when SO (^N) active, using G1
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
 
@@ -365,7 +368,9 @@ public class SshTabController {
                     nl();
                 }
             }
-            else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace (top uses this)
+            else if (c == 0x0E) { useG1 = true; } // SO - shift out, use G1 charset
+            else if (c == 0x0F) { useG1 = false; } // SI - shift in, use G0 charset
+            else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace
             else if (c >= 0x20) put(c);
         }
         if (isTopData) {
@@ -391,6 +396,7 @@ public class SshTabController {
         pendingWrap = false; wrapPendingEraseSuppress = false;
         List<Cell> ln = ensureBuf(curRow);
         // Extend row to accommodate curCol
+        if ((g0Charset == '0' && !useG1) || (g1Charset == '0' && useG1)) { c = mapDecSpecial(c); }
         while (ln.size() <= curCol) ln.add(new Cell());
         Cell cell = ln.get(curCol);
         cell.ch = c;
@@ -458,7 +464,7 @@ public class SshTabController {
         char c = s.charAt(p);
         if (c == '[') { int r = csi(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == ']') { int r = osc(s, p + 1, e); return r < 0 ? -1 : r; }
-        if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e); return r < 0 ? -1 : r; }
+        if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e, c == '('); return r < 0 ? -1 : r; }
         // ESC 7 / ESC 8 — save/restore cursor (DECSC/DECRC)
         if (c == '7') { saveCursor(); return p; }
         if (c == '8') { restoreCursor(); return p; }
@@ -477,8 +483,8 @@ public class SshTabController {
         return p;
     }
 
-    private int consumeCharset(String s, int p, int e) {
-        if (p < e) return p; // skip one char
+    private int consumeCharset(String s, int p, int e, boolean isG0) {
+        if (p < e) { char cs = s.charAt(p); if (isG0) g0Charset = cs; else g1Charset = cs; return p; }
         return -1;
     }
 
@@ -487,7 +493,8 @@ public class SshTabController {
         curCol = curRow = scrollOff = 0;
         scrollTop = 0; scrollBottom = -1; originMode = false;
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
-        inAltScreen = false; altSavedBuffer = null;
+        g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
+
         draw();
     }
 
@@ -1196,6 +1203,18 @@ public class SshTabController {
         return sb.toString();
     }
     /** Make control chars visible for logging. */
+
+    /** Map DEC Special Graphics (line drawing) characters to Unicode. */
+    private static char mapDecSpecial(char c) {
+        switch (c) {
+            case 'j': return '\u2518'; case 'k': return '\u2510'; case 'l': return '\u250C';
+            case 'm': return '\u2514'; case 'n': return '\u253C'; case 'q': return '\u2500';
+            case 't': return '\u251C'; case 'u': return '\u2524'; case 'v': return '\u2534';
+            case 'w': return '\u252C'; case 'x': return '\u2502';
+            default: return c;
+        }
+    }
+
     private static String escapeForLog(String s) {
         StringBuilder sb = new StringBuilder(s.length() * 2);
         for (int i = 0; i < s.length(); i++) {
