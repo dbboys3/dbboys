@@ -1129,7 +1129,7 @@ public class SshTabController {
                 return null;
             }
             switch (k) {
-                case A:return new byte[]{0x01}; case B:return new byte[]{0x02};
+                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:return new byte[]{0x03};
                 case D:return new byte[]{0x04}; case E:return new byte[]{0x05};
                 case F:return new byte[]{0x06}; case G:return new byte[]{0x07};
                 case H:return new byte[]{0x08}; case J:return new byte[]{0x0A};
