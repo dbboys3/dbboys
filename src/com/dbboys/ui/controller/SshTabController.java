@@ -92,6 +92,7 @@ public class SshTabController {
     private int sgrFg = 37, sgrBg = 40;
     private boolean sgrReverse, sgrBold, sgrUnderline;
     private boolean cursorShown = true; // DECTCEM
+    private boolean cursorKeysApp; // DECCKM: true=ESC OA, false=ESC [A
     private int scrollTop, scrollBottom = -1; // DECSTBM scroll region
     private boolean originMode; // DECOM
     private boolean pendingWrap; // auto-wrap happened, skip next
@@ -565,6 +566,7 @@ public class SshTabController {
                     switch (c) {
                         case 'h': case 'l':
                             if (ps.equals("25")) { cursorShown = (c == 'h'); break; }
+                            if (ps.equals("1")) { cursorKeysApp = (c == 'h'); break; }
                             // DECSET ?1049h/?1049l -- alternate screen buffer
                             if (ps.equals("1049")) {
                                 if (c == 'h') {
@@ -1148,10 +1150,10 @@ public class SshTabController {
             case BACK_SPACE:return new byte[]{0x7F};
             case TAB:return "\t".getBytes(StandardCharsets.UTF_8);
             case ESCAPE:return "".getBytes(StandardCharsets.UTF_8);
-            case UP:return "[A".getBytes(StandardCharsets.UTF_8);
-            case DOWN:return "[B".getBytes(StandardCharsets.UTF_8);
-            case RIGHT:return "[C".getBytes(StandardCharsets.UTF_8);
-            case LEFT:return "[D".getBytes(StandardCharsets.UTF_8);
+            case UP:return cursorKeysApp ? "OA".getBytes(StandardCharsets.UTF_8) : "[A".getBytes(StandardCharsets.UTF_8);
+            case DOWN:return cursorKeysApp ? "OB".getBytes(StandardCharsets.UTF_8) : "[B".getBytes(StandardCharsets.UTF_8);
+            case RIGHT:return cursorKeysApp ? "OC".getBytes(StandardCharsets.UTF_8) : "[C".getBytes(StandardCharsets.UTF_8);
+            case LEFT:return cursorKeysApp ? "OD".getBytes(StandardCharsets.UTF_8) : "[D".getBytes(StandardCharsets.UTF_8);
             case HOME:return "[H".getBytes(StandardCharsets.UTF_8);
             case END:return "[F".getBytes(StandardCharsets.UTF_8);
             case DELETE:return "[3~".getBytes(StandardCharsets.UTF_8);
