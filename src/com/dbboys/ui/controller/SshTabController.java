@@ -335,12 +335,18 @@ public class SshTabController {
         if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
         requestDraw();
     }
-
     private void write(String raw) {
         // prepend any incomplete escape sequence from the previous chunk
         if (pendingEsc != null) {
             raw = pendingEsc + raw;
             pendingEsc = null;
+        }
+        // Log large chunks (top/nmon output) for debugging
+        boolean isTopData = raw.length() > 200;
+        if (isTopData) {
+            log.info("=== SSH RAW ({} chars) wrap={} cur=({},{}) ===",
+                    raw.length(), pendingWrap, curCol, curRow);
+            log.info("  {}", escapeForLog(raw.substring(0, Math.min(200, raw.length()))));
         }
         for (int i = 0, n = raw.length(); i < n; i++) {
             char c = raw.charAt(i);
@@ -360,6 +366,10 @@ public class SshTabController {
             }
             else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace (top uses this)
             else if (c >= 0x20) put(c);
+        }
+        if (isTopData) {
+            log.info("=== AFTER ===");
+            dumpBuffer();
         }
         requestDraw();
     }
@@ -1181,5 +1191,38 @@ public class SshTabController {
             if (c != '\0') sb.append(c);
         }
         return sb.toString();
+    }
+    /** Make control chars visible for logging. */
+    private static String escapeForLog(String s) {
+        StringBuilder sb = new StringBuilder(s.length() * 2);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == 0x1B) sb.append("<ESC>");
+            else if (c == '\r') sb.append("<CR>");
+            else if (c == '\n') sb.append("<LF>");
+            else if (c == '\b') sb.append("<BS>");
+            else if (c == 0x7F) sb.append("<DEL>");
+            else if (c < 0x20) sb.append(String.format("<0x%02X>", (int) c));
+            else sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** Dump the current buffer content to log. */
+    private void dumpBuffer() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("cur=(%d,%d) wrap=%b scrollOff=%d rows=%d bufSize=%d\n",
+                curCol, curRow, pendingWrap, scrollOff, rows, buffer.size()));
+        int showRows = Math.min(buffer.size(), rows + 2);
+        for (int r = Math.max(0, scrollOff - 1); r < showRows; r++) {
+            if (r >= buffer.size()) break;
+            String l = line(r);
+            String outline = l.length() > 80 ? l.substring(0, 80) + "..." : l;
+            sb.append(String.format("  [%d] cells=%d |%s|\n", r,
+                    r < buffer.size() ? buffer.get(r).size() : 0,
+                    outline.replace(' ', '\u00B7')));
+            if (r - scrollOff + 1 > rows + 2) break;
+        }
+        log.info(sb.toString());
     }
 }
