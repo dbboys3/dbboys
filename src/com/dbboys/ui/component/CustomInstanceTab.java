@@ -128,7 +128,8 @@ public class CustomInstanceTab extends CustomTab {
 
 
     public CustomInstanceTab(Connect connect,int tabNum) {
-        super("[instance]"+connect.getName());
+        super(connect.getName());
+        setTabIcon(IconPaths.CONNECTION_LINK, 0.5);
         this.connect=connect;
 
         // 实例信息 tab 初始化变量

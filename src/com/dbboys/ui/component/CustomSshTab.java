@@ -2,7 +2,7 @@ package com.dbboys.ui.component;
 
 import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.ui.controller.SshTabController;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.Tooltip;
@@ -25,6 +25,7 @@ public class CustomSshTab extends CustomTab {
         super(sshConnect.getName());
         this.sshConnect = sshConnect;
         setUserData("ssh:" + sshConnect.getId());
+        setTabIcon(com.dbboys.ui.icon.IconPaths.SSH_TAB_TOGGLE, 0.6);
 
         // Load FXML
         VBox contentVBox;

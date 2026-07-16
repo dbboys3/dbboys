@@ -1,4 +1,4 @@
-package com.dbboys.ssh;
+package com.dbboys.model;
 
 import com.dbboys.model.TreeData;
 import javafx.beans.property.IntegerProperty;

@@ -3,7 +3,7 @@ package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.jcraft.jsch.ChannelShell;

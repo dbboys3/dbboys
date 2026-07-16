@@ -1,7 +1,7 @@
 package com.dbboys.infra.util;
 
 import com.dbboys.model.Connect;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;

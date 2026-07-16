@@ -4,7 +4,7 @@ import com.dbboys.model.ConnectFolder;
 import com.dbboys.model.Connect;
 import com.dbboys.model.SshFolder;
 import com.dbboys.model.UpdateResult;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.core.ConnectionService;
 
 import org.apache.logging.log4j.LogManager;

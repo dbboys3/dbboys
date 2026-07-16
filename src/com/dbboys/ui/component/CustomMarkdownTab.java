@@ -42,6 +42,7 @@ public class CustomMarkdownTab extends CustomTab{
     //sql编辑框以上控件
     public CustomMarkdownTab(File file,boolean modifiable) {
         super(file.getName());
+        setTabIcon(IconPaths.MARKDOWN_TAB_TOGGLE, 0.46);
         filePath = file.getAbsolutePath();
         setTooltip(new Tooltip(filePath.isBlank() ? I18n.t("markdown.tab.unsaved_path_tip", "新建脚本未保存到磁盘") : filePath));
 

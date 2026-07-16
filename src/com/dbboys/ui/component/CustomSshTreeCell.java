@@ -2,7 +2,7 @@ package com.dbboys.ui.component;
 
 import com.dbboys.model.SshFolder;
 import com.dbboys.model.TreeData;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconPaths;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Pos;

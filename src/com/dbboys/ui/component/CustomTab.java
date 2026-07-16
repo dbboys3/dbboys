@@ -161,5 +161,23 @@ public class CustomTab extends Tab {
         // Override in subclasses that support save.
     }
 
+    
+    /** Set tab graphic to an SVG icon. */
+    protected void setTabIcon(String svgPath, double scale) {
+        javafx.scene.shape.SVGPath svg = new javafx.scene.shape.SVGPath();
+        svg.setContent(svgPath);
+        javafx.scene.layout.StackPane stack = new javafx.scene.layout.StackPane(svg);
+        stack.setMinSize(16, 16);
+        stack.setPrefSize(16, 16);
+        stack.setMaxSize(16, 16);
+        svg.setScaleX(scale);
+        svg.setScaleY(scale);
+        svg.getStyleClass().add("icon-primary");
+        setGraphic(stack);
+    }
 
+    /** Set tab graphic to an SVG icon with custom scale. */
+    protected void setTabIcon(String svgPath) {
+        setTabIcon(svgPath, 0.65);
+    }
 }

@@ -136,7 +136,8 @@ public class CustomTableInfoTab extends CustomTab {
 
     public CustomTableInfoTab(TreeItem<TreeData> treeItem, String tableName) {
 
-        super("[table]"+(TreeViewUtil.getMetaConnTreeItem(treeItem).getValue().getName()+"."+TreeViewUtil.getCurrentDatabase(treeItem).getName()+"."+""));
+        super(TreeViewUtil.getMetaConnTreeItem(treeItem).getValue().getName()+"."+TreeViewUtil.getCurrentDatabase(treeItem).getName()+".");
+        setTabIcon(IconPaths.TREECELL_TABLE, 0.39);
         this.treeItem=treeItem;
         this.connect=(Connect)TreeViewUtil.getMetaConnTreeItem(treeItem).getValue();
         this.database=TreeViewUtil.getCurrentDatabase(treeItem);
@@ -1621,7 +1622,7 @@ private void waitAndSelectCreatedTableNode(String targetName) {
 
 private String buildTabTitle(String tableName) {
     String currentTableName = (tableName == null || tableName.trim().isEmpty()) ? this.tableName : tableName.trim();
-    return "[table]" + connect + "." + database + "." + currentTableName;
+    return  connect + "." + database + "." + currentTableName;
 }
 
 private ObservableList<String> buildCreateTableColumnTypes() {

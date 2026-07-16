@@ -3,7 +3,7 @@ package com.dbboys.infra.util;
 import com.dbboys.core.ConnectionService;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppExecutor;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.app.AppState;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.ui.component.*;

@@ -2,7 +2,7 @@ package com.dbboys.ui.controller;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.ui.component.*;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.*;
@@ -878,7 +878,7 @@ public class MainController {
 
             // Load folders and connections (same pattern as database tree)
             java.util.List<com.dbboys.model.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
-            java.util.List<com.dbboys.ssh.SshConnect> connections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
+            java.util.List<com.dbboys.model.SshConnect> connections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
 
             for (com.dbboys.model.SshFolder folder : folders) {
                 TreeItem<TreeData> folderItem = new TreeItem<>(folder) {
@@ -889,7 +889,7 @@ public class MainController {
                 };
                 folderItem.setExpanded(folder.getExpand() == 1);
                 rootItem.getChildren().add(folderItem);
-                for (com.dbboys.ssh.SshConnect sc : connections) {
+                for (com.dbboys.model.SshConnect sc : connections) {
                     if (sc.getParentId() == folder.getId()) {
                         folderItem.getChildren().add(new TreeItem<>(sc));
                     }
@@ -903,7 +903,7 @@ public class MainController {
             sshTreeView.setOnMouseClicked(event -> {
                 if (event.getButton().equals(javafx.scene.input.MouseButton.PRIMARY) && event.getClickCount() == 2) {
                     TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                    if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                    if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect sshConnect) {
                         TabpaneUtil.addCustomSshTab(sshConnect);
                     }
                 }
@@ -924,7 +924,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_CONNECT_ITEM, 0.65, 0.65));
             openSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect sshConnect) {
                     TabpaneUtil.addCustomSshTab(sshConnect);
                 }
             });
@@ -934,7 +934,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.7, 0.7));
             editSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect sshConnect) {
                     showSshConnectDialog(sshConnect, false);
                 }
             });
@@ -944,16 +944,16 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_COPY_CONNECT_ITEM, 0.7, 0.7));
             copySshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect orig) {
-                    com.dbboys.ssh.SshConnect copy = new com.dbboys.ssh.SshConnect();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect orig) {
+                    com.dbboys.model.SshConnect copy = new com.dbboys.model.SshConnect();
                     // Generate unique copy name
                     String baseName = orig.getName();
                     String copyName = baseName + "_1";
                     int suffix = 2;
-                    java.util.List<com.dbboys.ssh.SshConnect> allSshInDb = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
+                    java.util.List<com.dbboys.model.SshConnect> allSshInDb = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
                     while (true) {
                         boolean nameExists = false;
-                        for (com.dbboys.ssh.SshConnect existing : allSshInDb) {
+                        for (com.dbboys.model.SshConnect existing : allSshInDb) {
                             if (existing.getName().equals(copyName)) {
                                 nameExists = true;
                                 break;
@@ -992,7 +992,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteSshItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.ssh.SshConnect sshConnect) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect sshConnect) {
                     if (AlertUtil.CustomAlertConfirm(
                             I18n.t("metadata.alert.delete_connection.title", "删除连接"),
                             I18n.t("metadata.alert.delete_connection.content", "确定要删除连接\"%s\"吗？")
@@ -1010,7 +1010,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_CREATE_CONNECT_ITEM, 0.6, 0.6));
             createSshConnectItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                com.dbboys.ssh.SshConnect newConn = new com.dbboys.ssh.SshConnect();
+                com.dbboys.model.SshConnect newConn = new com.dbboys.model.SshConnect();
                 if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
                     newConn.setParentId(folder.getId());
                 }
@@ -1108,7 +1108,7 @@ public class MainController {
                 // Build menu based on the (now selected) item
                 sshCtxMenu.getItems().clear();
                 TreeItem<TreeData> sel = sshTreeView.getSelectionModel().getSelectedItem();
-                boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.ssh.SshConnect;
+                boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.model.SshConnect;
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
 
                 if (isConnection) {
@@ -1204,7 +1204,7 @@ public class MainController {
         }
     }
 
-    private void testSshConnection(com.dbboys.ssh.SshConnect sc) {
+    private void testSshConnection(com.dbboys.model.SshConnect sc) {
         AppExecutor.runAsync(() -> {
             long start = System.currentTimeMillis();
             try {
@@ -1227,7 +1227,7 @@ public class MainController {
         });
     }
 
-    private void showSshConnectDialog(com.dbboys.ssh.SshConnect sshConnect, boolean isNew) {
+    private void showSshConnectDialog(com.dbboys.model.SshConnect sshConnect, boolean isNew) {
         int oldParentId = sshConnect.getParentId();
         SshConnectDialogController dlgCtrl = new SshConnectDialogController(sshConnect, isNew);
         if (dlgCtrl.showAndWait()) {
@@ -1239,7 +1239,7 @@ public class MainController {
                         // Find and remove the item from old folder
                         TreeItem<TreeData> toRemove = null;
                         for (TreeItem<TreeData> conn : child.getChildren()) {
-                            if (conn.getValue() instanceof com.dbboys.ssh.SshConnect sc
+                            if (conn.getValue() instanceof com.dbboys.model.SshConnect sc
                                     && sc.getId() == sshConnect.getId()) {
                                 toRemove = conn;
                                 break;
@@ -1270,7 +1270,7 @@ public class MainController {
         sshTreeView.refresh();
     }
 
-    private void addSshToTree(com.dbboys.ssh.SshConnect sc) {
+    private void addSshToTree(com.dbboys.model.SshConnect sc) {
         // Find parent folder item and add the new connection
         TreeItem<TreeData> folderItem = null;
         for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
@@ -1294,7 +1294,7 @@ public class MainController {
     /** Move SSH connection to a different folder (matching database connection "Move To"). */
     private void sshMoveConnection() {
         TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-        if (selected == null || !(selected.getValue() instanceof com.dbboys.ssh.SshConnect sc)) {
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.SshConnect sc)) {
             return;
         }
 
@@ -1360,7 +1360,7 @@ public class MainController {
         if (data == null) {
             return;
         }
-        if (data instanceof com.dbboys.ssh.SshConnect sc) {
+        if (data instanceof com.dbboys.model.SshConnect sc) {
             HBox hbox = new HBox();
             hbox.getChildren().add(new Label(I18n.t("metadata.dialog.rename.title", "Enter new name") + "  "));
             hbox.setAlignment(Pos.CENTER_LEFT);
@@ -1384,7 +1384,7 @@ public class MainController {
                     boolean exists = false;
                     for (TreeItem<TreeData> folderChild : sshTreeView.getRoot().getChildren()) {
                         for (TreeItem<TreeData> connChild : folderChild.getChildren()) {
-                            if (connChild.getValue() instanceof com.dbboys.ssh.SshConnect existing
+                            if (connChild.getValue() instanceof com.dbboys.model.SshConnect existing
                                     && existing.getName().equals(n)) {
                                 exists = true;
                                 break;
@@ -1443,10 +1443,10 @@ public class MainController {
     }
 
     /** Check if an SSH connection name already exists (excluding the one being edited). */
-    private boolean sshNameExists(com.dbboys.ssh.SshConnect sc) {
+    private boolean sshNameExists(com.dbboys.model.SshConnect sc) {
         for (TreeItem<TreeData> folderChild : sshTreeView.getRoot().getChildren()) {
             for (TreeItem<TreeData> connChild : folderChild.getChildren()) {
-                if (connChild.getValue() instanceof com.dbboys.ssh.SshConnect existing
+                if (connChild.getValue() instanceof com.dbboys.model.SshConnect existing
                         && existing.getName().equals(sc.getName())
                         && existing.getId() != sc.getId()) {
                     return true;

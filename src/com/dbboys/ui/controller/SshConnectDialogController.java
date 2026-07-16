@@ -6,7 +6,7 @@ import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.SshTunnelUtil;
 import com.dbboys.model.SshFolder;
-import com.dbboys.ssh.SshConnect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.ui.component.CustomPasswordField;
 import com.dbboys.ui.component.CustomUserTextField;
 import com.dbboys.ui.dialog.AlertUtil;
