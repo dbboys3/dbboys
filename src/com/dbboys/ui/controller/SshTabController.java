@@ -368,6 +368,7 @@ public class SshTabController {
                     nl();
                 }
             }
+            else if (c == 0x09) { curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; curRow++; pendingWrap = true; } }
             else if (c == 0x0E) { useG1 = true; } // SO - shift out, use G1 charset
             else if (c == 0x0F) { useG1 = false; } // SI - shift in, use G0 charset
             else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace
@@ -739,7 +740,8 @@ public class SshTabController {
     private void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
         List<Cell> ln = ensureBuf(curRow);
-        while (ln.size() > curCol) ln.remove(ln.size() - 1);
+        for (int i = curCol; i < ln.size(); i++) ln.get(i).reset();
+
     }
 
     private void eraseBOL() {
