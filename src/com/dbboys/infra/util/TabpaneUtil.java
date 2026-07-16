@@ -97,11 +97,13 @@ public class TabpaneUtil {
      * If a tab for this connection already exists, select it instead of creating a new one.
      */
     public static void addCustomSshTab(SshConnect sshConnect) {
+        /* 
         Tab existing = findTabByUserData(TAB_KEY_SSH + sshConnect.getId());
         if (existing != null) {
             tabPane().getSelectionModel().select(existing);
             return;
         }
+            */
         CustomSshTab tab = new CustomSshTab(sshConnect);
         tabPane().getTabs().add(tab);
         tabPane().getSelectionModel().select(tab);

@@ -914,7 +914,7 @@ public class SshTabController {
                 char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).size())
                         ? buffer.get(curRow).get(curCol).ch : ' ';
                 double cursorW = isFullwidth(atCursor) ? CHAR_W * 2 : CHAR_W;
-                g.setFill(Color.rgb(200,200,200,0.7));
+                g.setFill(Color.rgb(200,200,200));
                 g.fillRect(cx, cy, cursorW, cursorHeight);
                 if (atCursor != '\0' && atCursor != ' ') {
                     g.setFill(Color.BLACK);
