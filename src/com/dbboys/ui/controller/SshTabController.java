@@ -385,7 +385,6 @@ public class SshTabController {
 
     private void nl() {
         curRow++;
-        curCol = 0;
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
         if (!scrollLock && curRow - scrollOff >= rows) scrollOff = curRow - rows + 1;
