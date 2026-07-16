@@ -94,7 +94,8 @@ public class SshTabController {
     private boolean cursorShown = true; // DECTCEM
     private int scrollTop, scrollBottom = -1; // DECSTBM scroll region
     private boolean originMode; // DECOM
-    private boolean pendingWrap; // auto-wrap happened, skip next \n
+    private boolean pendingWrap; // auto-wrap happened, skip next
+    private boolean wrapPendingEraseSuppress; // suppress eraseEOL on wrap
     private int savedCurCol, savedCurRow; // DECSC/DECRC
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
@@ -346,7 +347,7 @@ public class SshTabController {
         if (isTopData) {
             log.info("=== SSH RAW ({} chars) wrap={} cur=({},{}) ===",
                     raw.length(), pendingWrap, curCol, curRow);
-            log.info("  {}", escapeForLog(raw.substring(0, Math.min(200, raw.length()))));
+            log.info("  {}", escapeForLog(raw.substring(0, Math.min(2000, raw.length()))));
         }
         for (int i = 0, n = raw.length(); i < n; i++) {
             char c = raw.charAt(i);
@@ -359,7 +360,7 @@ public class SshTabController {
             else if (c == '\r') curCol = 0;
             else if (c == '\n') {
                 if (pendingWrap) {
-                    pendingWrap = false; // auto-wrap already moved cursor, skip
+                    pendingWrap = false; log.info("WRAP consumed r{} c{}", curRow, curCol); // auto-wrap
                 } else {
                     nl();
                 }
@@ -387,7 +388,7 @@ public class SshTabController {
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
 
     private void put(char c) {
-        pendingWrap = false;
+        pendingWrap = false; wrapPendingEraseSuppress = false;
         List<Cell> ln = ensureBuf(curRow);
         // Extend row to accommodate curCol
         while (ln.size() <= curCol) ln.add(new Cell());
@@ -407,7 +408,7 @@ public class SshTabController {
         if (curCol >= cols) {
             curCol = 0;
             curRow++;
-            pendingWrap = true;
+            pendingWrap = true; wrapPendingEraseSuppress = true;
             int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
             if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
                 // scroll region is full — scroll up one line
@@ -636,6 +637,7 @@ public class SshTabController {
                         curRow = Math.max(0, row);
                         curCol = Math.max(0, col);
                         // Only reset viewport on home in normal screen (not alt screen)
+                        if (row == 0 && col == 0) { pendingWrap = false; }
                         if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = true; }
                     } break;
                     case 'L': { // insert lines at current cursor row within scroll region
@@ -728,6 +730,7 @@ public class SshTabController {
     }
 
     private void eraseEOL() {
+        if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
         List<Cell> ln = ensureBuf(curRow);
         while (ln.size() > curCol) ln.remove(ln.size() - 1);
     }
