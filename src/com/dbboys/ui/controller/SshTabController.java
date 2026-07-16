@@ -1,5 +1,4 @@
 package com.dbboys.ui.controller;
-
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
@@ -26,19 +25,16 @@ import javafx.scene.text.Text;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-
 /**
  * SSH terminal tab controller with embedded Canvas-based terminal emulator.
  */
 public class SshTabController {
-
     private static final Logger log = LogManager.getLogger(SshTabController.class);
     private static final Font FONT = Font.font("Consolas", 13);
     static final double CHAR_W;
@@ -49,17 +45,13 @@ public class SshTabController {
         CHAR_W = m.getLayoutBounds().getWidth();
         LINE_H = 13 * 1.4;
     }
-
     // ---- Terminal cell with per-character SGR attributes ----
-
     /** A single character cell storing both the glyph and its SGR styling. */
     private static class Cell {
         char ch = ' ';
         int fg = 37, bg = 40;   // SGR color codes (30-37/39 foreground, 40-47/49 background)
         boolean bold, underline, reverse;
-
         void reset() { ch = ' '; fg = 37; bg = 40; bold = underline = reverse = false; }
-
         Cell copy() {
             Cell c = new Cell();
             c.ch = this.ch; c.fg = this.fg; c.bg = this.bg;
@@ -67,20 +59,17 @@ public class SshTabController {
             return c;
         }
     }
-
     @FXML public StackPane terminalPane;
     @FXML public Button connectButton;
     @FXML public Button disconnectButton;
     @FXML public Label connectionLabel;
     @FXML public VBox sshTab;
-
     private SshConnect sshConnect;
     private Session session;
     private ChannelShell shellChannel;
     private final StringProperty connectStatus = new SimpleStringProperty();
     private ScrollBar scrollBar;
     private boolean updatingScrollBar;
-
     // Terminal state
     private Canvas canvas;
     private int cols = 80, rows = 24;
@@ -103,7 +92,6 @@ public class SshTabController {
     private boolean useG1;          // true when SO (^N) active, using G1
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
-
     private Thread readThread;
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
@@ -112,11 +100,9 @@ public class SshTabController {
     private List<List<Cell>> altSavedBuffer;
     private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
     private boolean inAltScreen; // whether alternate screen buffer (?1049h) is active
-
     // Deferred draw: coalesce rapid write() calls into a single draw,
     // preventing the blink timer from rendering partially-updated screens.
     private volatile boolean drawPending;
-
     private Timeline autoScrollTimeline;
     private int autoScrollDirection = 0;
     public SshTabController() {
@@ -127,7 +113,6 @@ public class SshTabController {
         blink.setCycleCount(Timeline.INDEFINITE);
         blink.play();
     }
-
     public void initialize() {
         // Buttons
         connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.GREEN));
@@ -137,10 +122,8 @@ public class SshTabController {
         disconnectButton.setDisable(true);
         connectButton.setOnAction(e -> doConnect());
         disconnectButton.setOnAction(e -> doDisconnect());
-
         connectStatus.addListener((obs, o, n) -> connectionLabel.setText(n));
         connectStatus.set(I18n.t("ssh.tab.disconnected", "Disconnected"));
-
         // Canvas terminal
         buffer.add(new ArrayList<>());
         canvas = new Canvas(cols * CHAR_W, rows * LINE_H);
@@ -148,7 +131,6 @@ public class SshTabController {
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
         setupCanvasInput();
         terminalPane.getChildren().add(canvas);
-
         // ScrollBar
         scrollBar = new ScrollBar();
         scrollBar.setOrientation(javafx.geometry.Orientation.VERTICAL);
@@ -162,7 +144,6 @@ public class SshTabController {
         scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
-
         scrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (!updatingScrollBar) {
                 int v = newVal.intValue();
@@ -174,7 +155,6 @@ public class SshTabController {
                 }
             }
         });
-
         onScrollChanged = () -> {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
@@ -188,7 +168,6 @@ public class SshTabController {
                 updatingScrollBar = false;
             });
         };
-
         // Resize listeners
         terminalPane.widthProperty().addListener((obs, o, n) -> {
             if (n.doubleValue() > 0) {
@@ -213,30 +192,25 @@ public class SshTabController {
             }
         });
     }
-
     public void init(SshConnect sc) {
         this.sshConnect = sc;
         connectStatus.set(sc.getUsername() + "@" + sc.getHost() + ":" + sc.getPort());
         doConnect();
     }
-
     private void doConnect() {
         if (sshConnect == null) return;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
         status("Connecting to " + sshConnect.getUsername() + "@"
                 + sshConnect.getHost() + ":" + sshConnect.getPort() + "...\r\n");
-
         AppExecutor.runAsync(() -> {
             try {
                 session = JschUtil.getSshSession(sshConnect);
                 shellChannel = (ChannelShell) session.openChannel("shell");
                 shellChannel.setPty(true);
-                shellChannel.setPtyType("vt100");
+                shellChannel.setPtyType("xterm");
                 shellChannel.connect();
-
                 start();
-
                 Platform.runLater(() -> {
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
@@ -260,7 +234,6 @@ public class SshTabController {
             }
         });
     }
-
     private void doDisconnect() {
         stop();
         JschUtil.disconnectSession(session);
@@ -274,17 +247,13 @@ public class SshTabController {
                     + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
         }
     }
-
     private void updatePtySize() {
         if (shellChannel != null && shellChannel.isConnected()) {
             shellChannel.setPtySize(cols, rows, (int) canvas.getWidth(), (int) canvas.getHeight());
         }
     }
-
     public void closeSession() { doDisconnect(); }
-
     // ==================== Terminal engine ====================
-
     private void start() {
         if (shellChannel == null || !shellChannel.isConnected()) return;
         readThread = new Thread(() -> {
@@ -301,7 +270,6 @@ public class SshTabController {
         readThread.setDaemon(true);
         readThread.start();
     }
-
     private void stop() {
         blink.stop();
         if (readThread != null) {
@@ -314,7 +282,6 @@ public class SshTabController {
             shellChannel.disconnect();
         }
     }
-
     /** Request a deferred draw. Coalesces rapid write() calls to prevent
      *  the blink timer rendering a partially-updated screen during full-screen
      *  program refreshes (top, nmon, etc.). */
@@ -328,7 +295,6 @@ public class SshTabController {
             });
         }
     }
-
     private void status(String s) {
         for (char c : s.toCharArray()) {
             if (c == '\n') {
@@ -381,18 +347,25 @@ public class SshTabController {
         }
         requestDraw();
     }
-
     // ---- Buffer ----
-
     private void nl() {
         curRow++;
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
-        if (!scrollLock && curRow - scrollOff >= rows) scrollOff = curRow - rows + 1;
+        int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+        if (!scrollLock && curRow > effectiveBottom) {
+            // scroll within the scroll region
+            if (scrollTop < effectiveBottom) {
+                buffer.remove(scrollTop);
+                ensureBuf(effectiveBottom);
+                buffer.get(effectiveBottom).clear();
+            }
+            curRow = effectiveBottom;
+        } else if (!scrollLock && curRow - scrollOff >= rows) {
+            scrollOff = curRow - rows + 1;
+        }
     }
-
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
-
     private void put(char c) {
         pendingWrap = false; wrapPendingEraseSuppress = false;
         List<Cell> ln = ensureBuf(curRow);
@@ -418,7 +391,7 @@ public class SshTabController {
             pendingWrap = true; wrapPendingEraseSuppress = true;
             int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
             if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
-                // scroll region is full — scroll up one line
+                // scroll region is full 闂?scroll up one line
                 int top = scrollTop;
                 int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
                 bottom = Math.max(scrollTop, bottom);
@@ -432,12 +405,10 @@ public class SshTabController {
             ensureBuf(curRow);
         }
     }
-
     private List<Cell> ensureBuf(int r) {
         while (buffer.size() <= r) buffer.add(new ArrayList<>());
         return buffer.get(r);
     }
-
     private String line(int r) {
         if (r >= buffer.size()) return "";
         List<Cell> row = buffer.get(r);
@@ -447,7 +418,6 @@ public class SshTabController {
         }
         return sb.toString();
     }
-
     private void jumpToBottom() {
         int maxOff = Math.max(0, buffer.size() - rows);
         if (scrollOff != maxOff) {
@@ -457,55 +427,60 @@ public class SshTabController {
             fireScrollChanged();
         }
     }
-
     // ---- ANSI ----
-
     private int esc(String s, int p, int e) {
         if (p >= e) return -1;
         char c = s.charAt(p);
         if (c == '[') { int r = csi(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == ']') { int r = osc(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e, c == '('); return r < 0 ? -1 : r; }
-        // ESC 7 / ESC 8 — save/restore cursor (DECSC/DECRC)
+        // ESC 7 / ESC 8 闂?save/restore cursor (DECSC/DECRC)
         if (c == '7') { saveCursor(); return p; }
         if (c == '8') { restoreCursor(); return p; }
-        // ESC M — reverse index (RI)
+        // ESC M 闂?reverse index (RI)
         if (c == 'M') { reverseIndex(); return p; }
-        // ESC D — index (IND, move down one line)
+        // ESC D 闂?index (IND, move down one line)
         if (c == 'D') { indexDown(); return p; }
-        // ESC E — next line (NEL)
+        // ESC E 闂?next line (NEL)
         if (c == 'E') { curCol = 0; indexDown(); return p; }
-        // ESC H — horizontal tab set
+        // ESC H 闂?horizontal tab set
         if (c == 'H') return p;
-        // ESC > — alternate keypad numeric; ESC = — alternate keypad application
+        // ESC > 闂?alternate keypad numeric; ESC = 闂?alternate keypad application
         if (c == '>' || c == '=') return p;
-        // ESC c — RIS (reset to initial state)
-        if (c == 'c') { resetTerminal(); return p; }
+        // ESC c 闂?RIS (reset to initial state)
+        // ESC O A/B/C/D -- SS3 cursor keys (when DECCKM is enabled)
+        if (c == 'O' && p + 1 < e) {
+            char oc = s.charAt(p + 1);
+            switch (oc) {
+                case 'A': curRow = Math.max(originMode ? scrollTop : 0, curRow - 1); return p + 1;
+                case 'B': curRow = Math.min(buffer.isEmpty() ? 0 : buffer.size() - 1, curRow + 1); return p + 1;
+                case 'C': curCol = Math.min(cols - 1, curCol + 1); return p + 1;
+                case 'D': curCol = Math.max(0, curCol - 1); return p + 1;
+                case 'H': curRow = 0; curCol = 0; return p + 1;
+                case 'F': curRow = Math.max(0, buffer.size() - 1); curCol = 0; return p + 1;
+            }
+        }     
+    if (c == 'c') { resetTerminal(); return p; }
         return p;
     }
-
     private int consumeCharset(String s, int p, int e, boolean isG0) {
         if (p < e) { char cs = s.charAt(p); if (isG0) g0Charset = cs; else g1Charset = cs; return p; }
         return -1;
     }
-
     private void resetTerminal() {
         buffer.clear(); buffer.add(new ArrayList<>());
         curCol = curRow = scrollOff = 0;
         scrollTop = 0; scrollBottom = -1; originMode = false;
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
-
         draw();
     }
-
     private void saveCursor() {
         savedCurCol = curCol; savedCurRow = curRow;
         savedSgrFg = sgrFg; savedSgrBg = sgrBg;
         savedSgrReverse = sgrReverse; savedSgrBold = sgrBold;
         savedSgrUnderline = sgrUnderline;
     }
-
     private void restoreCursor() {
         curCol = savedCurCol; curRow = savedCurRow;
         sgrFg = savedSgrFg; sgrBg = savedSgrBg;
@@ -513,7 +488,6 @@ public class SshTabController {
         sgrUnderline = savedSgrUnderline;
         ensureBuf(curRow);
     }
-
     private void reverseIndex() {
         if (curRow == scrollTop) {
             insertLine(scrollTop);
@@ -521,7 +495,6 @@ public class SshTabController {
             curRow = Math.max(0, curRow - 1);
         }
     }
-
     private void indexDown() {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         if (curRow == bottom) {
@@ -532,26 +505,22 @@ public class SshTabController {
             curRow = Math.min(bottom, curRow + 1);
         }
     }
-
     private void insertLine(int at) {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         ensureBuf(bottom + 1);
         buffer.add(at, new ArrayList<>());
         if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
     }
-
     private void deleteLine(int from, int to) {
         if (from >= buffer.size()) return;
         buffer.remove(from);
         ensureBuf(to);
     }
-
     private void deleteLines(int from, int count) {
         for (int i = 0; i < count && from < buffer.size(); i++) {
             buffer.remove(from);
         }
     }
-
     private int csi(String s, int p, int e) {
         int st = p;
         boolean isPrivate = false; // CSI ? prefix
@@ -599,7 +568,7 @@ public class SshTabController {
                                 break;
                             }
                             break;
-                        case 'r': // DECSTBM — handled below in standard CSI
+                        case 'r': // DECSTBM 闂?handled below in standard CSI
                             if (inAltScreen && ps.isEmpty()) {
                                 // ?r without params: restore default scroll region
                                 scrollTop = 0; scrollBottom = rows - 1;
@@ -608,7 +577,7 @@ public class SshTabController {
                         case 's': break; // DECSC
                         case 'u': break; // DECRC
                         case 'J':
-                            if (ps.equals("2")) { clearBuffer(); }
+                            if (ps.equals("2")) { clearBuffer(); scrollOff = 0; }
                             break;
                     }
                     return p;
@@ -624,8 +593,9 @@ public class SshTabController {
                         else if (ps.equals("1")) eraseDOS();
                         else if (ps.equals("2")) {
                             clearBuffer();
+                            scrollOff = 0;
                             if (!inAltScreen) {
-                                scrollOff = 0; scrollTop = 0; scrollBottom = -1; originMode = false;
+                                scrollTop = 0; scrollBottom = -1; originMode = false;
                             }
                         }
                         break;
@@ -689,18 +659,21 @@ public class SshTabController {
                             if (i2 < ln.size()) ln.get(i2).reset();
                         }
                     } break;
+                    case 'Z': { // cursor backward tab (CBT)
+                        int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
+                        for (int i = 0; i < n; i++) curCol = Math.max(0, ((curCol - 1) / 8) * 8);
+                    } break;
                     case 'S': { // scroll up
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         for (int i3 = 0; i3 < n; i3++) { buffer.add(top, new ArrayList<>()); if (buffer.size() > bottom + 2) buffer.remove(bottom + 1); }
                     } break;
-                    case 'T': { // scroll down
+                    case 'T': { // scroll down (SD)
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n && buffer.size() > top; i3++) buffer.remove(top);
-                        for (int i3 = buffer.size(); i3 <= bottom; i3++) buffer.add(new ArrayList<>());
+                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top) { buffer.remove(bottom); buffer.add(top, new ArrayList<>()); } }
                     } break;
-                    case 'r': { // DECSTBM — set scroll region
+                    case 'r': { // DECSTBM 闂?set scroll region
                         String[] sr_ = ps.split(";");
                         scrollTop = sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0;
                         scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? Integer.parseInt(sr_[1]) - 1 : -1;
@@ -711,18 +684,17 @@ public class SshTabController {
                         break;
                     case 's': saveCursor(); break;
                     case 'u': restoreCursor(); break;
-                    case 'n': break; // DSR — ignore
-                    case 'q': break; // DECSCUSR — ignore cursor style
+                    case 'n': break; // DSR 闂?ignore
+                    case 'q': break; // DECSCUSR 闂?ignore cursor style
                 }
                 return p;
             } else {
-                // Unrecognized char in CSI sequence — skip it silently instead of
+                // Unrecognized char in CSI sequence 闂?skip it silently instead of
                 // backtracking (which could feed garbage to put())
             }
         }
         return -1;
     }
-
     private int osc(String s, int p, int e) {
         while (p < e) {
             char c = s.charAt(p);
@@ -732,39 +704,31 @@ public class SshTabController {
         }
         return -1;
     }
-
     private void clearBuffer() {
         buffer.clear(); buffer.add(new ArrayList<>());
         curCol = curRow = 0;
     }
-
     private void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
         List<Cell> ln = ensureBuf(curRow);
         for (int i = curCol; i < ln.size(); i++) ln.get(i).reset();
-
     }
-
     private void eraseBOL() {
         List<Cell> ln = ensureBuf(curRow);
         int end = Math.min(curCol, ln.size() - 1);
         for (int i = 0; i <= end && !ln.isEmpty(); i++) ln.remove(0);
     }
-
     private void eraseLine() {
         if (curRow < buffer.size()) buffer.get(curRow).clear();
     }
-
     private void eraseEOD() {
         eraseEOL();
         for (int r = curRow + 1; r < buffer.size(); r++) buffer.get(r).clear();
     }
-
     private void eraseDOS() {
         for (int r = 0; r < curRow && r < buffer.size(); r++) buffer.get(r).clear();
         eraseBOL();
     }
-
     private void sgr(String ps) {
         if (ps.isEmpty()) { sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false; return; }
         for (String p : ps.split(";")) {
@@ -775,10 +739,10 @@ public class SshTabController {
                 try { n = Integer.parseInt(p); } catch (NumberFormatException x) { continue; }
                 switch (n) {
                     case 1: sgrBold = true; break;
-                    case 2: sgrBold = false; break;  // dim/faint — treat as unbold for now
-                    case 3: break; // italic — ignore
+                    case 2: sgrBold = false; break;  // dim/faint 闂?treat as unbold for now
+                    case 3: break; // italic 闂?ignore
                     case 4: sgrUnderline = true; break;
-                    case 5: case 6: break; // blink — ignore
+                    case 5: case 6: break; // blink 闂?ignore
                     case 7: sgrReverse = true; break;
                     case 22: sgrBold = false; break;
                     case 23: break; // italic off
@@ -797,9 +761,7 @@ public class SshTabController {
             }
         }
     }
-
     // ---- CJK fullwidth detection ----
-
     /**
      * Returns true if the character is a CJK fullwidth character that
      * occupies 2 columns in a terminal.
@@ -820,9 +782,7 @@ public class SshTabController {
         if (ch >= 0xFFE0 && ch <= 0xFFE6) return true; // Fullwidth Symbols
         return false;
     }
-
     // ---- Rendering ----
-
     private static Color c(int code) {
         switch (code) {
             case 30:case 40: return Color.BLACK;
@@ -844,14 +804,12 @@ public class SshTabController {
             default: return Color.WHITE;
         }
     }
-
     private void draw() {
         GraphicsContext g = canvas.getGraphicsContext2D();
         double w = canvas.getWidth(), h = canvas.getHeight();
         g.setFill(Color.BLACK);
         g.fillRect(0, 0, w, h);
         g.setFont(FONT);
-
         int sr = scrollOff, er = Math.min(buffer.size(), sr + rows);
         boolean hs = selStartRow >= 0 && (selStartRow != selEndRow || selStartCol != selEndCol);
         int mr = hs ? Math.min(selStartRow, selEndRow) : -1;
@@ -867,7 +825,6 @@ public class SshTabController {
                 if (sl > sr2) { int t = sl; sl = sr2; sr2 = t; }
             }
         }
-
         for (int r = sr; r < er && r < buffer.size(); r++) {
             int sy = r - sr;
             double y = sy * LINE_H;
@@ -877,7 +834,6 @@ public class SshTabController {
                 if (cell.ch == '\0') continue;
                 boolean isFw = isFullwidth(cell.ch);
                 double cellW = isFw ? CHAR_W * 2 : CHAR_W;
-
                 boolean in = hs && ((r > mr && r < Mr)
                         || (r == mr && r == Mr && col >= sl && col < sr2)
                         || (r == mr && r != Mr && col >= sl)
@@ -907,7 +863,6 @@ public class SshTabController {
                 }
             }
         }
-
         if (cursorShown && cursorVis && focused) {
             int vr = curRow - scrollOff;
             if (vr >= 0 && vr < rows) {
@@ -927,9 +882,7 @@ public class SshTabController {
             }
         }
     }
-
     // ---- Input ----
-
     private void setupCanvasInput() {
         canvas.setOnMousePressed(e -> {
             canvas.requestFocus();
@@ -1074,7 +1027,6 @@ public class SshTabController {
         });
     }
 
-
     private void startAutoScroll(int dir) {
         if (autoScrollDirection == dir) return;
         autoScrollDirection = dir;
@@ -1096,7 +1048,6 @@ public class SshTabController {
         }
         autoScrollTimeline.play();
     }
-
     private void stopAutoScroll() {
         autoScrollDirection = 0;
         if (autoScrollTimeline != null) autoScrollTimeline.stop();
@@ -1104,13 +1055,11 @@ public class SshTabController {
     private static int clamp(int v, int lo, int hi) {
         return Math.max(lo, Math.min(hi, v));
     }
-
     private boolean isWordChar(char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
                 || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'
                 || isFullwidth(c);
     }
-
     private byte[] key(KeyEvent e) {
         KeyCode k = e.getCode();
         boolean ct = e.isControlDown() && !e.isShiftDown() && !e.isAltDown() && !e.isMetaDown();
@@ -1174,7 +1123,6 @@ public class SshTabController {
             default:return null;
         }
     }
-
     private String selectedText() {
         if (selStartRow < 0 || selEndRow < 0) return "";
         int sr = Math.min(selStartRow, selEndRow), er = Math.max(selStartRow, selEndRow);
@@ -1195,7 +1143,6 @@ public class SshTabController {
         }
         return sb.toString();
     }
-
     /** Strip continuation cells (\0) left by fullwidth characters. */
     private static String stripContinuationChars(String s) {
         StringBuilder sb = new StringBuilder(s.length());
@@ -1206,7 +1153,6 @@ public class SshTabController {
         return sb.toString();
     }
     /** Make control chars visible for logging. */
-
     /** Map DEC Special Graphics (line drawing) characters to Unicode. */
     private static char mapDecSpecial(char c) {
         switch (c) {
@@ -1217,7 +1163,6 @@ public class SshTabController {
             default: return c;
         }
     }
-
     private static String escapeForLog(String s) {
         StringBuilder sb = new StringBuilder(s.length() * 2);
         for (int i = 0; i < s.length(); i++) {
@@ -1232,7 +1177,6 @@ public class SshTabController {
         }
         return sb.toString();
     }
-
     /** Dump the current buffer content to log. */
     private void dumpBuffer() {
         StringBuilder sb = new StringBuilder();
