@@ -45,6 +45,11 @@ public class SshTabController {
         CHAR_W = m.getLayoutBounds().getWidth();
         LINE_H = 13 * 1.4;
     }
+    /** Request keyboard focus on the terminal canvas. */
+    public void requestFocus() {
+        canvas.requestFocus();
+    }
+
     // ---- Terminal cell with per-character SGR attributes ----
     /** A single character cell storing both the glyph and its SGR styling. */
     private static class Cell {

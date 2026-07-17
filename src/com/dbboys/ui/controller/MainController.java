@@ -352,6 +352,10 @@ public class MainController {
                     Platform.runLater(() -> {
                         ((CustomSqlTab)newTab).sqlTabController.sqlEditCodeArea.requestFocus();                        // 可选：将光标移动到文本末尾
                     });
+                } else if (newTab instanceof CustomSshTab) {
+                    Platform.runLater(() -> {
+                        ((CustomSshTab)newTab).controller.requestFocus();
+                    });
                 }
             }
         });
