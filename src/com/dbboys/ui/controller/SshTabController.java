@@ -152,7 +152,7 @@ public class SshTabController {
                 int maxScroll = Math.max(0, buffer.size() - rows);
                 if (v != scrollOff) {
                     scrollOff = clamp(v, 0, maxScroll);
-                    scrollLock = false;
+                    scrollLock = true;
                     draw();
                 }
             }
@@ -188,7 +188,12 @@ public class SshTabController {
                 if (newRows != rows) {
                     rows = newRows;
                     canvas.setHeight(rows * LINE_H);
+                    // Keep scrollOff valid after resize
+                    if (scrollOff > Math.max(0, buffer.size() - rows)) {
+                        scrollOff = Math.max(0, buffer.size() - rows);
+                    }
                     draw();
+                    fireScrollChanged();
                 }
                 updatePtySize();
             }
@@ -353,16 +358,19 @@ public class SshTabController {
     private void nl() {
         curRow++;
         ensureBuf(curRow);
-        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
+        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); }
         int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         if (!scrollLock && curRow > effectiveBottom) {
-            // scroll within the scroll region
-            if (scrollTop < effectiveBottom) {
+            if (scrollBottom >= 0 && scrollTop < effectiveBottom) {
+                // DECSTBM scroll region: scroll within region, discarding top line
                 buffer.remove(scrollTop);
                 ensureBuf(effectiveBottom);
                 buffer.get(effectiveBottom).clear();
+                curRow = effectiveBottom;
+            } else {
+                // Normal mode: advance viewport, preserve history in buffer
+                scrollOff = curRow - rows + 1;
             }
-            curRow = effectiveBottom;
         } else if (!scrollLock && curRow - scrollOff >= rows) {
             scrollOff = curRow - rows + 1;
         }
@@ -393,16 +401,21 @@ public class SshTabController {
             pendingWrap = true; wrapPendingEraseSuppress = true;
             int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
             if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
-                // scroll region is full 闂?scroll up one line
-                int top = scrollTop;
-                int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-                bottom = Math.max(scrollTop, bottom);
-                deleteLine(top, bottom);
-                ensureBuf(bottom);
-                // blank the bottom line
-                List<Cell> bottomLn = buffer.get(bottom);
-                for (Cell cl : bottomLn) cl.reset();
-                curRow = bottom;
+                if (scrollBottom >= 0) {
+                    // DECSTBM scroll region: scroll within region, discarding top line
+                    int top = scrollTop;
+                    int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+                    bottom = Math.max(scrollTop, bottom);
+                    deleteLine(top, bottom);
+                    ensureBuf(bottom);
+                    // blank the bottom line
+                    List<Cell> bottomLn = buffer.get(bottom);
+                    for (Cell cl : bottomLn) cl.reset();
+                    curRow = bottom;
+                } else {
+                    // Normal mode: advance viewport, preserve history in buffer
+                    scrollOff = curRow - rows + 1;
+                }
             }
             ensureBuf(curRow);
         }
@@ -1053,7 +1066,7 @@ public class SshTabController {
             if (dir != 0) {
                 int maxOff = Math.max(0, buffer.size() - rows);
                 scrollOff = clamp(scrollOff + dir, 0, maxOff);
-                scrollLock = false;
+                scrollLock = true;
                 draw();
                 fireScrollChanged();
             }
