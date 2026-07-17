@@ -38,6 +38,7 @@ public class SshConnect extends TreeData {
     private StringProperty authType = new SimpleStringProperty(AUTH_PASSWORD);
     private StringProperty keyPath = new SimpleStringProperty();
     private StringProperty keyPassphrase = new SimpleStringProperty();
+    private StringProperty charset = new SimpleStringProperty("UTF-8");
     private StringProperty info = new SimpleStringProperty();
 
     public SshConnect() {}
@@ -92,6 +93,11 @@ public class SshConnect extends TreeData {
     public String getKeyPassphrase() { return keyPassphrase.get(); }
     public StringProperty keyPassphraseProperty() { return keyPassphrase; }
     public void setKeyPassphrase(String keyPassphrase) { this.keyPassphrase.set(keyPassphrase); }
+
+    // --- charset ---
+    public String getCharset() { return charset.get(); }
+    public StringProperty charsetProperty() { return charset; }
+    public void setCharset(String charset) { this.charset.set(charset); }
 
     // --- info ---
     public String getInfo() { return info.get(); }

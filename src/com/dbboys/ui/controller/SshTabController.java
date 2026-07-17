@@ -64,10 +64,22 @@ public class SshTabController {
     @FXML public Button connectButton;
     @FXML public Button disconnectButton;
     @FXML public Label connectionLabel;
+    @FXML public Label charsetLabel;
+    @FXML public ChoiceBox<String> charsetChoiceBox;
     @FXML public VBox sshTab;
     private SshConnect sshConnect;
     private Session session;
     private ChannelShell shellChannel;
+    private String charset = "UTF-8"; // terminal encoding, synced from SshConnect.charset
+
+    /** Get the current terminal charset, fallback to UTF-8 if invalid. */
+    private java.nio.charset.Charset terminalCharset() {
+        try {
+            return java.nio.charset.Charset.forName(charset);
+        } catch (Exception e) {
+            return StandardCharsets.UTF_8;
+        }
+    }
     private final StringProperty connectStatus = new SimpleStringProperty();
     private ScrollBar scrollBar;
     private boolean updatingScrollBar;
@@ -126,6 +138,21 @@ public class SshTabController {
         disconnectButton.setOnAction(e -> doDisconnect());
         connectStatus.addListener((obs, o, n) -> connectionLabel.setText(n));
         connectStatus.set(I18n.t("ssh.tab.disconnected", "Disconnected"));
+        // Charset ComboBox
+        charsetChoiceBox.getItems().addAll("UTF-8", "GB18030");
+        charsetChoiceBox.setValue("UTF-8");
+        charsetLabel.textProperty().bind(I18n.bind("ssh.label.charset"));
+        charsetChoiceBox.setOnAction(e -> {
+            String newCharset = charsetChoiceBox.getValue();
+            if (newCharset != null && !newCharset.equals(charset)) {
+                charset = newCharset;
+                // Sync to DB
+                if (sshConnect != null) {
+                    sshConnect.setCharset(charset);
+                    com.dbboys.infra.db.LocalDbRepository.updateSsh(sshConnect);
+                }
+            }
+        });
         // Canvas terminal
         buffer.add(new ArrayList<>());
         canvas = new Canvas(cols * CHAR_W, rows * LINE_H);
@@ -201,6 +228,13 @@ public class SshTabController {
     }
     public void init(SshConnect sc) {
         this.sshConnect = sc;
+        // Load charset from DB record, default UTF-8
+        charset = (sc.getCharset() != null && !sc.getCharset().isBlank())
+                ? sc.getCharset() : "UTF-8";
+        if (!charset.equals("UTF-8") && !charset.equals("GB18030")) {
+            charset = "UTF-8";
+        }
+        charsetChoiceBox.setValue(charset);
         connectStatus.set(sc.getUsername() + "@" + sc.getHost() + ":" + sc.getPort());
         doConnect();
     }
@@ -269,7 +303,7 @@ public class SshTabController {
                 byte[] buf = new byte[8192];
                 int len;
                 while (shellChannel.isConnected() && (len = in.read(buf, 0, buf.length)) != -1) {
-                    String out = new String(buf, 0, len, StandardCharsets.UTF_8);
+                    String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
                 }
             } catch (Exception e) { /* closed */ }
@@ -1017,7 +1051,7 @@ public class SshTabController {
                     text = text.replace("\n", "\r");
                     try {
                         OutputStream os = shellChannel.getOutputStream();
-                        os.write(text.getBytes(StandardCharsets.UTF_8));
+                        os.write(text.getBytes(terminalCharset()));
                         os.flush();
                     } catch (Exception ignored) {}
                 }
@@ -1055,7 +1089,7 @@ public class SshTabController {
             } else if (c >= 0x20 && c != 0x7F) {
                 try {
                     OutputStream os = shellChannel.getOutputStream();
-                    os.write(ch.getBytes(StandardCharsets.UTF_8));
+                    os.write(ch.getBytes(terminalCharset()));
                     os.flush();
                 } catch (Exception ignored) {}
                 e.consume();

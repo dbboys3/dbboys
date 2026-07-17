@@ -40,12 +40,14 @@ public  class LocalDbRepository {
                     + "c_auth_type VARCHAR(10),"
                     + "c_key_path VARCHAR(500),"
                     + "c_key_passphrase VARCHAR(100),"
+                    + "c_charset VARCHAR(20) DEFAULT 'UTF-8',"
                     + "c_info VARCHAR(3200))");
         } catch (Exception e) {
         }
         // Migrate: add columns that may not exist in older databases
         String[][] sshTableCols = {
             {"c_key_passphrase", "VARCHAR(100)"},
+            {"c_charset", "VARCHAR(20) DEFAULT 'UTF-8'"},
             {"c_info", "VARCHAR(3200)"}
         };
         for (String[] col : sshTableCols) {
@@ -83,7 +85,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("create table if not exists t_connect(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid int,c_name varchar(100),c_dbtype varchar(50),c_dbversion varchar(100),c_driver varchar(100),c_drivermd5 varchar(100),c_ip varchar(50),c_port varchar(50),c_database varchar(100),c_readonly varchar(2),c_username varchar(50),c_password varchar(50),c_props varchar(3200),c_info varchar(3200),c_ssh_host varchar(100),c_ssh_port varchar(10),c_ssh_user varchar(100),c_ssh_password varchar(100),c_ssh_enabled varchar(2))");
             statement.executeUpdate("create table if not exists t_sqlhistory(c_connectid INTEGER,c_database varchar(50),c_sql varchar(32000),c_starttime varchar(20),c_endtime varchar(20),c_elapsedtime varchar(20),c_affect int,c_mark varchar(100))");
             statement.executeUpdate("create table if not exists t_ssh_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
-            statement.executeUpdate("create table if not exists t_ssh(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_host varchar(100),c_port varchar(10),c_username varchar(100),c_password varchar(100),c_auth_type varchar(10),c_key_path varchar(500),c_key_passphrase varchar(100),c_info varchar(3200))");
+            statement.executeUpdate("create table if not exists t_ssh(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_host varchar(100),c_port varchar(10),c_username varchar(100),c_password varchar(100),c_auth_type varchar(10),c_key_path varchar(500),c_key_passphrase varchar(100),c_charset varchar(20) DEFAULT 'UTF-8',c_info varchar(3200))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
             //statement.executeUpdate("INSERT INTO t_connect(c_parentid,c_level,c_name,c_expand,c_dbtype,c_ip,c_port,c_username,c_password) VALUES (2,3, '核心业务系统',0,'GBASE 8S','192.168.17.123','9088','gbasedbt','GBase123')");
@@ -748,7 +750,7 @@ public  class LocalDbRepository {
     public static java.util.List<SshConnect> getAllSsh() {
         java.util.List<SshConnect> list = new java.util.ArrayList<>();
         String sql = "SELECT c_id, c_parentid, c_name, c_host, c_port, c_username, c_password, "
-                + "c_auth_type, c_key_path, c_key_passphrase, c_info FROM t_ssh ORDER BY c_name";
+                + "c_auth_type, c_key_path, c_key_passphrase, c_charset, c_info FROM t_ssh ORDER BY c_name";
         try (java.sql.Statement stmt = conn.createStatement();
              java.sql.ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
@@ -763,6 +765,7 @@ public  class LocalDbRepository {
                 sc.setAuthType(rs.getString("c_auth_type") != null ? rs.getString("c_auth_type") : SshConnect.AUTH_PASSWORD);
                 sc.setKeyPath(rs.getString("c_key_path") != null ? rs.getString("c_key_path") : "");
                 sc.setKeyPassphrase(rs.getString("c_key_passphrase") != null ? rs.getString("c_key_passphrase") : "");
+                sc.setCharset(rs.getString("c_charset") != null ? rs.getString("c_charset") : "UTF-8");
                 sc.setInfo(rs.getString("c_info") != null ? rs.getString("c_info") : "");
                 list.add(sc);
             }
@@ -774,7 +777,7 @@ public  class LocalDbRepository {
 
     public static String createSsh(SshConnect sc) {
         String sql = "INSERT INTO t_ssh (c_parentid, c_name, c_host, c_port, c_username, c_password, "
-                + "c_auth_type, c_key_path, c_key_passphrase, c_info) VALUES (?,?,?,?,?,?,?,?,?,?)";
+                + "c_auth_type, c_key_path, c_key_passphrase, c_charset, c_info) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
         try (java.sql.PreparedStatement ps = conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, sc.getParentId());
             ps.setString(2, sc.getName());
@@ -785,7 +788,8 @@ public  class LocalDbRepository {
             ps.setString(7, sc.getAuthType());
             ps.setString(8, sc.getKeyPath());
             ps.setString(9, sc.getKeyPassphrase());
-            ps.setString(10, sc.getInfo());
+            ps.setString(10, sc.getCharset());
+            ps.setString(11, sc.getInfo());
             ps.executeUpdate();
             try (java.sql.ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -801,7 +805,7 @@ public  class LocalDbRepository {
 
     public static String updateSsh(SshConnect sc) {
         String sql = "UPDATE t_ssh SET c_parentid=?, c_name=?, c_host=?, c_port=?, c_username=?, c_password=?, "
-                + "c_auth_type=?, c_key_path=?, c_key_passphrase=?, c_info=? WHERE c_id=?";
+                + "c_auth_type=?, c_key_path=?, c_key_passphrase=?, c_charset=?, c_info=? WHERE c_id=?";
         try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, sc.getParentId());
             ps.setString(2, sc.getName());
@@ -812,8 +816,9 @@ public  class LocalDbRepository {
             ps.setString(7, sc.getAuthType());
             ps.setString(8, sc.getKeyPath());
             ps.setString(9, sc.getKeyPassphrase());
-            ps.setString(10, sc.getInfo());
-            ps.setInt(11, sc.getId());
+            ps.setString(10, sc.getCharset());
+            ps.setString(11, sc.getInfo());
+            ps.setInt(12, sc.getId());
             ps.executeUpdate();
             return "";
         } catch (Exception e) {

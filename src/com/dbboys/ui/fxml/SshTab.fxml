@@ -19,6 +19,9 @@
         </Button>
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
+        <Label fx:id="charsetLabel" />
+        <ChoiceBox fx:id="charsetChoiceBox" prefWidth="80" focusTraversable="false">
+        </ChoiceBox>
     </HBox>
     <StackPane fx:id="terminalPane" VBox.vgrow="ALWAYS" style="-fx-background-color: black;" />
 </VBox>
