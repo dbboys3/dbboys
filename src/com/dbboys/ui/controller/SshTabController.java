@@ -175,6 +175,10 @@ public class SshTabController {
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
         setupCanvasInput();
         terminalPane.getChildren().add(canvas);
+        // Click on the tab body focuses the terminal
+        sshTab.setOnMouseClicked(e -> canvas.requestFocus());
+        // Click on the tab body (including toolbar area) focuses the terminal
+        sshTab.setOnMouseClicked(e -> canvas.requestFocus());
         // ScrollBar
         scrollBar = new ScrollBar();
         scrollBar.setOrientation(javafx.geometry.Orientation.VERTICAL);
@@ -279,19 +283,21 @@ public class SshTabController {
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connected", "Connected") + "]");
-                    status(I18n.t("ssh.tab.connected", "Connected") + "\r\n");
+                    statusGreen(I18n.t("ssh.tab.connected", "Connected") + "\r\n");
                     updatePtySize();
                 });
             } catch (Exception ex) {
                 log.error("SSH connect failed", ex);
                 Platform.runLater(() -> {
                     connecting = false;
+                    cursorShown = false;
+                    draw();
                     connectButton.setDisable(false);
                     disconnectButton.setDisable(true);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connect_failed", "Connect Failed") + "]");
-                    status("[ERROR] " + ex.getMessage() + "\r\n");
+                    statusRed("[ERROR] " + ex.getMessage() + "\r\n");
                 });
             }
         });
@@ -301,6 +307,8 @@ public class SshTabController {
         JschUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
+        cursorShown = false;
+        draw();
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
         if (sshConnect != null) {
@@ -363,7 +371,7 @@ public class SshTabController {
         JschUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
-        status("\r\nDisconnected\r\n");
+        statusRed("\r\nDisconnected\r\n");
         cursorShown = false;
         draw();
         connectStatus.set((sshConnect != null
@@ -396,6 +404,27 @@ public class SshTabController {
         }
         if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
         requestDraw();
+    }
+
+    /** Write status text in red, then restore default SGR. */
+    private void statusRed(String s) {
+        int saveFg = sgrFg, saveBg = sgrBg, saveExtFg = sgrExtFg, saveExtBg = sgrExtBg;
+        boolean saveBold = sgrBold, saveRev = sgrReverse, saveUnder = sgrUnderline;
+        sgrFg = 31; sgrBg = 40; sgrExtFg = -1; sgrExtBg = -1;
+        sgrBold = false; sgrReverse = false; sgrUnderline = false;
+        status(s);
+        sgrFg = saveFg; sgrBg = saveBg; sgrExtFg = saveExtFg; sgrExtBg = saveExtBg;
+        sgrBold = saveBold; sgrReverse = saveRev; sgrUnderline = saveUnder;
+    }
+    /** Write status text in green, then restore default SGR. */
+    private void statusGreen(String s) {
+        int saveFg = sgrFg, saveBg = sgrBg, saveExtFg = sgrExtFg, saveExtBg = sgrExtBg;
+        boolean saveBold = sgrBold, saveRev = sgrReverse, saveUnder = sgrUnderline;
+        sgrFg = 32; sgrBg = 40; sgrExtFg = -1; sgrExtBg = -1;
+        sgrBold = false; sgrReverse = false; sgrUnderline = false;
+        status(s);
+        sgrFg = saveFg; sgrBg = saveBg; sgrExtFg = saveExtFg; sgrExtBg = saveExtBg;
+        sgrBold = saveBold; sgrReverse = saveRev; sgrUnderline = saveUnder;
     }
     private void write(String raw) {
         // prepend any incomplete escape sequence from the previous chunk
