@@ -106,6 +106,7 @@ public class SshTabController {
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
     private Thread readThread;
+    private volatile boolean connecting; // guards against concurrent connect attempts
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
     private String pendingEsc;
@@ -240,6 +241,8 @@ public class SshTabController {
     }
     private void doConnect() {
         if (sshConnect == null) return;
+        if (connecting) return; // already connecting — skip duplicate
+        connecting = true;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
         status("Connecting to " + sshConnect.getUsername() + "@"
@@ -253,6 +256,9 @@ public class SshTabController {
                 shellChannel.connect();
                 start();
                 Platform.runLater(() -> {
+                    connecting = false;
+                    cursorShown = true; // restore cursor on successful connect
+                    if (blink != null) blink.play(); // ensure blink is running after reconnect
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
                     canvas.requestFocus();
@@ -265,6 +271,7 @@ public class SshTabController {
             } catch (Exception ex) {
                 log.error("SSH connect failed", ex);
                 Platform.runLater(() -> {
+                    connecting = false;
                     connectButton.setDisable(false);
                     disconnectButton.setDisable(true);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
@@ -306,7 +313,12 @@ public class SshTabController {
                     String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
                 }
-            } catch (Exception e) { /* closed */ }
+                // read returned -1 or channel disconnected — connection lost
+                Platform.runLater(this::onConnectionLost);
+            } catch (Exception e) {
+                // read thread interrupted or IO error — connection likely lost
+                Platform.runLater(this::onConnectionLost);
+            }
         }, "term-reader");
         readThread.setDaemon(true);
         readThread.start();
@@ -317,12 +329,31 @@ public class SshTabController {
             readThread.interrupt();
             readThread = null;
         }
-        if (shellChannel != null && shellChannel.isConnected()) {
+        if (shellChannel != null) {
             try { shellChannel.getOutputStream().close(); } catch (Exception ignored) {}
             try { shellChannel.getInputStream().close(); } catch (Exception ignored) {}
-            shellChannel.disconnect();
+            if (shellChannel.isConnected()) {
+                shellChannel.disconnect();
+            }
         }
     }
+    /** Called on the FX thread when the SSH read thread exits (connection lost). */
+    private void onConnectionLost() {
+        // Clean up stale session/channel regardless of isConnected() state
+        stop();
+        JschUtil.disconnectSession(session);
+        session = null;
+        shellChannel = null;
+        status("\r\nDisconnected\r\n");
+        cursorShown = false;
+        draw();
+        connectStatus.set((sshConnect != null
+                ? sshConnect.getUsername() + "@" + sshConnect.getHost() + ":" + sshConnect.getPort()
+                : "") + " [" + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
+        connectButton.setDisable(false);
+        disconnectButton.setDisable(true);
+    }
+
     /** Request a deferred draw. Coalesces rapid write() calls to prevent
      *  the blink timer rendering a partially-updated screen during full-screen
      *  program refreshes (top, nmon, etc.). */
@@ -1059,7 +1090,14 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnKeyPressed(e -> {
-            if (shellChannel == null || !shellChannel.isConnected()) { e.consume(); return; }
+            // Disconnected — Enter triggers reconnect
+            if (shellChannel == null || !shellChannel.isConnected()) {
+                if (e.getCode() == KeyCode.ENTER) {
+                    doConnect();
+                }
+                e.consume();
+                return;
+            }
             // Auto-jump to bottom before sending input
             jumpToBottom();
             byte[] b = key(e);
@@ -1073,6 +1111,7 @@ public class SshTabController {
             }
         });
         canvas.setOnKeyTyped(e -> {
+            // Disconnected — ignore keystrokes (Enter handled in OnKeyPressed)
             if (shellChannel == null || !shellChannel.isConnected()) return;
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
