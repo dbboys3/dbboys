@@ -19,6 +19,8 @@
         </Button>
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
+        <CheckBox fx:id="logCheckBox" focusTraversable="false" />
+        <Region prefWidth="10" />
         <Label fx:id="charsetLabel" />
         <ChoiceBox fx:id="charsetChoiceBox" prefWidth="80" focusTraversable="false">
         </ChoiceBox>

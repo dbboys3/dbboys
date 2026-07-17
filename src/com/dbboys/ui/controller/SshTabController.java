@@ -27,6 +27,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +67,7 @@ public class SshTabController {
     @FXML public Label connectionLabel;
     @FXML public Label charsetLabel;
     @FXML public ChoiceBox<String> charsetChoiceBox;
+    @FXML public CheckBox logCheckBox;
     @FXML public VBox sshTab;
     private SshConnect sshConnect;
     private Session session;
@@ -120,6 +122,9 @@ public class SshTabController {
     private volatile boolean drawPending;
     private Timeline autoScrollTimeline;
     private int autoScrollDirection = 0;
+    // Logging
+    private java.io.BufferedWriter logWriter;
+    private boolean logging;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
@@ -152,6 +157,15 @@ public class SshTabController {
                     sshConnect.setCharset(charset);
                     com.dbboys.infra.db.LocalDbRepository.updateSsh(sshConnect);
                 }
+            }
+        });
+        // Log checkbox
+        logCheckBox.textProperty().bind(I18n.bind("ssh.label.log"));
+        logCheckBox.setOnAction(e -> {
+            if (logCheckBox.isSelected()) {
+                startLogging();
+            } else {
+                stopLogging();
             }
         });
         // Canvas terminal
@@ -310,6 +324,10 @@ public class SshTabController {
                 byte[] buf = new byte[8192];
                 int len;
                 while (shellChannel.isConnected() && (len = in.read(buf, 0, buf.length)) != -1) {
+                    // Log raw bytes to file if enabled (do this BEFORE converting to String for display)
+                    if (logging && logWriter != null) {
+                        try { logWriter.write(new String(buf, 0, len, terminalCharset())); logWriter.flush(); } catch (Exception ignored) {}
+                    }
                     String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
                 }
@@ -341,6 +359,7 @@ public class SshTabController {
     private void onConnectionLost() {
         // Clean up stale session/channel regardless of isConnected() state
         stop();
+        closeLogWriter();
         JschUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
@@ -555,6 +574,41 @@ public class SshTabController {
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
         draw();
     }
+
+    // ---- Logging ----
+    private void startLogging() {
+        try {
+            String desktop = System.getProperty("user.home") + File.separator + "Desktop";
+            String host = sshConnect != null ? sshConnect.getHost() : "unknown";
+            String ts = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String logFile = desktop + File.separator + host + "_" + ts + ".log";
+            logWriter = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                    new java.io.FileOutputStream(logFile), terminalCharset()));
+            logging = true;
+            try { logWriter.flush(); } catch (Exception ignored) {}
+            com.dbboys.ui.notification.NotificationUtil.showMainNotification(
+                    I18n.t("ssh.notice.log_started", "Logging started") + ": " + new File(logFile).getName());
+        } catch (Exception ex) {
+            log.error("Failed to start terminal log", ex);
+            logCheckBox.setSelected(false);
+        }
+    }
+
+    private void stopLogging() {
+        closeLogWriter();
+        com.dbboys.ui.notification.NotificationUtil.showMainNotification(
+                I18n.t("ssh.notice.log_stopped", "Logging stopped"));
+    }
+
+    private void closeLogWriter() {
+        if (logWriter != null) {
+            try { logWriter.close(); } catch (Exception ignored) {}
+            logWriter = null;
+        }
+        logging = false;
+    }
+
     private void saveCursor() {
         savedCurCol = curCol; savedCurRow = curRow;
         savedSgrFg = sgrFg; savedSgrBg = sgrBg;
