@@ -326,7 +326,7 @@ public class SshTabController {
                 while (shellChannel.isConnected() && (len = in.read(buf, 0, buf.length)) != -1) {
                     // Log raw bytes to file if enabled (do this BEFORE converting to String for display)
                     if (logging && logWriter != null) {
-                        try { logWriter.write(new String(buf, 0, len, terminalCharset())); logWriter.flush(); } catch (Exception ignored) {}
+                        try { logWriter.write(stripAnsi(new String(buf, 0, len, terminalCharset()))); logWriter.flush(); } catch (Exception ignored) {}
                     }
                     String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
@@ -1348,6 +1348,49 @@ public class SshTabController {
             else if (c == 0x7F) sb.append("<DEL>");
             else if (c < 0x20) sb.append(String.format("<0x%02X>", (int) c));
             else sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** Strip ANSI escape sequences from a string, returning clean visible text. */
+    private static String stripAnsi(String s) {
+        if (s == null || s.isEmpty()) return s;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == 0x1B) {
+                // ESC - skip the escape sequence
+                i++;
+                if (i >= s.length()) break;
+                c = s.charAt(i);
+                if (c == '[') {
+                    // CSI sequence: ESC [ params... finalChar
+                    i++;
+                    while (i < s.length()) {
+                        c = s.charAt(i);
+                        if (c >= '@' && c <= '~') break; // final char
+                        i++;
+                    }
+                } else if (c == ']') {
+                    // OSC sequence: ESC ] ... terminated by BEL or ST
+                    i++;
+                    while (i < s.length()) {
+                        c = s.charAt(i);
+                        if (c == 0x07) break; // BEL
+                        if (c == 0x1B && i + 1 < s.length() && s.charAt(i + 1) == '\\') break; // ST
+                        i++;
+                    }
+                } else if (c == '(' || c == ')') {
+                    // Charset selection: ESC ( <char>
+                    if (i + 1 < s.length()) i++; // skip the charset char
+                } else if (c == 'O') {
+                    // SS3: ESC O <char>
+                    if (i + 1 < s.length()) i++; // skip the key code
+                }
+                // else: single-char ESC command (7 8 M D E H c) - already consumed by i++
+            } else {
+                sb.append(c);
+            }
         }
         return sb.toString();
     }
