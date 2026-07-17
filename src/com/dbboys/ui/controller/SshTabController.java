@@ -25,9 +25,8 @@ import javafx.scene.text.Text;
 import javafx.util.Duration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,11 +49,13 @@ public class SshTabController {
     private static class Cell {
         char ch = ' ';
         int fg = 37, bg = 40;   // SGR color codes (30-37/39 foreground, 40-47/49 background)
+        int extFg = -1, extBg = -1; // 256-color extended colors (-1 = not set)
         boolean bold, underline, reverse;
-        void reset() { ch = ' '; fg = 37; bg = 40; bold = underline = reverse = false; }
+        void reset() { ch = ' '; fg = 37; bg = 40; extFg = extBg = -1; bold = underline = reverse = false; }
         Cell copy() {
             Cell c = new Cell();
             c.ch = this.ch; c.fg = this.fg; c.bg = this.bg;
+            c.extFg = this.extFg; c.extBg = this.extBg;
             c.bold = this.bold; c.underline = this.underline; c.reverse = this.reverse;
             return c;
         }
@@ -97,6 +98,7 @@ public class SshTabController {
     private Runnable onScrollChanged;
     private String pendingEsc;
     private boolean scrollLock;
+    private int sgrExtFg = -1, sgrExtBg = -1; // 256-color extended colors
     private List<List<Cell>> altSavedBuffer;
     private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
     private boolean inAltScreen; // whether alternate screen buffer (?1049h) is active
@@ -158,7 +160,7 @@ public class SshTabController {
         onScrollChanged = () -> {
             Platform.runLater(() -> {
                 int max = Math.max(0, buffer.size() - rows);
-                scrollBar.setVisible(max > 0 && !scrollLock);
+                scrollBar.setVisible(max > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
                                 int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
@@ -208,7 +210,7 @@ public class SshTabController {
                 session = JschUtil.getSshSession(sshConnect);
                 shellChannel = (ChannelShell) session.openChannel("shell");
                 shellChannel.setPty(true);
-                shellChannel.setPtyType("xterm");
+                shellChannel.setPtyType("xterm-256color");
                 shellChannel.connect();
                 start();
                 Platform.runLater(() -> {
@@ -258,11 +260,11 @@ public class SshTabController {
         if (shellChannel == null || !shellChannel.isConnected()) return;
         readThread = new Thread(() -> {
             try {
-                Reader reader = new InputStreamReader(shellChannel.getInputStream(), StandardCharsets.UTF_8);
-                char[] buf = new char[8192];
+                InputStream in = shellChannel.getInputStream();
+                byte[] buf = new byte[8192];
                 int len;
-                while (shellChannel.isConnected() && (len = reader.read(buf, 0, buf.length)) != -1) {
-                    String out = new String(buf, 0, len);
+                while (shellChannel.isConnected() && (len = in.read(buf, 0, buf.length)) != -1) {
+                    String out = new String(buf, 0, len, StandardCharsets.UTF_8);
                     Platform.runLater(() -> write(out));
                 }
             } catch (Exception e) { /* closed */ }
@@ -374,7 +376,7 @@ public class SshTabController {
         while (ln.size() <= curCol) ln.add(new Cell());
         Cell cell = ln.get(curCol);
         cell.ch = c;
-        cell.fg = sgrFg; cell.bg = sgrBg;
+        cell.fg = sgrFg; cell.bg = sgrBg; cell.extFg = sgrExtFg; cell.extBg = sgrExtBg;
         cell.bold = sgrBold; cell.underline = sgrUnderline; cell.reverse = sgrReverse;
         int w = isFullwidth(c) ? 2 : 1;
         if (w == 2 && curCol + 1 < cols) {
@@ -689,7 +691,8 @@ public class SshTabController {
                 }
                 return p;
             } else {
-                // Unrecognized char in CSI sequence 闂?skip it silently instead of
+                // Unrecognized char in CSI sequence, skip silently
+                p++;
                 // backtracking (which could feed garbage to put())
             }
         }
@@ -730,34 +733,47 @@ public class SshTabController {
         eraseBOL();
     }
     private void sgr(String ps) {
-        if (ps.isEmpty()) { sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false; return; }
-        for (String p : ps.split(";")) {
+        if (ps.isEmpty()) { sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false; sgrExtFg = -1; sgrExtBg = -1; return; }
+        String[] parts = ps.split(";");
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i];
             if (p.isEmpty() || p.equals("0")) {
-                sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
-            } else {
-                int n;
-                try { n = Integer.parseInt(p); } catch (NumberFormatException x) { continue; }
-                switch (n) {
-                    case 1: sgrBold = true; break;
-                    case 2: sgrBold = false; break;  // dim/faint 闂?treat as unbold for now
-                    case 3: break; // italic 闂?ignore
-                    case 4: sgrUnderline = true; break;
-                    case 5: case 6: break; // blink 闂?ignore
-                    case 7: sgrReverse = true; break;
-                    case 22: sgrBold = false; break;
-                    case 23: break; // italic off
-                    case 24: sgrUnderline = false; break;
-                    case 25: break; // blink off
-                    case 27: sgrReverse = false; break;
-                    case 30: sgrFg=30; break; case 31: sgrFg=31; break; case 32: sgrFg=32; break; case 33: sgrFg=33; break;
-                    case 34: sgrFg=34; break; case 35: sgrFg=35; break; case 36: sgrFg=36; break; case 37: case 39: sgrFg=37; break;
-                    case 90: sgrFg=90; break; case 91: sgrFg=91; break; case 92: sgrFg=92; break; case 93: sgrFg=93; break;
-                    case 94: sgrFg=94; break; case 95: sgrFg=95; break; case 96: sgrFg=96; break; case 97: sgrFg=97; break;
-                    case 40: sgrBg=40; break; case 41: sgrBg=41; break; case 42: sgrBg=42; break; case 43: sgrBg=43; break;
-                    case 44: sgrBg=44; break; case 45: sgrBg=45; break; case 46: sgrBg=46; break; case 47: case 49: sgrBg=40; break;
-                    case 100: sgrBg=100; break; case 101: sgrBg=101; break; case 102: sgrBg=102; break; case 103: sgrBg=103; break;
-                    case 104: sgrBg=104; break; case 105: sgrBg=105; break; case 106: sgrBg=106; break; case 107: sgrBg=107; break;
-                }
+                sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false; sgrExtFg = -1; sgrExtBg = -1;
+                continue;
+            }
+            int n;
+            try { n = Integer.parseInt(p); } catch (NumberFormatException x) { continue; }
+            if (n == 38 && i + 2 < parts.length && parts[i+1].equals("5")) {
+                try { sgrExtFg = Integer.parseInt(parts[i+2]); }
+                catch (NumberFormatException x) {}
+                i += 2;
+                continue;
+            }
+            if (n == 48 && i + 2 < parts.length && parts[i+1].equals("5")) {
+                try { sgrExtBg = Integer.parseInt(parts[i+2]); } catch (NumberFormatException x) {}
+                i += 2;
+                continue;
+            }
+            switch (n) {
+                case 1: sgrBold = true; break;
+                case 2: sgrBold = false; break;
+                case 3: break;
+                case 4: sgrUnderline = true; break;
+                case 5: case 6: break;
+                case 7: sgrReverse = true; break;
+                case 22: sgrBold = false; break;
+                case 23: break;
+                case 24: sgrUnderline = false; break;
+                case 25: break;
+                case 27: sgrReverse = false; break;
+                case 30: sgrFg=30; break; case 31: sgrFg=31; break; case 32: sgrFg=32; break; case 33: sgrFg=33; break;
+                case 34: sgrFg=34; break; case 35: sgrFg=35; break; case 36: sgrFg=36; break; case 37: case 39: sgrFg=37; break;
+                case 90: sgrFg=90; break; case 91: sgrFg=91; break; case 92: sgrFg=92; break; case 93: sgrFg=93; break;
+                case 94: sgrFg=94; break; case 95: sgrFg=95; break; case 96: sgrFg=96; break; case 97: sgrFg=97; break;
+                case 40: sgrBg=40; break; case 41: sgrBg=41; break; case 42: sgrBg=42; break; case 43: sgrBg=43; break;
+                case 44: sgrBg=44; break; case 45: sgrBg=45; break; case 46: sgrBg=46; break; case 47: case 49: sgrBg=40; break;
+                case 100: sgrBg=100; break; case 101: sgrBg=101; break; case 102: sgrBg=102; break; case 103: sgrBg=103; break;
+                case 104: sgrBg=104; break; case 105: sgrBg=105; break; case 106: sgrBg=106; break; case 107: sgrBg=107; break;
             }
         }
     }
@@ -804,6 +820,22 @@ public class SshTabController {
             default: return Color.WHITE;
         }
     }
+    private static Color xtermColor(int idx) {
+        if (idx < 16) {
+            int[] std = {0, 128, 0, 0, 0, 128, 0, 192, 128, 255, 80, 255, 80, 255, 255, 255};
+            int[] stdG = {0, 0, 128, 0, 128, 0, 128, 128, 128, 128, 255, 128, 255, 0, 0, 192};
+            int[] stdB = {0, 0, 0, 128, 128, 128, 128, 0, 128, 128, 128, 255, 255, 255, 255, 255};
+            return Color.rgb(std[idx], stdG[idx], stdB[idx]);
+        }
+        if (idx <= 231) {
+            int r = ((idx - 16) / 36) * 40 + 55;
+            int g = ((idx - 16) / 6 % 6) * 40 + 55;
+            int b = ((idx - 16) % 6) * 40 + 55;
+            return Color.rgb(r, g, b);
+        }
+        int gray = (idx - 232) * 10 + 8;
+        return Color.rgb(gray, gray, gray);
+    }
     private void draw() {
         GraphicsContext g = canvas.getGraphicsContext2D();
         double w = canvas.getWidth(), h = canvas.getHeight();
@@ -839,7 +871,9 @@ public class SshTabController {
                         || (r == mr && r != Mr && col >= sl)
                         || (r == Mr && r != mr && col < sr2));
                 double x = col * CHAR_W;
-                Color fg = c(cell.fg), bg = c(cell.bg);
+                Color fg = cell.extFg >= 0 ? xtermColor(cell.extFg) : c(cell.fg);
+
+                Color bg = cell.extBg >= 0 ? xtermColor(cell.extBg) : c(cell.bg);
                 if (cell.reverse) { Color t = fg; fg = bg; bg = t; }
                 if (in) {
                     g.setFill(Color.rgb(200,200,200));
