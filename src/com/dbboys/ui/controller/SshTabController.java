@@ -632,7 +632,7 @@ public class SshTabController {
                         curCol = Math.max(0, col);
                         // Only reset viewport on home in normal screen (not alt screen)
                         if (row == 0 && col == 0) { pendingWrap = false; }
-                        if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = true; }
+                        if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = false; }
                     } break;
                     case 'L': { // insert lines at current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
