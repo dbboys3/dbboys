@@ -144,7 +144,7 @@ public class SshTabController {
     }
     public void initialize() {
         // Buttons
-        connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.GREEN));
+        connectButton.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.65, Color.rgb(0, 205, 0)));
         disconnectButton.setGraphic(IconFactory.group(IconPaths.SSH_DISCONNECT, 0.65, Color.RED));
         connectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.connect", "Connect")));
         disconnectButton.setTooltip(new Tooltip(I18n.t("ssh.tab.disconnect", "Disconnect")));
@@ -185,8 +185,6 @@ public class SshTabController {
         setupCanvasInput();
         terminalPane.getChildren().add(canvas);
         // Click on the tab body focuses the terminal
-        sshTab.setOnMouseClicked(e -> canvas.requestFocus());
-        // Click on the tab body (including toolbar area) focuses the terminal
         sshTab.setOnMouseClicked(e -> canvas.requestFocus());
         // ScrollBar
         scrollBar = new ScrollBar();
