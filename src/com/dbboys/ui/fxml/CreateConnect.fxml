@@ -42,19 +42,19 @@
                             <ChoiceBox fx:id="driverChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
                             </ChoiceBox>
                             <Label text=" "></Label>
-                            <Button fx:id="addDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#addDriverClicked" styleClass="custom-button-with-radius">
+                            <Button fx:id="addDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#addDriverClicked" styleClass="custom-button-with-radius,small">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.add_driver"/>
                                 </tooltip>
                             </Button>
                             <Label text=" "></Label>
-                            <Button fx:id="deleteDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#deleteDriverClicked" styleClass="custom-button-with-radius">
+                            <Button fx:id="deleteDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#deleteDriverClicked" styleClass="custom-button-with-radius,small">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.delete_driver"/>
                                 </tooltip>
                             </Button>
                             <Label text=" "></Label>
-                            <Button fx:id="modifyDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyDriverProps" styleClass="custom-button-with-radius">
+                            <Button fx:id="modifyDriverButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyDriverProps" styleClass="custom-button-with-radius,small">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.edit_driver_props"/>
                                 </tooltip>
@@ -77,13 +77,13 @@
                                 </Label>
                                 <CustomUserTextField fx:id="groupTextField" text="db_group" promptText="%createconnect.prompt.group" prefWidth="200"></CustomUserTextField>
                                 <Label text=" "></Label>
-                                <Button fx:id="modifyGroupButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyGroupProps" styleClass="custom-button-with-radius">
+                                <Button fx:id="modifyGroupButton" focusTraversable="false" maxHeight="14" maxWidth="14" onAction="#modifyGroupProps" styleClass="custom-button-with-radius,small">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.edit_group_props"/>
                                 </tooltip>
                                 </Button>
                             </HBox>
-                            <Button fx:id="switchGroupOrIP" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius" StackPane.alignment="CENTER_RIGHT" onAction="#switchGroupOrIP">
+                            <Button fx:id="switchGroupOrIP" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius,small" StackPane.alignment="CENTER_RIGHT" onAction="#switchGroupOrIP">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.switch_group_or_ip"/>
                                 </tooltip>
@@ -140,9 +140,9 @@
                         <HBox fx:id="sshKeyPathRow" prefHeight="30" alignment="CENTER_LEFT">
                             <Label fx:id="sshKeyPathLabel" text="%ssh.label.key_path" prefWidth="80">
                             </Label>
-                            <CustomUserTextField fx:id="sshKeyPathTextField" promptText="%ssh.prompt.key_path" prefWidth="120"></CustomUserTextField>
+                            <CustomUserTextField fx:id="sshKeyPathTextField" promptText="%ssh.prompt.key_path" prefWidth="220"></CustomUserTextField>
                             <Label text=" "></Label>
-                            <Button fx:id="sshKeyBrowseButton" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius">
+                            <Button fx:id="sshKeyBrowseButton" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius,small">
                                 <tooltip>
                                     <Tooltip text="%createconnect.tooltip.browse_file"/>
                                 </tooltip>

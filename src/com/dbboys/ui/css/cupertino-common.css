@@ -431,6 +431,7 @@ Text {
   -fx-background-insets: 0, 1px;
 }
 .dialog-pane .button.small:hover,
+.dialog-pane .button.custom-button:hover,
 .button:hover {
   -fx-background-color:  -color-button-bg-hover;
   -fx-text-fill: -color-button-fg-hover;
@@ -556,6 +557,7 @@ Text {
 .button.flat:hover {
   -fx-underline: true;
 }
+.button.custom-button,
 .button.small {
   -color-button-bg-focused: -color-button-bg-hover;
   -color-button-bg-pressed: -color-button-bg-hover;

@@ -911,11 +911,12 @@ public class CreateConnectController {
 
     private void setupIcons() {
         // Label icons removed per user request �?keep only button icons
-        addDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.7));
-        deleteDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.6));
-        modifyDriverButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));
-        modifyGroupButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.6));
-        switchGroupOrIP.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.7));
+        addDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.8));
+        deleteDriverButton.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.7));
+        modifyDriverButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
+        modifyGroupButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
+        switchGroupOrIP.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.75));
+        sshKeyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
 
         connectingLoadingImageView.setImage(new Image(IconPaths.LOADING_GIF));
         connectingStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
