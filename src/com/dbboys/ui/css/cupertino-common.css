@@ -3764,9 +3764,8 @@ Text {
 .alert-body .button,
 .dialog-pane .button {
   -fx-background-color: -color-bg-subtle;
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0.5;
-  -fx-border-radius: 3;
+  -fx-background-radius: 3;
+  -fx-border-width: 0;
 }
 .dialog-pane .button.small{
   -fx-background-color: transparent;
@@ -3775,7 +3774,6 @@ Text {
 
 .alert-body .button:hover,
 .dialog-pane .button:hover {
-  -fx-border-color: -color-border-default;
   -fx-background-color: -color-dialog-button-hover-bg;
 }
 .alert-body .button:default,
@@ -3875,9 +3873,8 @@ Text {
 
 .dialog-pane .button {
   -fx-background-color: -color-bg-subtle;
-  -fx-border-color: -color-border-default;
-  -fx-border-width: 0.5;
-  -fx-border-radius: 3;
+  -fx-background-radius: 3;
+  -fx-border-width: 0;
 }
 .dialog-pane .button:default,
 .dialog-pane .button.accent {
