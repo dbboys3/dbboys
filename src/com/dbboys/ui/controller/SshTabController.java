@@ -88,6 +88,8 @@ public class SshTabController {
         }
     }
     private final StringProperty connectStatus = new SimpleStringProperty();
+    /** Callback invoked with true when connected, false when disconnected. */
+    public java.util.function.Consumer<Boolean> onConnectionStateChanged;
     private ScrollBar scrollBar;
     private boolean updatingScrollBar;
     // Terminal state
@@ -285,6 +287,7 @@ public class SshTabController {
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
                     canvas.requestFocus();
+                    if (onConnectionStateChanged != null) onConnectionStateChanged.accept(true);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connected", "Connected") + "]");
@@ -299,6 +302,7 @@ public class SshTabController {
                     draw();
                     connectButton.setDisable(false);
                     disconnectButton.setDisable(true);
+                    if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
                             + I18n.t("ssh.tab.connect_failed", "Connect Failed") + "]");
@@ -316,6 +320,7 @@ public class SshTabController {
         draw();
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
+        if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
         if (sshConnect != null) {
             connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                     + ":" + sshConnect.getPort() + " ["
@@ -379,6 +384,7 @@ public class SshTabController {
         statusRed("\r\nDisconnected\r\n");
         cursorShown = false;
         draw();
+        if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
         connectStatus.set((sshConnect != null
                 ? sshConnect.getUsername() + "@" + sshConnect.getHost() + ":" + sshConnect.getPort()
                 : "") + " [" + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
