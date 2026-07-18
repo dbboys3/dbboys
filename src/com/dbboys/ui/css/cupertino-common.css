@@ -2689,7 +2689,7 @@ Text {
 }
 .tab-pane > .tab-header-area > .headers-region > .tab > .tab-container > .tab-close-button:hover {
   -fx-cursor: hand;
-  -fx-background-color:-color-danger-7;
+  -fx-background-color:red;
   -fx-effect: none;
   -fx-scale-x: 1.1;
   -fx-scale-y: 1.1;
@@ -2712,7 +2712,7 @@ Text {
   -fx-background-color: -color-tab-fg-selected;
 }
 .tab-pane > .tab-header-area > .headers-region > .tab:top > .tab-container > .tab-close-button:hover, .tab-pane > .tab-header-area > .headers-region > .tab:bottom > .tab-container > .tab-close-button:hover {
-  -fx-background-color: -color-danger-7;
+  -fx-background-color: red;
   -fx-cursor: hand;
   -fx-effect: none;
   -fx-scale-x: 1.1;
@@ -2737,7 +2737,7 @@ Text {
   -fx-background-color: -color-fg-default;
 }
 .tab-pane > .tab-header-area > .headers-region > .tab:left > .tab-container > .tab-close-button:hover, .tab-pane > .tab-header-area > .headers-region > .tab:right > .tab-container > .tab-close-button:hover {
-  -fx-background-color: -color-danger-7;
+  -fx-background-color: red;
   -fx-cursor: hand;
   -fx-effect: none;
   -fx-scale-x: 1.1;
@@ -2846,7 +2846,7 @@ Text {
   -fx-background-color: -color-tab-fg-selected;
 }
 .tab-pane.floating > .tab-header-area > .headers-region > .tab > .tab-container > .tab-close-button:hover {
-  -fx-background-color: -color-danger-7;
+  -fx-background-color: red;
   -fx-cursor: hand;
   -fx-effect: none;
   -fx-scale-x: 1.1;
