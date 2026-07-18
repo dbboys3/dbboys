@@ -102,13 +102,13 @@
   -color-app-inactive-fg: -color-fg-subtle;
   -color-table-null-fg: -color-fg-subtle;
   -color-side-tab-border: -color-border-default;
-  -color-badge-type: -color-accent-7;
+  -color-badge-type: -color-fg-muted;
   -color-badge-primary: -color-danger-7;
   -color-badge-rowid: -color-warning-7;
-  -color-badge-type-bg: rgba(0, 94, 196, 0.08);
+  -color-badge-type-bg: rgba(0, 0, 0, 0.04);
   -color-badge-primary-bg: rgba(179, 41, 34, 0.10);
   -color-badge-rowid-bg: rgba(179, 104, 0, 0.12);
-  -color-badge-type-border: rgba(0, 94, 196, 0.78);
+  -color-badge-type-border: -color-border-default;
   -color-badge-primary-border: rgba(179, 41, 34, 0.78);
   -color-badge-rowid-border: rgba(179, 104, 0, 0.78);
   -color-dialog-title-fg: -color-fg-default;
