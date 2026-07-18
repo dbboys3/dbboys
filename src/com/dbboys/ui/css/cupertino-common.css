@@ -3775,7 +3775,8 @@ Text {
 
 .alert-body .button:hover,
 .dialog-pane .button:hover {
-  -fx-border-color: -color-accent-emphasis;
+  -fx-border-color: -color-border-default;
+  -fx-background-color: -color-dialog-button-hover-bg;
 }
 .alert-body .button:default,
 .alert-body .button:accent,

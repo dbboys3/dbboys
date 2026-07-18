@@ -67,6 +67,7 @@
   -color-border-subtle: rgb(49, 49, 52);
   -color-control-border: -color-base-5; /*复选框/单选框边框*/
   -color-control-border-hover: -color-base-4; /*复选框/单选框悬停边框*/
+  -color-dialog-button-hover-bg: -color-base-7; /*弹窗按钮悬停背景*/
   -color-table-border: -color-border-subtle;
   -color-shadow-default: rgb(0, 0, 0);
   -color-neutral-emphasis-plus: rgb(142, 142, 147);
@@ -90,6 +91,7 @@
   -color-danger-muted: rgba(255, 69, 58, 0.4);
   -color-danger-subtle: rgba(255, 69, 58, 0.15);
   -color-button-default: -color-fg-default;
+  -color-button-bg-hover: -color-base-7;
   -color-hover-bg: -color-base-7;
   -color-window-button-fg: white;
   -color-window-button-hover-fg: -color-fg-default;
