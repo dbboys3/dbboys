@@ -67,6 +67,14 @@ public class ConnectionServiceImpl implements ConnectionService {
         session = jsch.getSession(connect.getSshUser(), connect.getSshHost(), sshPort);
         if (connect.isSshAuthKey()) {
             String keyPath = connect.getSshKeyPath();
+            if (keyPath == null || keyPath.isBlank()) {
+                throw new IllegalArgumentException(
+                    I18n.t("ssh.error.key_path_empty", "SSH private key path is empty"));
+            }
+            if (!java.nio.file.Files.exists(java.nio.file.Paths.get(keyPath))) {
+                throw new IllegalArgumentException(
+                    I18n.t("ssh.error.key_path_not_found", "SSH private key not found") + ": " + keyPath);
+            }
             String keyPassphrase = connect.getSshKeyPassphrase();
             if (keyPassphrase != null && !keyPassphrase.isBlank()) {
                 jsch.addIdentity(keyPath, keyPassphrase);
