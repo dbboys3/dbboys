@@ -23,6 +23,7 @@ public  class LocalDbRepository {
     private static Connection conn = com.dbboys.infra.db.LocalDbConnection.get();
 
     //初始化数据库，在恢复出厂设置时调用
+    /*老版本升级后ssh相关表可能没有，需要创建 */
     public static void migrateTConnectTable() {
         try (java.sql.Statement stmt = conn.createStatement()) {
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_ssh_folder ("
@@ -44,24 +45,17 @@ public  class LocalDbRepository {
                     + "c_info VARCHAR(3200))");
         } catch (Exception e) {
         }
-        // Migrate: add columns that may not exist in older databases
-        String[][] sshTableCols = {
-            {"c_key_passphrase", "VARCHAR(100)"},
-            {"c_charset", "VARCHAR(20) DEFAULT 'UTF-8'"},
-            {"c_info", "VARCHAR(3200)"}
-        };
-        for (String[] col : sshTableCols) {
-            try (Statement stmt = conn.createStatement()) {
-                stmt.executeUpdate("ALTER TABLE t_ssh ADD COLUMN " + col[0] + " " + col[1]);
-            } catch (Exception ignored) {
-            }
-        }
+
+        /*老版本升级后t_connect可能少了ssh相关字段，需要加上 */
         String[][] sshColumns = {
             {"c_ssh_host", "varchar(100)"},
             {"c_ssh_port", "varchar(10)"},
             {"c_ssh_user", "varchar(100)"},
             {"c_ssh_password", "varchar(100)"},
-            {"c_ssh_enabled", "varchar(2)"}
+            {"c_ssh_enabled", "varchar(2)"},
+            {"c_ssh_auth_type", "varchar(10)"},
+            {"c_ssh_key_path", "varchar(500)"},
+            {"c_ssh_key_passphrase", "varchar(100)"},
         };
         for (String[] col : sshColumns) {
             try (Statement stmt = conn.createStatement()) {
@@ -245,7 +239,7 @@ public  class LocalDbRepository {
         PreparedStatement psmt = null;
         try {
             com.dbboys.app.AppContext.get(ConnectionService.class).setConnectInfo(connect);
-            psmt=conn.prepareStatement("insert into t_connect(c_parentid,c_name,c_dbtype,c_driver,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_props,c_info,c_drivermd5,c_dbversion,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_enabled) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            psmt=conn.prepareStatement("insert into t_connect(c_parentid,c_name,c_dbtype,c_driver,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_props,c_info,c_drivermd5,c_dbversion,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_auth_type,c_ssh_key_path,c_ssh_key_passphrase,c_ssh_enabled) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             psmt.setObject(1, connect.getParentId());
             psmt.setObject(2, connect.getName());
             psmt.setObject(3, connect.getDbtype());
@@ -264,7 +258,10 @@ public  class LocalDbRepository {
             psmt.setObject(16, connect.getSshPort());
             psmt.setObject(17, connect.getSshUser());
             psmt.setObject(18, connect.getSshPassword());
-            psmt.setObject(19, connect.getSshEnabled()?"1":"0");
+            psmt.setObject(19, connect.getSshAuthType());
+            psmt.setObject(20, connect.getSshKeyPath());
+            psmt.setObject(21, connect.getSshKeyPassphrase());
+            psmt.setObject(22, connect.getSshEnabled()?"1":"0");
 
             psmt.executeUpdate();
             psmt=conn.prepareStatement("select max(c_id) from t_connect");
@@ -324,7 +321,7 @@ public  class LocalDbRepository {
         Statement statement = null;
         try{
             statement = conn.createStatement();
-            ResultSet rs=statement.executeQuery("select c_id,c_parentid,c_name,c_ip,c_port,c_database,c_username,c_dbtype,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion,c_readonly,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_enabled from t_connect order by c_name");
+            ResultSet rs=statement.executeQuery("select c_id,c_parentid,c_name,c_ip,c_port,c_database,c_username,c_dbtype,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion,c_readonly,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_auth_type,c_ssh_key_path,c_ssh_key_passphrase,c_ssh_enabled from t_connect order by c_name");
             while (rs.next()){
                 Connect connect =new Connect();
                 connect.setId(rs.getInt(1));
@@ -347,7 +344,10 @@ public  class LocalDbRepository {
                 try { connect.setSshPort(rs.getString(17)); } catch (Exception ignored) {}
                 try { connect.setSshUser(rs.getString(18)); } catch (Exception ignored) {}
                 try { connect.setSshPassword(rs.getString(19)); } catch (Exception ignored) {}
-                try { connect.setSshEnabled(rs.getString(20) != null && rs.getString(20).equals("1")); } catch (Exception ignored) {}
+                try { connect.setSshAuthType(rs.getString(20) != null ? rs.getString(20) : "password"); } catch (Exception ignored) {}
+                try { connect.setSshKeyPath(rs.getString(21)); } catch (Exception ignored) {}
+                try { connect.setSshKeyPassphrase(rs.getString(22)); } catch (Exception ignored) {}
+                try { connect.setSshEnabled(rs.getString(23) != null && rs.getString(23).equals("1")); } catch (Exception ignored) {}
                 connectLeafList.add(connect);
             }
         } catch (Exception e) {
@@ -364,7 +364,7 @@ public  class LocalDbRepository {
             List<Connect> connectLeafList = new ArrayList<>();
             PreparedStatement psmt = null;
             try{
-                psmt= conn.prepareStatement("select c_id,c_parentid,c_name,c_dbtype,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion from t_connect where c_parentid=? order by c_name");
+                psmt= conn.prepareStatement("select c_id,c_parentid,c_name,c_dbtype,c_ip,c_port,c_database,c_readonly,c_username,c_password,c_driver,c_props,c_info,c_drivermd5,c_dbversion,c_ssh_host,c_ssh_port,c_ssh_user,c_ssh_password,c_ssh_auth_type,c_ssh_key_path,c_ssh_key_passphrase,c_ssh_enabled from t_connect where c_parentid=? order by c_name");
                 psmt.setInt(1,connectParm.getId());
                 ResultSet rs=psmt.executeQuery();
                 while (rs.next()){
@@ -384,6 +384,14 @@ public  class LocalDbRepository {
                     connect.setInfo(rs.getString(13));
                     connect.setDrivermd5(rs.getString(14));
                     connect.setDbversion(rs.getString(15));
+                    try { connect.setSshHost(rs.getString(16)); } catch (Exception ignored) {}
+                    try { connect.setSshPort(rs.getString(17)); } catch (Exception ignored) {}
+                    try { connect.setSshUser(rs.getString(18)); } catch (Exception ignored) {}
+                    try { connect.setSshPassword(rs.getString(19)); } catch (Exception ignored) {}
+                    try { connect.setSshAuthType(rs.getString(20) != null ? rs.getString(20) : "password"); } catch (Exception ignored) {}
+                    try { connect.setSshKeyPath(rs.getString(21)); } catch (Exception ignored) {}
+                    try { connect.setSshKeyPassphrase(rs.getString(22)); } catch (Exception ignored) {}
+                    try { connect.setSshEnabled(rs.getString(23) != null && rs.getString(23).equals("1")); } catch (Exception ignored) {}
                     connectLeafList.add(connect);
                 }
             } catch (Exception e) {
@@ -418,7 +426,7 @@ public  class LocalDbRepository {
                boolean success = false;
                PreparedStatement psmt = null;
                try {
-                   psmt= conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_database=?,c_props=?,c_ssh_host=?,c_ssh_port=?,c_ssh_user=?,c_ssh_password=?,c_ssh_enabled=? where c_id=?");
+                   psmt= conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_database=?,c_props=?,c_ssh_host=?,c_ssh_port=?,c_ssh_user=?,c_ssh_password=?,c_ssh_auth_type=?,c_ssh_key_path=?,c_ssh_key_passphrase=?,c_ssh_enabled=? where c_id=?");
                    psmt.setInt(1,connect.getParentId());
                    psmt.setString(2,connect.getName());
                    psmt.setString(3,connect.getCatalog());
@@ -427,8 +435,11 @@ public  class LocalDbRepository {
                    psmt.setString(6,connect.getSshPort());
                    psmt.setString(7,connect.getSshUser());
                    psmt.setString(8,connect.getSshPassword());
-                   psmt.setString(9,connect.getSshEnabled()?"1":"0");
-                   psmt.setInt(10,connect.getId());
+                   psmt.setString(9,connect.getSshAuthType());
+                   psmt.setString(10,connect.getSshKeyPath());
+                   psmt.setString(11,connect.getSshKeyPassphrase());
+                   psmt.setString(12,connect.getSshEnabled()?"1":"0");
+                   psmt.setInt(13,connect.getId());
                    psmt.executeUpdate();
                    success = true;
                } catch (Exception e) {

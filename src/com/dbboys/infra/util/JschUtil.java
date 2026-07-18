@@ -38,13 +38,23 @@ public class JschUtil {
         } catch (NumberFormatException e) {
             port = 22;
         }
-        Session session = new JSch().getSession(user, host, port);
-                    session.setPassword(pass);
-                    session.setPassword(pass);
-                    Properties config = new Properties();
-                    config.put("StrictHostKeyChecking", "no");
-                    session.setConfig(config);
-                    session.connect(5000); // 5秒超时
+        JSch jsch = new JSch();
+        Session session = jsch.getSession(user, host, port);
+        if (useSsh && connect.isSshAuthKey()) {
+            String keyPath = connect.getSshKeyPath();
+            String keyPassphrase = connect.getSshKeyPassphrase();
+            if (keyPassphrase != null && !keyPassphrase.isBlank()) {
+                jsch.addIdentity(keyPath, keyPassphrase);
+            } else {
+                jsch.addIdentity(keyPath);
+            }
+        } else {
+            session.setPassword(pass);
+        }
+        Properties config = new Properties();
+        config.put("StrictHostKeyChecking", "no");
+        session.setConfig(config);
+        session.connect(5000); // 5-second timeout
         return session;
     }
 

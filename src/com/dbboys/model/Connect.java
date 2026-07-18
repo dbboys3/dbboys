@@ -52,6 +52,9 @@ public class Connect extends TreeData{
     private StringProperty  sshPort=new SimpleStringProperty();
     private StringProperty  sshUser=new SimpleStringProperty();
     private StringProperty  sshPassword=new SimpleStringProperty();
+    private StringProperty  sshAuthType=new SimpleStringProperty("password");
+    private StringProperty  sshKeyPath=new SimpleStringProperty();
+    private StringProperty  sshKeyPassphrase=new SimpleStringProperty();
     private BooleanProperty sshEnabled=new SimpleBooleanProperty();
     private volatile boolean keepAliveEnabled;
     private volatile ScheduledFuture<?> keepAliveFuture;
@@ -372,6 +375,23 @@ public class Connect extends TreeData{
     public void setSshEnabled(Boolean sshEnabled) {
         this.sshEnabled.set(sshEnabled);
     }
+
+    // --- sshAuthType ---
+    public String getSshAuthType() { return sshAuthType.get(); }
+    public StringProperty sshAuthTypeProperty() { return sshAuthType; }
+    public void setSshAuthType(String v) { this.sshAuthType.set(v); }
+    public boolean isSshAuthKey() { return SshConnect.AUTH_KEY.equals(sshAuthType.get()); }
+
+    // --- sshKeyPath ---
+    public String getSshKeyPath() { return sshKeyPath.get(); }
+    public StringProperty sshKeyPathProperty() { return sshKeyPath; }
+    public void setSshKeyPath(String v) { this.sshKeyPath.set(v); }
+
+    // --- sshKeyPassphrase ---
+    public String getSshKeyPassphrase() { return sshKeyPassphrase.get(); }
+    public StringProperty sshKeyPassphraseProperty() { return sshKeyPassphrase; }
+    public void setSshKeyPassphrase(String v) { this.sshKeyPassphrase.set(v); }
+
     public String toString(){
         return getName();
     }

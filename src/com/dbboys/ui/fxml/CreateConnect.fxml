@@ -107,6 +107,12 @@
                 <Tab fx:id="sshTab" closable="false">
                     <VBox style="-fx-padding: 10 18 10 18;">
                         <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshConnectionLabel" text="%createconnect.label.ssh_connection" prefWidth="80">
+                            </Label>
+                            <ChoiceBox fx:id="sshConnectionChoiceBox" focusTraversable="false" styleClass="choice-box-with-border" prefWidth="200">
+                            </ChoiceBox>
+                        </HBox>
+                        <HBox prefHeight="30" alignment="CENTER_LEFT">
                             <Label fx:id="sshHostLabel" text="%createconnect.label.ssh_host" prefWidth="80">
                             </Label>
                             <CustomUserTextField fx:id="sshHostTextField" promptText="%createconnect.prompt.ssh_host" prefWidth="200"></CustomUserTextField>
@@ -121,10 +127,29 @@
                             <CustomUserTextField fx:id="sshUserTextField" promptText="%createconnect.prompt.ssh_user" prefWidth="200"></CustomUserTextField>
                         </HBox>
                         <HBox prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshAuthTypeLabel" text="%ssh.label.auth_type" prefWidth="80">
+                            </Label>
+                            <ChoiceBox fx:id="sshAuthTypeChoiceBox" focusTraversable="false" styleClass="choice-box-with-border">
+                            </ChoiceBox>
+                        </HBox>
+                        <HBox fx:id="sshPasswordRow" prefHeight="30" alignment="CENTER_LEFT">
                             <Label fx:id="sshPasswordLabel" text="%createconnect.label.ssh_password" prefWidth="80">
                             </Label>
                             <CustomPasswordField fx:id="sshPasswordTextField" promptText="%createconnect.prompt.ssh_password" prefWidth="200"></CustomPasswordField>
-                                                </HBox>
+                        </HBox>
+                        <HBox fx:id="sshKeyPathRow" prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="sshKeyPathLabel" text="%ssh.label.key_path" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="sshKeyPathTextField" promptText="%ssh.prompt.key_path" prefWidth="120"></CustomUserTextField>
+                            <Label text=" "></Label>
+                            <Button fx:id="sshKeyBrowseButton" focusTraversable="false" maxHeight="14" maxWidth="14" styleClass="custom-button-with-radius">
+                                <tooltip>
+                                    <Tooltip text="%createconnect.tooltip.browse_file"/>
+                                </tooltip>
+                            </Button>
+                            <Label text=" " prefWidth="5"></Label>
+                            <CustomPasswordField fx:id="sshKeyPassphraseField" promptText="%ssh.prompt.key_passphrase" prefWidth="100"></CustomPasswordField>
+                        </HBox>
                         <HBox prefHeight="30" alignment="CENTER_LEFT">
                             <CheckBox fx:id="sshToggleButton" text="%createconnect.label.ssh_enable">
                             </CheckBox>

@@ -51,6 +51,9 @@ public interface ConnectionService {
 
     <T> T withMetaSession(Connect connect, Catalog database, SqlWork<T> action) throws Exception;
 
+    /** Disconnect and remove a cached SSH session so the next connection re-authenticates. */
+    void invalidateSshSession(Connect connect);
+
     @FunctionalInterface
     interface SqlWork<T> {
         T apply(Connection conn) throws Exception;

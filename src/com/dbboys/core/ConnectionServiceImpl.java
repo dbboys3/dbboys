@@ -56,10 +56,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     private Session getOrCreateSshSession(Connect connect) throws Exception {
         // Remove disconnected sessions from cache
         sshSessionCache.values().removeIf(s -> !s.isConnected());
-        String cacheKey = String.format("%s@%s:%s",
-                connect.getSshUser(), connect.getSshHost(),
-                connect.getSshPort() != null && !connect.getSshPort().isBlank()
-                        ? connect.getSshPort().trim() : "22");
+        String cacheKey = buildSshCacheKey(connect);
         Session session = sshSessionCache.get(cacheKey);
         if (session != null && session.isConnected()) {
             return session;
@@ -68,7 +65,17 @@ public class ConnectionServiceImpl implements ConnectionService {
         int sshPort = connect.getSshPort() != null && !connect.getSshPort().isBlank()
                 ? Integer.parseInt(connect.getSshPort().trim()) : 22;
         session = jsch.getSession(connect.getSshUser(), connect.getSshHost(), sshPort);
-        session.setPassword(connect.getSshPassword());
+        if (connect.isSshAuthKey()) {
+            String keyPath = connect.getSshKeyPath();
+            String keyPassphrase = connect.getSshKeyPassphrase();
+            if (keyPassphrase != null && !keyPassphrase.isBlank()) {
+                jsch.addIdentity(keyPath, keyPassphrase);
+            } else {
+                jsch.addIdentity(keyPath);
+            }
+        } else {
+            session.setPassword(connect.getSshPassword());
+        }
         java.util.Properties config = new java.util.Properties();
         config.put("StrictHostKeyChecking", "no");
         config.put("compression.s2c", "zlib@openssh.com,zlib,none");
@@ -81,6 +88,31 @@ public class ConnectionServiceImpl implements ConnectionService {
         log.info("SSH session created (cached): {}@{}:{}",
                 connect.getSshUser(), connect.getSshHost(), sshPort);
         return session;
+    }
+
+    @Override
+    public void invalidateSshSession(Connect connect) {
+        String cacheKey = buildSshCacheKey(connect);
+        Session session = sshSessionCache.remove(cacheKey);
+        if (session != null && session.isConnected()) {
+            session.disconnect();
+        }
+    }
+
+    /** Build a cache key from all SSH connection parameters.
+     *  Changing any parameter (password, key path, passphrase, auth type, etc.)
+     *  produces a different key and forces a new SSH session. */
+    private static String buildSshCacheKey(Connect connect) {
+        String user = connect.getSshUser() != null ? connect.getSshUser() : "";
+        String host = connect.getSshHost() != null ? connect.getSshHost() : "";
+        String sshPort = connect.getSshPort() != null && !connect.getSshPort().isBlank()
+                ? connect.getSshPort().trim() : "22";
+        String password = connect.getSshPassword() != null ? connect.getSshPassword() : "";
+        String authType = connect.getSshAuthType() != null ? connect.getSshAuthType() : "password";
+        String keyPath = connect.getSshKeyPath() != null ? connect.getSshKeyPath() : "";
+        String passphrase = connect.getSshKeyPassphrase() != null ? connect.getSshKeyPassphrase() : "";
+        return String.format("%s@%s:%s:%s:%s:%s:%s",
+                user, host, sshPort, password, keyPath, passphrase, authType);
     }
 
     public Connection createConnection(Connect connect) throws Exception {

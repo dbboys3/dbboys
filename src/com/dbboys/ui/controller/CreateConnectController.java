@@ -23,6 +23,7 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.model.ConnectFolder;
 import com.dbboys.model.Connect;
+import com.dbboys.model.SshConnect;
 import com.dbboys.model.TreeData;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -101,13 +102,20 @@ public class CreateConnectController {
     @FXML
     private Button switchGroupOrIP;
     private Button sqliteBrowseButton;
-    private static final String BROWSE_ICON_PATH = "M9.8438 1.7184 Q12.0469 1.7184 13.9219 2.7965 Q15.7969 3.8746 16.8906 5.7496 Q18 7.609 18 9.8278 Q18 12.4684 16.4688 14.6246 L21.8906 20.0934 Q22.2656 20.4371 22.2812 20.9684 Q22.3125 21.484 21.9531 21.8746 Q21.5938 22.2496 21.0938 22.2809 Q20.5938 22.2965 20.2031 21.9684 L14.6406 16.4528 Q12.4844 17.984 9.8438 17.984 Q7.625 17.984 5.75 16.8903 Q3.8906 15.7809 2.8125 13.9059 Q1.7344 12.0309 1.7344 9.8278 Q1.7344 7.609 2.8125 5.7496 Q3.8906 3.8746 5.75 2.7965 Q7.625 1.7184 9.8438 1.7184 ZM9.8438 4.2496 Q8.3594 4.2496 7.0625 4.9996 Q5.7656 5.7496 5.0156 7.0465 Q4.2656 8.3434 4.2656 9.8278 Q4.2656 11.3121 5.0156 12.609 Q5.7656 13.9059 7.0625 14.6559 Q8.3594 15.3903 9.8594 15.3903 Q11.375 15.3903 12.6406 14.6559 Q13.9219 13.9059 14.6562 12.6403 Q15.4062 11.359 15.4062 9.859 Q15.4062 8.3434 14.6562 7.0778 Q13.9219 5.7965 12.6406 5.0309 Q11.375 4.2496 9.8438 4.2496 Z";
+    private static final String BROWSE_ICON_PATH = "...";
+    /** Maps dropdown index -> ssh connection id for the "use existing SSH connection" dropdown. */
+    private final java.util.List<Integer> sshConnectionIds = new java.util.ArrayList<>();
+    private Runnable updateSshAuthRows;
     @FXML
     private TabPane connectTabPane;
     @FXML
     private Tab connectBasicTab;
     @FXML
     private Tab sshTab;
+    @FXML
+    private ChoiceBox<String> sshConnectionChoiceBox;
+    @FXML
+    private ChoiceBox<String> sshAuthTypeChoiceBox;
     @FXML
     private CustomUserTextField sshHostTextField;
     @FXML
@@ -116,6 +124,16 @@ public class CreateConnectController {
     private CustomUserTextField sshUserTextField;
     @FXML
     private PasswordField sshPasswordTextField;
+    @FXML
+    private CustomUserTextField sshKeyPathTextField;
+    @FXML
+    private Button sshKeyBrowseButton;
+    @FXML
+    private PasswordField sshKeyPassphraseField;
+    @FXML
+    private HBox sshPasswordRow;
+    @FXML
+    private HBox sshKeyPathRow;
     @FXML
     private CheckBox sshToggleButton;
     @FXML
@@ -205,6 +223,9 @@ public class CreateConnectController {
         });
         ObservableList<String> dbtypelist = FXCollections.observableArrayList(loadAvailableDbTypes());
         dbTypeChoiceBox.setItems(dbtypelist);
+        sshAuthTypeChoiceBox.getItems().addAll(
+                I18n.t("ssh.label.auth_password", "Password"),
+                I18n.t("ssh.label.auth_key", "Key"));
 
 
         //driver增加监听，发生变化重置connect.driver
@@ -289,6 +310,17 @@ public class CreateConnectController {
                 sshPortTextField.setText(Objects.toString(persisted.getSshPort(), "22"));
                 sshUserTextField.setText(Objects.toString(persisted.getSshUser(), ""));
                 sshPasswordTextField.setText(Objects.toString(persisted.getSshPassword(), ""));
+                sshKeyPathTextField.setText(Objects.toString(persisted.getSshKeyPath(), ""));
+                sshKeyPassphraseField.setText(Objects.toString(persisted.getSshKeyPassphrase(), ""));
+                // Auth type: use saved value, default password
+                String savedAuthType = persisted.getSshAuthType();
+                if (savedAuthType != null && savedAuthType.equals("key")) {
+                    sshAuthTypeChoiceBox.getSelectionModel().select(1);
+                } else {
+                    sshAuthTypeChoiceBox.getSelectionModel().select(0);
+                }
+                // SSH connection dropdown: keep "-- Manual --"
+                sshConnectionChoiceBox.getSelectionModel().select(0);
                 // SSH toggle initialization (edit/copy path)
                 sshToggleButton.setSelected(persisted.getSshEnabled() != null && persisted.getSshEnabled());
                 bindSshFieldsEnabled(sshToggleButton.isSelected());
@@ -327,6 +359,67 @@ public class CreateConnectController {
                 connectBasicTab.textProperty().bind(I18n.bind("createconnect.tab.basic", "数据库连接"));
         sshTab.textProperty().bind(I18n.bind("createconnect.tab.ssh", "SSH 隧道"));
 
+        // Populate SSH connection dropdown and auth type choice box
+        populateSshConnectionDropdown();
+        // Default to Password if no selection has been made (new connection path)
+        if (sshAuthTypeChoiceBox.getSelectionModel().getSelectedIndex() < 0) {
+            sshAuthTypeChoiceBox.getSelectionModel().select(0);
+        }
+
+        // Auth type toggle: show/hide password vs key rows
+        updateSshAuthRows = () -> {
+            boolean isKey = sshAuthTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
+            sshPasswordRow.setVisible(!isKey);
+            sshPasswordRow.setManaged(!isKey);
+            sshKeyPathRow.setVisible(isKey);
+            sshKeyPathRow.setManaged(isKey);
+        };
+        updateSshAuthRows.run();
+        sshAuthTypeChoiceBox.getSelectionModel().selectedIndexProperty()
+                .addListener((obs, o, n) -> updateSshAuthRows.run());
+
+        // SSH connection dropdown: populate fields from selected connection
+        sshConnectionChoiceBox.getSelectionModel().selectedIndexProperty()
+                .addListener((obs, o, n) -> {
+                    int idx = n.intValue();
+                    if (idx > 0 && idx < sshConnectionIds.size()) {
+                        int sshId = sshConnectionIds.get(idx);
+                        com.dbboys.model.SshConnect sel = getSshConnectionById(sshId);
+                        if (sel != null) {
+                            sshHostTextField.setText(sel.getHost());
+                            sshPortTextField.setText(sel.getPort());
+                            sshUserTextField.setText(sel.getUsername());
+                            if (sel.isAuthKey()) {
+                                sshAuthTypeChoiceBox.getSelectionModel().select(1);
+                                sshKeyPathTextField.setText(sel.getKeyPath());
+                                sshKeyPassphraseField.setText(sel.getKeyPassphrase());
+                                sshPasswordTextField.setText("");
+                            } else {
+                                sshAuthTypeChoiceBox.getSelectionModel().select(0);
+                                sshPasswordTextField.setText(sel.getPassword());
+                                sshKeyPathTextField.setText("");
+                                sshKeyPassphraseField.setText("");
+                            }
+                            if (updateSshAuthRows != null) updateSshAuthRows.run();
+                        }
+                    }
+                });
+
+        // SSH key browse button
+        sshKeyBrowseButton.setOnAction(e -> {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle(I18n.t("ssh.prompt.key_path", "Select SSH Private Key"));
+            java.io.File homeDir = new java.io.File(System.getProperty("user.home"));
+            if (homeDir.isDirectory()) {
+                java.io.File sshDir = new java.io.File(homeDir, ".ssh");
+                chooser.setInitialDirectory(sshDir.isDirectory() ? sshDir : homeDir);
+            }
+            java.io.File selected = chooser.showOpenDialog(AppState.getWindow());
+            if (selected != null) {
+                sshKeyPathTextField.setText(selected.getAbsolutePath());
+            }
+        });
+
         Button tryConnectButton = (Button) dialogPane.lookupButton(testButtonType);
         tryConnectButton.disableProperty().bind(connectingHBox.visibleProperty());
         tryConnectButton.addEventFilter(ActionEvent.ACTION, event -> {
@@ -335,7 +428,6 @@ public class CreateConnectController {
                 event.consume();
             }else {
                 setConnect(connect);
-                
                 //如果连接信息可正常连接，检查连接名是否已存�?
                 commitConnecting(connect,false);
             }
@@ -472,10 +564,29 @@ public class CreateConnectController {
 
         // SSH: controlled by toggle switch
         connect.setSshEnabled(sshToggleButton.isSelected());
-        connect.setSshHost(sshHostTextField.getText());
-        connect.setSshPort(sshPortTextField.getText());
-        connect.setSshUser(sshUserTextField.getText());
-        connect.setSshPassword(sshPasswordTextField.getText());
+        if (sshConnectionChoiceBox.getSelectionModel().getSelectedIndex() > 0) {
+            // Using an existing SSH connection: copy fields from it
+            int sshConnId = sshConnectionIds.get(sshConnectionChoiceBox.getSelectionModel().getSelectedIndex());
+            SshConnect sel = getSshConnectionById(sshConnId);
+            if (sel != null) {
+                connect.setSshHost(sel.getHost());
+                connect.setSshPort(sel.getPort());
+                connect.setSshUser(sel.getUsername());
+                connect.setSshAuthType(sel.getAuthType());
+                connect.setSshKeyPath(sel.getKeyPath());
+                connect.setSshKeyPassphrase(sel.getKeyPassphrase());
+                connect.setSshPassword(sel.isAuthKey() ? "" : sel.getPassword());
+            }
+        } else {
+            connect.setSshHost(sshHostTextField.getText());
+            connect.setSshPort(sshPortTextField.getText());
+            connect.setSshUser(sshUserTextField.getText());
+            connect.setSshPassword(sshPasswordTextField.getText());
+            boolean isKey = sshAuthTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
+            connect.setSshAuthType(isKey ? "key" : "password");
+            connect.setSshKeyPath(isKey ? sshKeyPathTextField.getText() : "");
+            connect.setSshKeyPassphrase(isKey ? sshKeyPassphraseField.getText() : "");
+        }
     }
     public boolean checkInput(){
         if(resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()) != null && resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()).connection().supportsServiceName()){
@@ -521,20 +632,32 @@ public class CreateConnectController {
                 return false;
             }
             if(sshToggleButton.isSelected()){
-                if(sshHostTextField.getText().isBlank()){
-                    connectTabPane.getSelectionModel().select(sshTab);
-                    sshHostTextField.requestFocus();
-                    return false;
-                }
-                if(sshUserTextField.getText().isBlank()){
-                    connectTabPane.getSelectionModel().select(sshTab);
-                    sshUserTextField.requestFocus();
-                    return false;
-                }
-                if(sshPasswordTextField.getText().isBlank()){
-                    connectTabPane.getSelectionModel().select(sshTab);
-                    sshPasswordTextField.requestFocus();
-                    return false;
+                // If using an existing SSH connection, skip manual field validation
+                if (sshConnectionChoiceBox.getSelectionModel().getSelectedIndex() <= 0) {
+                    if(sshHostTextField.getText().isBlank()){
+                        connectTabPane.getSelectionModel().select(sshTab);
+                        sshHostTextField.requestFocus();
+                        return false;
+                    }
+                    if(sshUserTextField.getText().isBlank()){
+                        connectTabPane.getSelectionModel().select(sshTab);
+                        sshUserTextField.requestFocus();
+                        return false;
+                    }
+                    boolean isKey = sshAuthTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
+                    if (isKey) {
+                        if (sshKeyPathTextField.getText().isBlank()) {
+                            connectTabPane.getSelectionModel().select(sshTab);
+                            sshKeyPathTextField.requestFocus();
+                            return false;
+                        }
+                    } else {
+                        if (sshPasswordTextField.getText().isBlank()) {
+                            connectTabPane.getSelectionModel().select(sshTab);
+                            sshPasswordTextField.requestFocus();
+                            return false;
+                        }
+                    }
                 }
             }
             return true;
@@ -1534,5 +1657,32 @@ public class CreateConnectController {
         sshPortTextField.setDisable(!enabled);
         sshUserTextField.setDisable(!enabled);
         sshPasswordTextField.setDisable(!enabled);
+        sshAuthTypeChoiceBox.setDisable(!enabled);
+        sshKeyPathTextField.setDisable(!enabled);
+        sshKeyBrowseButton.setDisable(!enabled);
+        sshKeyPassphraseField.setDisable(!enabled);
+        sshConnectionChoiceBox.setDisable(!enabled);
+    }
+
+    /** Populate the "use existing SSH connection" dropdown with saved SSH connections. */
+    private void populateSshConnectionDropdown() {
+        sshConnectionIds.clear();
+        sshConnectionChoiceBox.getItems().clear();
+        sshConnectionChoiceBox.getItems().add(I18n.t("ssh.prompt.manual_ssh", "-- Manual --"));
+        sshConnectionIds.add(0);
+        java.util.List<SshConnect> sshList = LocalDbRepository.getAllSsh();
+        for (SshConnect sc : sshList) {
+            sshConnectionChoiceBox.getItems().add(sc.getName());
+            sshConnectionIds.add(sc.getId());
+        }
+        sshConnectionChoiceBox.getSelectionModel().select(0);
+    }
+
+    /** Get an SshConnect by its database ID. */
+    private static SshConnect getSshConnectionById(int id) {
+        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
+            if (sc.getId() == id) return sc;
+        }
+        return null;
     }
 }
