@@ -91,6 +91,9 @@ public class Connect extends TreeData{
         setSshPort(connect.getSshPort());
         setSshUser(connect.getSshUser());
         setSshPassword(connect.getSshPassword());
+        setSshAuthType(connect.getSshAuthType());
+        setSshKeyPath(connect.getSshKeyPath());
+        setSshKeyPassphrase(connect.getSshKeyPassphrase());
         setSshEnabled(connect.getSshEnabled());
         keepAliveEnabled = connect.keepAliveEnabled;
     }
