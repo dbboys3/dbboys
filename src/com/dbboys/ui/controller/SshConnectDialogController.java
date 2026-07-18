@@ -437,8 +437,9 @@ public class SshConnectDialogController {
         task.setOnFailed(e -> {
             setConnectingVisible(false);
             Throwable ex = task.getException();
-            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : "Failed";
-            AlertUtil.CustomAlert(I18n.t("common.error"), msg);
+            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : I18n.t("ssh.error.connect_failed", "Connection failed");
+            AlertUtil.CustomAlert(I18n.t("common.error"),
+                    I18n.t("ssh.error.connect_failed", "SSH connection failed") + ": " + msg);
         });
         currentTask = task;
         AppExecutor.runTask(task);
@@ -474,8 +475,9 @@ public class SshConnectDialogController {
         task.setOnFailed(e -> {
             setConnectingVisible(false);
             Throwable ex = task.getException();
-            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : "Failed";
-            AlertUtil.CustomAlert(I18n.t("common.error"), msg);
+            String msg = ex != null ? (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getName()) : I18n.t("ssh.error.connect_failed", "Connection failed");
+            AlertUtil.CustomAlert(I18n.t("common.error"),
+                    I18n.t("ssh.error.connect_failed", "SSH connection failed") + ": " + msg);
         });
         currentTask = task;
         AppExecutor.runTask(task);

@@ -1,5 +1,6 @@
 package com.dbboys.infra.util;
 
+import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.model.SshConnect;
 import com.jcraft.jsch.ChannelExec;
@@ -183,10 +184,19 @@ public class JschUtil {
         }
         Session session = jsch.getSession(sc.getUsername(), sc.getHost(), port);
         if (sc.isAuthKey()) {
+            String keyPath = sc.getKeyPath();
+            if (keyPath == null || keyPath.isBlank()) {
+                throw new IllegalArgumentException(
+                    I18n.t("ssh.error.key_path_empty", "SSH private key path is empty"));
+            }
+            if (!java.nio.file.Files.exists(java.nio.file.Paths.get(keyPath))) {
+                throw new IllegalArgumentException(
+                    I18n.t("ssh.error.key_path_not_found", "SSH private key not found") + ": " + keyPath);
+            }
             if (sc.getKeyPassphrase() != null && !sc.getKeyPassphrase().isBlank()) {
-                jsch.addIdentity(sc.getKeyPath(), sc.getKeyPassphrase());
+                jsch.addIdentity(keyPath, sc.getKeyPassphrase());
             } else {
-                jsch.addIdentity(sc.getKeyPath());
+                jsch.addIdentity(keyPath);
             }
         } else {
             session.setPassword(sc.getPassword());
