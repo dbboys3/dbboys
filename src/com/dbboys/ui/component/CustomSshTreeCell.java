@@ -106,8 +106,8 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
 
         // Use the SSH tab icon (same as left sidebar SSH tab icon)
         nodeIcon.setContent(IconPaths.SSH_TAB_TOGGLE);
-        nodeIcon.setScaleX(0.66);
-        nodeIcon.setScaleY(0.66);
+        nodeIcon.setScaleX(0.59);
+        nodeIcon.setScaleY(0.59);
         applyPrimaryIconStyle(nodeIcon);
 
         nameLabel.textProperty().unbind();
