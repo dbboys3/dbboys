@@ -7,12 +7,18 @@ import com.dbboys.ui.icon.IconPaths;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
+import javafx.scene.SnapshotParameters;
 import javafx.scene.control.Label;
 import javafx.scene.control.TreeCell;
+import javafx.scene.image.Image;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 
 /**
@@ -24,6 +30,7 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
     private static final int ICON_SLOT_SIZE = 16;
     private static final String PRIMARY_ICON_STYLE = "icon-primary";
     private static final String HOVER_STYLE_CLASS = "hover";
+    private static final String DRAG_PAYLOAD = "DATABASEOBJECTDRAG";
     private boolean hovered;
 
     private final Label nameLabel = new Label();
@@ -68,6 +75,7 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
             renderSshFolder(item);
         } else if (item instanceof SshConnect sshConnect) {
             renderSshConnect(sshConnect, item);
+            configureDragActions(item);
         }
     }
 
@@ -137,5 +145,34 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
         if (!icon.getStyleClass().contains(PRIMARY_ICON_STYLE)) {
             icon.getStyleClass().add(PRIMARY_ICON_STYLE);
         }
+    }
+
+    /** Drag source: SSH connections can be dragged to the tab pane to open. */
+    private void configureDragActions(TreeData item) {
+        setOnDragDetected(null);
+        setOnDragDone(null);
+
+        if (!(item instanceof SshConnect)) return;
+
+        setOnDragDetected(event -> {
+            if (getItem() == null) return;
+            SnapshotParameters params = new SnapshotParameters();
+            params.setFill(Color.TRANSPARENT);
+            Image dragImage = this.snapshot(params, null);
+            Dragboard db = startDragAndDrop(TransferMode.COPY_OR_MOVE);
+            ClipboardContent content = new ClipboardContent();
+            content.putString(DRAG_PAYLOAD);
+            db.setContent(content);
+            db.setDragView(dragImage, event.getX(), event.getY());
+            event.consume();
+        });
+
+        setOnDragDone(event -> {
+            TransferMode mode = event.getTransferMode();
+            if (mode != TransferMode.MOVE && mode != TransferMode.COPY) return;
+            // Use the SSH tab helper directly (same as double-click)
+            javafx.application.Platform.runLater(() ->
+                com.dbboys.infra.util.TabpaneUtil.addCustomSshTab((SshConnect) getItem()));
+        });
     }
 }

@@ -319,7 +319,11 @@ public class MainController {
         sqlTabPane.setOnDragOver(event -> {
             if (event.getGestureSource() != sqlTabPane && event.getDragboard().hasString()) {
                 Dragboard db = event.getDragboard();
-                if (MarkdownUtil.sourceTreeItems==null||(MarkdownUtil.sourceTreeItems.size()==1)&&(!new File(db.getString().replace(";","")).isDirectory())) {
+                String payload = db.getString();
+                if (("DATABASEOBJECTDRAG".equals(payload))
+                        || MarkdownUtil.sourceTreeItems == null
+                        || (MarkdownUtil.sourceTreeItems.size() == 1
+                            && !new File(payload.replace(";", "")).isDirectory())) {
                     event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
                 }
             }
