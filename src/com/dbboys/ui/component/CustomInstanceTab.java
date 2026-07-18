@@ -2148,10 +2148,29 @@ public class CustomInstanceTab extends CustomTab {
 
     private  Node createErrorNode(String mesg){
         ImageView errorIcon = IconFactory.imageView(IconPaths.DIALOG_ERROR, 16, 16, true);
-        HBox hBox=new HBox(5,errorIcon,new Label(mesg));
+        Label mesgLabel = new Label(stripExceptionPrefix(mesg));
+        mesgLabel.setWrapText(true);
+        HBox hBox=new HBox(5,errorIcon,mesgLabel);
         hBox.setAlignment(Pos.CENTER);
         StackPane errorPane = new StackPane(hBox);
+        // 限制文本宽度以触发自动换行，留出图标与两侧边距
+        mesgLabel.maxWidthProperty().bind(errorPane.widthProperty().subtract(80));
         return errorPane;
+    }
+
+    /** 去掉异常链包装产生的类名前缀（如 java.lang.RuntimeException: java.lang.Exception:），只保留业务文案 */
+    private static String stripExceptionPrefix(String mesg) {
+        if (mesg == null) {
+            return "";
+        }
+        String result = mesg.trim();
+        Pattern prefixPattern = Pattern.compile("^(?:[A-Za-z_$][\\w$]*\\.)+[A-Za-z_$][\\w$]*:\\s*");
+        Matcher matcher = prefixPattern.matcher(result);
+        while (matcher.find()) {
+            result = result.substring(matcher.end());
+            matcher = prefixPattern.matcher(result);
+        }
+        return result;
     }
 }
 

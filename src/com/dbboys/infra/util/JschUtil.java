@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public class JschUtil {
     //private static JSch jsch = new JSch();
     //private static Session session;
+    //这个connect只有实例管理在用，其他地方没用
     public static Session getConnect(Connect connect) throws Exception {
         String sshHost = connect.getSshHost();
         boolean useSsh = sshHost != null && !sshHost.isBlank();
@@ -55,7 +56,14 @@ public class JschUtil {
         Properties config = new Properties();
         config.put("StrictHostKeyChecking", "no");
         session.setConfig(config);
-        session.connect(5000); // 5-second timeout
+        try {
+            session.connect(5000); // 5-second timeout
+        } catch (JSchException e) {
+            // 实例管理等操作依赖 SSH 直连数据库服务器，连接失败时给出可操作的提示
+            throw new Exception(I18n.t("instance.error.ssh_connect_failed",
+                    "该操作需要ssh连接数据库服务器，ssh连接失败，如果默认端口不是22，可以修改数据库连接里的ssh隧道端口来连接。")
+                    , e);
+        }
         return session;
     }
 
