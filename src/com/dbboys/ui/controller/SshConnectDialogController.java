@@ -53,6 +53,7 @@ public class SshConnectDialogController {
     private CustomPasswordField passwordField;
     private ChoiceBox<String> authTypeChoiceBox;
     private CustomUserTextField keyPathField;
+    private CustomPasswordField keyPassphraseField;
     private Button keyBrowseButton;
     private HBox passwordRow;
     private HBox keyPathRow;
@@ -205,10 +206,10 @@ public class SshConnectDialogController {
                 (sshConnect.getPassword() != null ? sshConnect.getPassword() : ""));
         passwordRow.getChildren().addAll(label80("createconnect.label.ssh_password"), passwordField);
 
-        // row 5: key file path (key auth mode)
+        // row 5: key file path + passphrase (key auth mode)
         keyPathRow = row30();
         keyPathField = new CustomUserTextField();
-        keyPathField.setPrefWidth(160);
+        keyPathField.setPrefWidth(110);
         keyPathField.setPromptText(I18n.t("ssh.prompt.key_path", "Select SSH private key"));
         keyPathField.setText(sshConnect.isAuthKey() ?
                 (sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "") : "");
@@ -230,9 +231,17 @@ public class SshConnectDialogController {
                 keyPathField.setText(selected.getAbsolutePath());
             }
         });
+        Label keySpacer = new Label("");
+        keySpacer.setPrefWidth(5);
+        keyPassphraseField = new CustomPasswordField();
+        keyPassphraseField.setPrefWidth(120);
+        keyPassphraseField.setPromptText(I18n.t("ssh.prompt.key_passphrase", "Passphrase (optional)"));
+        keyPassphraseField.setText(sshConnect.isAuthKey() ?
+                (sshConnect.getKeyPassphrase() != null ? sshConnect.getKeyPassphrase() : "") : "");
         keyPathRow.getChildren().addAll(label80("ssh.label.key_path"), keyPathField,
-                new Label(" "), keyBrowseButton);
+                new Label(" "), keyBrowseButton, keySpacer, keyPassphraseField);
 
+        // Use keyPathRow for key auth mode (replaces password row)
         contentBox.getChildren().addAll(nameRow, folderRow, hostRow, userRow, authTypeRow,
                 passwordRow, keyPathRow);
 
@@ -382,6 +391,7 @@ public class SshConnectDialogController {
         sshConnect.setAuthType(isKey ? SshConnect.AUTH_KEY : SshConnect.AUTH_PASSWORD);
         sshConnect.setPassword(isKey ? "" : passwordField.getText());
         sshConnect.setKeyPath(isKey ? keyPathField.getText() : "");
+        sshConnect.setKeyPassphrase(isKey ? keyPassphraseField.getText() : "");
     }
 
     // ---- Connecting overlay visibility ----
@@ -403,11 +413,7 @@ public class SshConnectDialogController {
             protected Void call() throws Exception {
                 long start = System.currentTimeMillis();
                 try {
-                    int port = Integer.parseInt(sshConnect.getPort());
-                    var tunnel = SshTunnelUtil.createTunnel(
-                            sshConnect.getHost(), port,
-                            sshConnect.getUsername(), sshConnect.getPassword(),
-                            "127.0.0.1", 1);
+                    var tunnel = SshTunnelUtil.createTunnel(sshConnect);
                     tunnel.close();
                     if (isCancelled()) return null;
                     long elapsed = System.currentTimeMillis() - start;
@@ -446,11 +452,7 @@ public class SshConnectDialogController {
             @Override
             protected Void call() throws Exception {
                 try {
-                    int port = Integer.parseInt(sshConnect.getPort());
-                    var tunnel = SshTunnelUtil.createTunnel(
-                            sshConnect.getHost(), port,
-                            sshConnect.getUsername(), sshConnect.getPassword(),
-                            "127.0.0.1", 1);
+                    var tunnel = SshTunnelUtil.createTunnel(sshConnect);
                     tunnel.close();
                     if (isCancelled()) return null;
                     Platform.runLater(() -> {

@@ -1,5 +1,6 @@
 package com.dbboys.infra.util;
 
+import com.dbboys.model.SshConnect;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import org.apache.logging.log4j.LogManager;
@@ -16,17 +17,38 @@ public final class SshTunnelUtil {
     private SshTunnelUtil() {}
 
     /**
-     * Create an SSH tunnel that forwards a local port to {@code remoteHost:remotePort}.
-     *
-     * @param sshHost     SSH server hostname or IP
-     * @param sshPort     SSH server port
-     * @param sshUser     SSH username
-     * @param sshPassword SSH password
-     * @param remoteHost  target database host (from the SSH server's perspective)
-     * @param remotePort  target database port
-     * @return an {@link SshTunnel} containing the session and the auto-assigned local port
-     * @throws Exception if the SSH connection or port forwarding fails
+     * Create an SSH tunnel for testing with SshConnect (supports password + key auth).
      */
+    public static SshTunnel createTunnel(SshConnect sc) throws Exception {
+        JSch jsch = new JSch();
+        int port;
+        try {
+            port = Integer.parseInt(sc.getPort());
+        } catch (NumberFormatException e) {
+            port = 22;
+        }
+        Session session = jsch.getSession(sc.getUsername(), sc.getHost(), port);
+        if (sc.isAuthKey()) {
+            if (sc.getKeyPassphrase() != null && !sc.getKeyPassphrase().isBlank()) {
+                jsch.addIdentity(sc.getKeyPath(), sc.getKeyPassphrase());
+            } else {
+                jsch.addIdentity(sc.getKeyPath());
+            }
+        } else {
+            session.setPassword(sc.getPassword());
+        }
+        Properties config = new Properties();
+        config.put("StrictHostKeyChecking", "no");
+        session.setConfig(config);
+        session.connect(10000);
+
+        int localPort = session.setPortForwardingL(0, "127.0.0.1", 1);
+        log.info("SSH tunnel test OK: localhost:{} via {}@{}:{}",
+                localPort, sc.getUsername(), sc.getHost(), port);
+
+        return new SshTunnel(session, localPort);
+    }
+
     public static SshTunnel createTunnel(String sshHost, int sshPort,
                                           String sshUser, String sshPassword,
                                           String remoteHost, int remotePort) throws Exception {

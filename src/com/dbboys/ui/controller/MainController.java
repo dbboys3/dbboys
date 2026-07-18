@@ -1212,11 +1212,7 @@ public class MainController {
         AppExecutor.runAsync(() -> {
             long start = System.currentTimeMillis();
             try {
-                int port = Integer.parseInt(sc.getPort());
-                var tunnel = SshTunnelUtil.createTunnel(
-                        sc.getHost(), port,
-                        sc.getUsername(), sc.getPassword(),
-                        "127.0.0.1", 1);
+                var tunnel = SshTunnelUtil.createTunnel(sc);
                 tunnel.close();
                 long elapsed = System.currentTimeMillis() - start;
                 Platform.runLater(() ->
