@@ -1077,6 +1077,10 @@ public class CreateConnectController {
                     : AppState.getWindow();
             File selectedFile = fileChooser.showOpenDialog(owner);
             if (selectedFile != null) {
+                if (!selectedFile.getName().toLowerCase(Locale.ROOT).endsWith(".jar")) {
+                    AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_not_jar"));
+                    return;
+                }
                 // 处理选中的文�?
                 ObservableList<String> items = driverChoiceBox.getItems();
                 if(items.stream().anyMatch(name -> name.equals(selectedFile.getName()))){
