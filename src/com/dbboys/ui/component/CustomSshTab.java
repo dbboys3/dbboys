@@ -4,10 +4,14 @@ import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.SshConnect;
 import com.dbboys.ui.controller.SshTabController;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 import java.io.IOException;
 
@@ -20,6 +24,8 @@ public class CustomSshTab extends CustomTab {
 
     private final SshConnect sshConnect;
     public SshTabController controller;
+    private boolean connected;
+    private Timeline pulseTimeline;
 
     public CustomSshTab(SshConnect sshConnect) {
         super(sshConnect.getName());
@@ -42,11 +48,26 @@ public class CustomSshTab extends CustomTab {
         controller.init(sshConnect);
 
         // Wire connection state → tab icon color
-        controller.onConnectionStateChanged = connected -> {
-            javafx.application.Platform.runLater(() -> setTabIconColor(connected));
+        controller.onConnectionStateChanged = isConnected -> {
+            this.connected = isConnected;
+            javafx.application.Platform.runLater(() -> setTabIconColor(isConnected));
         };
         // Start with disconnected (red)
         setTabIconColor(false);
+
+        // Wire activity callback: pulse icon when unselected tab receives new output
+        controller.onActivity = () -> {
+            if (connected && !isSelected()) {
+                javafx.application.Platform.runLater(this::pulseIcon);
+            }
+        };
+
+        // When tab gets selected, stop pulse and restore icon
+        selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                stopPulse();
+            }
+        });
 
         I18n.localeProperty().addListener((obs, oldLocale, newLocale) -> refreshTooltip());
         refreshTooltip();
@@ -89,6 +110,40 @@ public class CustomSshTab extends CustomTab {
                 svg.getStyleClass().removeAll("icon-primary", "icon-success", "icon-danger");
                 svg.getStyleClass().add(connected ? "icon-primary" : "icon-danger");
             }
+        }
+    }
+
+    /** Pulse the icon: scale up by 10% then back to normal, loop until stopped. */
+    private void pulseIcon() {
+        if (getGraphic() == null) return;
+        if (pulseTimeline != null) return; // already pulsing
+        javafx.scene.Node graphic = getGraphic();
+        double base = graphic.getScaleX();
+        double target = base * 1.1;
+        pulseTimeline = new Timeline(
+                new KeyFrame(Duration.ZERO,
+                        new KeyValue(graphic.scaleXProperty(), base),
+                        new KeyValue(graphic.scaleYProperty(), base)),
+                new KeyFrame(Duration.millis(400),
+                        new KeyValue(graphic.scaleXProperty(), target),
+                        new KeyValue(graphic.scaleYProperty(), target)),
+                new KeyFrame(Duration.millis(800),
+                        new KeyValue(graphic.scaleXProperty(), base),
+                        new KeyValue(graphic.scaleYProperty(), base))
+        );
+        pulseTimeline.setCycleCount(Timeline.INDEFINITE);
+        pulseTimeline.play();
+    }
+
+    /** Stop pulsing animation and restore icon to normal size. */
+    private void stopPulse() {
+        if (pulseTimeline != null) {
+            pulseTimeline.stop();
+            pulseTimeline = null;
+        }
+        if (getGraphic() != null) {
+            getGraphic().setScaleX(1.0);
+            getGraphic().setScaleY(1.0);
         }
     }
 }

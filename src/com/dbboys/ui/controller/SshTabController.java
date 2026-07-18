@@ -90,6 +90,8 @@ public class SshTabController {
     private final StringProperty connectStatus = new SimpleStringProperty();
     /** Callback invoked with true when connected, false when disconnected. */
     public java.util.function.Consumer<Boolean> onConnectionStateChanged;
+    /** Callback invoked when new server output arrives (not disconnect/status messages). */
+    public Runnable onActivity;
     private ScrollBar scrollBar;
     private boolean updatingScrollBar;
     // Terminal state
@@ -477,6 +479,7 @@ public class SshTabController {
             dumpBuffer();
         }
         requestDraw();
+        if (onActivity != null && !raw.isEmpty()) onActivity.run();
     }
     // ---- Buffer ----
     private void nl() {
