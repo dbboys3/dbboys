@@ -209,7 +209,7 @@ public class SshConnectDialogController {
         // row 5: key file path + passphrase (key auth mode)
         keyPathRow = row30();
         keyPathField = new CustomUserTextField();
-        keyPathField.setPrefWidth(110);
+        keyPathField.setPrefWidth(200);
         keyPathField.setPromptText(I18n.t("ssh.prompt.key_path", "Select SSH private key"));
         keyPathField.setText(sshConnect.isAuthKey() ?
                 (sshConnect.getKeyPath() != null ? sshConnect.getKeyPath() : "") : "");
@@ -234,7 +234,7 @@ public class SshConnectDialogController {
         Label keySpacer = new Label("");
         keySpacer.setPrefWidth(5);
         keyPassphraseField = new CustomPasswordField();
-        keyPassphraseField.setPrefWidth(120);
+        keyPassphraseField.setPrefWidth(100);
         keyPassphraseField.setPromptText(I18n.t("ssh.prompt.key_passphrase", "Passphrase (optional)"));
         keyPassphraseField.setText(sshConnect.isAuthKey() ?
                 (sshConnect.getKeyPassphrase() != null ? sshConnect.getKeyPassphrase() : "") : "");
