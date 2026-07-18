@@ -60,6 +60,8 @@
   -color-border-default: rgb(209, 209, 214);
   -color-border-muted: rgb(199, 199, 204);
   -color-border-subtle: rgb(229, 229, 234);
+  -color-control-border: -color-base-4; /*复选框/单选框边框*/
+  -color-control-border-hover: -color-base-5; /*复选框/单选框悬停边框*/
   -color-table-border: rgb(240, 240, 240);
   -color-shadow-default: rgba(0, 0, 0, 0.10);
   -color-neutral-emphasis-plus: #48484a;
