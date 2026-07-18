@@ -1271,24 +1271,31 @@ public class MainController {
     }
 
     private void addSshToTree(com.dbboys.model.SshConnect sc) {
-        // Find parent folder item and add the new connection
-        TreeItem<TreeData> folderItem = null;
+        TreeItem<TreeData> newItem = new TreeItem<>(sc);
+        // Find parent folder and add
         for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
             if (child.getValue() instanceof com.dbboys.model.SshFolder f
                     && f.getId() == sc.getParentId()) {
-                folderItem = child;
-                break;
+                child.getChildren().add(newItem);
+                if (!child.isExpanded()) {
+                    child.setExpanded(true);
+                }
+                // Sort by name and select the new item (matching createConnectLeaf)
+                child.getChildren().sort((a, b) ->
+                        a.getValue().getName().compareToIgnoreCase(b.getValue().getName()));
+                sshTreeView.getSelectionModel().clearSelection();
+                sshTreeView.getSelectionModel().select(newItem);
+                sshTreeView.scrollTo(sshTreeView.getSelectionModel().getSelectedIndex());
+                return;
             }
         }
-        TreeItem<TreeData> newItem = new TreeItem<>(sc);
-        if (folderItem != null) {
-            folderItem.getChildren().add(newItem);
-            if (!folderItem.isExpanded()) {
-                folderItem.setExpanded(true);
-            }
-        } else {
-            sshTreeView.getRoot().getChildren().add(newItem);
-        }
+        // No matching folder — add at root level
+        sshTreeView.getRoot().getChildren().add(newItem);
+        sshTreeView.getRoot().getChildren().sort((a, b) ->
+                a.getValue().getName().compareToIgnoreCase(b.getValue().getName()));
+        sshTreeView.getSelectionModel().clearSelection();
+        sshTreeView.getSelectionModel().select(newItem);
+        sshTreeView.scrollTo(sshTreeView.getSelectionModel().getSelectedIndex());
     }
 
     /** Move SSH connection to a different folder (matching database connection "Move To"). */
