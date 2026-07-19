@@ -6348,6 +6348,56 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-effect: dropshadow(gaussian, -color-accent-pill-active-shadow, 8, 0.2, 0, 1);
 }
 
+/* 执行结果成功/失败筛选按钮 — 图标(10px 圆角正方形) + 文字 */
+.result-filter-button {
+  -fx-background-color: -color-bg-default;
+  -fx-background-radius: 4;
+  -fx-border-radius: 4;
+  -fx-background-insets: 0;
+  -fx-padding: 2 6 2 6;
+  -fx-font-size: 9px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -color-fg-muted;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+  -fx-cursor: hand;
+  -fx-graphic-text-gap: 4;
+}
+
+.result-filter-button:hover,
+.result-filter-button:focused,
+.result-filter-button:armed,
+.result-filter-button:pressed {
+  -fx-background-color: -color-hover-bg;
+}
+
+.result-filter-dot {
+  -fx-min-width: 8px;
+  -fx-min-height: 8px;
+  -fx-pref-width: 8px;
+  -fx-pref-height: 8px;
+  -fx-max-width: 8px;
+  -fx-max-height: 8px;
+  -fx-background-radius: 2px;
+  -fx-border-radius: 2px;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
+.result-filter-dot-success {
+  -fx-background-color: -color-success-emphasis;
+}
+
+.result-filter-dot-failure {
+  -fx-background-color: -color-danger-emphasis;
+}
+
+.result-filter-active {
+  -fx-border-color: -color-fg-emphasis;
+  -fx-border-width: 1px;
+  -fx-effect: dropshadow(gaussian, -color-accent-pill-active-shadow, 6, 0.2, 0, 1);
+}
+
 /* SQL 工具栏等仅图标按钮：固定占位，hover 不改透明�?内边距，避免晃动 */
 .custom-button {
   -color-button-bg-focused: -color-button-bg-hover;

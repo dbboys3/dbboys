@@ -143,10 +143,17 @@ public class SqlTabUiHelper {
     private Button createResultFilterButton(String backgroundColor) {
         Button button = new Button();
         button.setFocusTraversable(false);
-        button.getStyleClass().add("accent-pill-button");
+        button.getStyleClass().add("result-filter-button");
         button.getStyleClass().add(SqlTabController.RESULT_SUCCESS_BUTTON_COLOR.equals(backgroundColor)
-                ? "accent-pill-success"
-                : "accent-pill-failure");
+                ? "result-filter-success"
+                : "result-filter-failure");
+        Region dot = new Region();
+        dot.getStyleClass().add("result-filter-dot");
+        dot.getStyleClass().add(SqlTabController.RESULT_SUCCESS_BUTTON_COLOR.equals(backgroundColor)
+                ? "result-filter-dot-success"
+                : "result-filter-dot-failure");
+        button.setGraphic(dot);
+        button.setContentDisplay(ContentDisplay.LEFT);
         return button;
     }
 

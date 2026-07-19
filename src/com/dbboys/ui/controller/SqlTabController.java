@@ -32,6 +32,7 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.Node;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.shape.SVGPath;
@@ -328,12 +329,21 @@ public class SqlTabController {
             return;
         }
         button.getStyleClass().removeAll(
-                "accent-pill-success", "accent-pill-failure", "accent-pill-active");
+                "result-filter-success", "result-filter-failure", "result-filter-active");
         button.getStyleClass().add(RESULT_SUCCESS_BUTTON_COLOR.equals(background)
-                ? "accent-pill-success"
-                : "accent-pill-failure");
+                ? "result-filter-success"
+                : "result-filter-failure");
         if (active) {
-            button.getStyleClass().add("accent-pill-active");
+            button.getStyleClass().add("result-filter-active");
+        }
+        // Also update graphic dot style classes
+        Node graphic = button.getGraphic();
+        if (graphic != null) {
+            graphic.getStyleClass().removeAll(
+                    "result-filter-dot-success", "result-filter-dot-failure");
+            graphic.getStyleClass().add(RESULT_SUCCESS_BUTTON_COLOR.equals(background)
+                    ? "result-filter-dot-success"
+                    : "result-filter-dot-failure");
         }
     }
 
