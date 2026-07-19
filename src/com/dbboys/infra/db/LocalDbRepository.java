@@ -30,7 +30,7 @@ public  class LocalDbRepository {
                     + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "c_name VARCHAR(100),"
                     + "c_expand INT)");
-            stmt.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
+            stmt.executeUpdate("INSERT INTO t_ssh_folder(c_id,c_name,c_expand) VALUES (1,'SSH连接分类[1级系统]',1)");
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_ssh ("
                     + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "c_parentid INTEGER DEFAULT 0,"

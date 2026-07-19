@@ -877,7 +877,6 @@ public class MainController {
 
     private void initSshTreeView() {
         try {
-            com.dbboys.infra.db.LocalDbRepository.migrateTConnectTable();
             TreeItem<TreeData> rootItem = new TreeItem<>();
             rootItem.setExpanded(true);
             sshTreeView.setRoot(rootItem);
