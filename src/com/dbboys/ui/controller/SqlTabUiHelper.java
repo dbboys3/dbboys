@@ -46,8 +46,17 @@ public class SqlTabUiHelper {
         ctrl.commitButtonTooltip.setShowDelay(Duration.millis(100));
         ctrl.transactionCommitButton.setTooltip(ctrl.commitButtonTooltip);
         ctrl.transactionRollbackButton.setTooltip(ctrl.commitButtonTooltip);
-        ctrl.transactionCommitButton.getStyleClass().addAll("accent-pill-button", "accent-pill-success");
-        ctrl.transactionRollbackButton.getStyleClass().addAll("accent-pill-button", "accent-pill-failure");
+        // 与成功/失败筛选按钮保持一致的风格：图标 10px 圆角正方形 + 文字
+        ctrl.transactionCommitButton.getStyleClass().add("result-filter-button");
+        ctrl.transactionRollbackButton.getStyleClass().add("result-filter-button");
+        Region commitDot = new Region();
+        commitDot.getStyleClass().addAll("result-filter-dot", "result-filter-dot-success");
+        ctrl.transactionCommitButton.setGraphic(commitDot);
+        ctrl.transactionCommitButton.setContentDisplay(ContentDisplay.LEFT);
+        Region rollbackDot = new Region();
+        rollbackDot.getStyleClass().addAll("result-filter-dot", "result-filter-dot-failure");
+        ctrl.transactionRollbackButton.setGraphic(rollbackDot);
+        ctrl.transactionRollbackButton.setContentDisplay(ContentDisplay.LEFT);
     }
 
     public void setupSqlTabIcons() {
