@@ -23,6 +23,7 @@ import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
+import javafx.scene.input.ScrollEvent;
 import javafx.fxml.FXML;
 import javafx.scene.Group;
 import javafx.scene.control.*;
@@ -356,6 +357,11 @@ public class ResultSetTabController {
                     getStyleClass().add("resultset-pending-dml-row");
                 }
             }
+        });
+
+
+        resultSetTableView.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (resultSetTableView.getItems().size() <= 5 && e.getDeltaY() != 0) e.consume();
         });
 
         setupResultSetContextMenu();
