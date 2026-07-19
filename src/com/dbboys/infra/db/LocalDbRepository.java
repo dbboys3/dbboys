@@ -1,4 +1,4 @@
-package com.dbboys.infra.db;
+﻿package com.dbboys.infra.db;
 
 import com.dbboys.model.ConnectFolder;
 import com.dbboys.model.Connect;
@@ -30,6 +30,7 @@ public  class LocalDbRepository {
                     + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "c_name VARCHAR(100),"
                     + "c_expand INT)");
+            stmt.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_ssh ("
                     + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "c_parentid INTEGER DEFAULT 0,"

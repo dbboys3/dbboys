@@ -34,9 +34,6 @@ import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.control.Button;
-import javafx.scene.control.Dialog;
-import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
@@ -61,7 +58,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.List;
 
 
 public class CreateConnectController {
@@ -102,7 +98,6 @@ public class CreateConnectController {
     @FXML
     private Button switchGroupOrIP;
     private Button sqliteBrowseButton;
-    private static final String BROWSE_ICON_PATH = "...";
     /** Maps dropdown index -> ssh connection id for the "use existing SSH connection" dropdown. */
     private final java.util.List<Integer> sshConnectionIds = new java.util.ArrayList<>();
     private Runnable updateSshAuthRows;
@@ -458,7 +453,7 @@ public class CreateConnectController {
         });
         // Create browse button for SQLite file selection
         sqliteBrowseButton = new Button("");
-        sqliteBrowseButton.setGraphic(IconFactory.group(BROWSE_ICON_PATH, 0.72, 0.72));
+        sqliteBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.72, 0.72));
         sqliteBrowseButton.getStyleClass().add("small");
         sqliteBrowseButton.setFocusTraversable(false);
         sqliteBrowseButton.setVisible(false);
