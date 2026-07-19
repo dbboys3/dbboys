@@ -1,4 +1,4 @@
-﻿package com.dbboys.infra.db;
+package com.dbboys.infra.db;
 
 import com.dbboys.model.ConnectFolder;
 import com.dbboys.model.Connect;
