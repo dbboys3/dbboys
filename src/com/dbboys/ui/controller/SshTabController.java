@@ -1,4 +1,4 @@
-﻿package com.dbboys.ui.controller;
+package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
