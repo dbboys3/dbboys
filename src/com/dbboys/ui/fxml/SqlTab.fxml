@@ -13,7 +13,7 @@
 <?import com.dbboys.ui.component.CustomUserTextField?>
 <?import org.controlsfx.control.tableview2.TableView2?>
 <?import com.dbboys.ui.component.CustomTableView?>
-<VBox fx:id="sqlTab" fx:controller="com.dbboys.ui.controller.SqlTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1">
+<VBox fx:id="sqlTab" fx:controller="com.dbboys.ui.controller.SqlTabController" xmlns="http://javafx.com/javafx/8.0.31" xmlns:fx="http://javafx.com/fxml/1" style="-fx-background-color: -color-bg-default;">
     <HBox alignment="CENTER_LEFT">
         <Button fx:id="sqlRunButton" styleClass="custom-button" focusTraversable="false">
             <tooltip>
