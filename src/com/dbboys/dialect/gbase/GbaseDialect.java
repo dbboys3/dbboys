@@ -345,7 +345,7 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public String metadataTreeDragTableSelectSql(String qualifiedTable) {
-        return DatabasePlatform.defaultMetadataTreeDragTableSelectSql(stripOwnerForDragSql(qualifiedTable));
+        return "select ifx_row_id,* from " + stripOwnerForDragSql(qualifiedTable) + ";";
     }
 
     @Override

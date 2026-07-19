@@ -276,7 +276,9 @@ public class ResultSetColumnBuilder {
     }
 
     private boolean isRowIdKey(String keyText) {
-        return "ROWID".equalsIgnoreCase(keyText == null ? "" : keyText.trim());
+        String trimmed = keyText == null ? "" : keyText.trim();
+        return "ROWID".equalsIgnoreCase(trimmed)
+                || "IFX_ROW_ID".equalsIgnoreCase(trimmed);
     }
 
     private boolean isIntegralType(String typeName) {

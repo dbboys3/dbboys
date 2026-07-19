@@ -127,7 +127,7 @@ public class ResultSetEditHelper {
         for (int i = 0; i < ctrl.resultTableCols.size(); i++) {
             String raw = ctrl.resultTableCols.get(i);
             String bare = oracleBareColumnNameForUpdate(raw);
-            if ("rowid".equalsIgnoreCase(bare != null ? bare.trim() : "")) {
+            if (isRowIdColumn(bare != null ? bare.trim() : "")) {
                 continue;
             }
             insertColExprs.add(raw);
@@ -547,11 +547,16 @@ public class ResultSetEditHelper {
         }
         for (int i = 0; i < selectedCols.size(); i++) {
             String bare = isOracleDialect() ? oracleBareColumnNameForUpdate(selectedCols.get(i)) : selectedCols.get(i);
-            if ("rowid".equalsIgnoreCase(bare != null ? bare.trim() : "")) {
+            if (isRowIdColumn(bare != null ? bare.trim() : "")) {
                 return i;
             }
         }
         return -1;
+    }
+
+    private boolean isRowIdColumn(String colName) {
+        return "ROWID".equalsIgnoreCase(colName)
+                || "IFX_ROW_ID".equalsIgnoreCase(colName);
     }
 
     /** null 提交框视为自动提交（非手动）。 */

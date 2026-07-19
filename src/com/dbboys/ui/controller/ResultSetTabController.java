@@ -1166,6 +1166,12 @@ public class ResultSetTabController {
         return "'" + val.replace("'", "''") + "'";
     }
 
+    private boolean isRowIdColumn(String colName) {
+        String trimmed = colName == null ? "" : colName.trim();
+        return "ROWID".equalsIgnoreCase(trimmed)
+                || "IFX_ROW_ID".equalsIgnoreCase(trimmed);
+    }
+
     private String bareCol(String colName) {
         if (colName == null || colName.isBlank()) return colName;
         String s = colName.trim();
@@ -1209,7 +1215,7 @@ public class ResultSetTabController {
         List<String> exprs = new ArrayList<>();
         for (int i = 0; i < cols.size(); i++) {
             String bare = bareCol(cols.get(i));
-            if ("rowid".equalsIgnoreCase(bare)) continue;
+            if (isRowIdColumn(bare)) continue;
             exprs.add(bare);
             idxs.add(i);
         }
@@ -1244,7 +1250,7 @@ public class ResultSetTabController {
             for (int i = 0; i < cols.size(); i++) {
                 if (pkSet.contains(i)) continue;
                 String bare = bareCol(cols.get(i));
-                if ("rowid".equalsIgnoreCase(bare)) continue;
+                if (isRowIdColumn(bare)) continue;
                 setParts.add(bare + "=" + formatSqlValue(row.get(i + 1)));
             }
             if (setParts.isEmpty()) continue;
