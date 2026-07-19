@@ -103,7 +103,7 @@ public class PopupWindowUtil {
     //适配列表
     private static final double COMPATIBILITY_FEATURES_COLUMN_WIDTH = 2000;
     /** 默认宽度需容纳功能列与其它两列最小宽度 */
-    private static final double COMPATIBILITY_POPUP_WIDTH = 800;
+    private static final double COMPATIBILITY_POPUP_WIDTH = 960;
     private static final double COMPATIBILITY_POPUP_HEIGHT = 460;
     /** 适配列表固定行高（相对原 58px 提高 20%） */
     private static final double COMPATIBILITY_TABLE_FIXED_ROW_HEIGHT = 30;
@@ -756,7 +756,9 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection",
                         "main.compatibility.feature.instance_start_stop")),
-                new CompatibilityRow("ORACLE", "19C", compatibilityFeaturesByKey(
+                new CompatibilityRow("ORACLE", "11g / 19C", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.metadata_detail",
                         "main.compatibility.feature.metadata_change",
@@ -823,13 +825,20 @@ public class PopupWindowUtil {
                 new CompatibilityRow("INFORMIX", "12.1", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检", "实例启停")),
-                new CompatibilityRow("ORACLE", "19C", compatibilityFeatures(
+                new CompatibilityRow("ORACLE", "11g / 19C", compatibilityFeatures(
+                        "安装", "卸载",
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
+                        "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
+                new CompatibilityRow("MYSQL", "5.7 / 8.0", compatibilityFeatures(
+                        "安装", "卸载",
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
                 new CompatibilityRow("SQLITE", "3.46.0.0", compatibilityFeatures(
-                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出"))
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
+                new CompatibilityRow("GENERAL JDBC", "JDBC 4.x", compatibilityFeatures(
+                        "元数据列表", "执行SQL"))
         );
     }
 
