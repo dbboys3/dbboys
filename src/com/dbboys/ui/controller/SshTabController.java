@@ -6,6 +6,9 @@ import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.jcraft.jsch.ChannelShell;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.ChannelExec;
+import com.jcraft.jsch.SftpProgressMonitor;
 import com.jcraft.jsch.Session;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -117,7 +120,9 @@ public class SshTabController {
     private int savedSgrFg, savedSgrBg;
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
     private Thread readThread;
-    private volatile boolean connecting; // guards against concurrent connect attempts
+    private volatile boolean connecting;
+    private volatile boolean sftpCancelFlag;
+    private final StringBuilder inputBuffer = new StringBuilder(); // guards against concurrent connect attempts
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
     private String pendingEsc;
@@ -266,7 +271,7 @@ public class SshTabController {
     }
     private void doConnect() {
         if (sshConnect == null) return;
-        if (connecting) return; // already connecting — skip duplicate
+        if (connecting) return; // already connecting 閳?skip duplicate
         connecting = true;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
@@ -349,10 +354,10 @@ public class SshTabController {
                     String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
                 }
-                // read returned -1 or channel disconnected — connection lost
+                // read returned -1 or channel disconnected 閳?connection lost
                 Platform.runLater(this::onConnectionLost);
             } catch (Exception e) {
-                // read thread interrupted or IO error — connection likely lost
+                // read thread interrupted or IO error 閳?connection likely lost
                 Platform.runLater(this::onConnectionLost);
             }
         }, "term-reader");
@@ -1185,7 +1190,7 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnKeyPressed(e -> {
-            // Disconnected — Enter triggers reconnect
+            // Disconnected 閳?Enter triggers reconnect
             if (shellChannel == null || !shellChannel.isConnected()) {
                 if (e.getCode() == KeyCode.ENTER) {
                     doConnect();
@@ -1206,28 +1211,33 @@ public class SshTabController {
             }
         });
         canvas.setOnKeyTyped(e -> {
-            // Disconnected — ignore keystrokes (Enter handled in OnKeyPressed)
             if (shellChannel == null || !shellChannel.isConnected()) return;
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
-            // Auto-jump to bottom before sending input
             jumpToBottom();
-            if (c == '\r' || c == '\n') {
-                try {
-                    OutputStream os = shellChannel.getOutputStream();
-                    os.write(c);
-                    os.flush();
-                } catch (Exception ignored) {}
-                e.consume();
-            } else if (c >= 0x20 && c != 0x7F) {
-                try {
-                    OutputStream os = shellChannel.getOutputStream();
+            try {
+                OutputStream os = shellChannel.getOutputStream();
+                if (c == '\r' || c == '\n') {
+                    String cmd = inputBuffer.toString().trim();
+                    if (cmd.startsWith("sz ")) {
+                        os.write(0x03); os.write(10); os.flush();
+                        handleSzDownload(cmd.substring(3).trim());
+                    } else if (cmd.equals("rz")) {
+                        os.write(0x03); os.write(10); os.flush();
+                        handleRzUpload();
+                    } else {
+                        os.write(c);
+                        os.flush();
+                    }
+                    inputBuffer.setLength(0);
+                } else if (c >= 0x20 && c != 0x7F) {
+                    inputBuffer.append(c);
                     os.write(ch.getBytes(terminalCharset()));
                     os.flush();
-                } catch (Exception ignored) {}
-                e.consume();
-            }
+                }
+            } catch (Exception ignored) {}
+            e.consume();
         });
         canvas.setOnScroll(e -> {
             int dir = -(int)Math.signum(e.getDeltaY());
@@ -1295,7 +1305,7 @@ public class SshTabController {
                 return null;
             }
             switch (k) {
-                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:return new byte[]{0x03};
+                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x03};
                 case D:return new byte[]{0x04}; case E:return new byte[]{0x05};
                 case F:return new byte[]{0x06}; case G:return new byte[]{0x07};
                 case H:return new byte[]{0x08}; case J:return new byte[]{0x0A};
@@ -1303,7 +1313,7 @@ public class SshTabController {
                 case N:return new byte[]{0x0E}; case O:return new byte[]{0x0F};
                 case P:return new byte[]{0x10}; case Q:return new byte[]{0x11};
                 case R:return new byte[]{0x12}; case S:return new byte[]{0x13};
-                case T:return new byte[]{0x14}; case U:return new byte[]{0x15};
+                case T:return new byte[]{0x14}; case U:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x15};
                 case W:return new byte[]{0x17}; case X:return new byte[]{0x18};
                 case Y:return new byte[]{0x19}; case Z:return new byte[]{0x1A};
                 default:return null;
@@ -1311,7 +1321,7 @@ public class SshTabController {
         }
         switch (k) {
             case ENTER:return null;
-            case BACK_SPACE:return new byte[]{0x7F};
+            case BACK_SPACE:if (inputBuffer.length()>0) inputBuffer.setLength(inputBuffer.length()-1);return new byte[]{0x7F};
             case TAB:return "\t".getBytes(StandardCharsets.UTF_8);
             case ESCAPE:return "".getBytes(StandardCharsets.UTF_8);
             case UP:return cursorKeysApp ? "OA".getBytes(StandardCharsets.UTF_8) : "[A".getBytes(StandardCharsets.UTF_8);
@@ -1359,7 +1369,165 @@ public class SshTabController {
         return sb.toString();
     }
     /** Strip continuation cells (\0) left by fullwidth characters. */
-    private static String stripContinuationChars(String s) {
+    
+    /** Write to terminal without trailing newline (for in-place progress). */
+    private void progressStatus(String s) {
+        for (char c : s.toCharArray()) {
+            if (c == '\n') { if (pendingWrap) pendingWrap = false; else nl(); }
+            else if (c == '\r') curCol = 0;
+            else put(c);
+        }
+        requestDraw();
+    }
+
+    /** Handle sz: download file via SFTP. */
+    private void handleSzDownload(String remotePath) {
+        AppExecutor.runAsync(() -> {
+            try {
+                Thread.sleep(200);
+                Platform.runLater(() -> {
+                    javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+                    fc.setTitle("Save file");
+                    String name = remotePath.replace('\\', '/');
+                    int idx = name.lastIndexOf('/');
+                    if (idx >= 0) name = name.substring(idx + 1);
+                    fc.setInitialFileName(name);
+                    File file = fc.showSaveDialog(canvas.getScene().getWindow());
+                    if (file != null) {
+                        canvas.requestFocus();
+                        doSftpDownload(remotePath, file);
+                    }
+                });
+            } catch (Exception ex) {
+                log.error("SFTP download failed", ex);
+                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
+            }
+        });
+    }
+    private void handleRzUpload() {
+        Platform.runLater(() -> {
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Select file to upload");
+            File file = fc.showOpenDialog(canvas.getScene().getWindow());
+            if (file != null) {
+                        canvas.requestFocus();
+                AppExecutor.runAsync(() -> {
+                    try {
+                        Thread.sleep(200);
+                        ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
+                        sftp.connect();
+                        String targetDir = sftp.pwd();
+                        sftp.disconnect();
+                        doSftpUpload(file, targetDir + "/" + file.getName());
+                    } catch (Exception ex) {
+                        log.error("SFTP upload failed", ex);
+                        Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
+                    }
+                });
+            }
+        });
+    }
+    private void doSftpDownload(String remotePath, File localFile) {
+        sftpCancelFlag = false;
+        try {
+            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp.connect();
+            try {
+                String target = remotePath;
+                if (!target.startsWith("/")) target = sftp.pwd() + "/" + target;
+                final String tgt = target;
+                final OutputStream shellOut = shellChannel.getOutputStream();
+                sftp.get(tgt, localFile.getAbsolutePath(), new SftpProgressMonitor() {
+                    private long max;
+                    private long cnt;
+                    private int lastPct;
+                    private long startMs;
+                    public void init(int op, String src, String d, long m) { max = m; cnt = 0; lastPct = 0; startMs = System.currentTimeMillis(); sftpCancelFlag = false; progressStatus("\r" + localFile.getName() + "\r"); }
+                    public boolean count(long c) {
+                        if (sftpCancelFlag) return false;
+                        cnt += c;
+                        if (max <= 0) return true;
+                        int pct = (int)(cnt * 100 / max);
+                        if (pct < lastPct + 10 && cnt < max) return true;
+                        lastPct = pct;
+                        long elapsed = System.currentTimeMillis() - startMs;
+                        if (elapsed < 100 && cnt < max) return true;
+                        long bps = elapsed > 0 ? cnt * 1000 / elapsed : 0;
+                        String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
+                        long rem = max - cnt;
+                        String eta = bps > 0 ? " ETA:" + (rem / bps) + "s" : "";
+                        String msg = "\r" + localFile.getName() + ": " + pct + "% " + speed + eta;
+                        while (msg.length() < 80) msg += " ";
+                        progressStatus(msg);
+                        return true;
+                    }
+                    public void end() {
+                        progressStatus("\r\n");
+                        try { if (shellOut != null) { shellOut.write(13); shellOut.flush(); } } catch (Exception e2) { log.warn("shellOut write failed", e2); }
+                    }
+                });
+            } finally {
+                sftp.disconnect();
+            }
+        } catch (Exception ex) {
+            if (!sftpCancelFlag) {
+                log.error("SFTP download failed", ex);
+                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
+            }
+            try { if (shellChannel != null && shellChannel.isConnected()) { shellChannel.getOutputStream().write(10); shellChannel.getOutputStream().flush(); } } catch (Exception e2) {}
+        }
+    }
+    private void doSftpUpload(File localFile, String remotePath) {
+        sftpCancelFlag = false;
+        try {
+            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp.connect();
+            try {
+                String target = remotePath;
+                if (!target.startsWith("/")) target = sftp.pwd() + "/" + target;
+                final String tgt = target;
+                final OutputStream shellOut = shellChannel.getOutputStream();
+                sftp.put(localFile.getAbsolutePath(), tgt, new SftpProgressMonitor() {
+                    private long max;
+                    private long cnt;
+                    private int lastPct;
+                    private long startMs;
+                    public void init(int op, String src, String d, long m) { max = m; cnt = 0; lastPct = 0; startMs = System.currentTimeMillis(); sftpCancelFlag = false; progressStatus("\r" + localFile.getName() + "\r"); }
+                    public boolean count(long c) {
+                        if (sftpCancelFlag) return false;
+                        cnt += c;
+                        if (max <= 0) return true;
+                        int pct = (int)(cnt * 100 / max);
+                        if (pct < lastPct + 10 && cnt < max) return true;
+                        lastPct = pct;
+                        long elapsed = System.currentTimeMillis() - startMs;
+                        if (elapsed < 100 && cnt < max) return true;
+                        long bps = elapsed > 0 ? cnt * 1000 / elapsed : 0;
+                        String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
+                        long rem = max - cnt;
+                        String eta = bps > 0 ? " ETA:" + (rem / bps) + "s" : "";
+                        String msg = "\r" + localFile.getName() + ": " + pct + "% " + speed + eta;
+                        while (msg.length() < 80) msg += " ";
+                        progressStatus(msg);
+                        return true;
+                    }
+                    public void end() {
+                        progressStatus("\r\n");
+                        try { if (shellOut != null) { shellOut.write(13); shellOut.flush(); } } catch (Exception e2) { log.warn("shellOut write failed", e2); }
+                    }
+                });
+            } finally {
+                sftp.disconnect();
+            }
+        } catch (Exception ex) {
+            if (!sftpCancelFlag) {
+                log.error("SFTP upload failed", ex);
+                Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
+            }
+            try { if (shellChannel != null && shellChannel.isConnected()) { shellChannel.getOutputStream().write(10); shellChannel.getOutputStream().flush(); } } catch (Exception e2) {}
+        }
+    }
+private static String stripContinuationChars(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
