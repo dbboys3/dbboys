@@ -1,4 +1,4 @@
-package com.dbboys.ui.controller;
+﻿package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
@@ -451,9 +451,9 @@ public class SshTabController {
         // Log large chunks (top/nmon output) for debugging
         boolean isTopData = raw.length() > 200;
         if (isTopData) {
-            log.info("=== SSH RAW ({} chars) wrap={} cur=({},{}) ===",
-                    raw.length(), pendingWrap, curCol, curRow);
-            log.info("  {}", escapeForLog(raw.substring(0, Math.min(2000, raw.length()))));
+            // log.info("=== SSH RAW ({} chars) wrap={} cur=({},{}) ===",
+            //        raw.length(), pendingWrap, curCol, curRow);
+            //log.info("  {}", escapeForLog(raw.substring(0, Math.min(2000, raw.length()))));
         }
         for (int i = 0, n = raw.length(); i < n; i++) {
             char c = raw.charAt(i);
@@ -466,7 +466,7 @@ public class SshTabController {
             else if (c == '\r') curCol = 0;
             else if (c == '\n') {
                 if (pendingWrap) {
-                    pendingWrap = false; log.info("WRAP consumed r{} c{}", curRow, curCol); // auto-wrap
+                    pendingWrap = false; // log.info("WRAP consumed r{} c{}", curRow, curCol); // auto-wrap
                 } else {
                     nl();
                 }
@@ -478,7 +478,7 @@ public class SshTabController {
             else if (c >= 0x20) put(c);
         }
         if (isTopData) {
-            log.info("=== AFTER ===");
+           // log.info("=== AFTER ===");
             dumpBuffer();
         }
         requestDraw();
@@ -1618,6 +1618,6 @@ private static String stripContinuationChars(String s) {
                     outline.replace(' ', '\u00B7')));
             if (r - scrollOff + 1 > rows + 2) break;
         }
-        log.info(sb.toString());
+        //log.info(sb.toString());
     }
 }
