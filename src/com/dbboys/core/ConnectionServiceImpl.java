@@ -11,9 +11,8 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.MD5Util;
 import com.dbboys.infra.util.SshTunnel;
 import com.dbboys.infra.util.SshTunnelUtil;
+import com.dbboys.infra.util.SshUtil;
 import com.dbboys.infra.util.SshConnectionWrapper;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.Session;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.*;
 
@@ -24,6 +23,7 @@ import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.SQLException;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +32,10 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.client.session.forward.ExplicitPortForwardingTracker;
+import org.apache.sshd.common.util.net.SshdSocketAddress;
+import org.apache.sshd.core.CoreModuleProperties;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -42,7 +46,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     private static final String PROP_IFX_TRIMTRAILINGSPACES = "IFX_TRIMTRAILINGSPACES";
     private static final Map<String, Driver> DRIVER_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, URLClassLoader> LOADER_CACHE = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Session> sshSessionCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ClientSession> sshSessionCache = new ConcurrentHashMap<>();
     private final DatabasePlatformResolver platformResolver;
 
     public ConnectionServiceImpl() {
@@ -53,45 +57,26 @@ public class ConnectionServiceImpl implements ConnectionService {
         this.platformResolver = platformResolver != null ? platformResolver : DatabasePlatforms.createDefault();
     }
 
-    private Session getOrCreateSshSession(Connect connect) throws Exception {
+    private ClientSession getOrCreateSshSession(Connect connect) throws Exception {
         // Remove disconnected sessions from cache
-        sshSessionCache.values().removeIf(s -> !s.isConnected());
+        sshSessionCache.values().removeIf(s -> !s.isOpen());
         String cacheKey = buildSshCacheKey(connect);
-        Session session = sshSessionCache.get(cacheKey);
-        if (session != null && session.isConnected()) {
+        ClientSession session = sshSessionCache.get(cacheKey);
+        if (session != null && session.isOpen()) {
             return session;
         }
-        JSch jsch = new JSch();
         int sshPort = connect.getSshPort() != null && !connect.getSshPort().isBlank()
                 ? Integer.parseInt(connect.getSshPort().trim()) : 22;
-        session = jsch.getSession(connect.getSshUser(), connect.getSshHost(), sshPort);
         if (connect.isSshAuthKey()) {
-            String keyPath = connect.getSshKeyPath();
-            if (keyPath == null || keyPath.isBlank()) {
-                throw new IllegalArgumentException(
-                    I18n.t("ssh.error.key_path_empty", "SSH private key path is empty"));
-            }
-            if (!java.nio.file.Files.exists(java.nio.file.Paths.get(keyPath))) {
-                throw new IllegalArgumentException(
-                    I18n.t("ssh.error.key_path_not_found", "SSH private key not found") + ": " + keyPath);
-            }
-            String keyPassphrase = connect.getSshKeyPassphrase();
-            if (keyPassphrase != null && !keyPassphrase.isBlank()) {
-                jsch.addIdentity(keyPath, keyPassphrase);
-            } else {
-                jsch.addIdentity(keyPath);
-            }
+            session = SshUtil.getKeySession(connect.getSshUser(), connect.getSshHost(), sshPort,
+                    connect.getSshKeyPath(), connect.getSshKeyPassphrase(), 10000);
         } else {
-            session.setPassword(connect.getSshPassword());
+            session = SshUtil.getPasswordSession(connect.getSshUser(), connect.getSshHost(), sshPort,
+                    connect.getSshPassword(), 10000);
         }
-        java.util.Properties config = new java.util.Properties();
-        config.put("StrictHostKeyChecking", "no");
-        config.put("compression.s2c", "zlib@openssh.com,zlib,none");
-        config.put("compression.c2s", "zlib@openssh.com,zlib,none");
-        session.setConfig(config);
-        session.setServerAliveInterval(30000);
-        session.setServerAliveCountMax(5);
-        session.connect(10000);
+        // 保活：30 秒一次心跳，连续 5 次无响应视为断开（与原 JSch 配置一致）
+        CoreModuleProperties.HEARTBEAT_INTERVAL.set(session, Duration.ofSeconds(30));
+        CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(session, 5);
         sshSessionCache.put(cacheKey, session);
         log.info("SSH session created (cached): {}@{}:{}",
                 connect.getSshUser(), connect.getSshHost(), sshPort);
@@ -101,9 +86,9 @@ public class ConnectionServiceImpl implements ConnectionService {
     @Override
     public void invalidateSshSession(Connect connect) {
         String cacheKey = buildSshCacheKey(connect);
-        Session session = sshSessionCache.remove(cacheKey);
-        if (session != null && session.isConnected()) {
-            session.disconnect();
+        ClientSession session = sshSessionCache.remove(cacheKey);
+        if (session != null && session.isOpen()) {
+            session.close(false);
         }
     }
 
@@ -135,9 +120,10 @@ public class ConnectionServiceImpl implements ConnectionService {
                         ? Integer.parseInt(connect.getSshPort().trim()) : 22;
                 int remotePort = originalPort != null && !originalPort.isBlank()
                         ? Integer.parseInt(originalPort.trim()) : 0;
-                Session sharedSession = getOrCreateSshSession(connect);
-                int localPort = sharedSession.setPortForwardingL(0, originalIp, remotePort);
-                tunnel = new SshTunnel(sharedSession, localPort, true);
+                ClientSession sharedSession = getOrCreateSshSession(connect);
+                ExplicitPortForwardingTracker tracker = sharedSession.createLocalPortForwardingTracker(
+                        new SshdSocketAddress("127.0.0.1", 0), new SshdSocketAddress(originalIp, remotePort));
+                tunnel = new SshTunnel(sharedSession, tracker, true);
                 // Point JDBC to local tunnel endpoint
                 connect.setIp("127.0.0.1");
                 connect.setPort(String.valueOf(tunnel.getLocalPort()));
@@ -233,9 +219,10 @@ public class ConnectionServiceImpl implements ConnectionService {
                         ? Integer.parseInt(connect.getSshPort().trim()) : 22;
                 int remotePort = originalPort != null && !originalPort.isBlank()
                         ? Integer.parseInt(originalPort.trim()) : 0;
-                Session sharedSession = getOrCreateSshSession(connect);
-                int localPort = sharedSession.setPortForwardingL(0, originalIp, remotePort);
-                tunnel = new SshTunnel(sharedSession, localPort, true);
+                ClientSession sharedSession = getOrCreateSshSession(connect);
+                ExplicitPortForwardingTracker tracker = sharedSession.createLocalPortForwardingTracker(
+                        new SshdSocketAddress("127.0.0.1", 0), new SshdSocketAddress(originalIp, remotePort));
+                tunnel = new SshTunnel(sharedSession, tracker, true);
                 connect.setIp("127.0.0.1");
                 connect.setPort(String.valueOf(tunnel.getLocalPort()));
             }

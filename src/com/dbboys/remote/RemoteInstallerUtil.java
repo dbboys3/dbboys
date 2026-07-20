@@ -31,7 +31,7 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import com.jcraft.jsch.*;
+import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -272,7 +272,7 @@ public class RemoteInstallerUtil {
                                 try {
                                     remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
-                                } catch (JSchException e) {
+                                } catch (Exception e) {
                                     throw new Exception(I18n.t("remote.install.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
                                 }
                             }
@@ -421,9 +421,9 @@ public class RemoteInstallerUtil {
                             Task<Void> runningTask = new Task<>() {
                                 @Override
                                 protected Void call() throws Exception {
-                                    ChannelSftp channelSftp = null;
+                                    SftpClient sftpClient = null;
                                     try {
-                                        channelSftp = remoteClient.openSftpChannel();
+                                        sftpClient = remoteClient.openSftpClient();
 
                                         Platform.runLater(() -> {
                                             runningLabel.setText(" " + I18n.t("remote.install.status.uploading_package", "正在上传安装包..."));
@@ -433,14 +433,14 @@ public class RemoteInstallerUtil {
                                         try (FileInputStream fis = new FileInputStream(selectedFile)) {
                                             ProgressMonitorInputStream monitor = new ProgressMonitorInputStream(
                                                     fis, selectedFile.length(), progress);
-                                            channelSftp.put(monitor, remoteFilePath+".upload");
+                                            sftpClient.put(monitor, remoteFilePath+".upload");
                                         }
 
                                     } catch (Exception e) {
                                         throw new Exception(I18n.t("remote.install.error.upload_failed", "上传安装包失败: %s").formatted(e.getMessage()));
                                     } finally {
-                                        if (channelSftp != null && channelSftp.isConnected()) {
-                                            channelSftp.disconnect();
+                                        if (sftpClient != null && sftpClient.isOpen()) {
+                                            sftpClient.close();
                                         }
                                     }
                                     return null;
@@ -982,7 +982,7 @@ public class RemoteInstallerUtil {
     }
 
     // 以下为原有工具方法（保持不变）
-    private static String executeCommand(String command) throws JSchException, IOException {
+    private static String executeCommand(String command) throws IOException {
         return remoteClient.executeCommand(command);
     }
 
@@ -1037,11 +1037,11 @@ public class RemoteInstallerUtil {
         });
     }
 
-    private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
+    private static int executeCommandWithExitStatus(String command) throws IOException {
         return remoteClient.executeCommandWithExitStatus(command);
     }
 
-    private static boolean isCommandExists(String command) throws JSchException, InterruptedException {
+    private static boolean isCommandExists(String command) throws IOException {
         int exitStatus = executeCommandWithExitStatus("command -v " + command);
         return exitStatus == 0;
     }
@@ -1105,7 +1105,7 @@ public class RemoteInstallerUtil {
         }
     }
 
-    private static boolean remoteFileExists(String filePath) throws JSchException, InterruptedException {
+    private static boolean remoteFileExists(String filePath) throws IOException {
         // Handle space-separated paths (e.g. Oracle 11g two-zip packages).
         // Every file in the list must exist.
         if (filePath == null || filePath.isBlank()) return false;

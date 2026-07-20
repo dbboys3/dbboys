@@ -1,27 +1,30 @@
 package com.dbboys.infra.util;
 
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.client.session.forward.ExplicitPortForwardingTracker;
 
 /**
- * Holds a JSch SSH session and the auto-assigned local port used for
- * port forwarding.
+ * Holds an SSH client session and the local port-forwarding tracker
+ * with its auto-assigned local port.
  */
 public class SshTunnel implements AutoCloseable {
-    private final Session session;
+    private final ClientSession session;
+    private final ExplicitPortForwardingTracker tracker;
     private final int localPort;
     private final boolean shared;
 
-    public SshTunnel(Session session, int localPort) {
-        this(session, localPort, false);
+    public SshTunnel(ClientSession session, ExplicitPortForwardingTracker tracker) {
+        this(session, tracker, false);
     }
 
-    public SshTunnel(Session session, int localPort, boolean shared) {
+    public SshTunnel(ClientSession session, ExplicitPortForwardingTracker tracker, boolean shared) {
         this.session = session;
-        this.localPort = localPort;
+        this.tracker = tracker;
+        this.localPort = tracker.getBoundAddress().getPort();
         this.shared = shared;
     }
 
-    public Session getSession() {
+    public ClientSession getSession() {
         return session;
     }
 
@@ -31,15 +34,14 @@ public class SshTunnel implements AutoCloseable {
 
     @Override
     public void close() {
-        if (session != null && session.isConnected()) {
-            if (shared) {
-                try {
-                    session.delPortForwardingL(localPort);
-                } catch (Exception ignored) {
-                }
-            } else {
-                session.disconnect();
+        if (tracker != null && tracker.isOpen()) {
+            try {
+                tracker.close();
+            } catch (Exception ignored) {
             }
+        }
+        if (!shared && session != null && session.isOpen()) {
+            session.close(false);
         }
     }
 }

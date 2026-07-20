@@ -1,14 +1,12 @@
 package com.dbboys.remote;
 
-import com.jcraft.jsch.JSchException;
-
 import java.io.IOException;
 
 public final class RemoteSystemInfoCollector {
     private RemoteSystemInfoCollector() {
     }
 
-    public static RemoteSystemInfoSnapshot collect(RemoteSessionClient client) throws JSchException, IOException, InterruptedException {
+    public static RemoteSystemInfoSnapshot collect(RemoteSessionClient client) throws IOException, InterruptedException {
         String machineInfo = client.executeCommand("dmidecode -s system-product-name");
         String osInfo;
         if (isCommandExists(client, "nkvers")) {
@@ -34,7 +32,7 @@ public final class RemoteSystemInfoCollector {
         );
     }
 
-    private static boolean isCommandExists(RemoteSessionClient client, String command) throws JSchException, InterruptedException {
+    private static boolean isCommandExists(RemoteSessionClient client, String command) throws IOException {
         return client.executeCommandWithExitStatus("command -v " + command) == 0;
     }
 }

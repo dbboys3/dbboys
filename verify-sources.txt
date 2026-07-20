@@ -82,7 +82,6 @@ src/com/dbboys/infra/util/DownloadManagerUtil.java
 src/com/dbboys/infra/util/InstanceHealthCheckUtil.java
 src/com/dbboys/infra/util/InstanceMutationUtil.java
 src/com/dbboys/infra/util/InstanceRuntimeUtil.java
-src/com/dbboys/infra/util/JschUtil.java
 src/com/dbboys/infra/util/KeywordsHighlightUtil.java
 src/com/dbboys/infra/util/MD5Util.java
 src/com/dbboys/infra/util/MenuItemUtil.java
@@ -93,6 +92,7 @@ src/com/dbboys/infra/util/SqlParserUtil.java
 src/com/dbboys/infra/util/SshConnectionWrapper.java
 src/com/dbboys/infra/util/SshTunnel.java
 src/com/dbboys/infra/util/SshTunnelUtil.java
+src/com/dbboys/infra/util/SshUtil.java
 src/com/dbboys/infra/util/TabpaneUtil.java
 src/com/dbboys/model/BackgroundSqlTask.java
 src/com/dbboys/model/BigIntegerProperty.java

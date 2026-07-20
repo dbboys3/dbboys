@@ -3,7 +3,7 @@ package com.dbboys.dialect.gbase;
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.model.SpaceUsage;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.JschUtil;
+import com.dbboys.infra.util.SshUtil;
 import com.dbboys.remote.RemoteSessionClient;
 import com.dbboys.model.Connect;
 
@@ -306,7 +306,7 @@ public final class GbaseInstanceAdminRepository implements InstanceAdminReposito
     }
 
     private String remoteCommandPrefix(Connect connect) {
-        String env = connect == null || connect.getInfo() == null ? "" : JschUtil.extractEnvValue(connect.getInfo());
+        String env = connect == null || connect.getInfo() == null ? "" : SshUtil.extractEnvValue(connect.getInfo());
         return env == null || env.isBlank() ? "source ~/.bash_profile && " : env;
     }
 }

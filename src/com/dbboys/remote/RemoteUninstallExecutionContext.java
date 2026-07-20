@@ -1,7 +1,5 @@
 package com.dbboys.remote;
 
-import com.jcraft.jsch.JSchException;
-
 import java.io.IOException;
 
 public final class RemoteUninstallExecutionContext {
@@ -13,11 +11,11 @@ public final class RemoteUninstallExecutionContext {
         this.host = host;
     }
 
-    public String executeCommand(String command) throws JSchException, IOException {
+    public String executeCommand(String command) throws IOException {
         return remoteClient.executeCommand(command);
     }
 
-    public int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
+    public int executeCommandWithExitStatus(String command) throws IOException {
         return remoteClient.executeCommandWithExitStatus(command);
     }
 

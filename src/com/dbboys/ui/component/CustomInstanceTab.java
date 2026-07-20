@@ -18,7 +18,7 @@ import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.model.SpaceUsage;
 import com.dbboys.model.Connect;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
@@ -595,12 +595,12 @@ public class CustomInstanceTab extends CustomTab {
                             @Override
                             protected Void call() throws Exception {
                                 try {
-                                    Session session=JschUtil.getConnect(connect);
+                                    ClientSession session=SshUtil.getConnect(connect);
                                     Double currentSize=0.0;
                                     while(currentSize<Double.parseDouble(sizeTextField.getText())){
                                         if(isCancelled())break;
                                         Thread.sleep(100);
-                                        String result = JschUtil.executeCommand(session,"/usr/bin/du -s "+filePathTextField.getText()+" |awk '{print $1}'");
+                                        String result = SshUtil.executeCommand(session,"/usr/bin/du -s "+filePathTextField.getText()+" |awk '{print $1}'");
                                         try{
                                             currentSize=Double.parseDouble(result);
                                         }catch(Exception e){
@@ -613,7 +613,7 @@ public class CustomInstanceTab extends CustomTab {
 
                                     }
 
-                                    JschUtil.disConnect(session);
+                                    SshUtil.disConnect(session);
 
                                 } catch (Exception e) {
                                     throw new RuntimeException(e);

@@ -79,7 +79,7 @@ DBboys 基于 **JavaFX 25** 构建，采用分层设计与方言插件架构：
 - **核心层** — `DatabasePlatform` 接口定义连接、元数据、DDL、SQL 执行、实例管理能力
 - **服务层** — 表、索引、过程、序列等对象业务逻辑
 - **UI 层** — JavaFX 控制器、FXML、Cupertino 风格 CSS 主题（亮/暗色）
-- **工具层** — JSqlParser（SQL 解析）、JSch（SSH）、Lucene/IK（知识库搜索）、Apache POI（导出）
+- **工具层** — JSqlParser（SQL 解析）、Apache MINA SSHD（SSH）、Lucene/IK（知识库搜索）、Apache POI（导出）
 
 
 ---

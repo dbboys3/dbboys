@@ -4,7 +4,7 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.app.AppContext;
 import com.dbboys.model.Connect;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
@@ -32,9 +32,9 @@ public final class InstanceMutationUtil {
                     + " " + newValue.replace("$", "\\$") + "#g\" " + installDirEnv + "/etc/$ONCONFIG";
         }
 
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd, true);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd, true);
             if (result.contains("has been changed to")) {
                 return new InstanceTabCapability.ConfigUpdateResult(
                         InstanceTabCapability.ConfigUpdateStatus.APPLIED,
@@ -52,31 +52,31 @@ public final class InstanceMutationUtil {
                     "参数已修改，请重启数据库生效！"
             );
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void startInformixStyleInstance(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, JschUtil.extractEnvValue(connect.getInfo()) + "oninit");
+            int result = SshUtil.executeCommandWithExitStatus(session, SshUtil.extractEnvValue(connect.getInfo()) + "oninit");
             if (result != 0) {
                 throw new Exception("启动数据库失败，请检查日志错误！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void stopInformixStyleInstance(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, JschUtil.extractEnvValue(connect.getInfo()) + "onmode -ky&&onclean -ky");
+            int result = SshUtil.executeCommandWithExitStatus(session, SshUtil.extractEnvValue(connect.getInfo()) + "onmode -ky&&onclean -ky");
             if (result != 0) {
                 throw new Exception("关闭数据库失败，请检查日志错误！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -99,26 +99,26 @@ public final class InstanceMutationUtil {
                 + "&&chown " + request.adminOsUser() + ":" + request.adminOsUser() + " " + request.filePath()
                 + "&&chmod 660 " + request.filePath()
                 + "&&" + cmd;
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!(result.contains("Space successfully added") || result.contains("Chunk successfully added"))) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void abortCreateOrAddInformixStyleSpace(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, "ps -ef |grep onspaces|grep -v grep |awk '{print \"kill -9 \"$2}' |sh ");
+            int result = SshUtil.executeCommandWithExitStatus(session, "ps -ef |grep onspaces|grep -v grep |awk '{print \"kill -9 \"$2}' |sh ");
             if (result != 0) {
                 throw new Exception("停止创建空间失败！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -131,14 +131,14 @@ public final class InstanceMutationUtil {
                 cmd.append("&& rm -rf ").append(path);
             }
         }
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!result.contains("Space successfully dropped")) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -146,14 +146,14 @@ public final class InstanceMutationUtil {
                                                  String spaceName,
                                                  String datafilePath) throws Exception {
         String cmd = "onspaces -d " + spaceName + " -p " + datafilePath + " -o 0 -y&& rm -rf " + datafilePath;
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!result.contains("Chunk successfully dropped")) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
