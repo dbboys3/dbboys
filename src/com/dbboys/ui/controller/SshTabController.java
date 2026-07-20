@@ -980,18 +980,18 @@ public class SshTabController {
                                         altSavedBuffer = null;
                                         pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
                                         wrapPendingEraseSuppress = false;
-                                        if (cols != altSavedCols || rows != altSavedRows) {
-                                            // Grid changed while in alt screen: re-lay the
-                                            // restored content at the current width, anchor the
-                                            // cursor to the end of the output and pin the viewport
-                                            // to the bottom, so the shell prompt lands at the
-                                            // bottom of the screen
-                                            if (cols != altSavedCols) reflowBuffer(cols);
-                                            curRow = Math.max(0, buffer.size() - 1);
-                                            curCol = 0;
-                                            scrollLock = false;
-                                            scrollOff = Math.max(0, buffer.size() - rows);
-                                        }
+                                        // Re-lay the restored content if the width changed in alt
+                                        if (cols != altSavedCols) reflowBuffer(cols);
+                                        // Always anchor the cursor to the end of the output and pin
+                                        // the viewport to the bottom. The position saved before the
+                                        // switch may have been moved by the app's stale-geometry
+                                        // cleanup sequences (nmon emits a pre-resize CUP between
+                                        // ?1049l and ?1049h on SIGWINCH), which would otherwise
+                                        // strand the shell prompt mid-buffer with stale rows below.
+                                        curRow = Math.max(0, buffer.size() - 1);
+                                        curCol = 0;
+                                        scrollLock = false;
+                                        scrollOff = Math.max(0, buffer.size() - rows);
                                         // Re-anchor the DECSC/DECRC slots to the restored cursor:
                                         // a position saved before the screen switch is meaningless
                                         // after the buffer has been replaced (and possibly reflowed),
