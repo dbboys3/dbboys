@@ -145,6 +145,7 @@ public class SshTabController {
     private boolean sgrReverse, sgrBold, sgrUnderline;
     private boolean cursorShown = true; // DECTCEM
     private boolean cursorKeysApp; // DECCKM: true=ESC OA, false=ESC [A
+    private boolean decawm = true; // DECAWM (?7h/?7l): auto-wrap at the last column
     private int scrollTop, scrollBottom = -1; // DECSTBM scroll region
     private boolean originMode; // DECOM
     private boolean pendingWrap; // auto-wrap happened, skip next
@@ -662,10 +663,16 @@ public class SshTabController {
         }
         curCol += w;
         if (curCol >= cols) {
-            // Last column filled: only mark the wrap as pending. curRow does not
-            // advance (and nothing scrolls) until the next printable character.
-            curCol = 0;
-            pendingWrap = true; wrapPendingEraseSuppress = true;
+            if (decawm) {
+                // Last column filled: only mark the wrap as pending. curRow does not
+                // advance (and nothing scrolls) until the next printable character.
+                curCol = 0;
+                pendingWrap = true; wrapPendingEraseSuppress = true;
+            } else {
+                // DECAWM off (?7l): stay on the last column; the next character
+                // overwrites it (nmon uses this to draw the bottom-right corner)
+                curCol = cols - 1;
+            }
         }
     }
     private List<Cell> ensureBuf(int r) {
@@ -829,6 +836,7 @@ public class SshTabController {
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
         pendingWrap = false;
+        decawm = true; // RIS restores auto-wrap
         draw();
     }
 
@@ -932,6 +940,7 @@ public class SshTabController {
                         case 'h': case 'l':
                             if (ps.equals("25")) { cursorShown = (c == 'h'); break; }
                             if (ps.equals("1")) { cursorKeysApp = (c == 'h'); break; }
+                            if (ps.equals("7")) { decawm = (c == 'h'); break; } // DECAWM auto-wrap
                             // DECSET ?1049h/?1049l -- alternate screen buffer
                             if (ps.equals("1049")) {
                                 if (c == 'h') {
@@ -1101,6 +1110,13 @@ public class SshTabController {
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         pendingWrap = false;
                         for (int i = 0; i < n; i++) curCol = Math.max(0, ((curCol - 1) / 8) * 8);
+                    } break;
+                    case 'b': { // REP: repeat the preceding graphic character n times
+                        int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
+                        int prevCol = pendingWrap ? cols - 1 : curCol - 1;
+                        char pc = (prevCol >= 0 && curRow < buffer.size() && prevCol < buffer.get(curRow).size())
+                                ? buffer.get(curRow).get(prevCol).ch : ' ';
+                        for (int i = 0; i < n; i++) put(pc);
                     } break;
                     case 'S': { // scroll up (SU): region content moves up, blank lines appear at the bottom
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
