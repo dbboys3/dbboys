@@ -1,5 +1,6 @@
 package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
+import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.JschUtil;
 import com.dbboys.model.SshConnect;
@@ -41,14 +42,37 @@ public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
     /** Set -Ddbboys.term.rawlog=true to dump raw terminal bytes (escapes shown) to the app log. */
     private static final boolean RAW_LOG = Boolean.getBoolean("dbboys.term.rawlog");
-    private static final Font FONT = Font.font("Consolas", 13);
-    static final double CHAR_W;
-    static final double LINE_H;
-    static {
+    // Terminal font: zoomable with Ctrl + '+' / Ctrl + '-' and Ctrl + mouse wheel,
+    // persisted in etc/config.properties (SSH_TERMINAL_FONT_SIZE)
+    private static final String SSH_FONT_SIZE_KEY = "SSH_TERMINAL_FONT_SIZE";
+    private static final int DEFAULT_FONT_SIZE = 13;
+    private static final int MIN_FONT_SIZE = 9;   // same bounds as the SQL editor
+    private static final int MAX_FONT_SIZE = 40;
+    private static final int FONT_SIZE_STEP = 1;
+    private int fontSize = loadConfiguredFontSize();
+    private Font FONT = Font.font("Consolas", fontSize);
+    private double CHAR_W = measureCharW(FONT);
+    private double LINE_H = fontSize * 1.4;
+
+    private static int loadConfiguredFontSize() {
+        try {
+            return clampFontSize(Integer.parseInt(ConfigManagerUtil.getProperty(
+                    SSH_FONT_SIZE_KEY, String.valueOf(DEFAULT_FONT_SIZE))));
+        } catch (NumberFormatException e) {
+            return DEFAULT_FONT_SIZE;
+        }
+    }
+    private static int clampFontSize(int size) { return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)); }
+    private static double measureCharW(Font f) {
         Text m = new Text("W");
-        m.setFont(FONT);
-        CHAR_W = m.getLayoutBounds().getWidth();
-        LINE_H = 13 * 1.4;
+        m.setFont(f);
+        return m.getLayoutBounds().getWidth();
+    }
+    private static boolean isZoomInKey(KeyEvent e) {
+        return e.getCode() == KeyCode.ADD || e.getCode() == KeyCode.PLUS || e.getCode() == KeyCode.EQUALS;
+    }
+    private static boolean isZoomOutKey(KeyEvent e) {
+        return e.getCode() == KeyCode.SUBTRACT || e.getCode() == KeyCode.MINUS;
     }
     /** Request keyboard focus on the terminal canvas. */
     public void requestFocus() {
@@ -364,6 +388,40 @@ public class SshTabController {
         if (shellChannel != null && shellChannel.isConnected()) {
             shellChannel.setPtySize(cols, rows, (int) canvas.getWidth(), (int) canvas.getHeight());
         }
+    }
+    /** Zoom the terminal font by delta steps: recompute metrics, re-tile the grid,
+     *  reflow content to the new column count, and persist the size to config. */
+    private void adjustFontSize(int delta) {
+        int newSize = clampFontSize(fontSize + delta);
+        if (newSize == fontSize || canvas == null) return;
+        fontSize = newSize;
+        FONT = Font.font("Consolas", fontSize);
+        CHAR_W = measureCharW(FONT);
+        LINE_H = fontSize * 1.4;
+        int newCols = Math.max(1, (int) (terminalPane.getWidth() / CHAR_W));
+        int newRows = Math.max(1, (int) (terminalPane.getHeight() / LINE_H));
+        if (newCols != cols) reflowBuffer(newCols);
+        cols = newCols;
+        rows = newRows;
+        canvas.setWidth(cols * CHAR_W);
+        canvas.setHeight(rows * LINE_H);
+        if (inAltScreen) {
+            // Alt screen is a fixed page: keep the scroll region in sync with the visible size
+            scrollTop = 0;
+            scrollBottom = rows - 1;
+        }
+        // Keep scrollOff valid after the grid change
+        if (scrollOff > Math.max(0, buffer.size() - rows)) {
+            scrollOff = Math.max(0, buffer.size() - rows);
+        }
+        if (!inAltScreen && !scrollLock) {
+            // Following output: keep the viewport pinned to the bottom
+            scrollOff = Math.max(0, buffer.size() - rows);
+        }
+        draw();
+        fireScrollChanged();
+        updatePtySize();
+        ConfigManagerUtil.setProperty(SSH_FONT_SIZE_KEY, String.valueOf(fontSize));
     }
     public void closeSession() { doDisconnect(); }
     // ==================== Terminal engine ====================
@@ -1344,6 +1402,11 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnKeyPressed(e -> {
+            // Font zoom: Ctrl + '+' / Ctrl + '-' (works whether connected or not)
+            if (e.isControlDown() && !e.isAltDown()) {
+                if (isZoomInKey(e)) { adjustFontSize(FONT_SIZE_STEP); e.consume(); return; }
+                if (isZoomOutKey(e)) { adjustFontSize(-FONT_SIZE_STEP); e.consume(); return; }
+            }
             // Disconnected 閳?Enter triggers reconnect
             if (shellChannel == null || !shellChannel.isConnected()) {
                 if (e.getCode() == KeyCode.ENTER) {
@@ -1366,6 +1429,7 @@ public class SshTabController {
         });
         canvas.setOnKeyTyped(e -> {
             if (shellChannel == null || !shellChannel.isConnected()) return;
+            if (e.isControlDown() || e.isAltDown()) return; // zoom/modified keys are not text input
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
@@ -1394,6 +1458,12 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnScroll(e -> {
+            if (e.isControlDown()) { // Ctrl + wheel: zoom font
+                double dy = e.getDeltaY();
+                if (dy != 0) adjustFontSize(dy > 0 ? FONT_SIZE_STEP : -FONT_SIZE_STEP);
+                e.consume();
+                return;
+            }
             if (inAltScreen) { e.consume(); return; } // alt screen has no scrollback to scroll
             int dir = -(int)Math.signum(e.getDeltaY());
             if (dir != 0) {
