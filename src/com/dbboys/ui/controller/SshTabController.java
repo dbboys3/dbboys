@@ -40,8 +40,10 @@ import java.util.List;
  */
 public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
-    /** Set -Ddbboys.term.rawlog=true to dump raw terminal bytes (escapes shown) to the app log. */
-    private static final boolean RAW_LOG = Boolean.getBoolean("dbboys.term.rawlog");
+    /** Dump raw terminal bytes (escapes shown) to the app log. Enable via
+     *  -Ddbboys.term.rawlog=true or TERM_RAWLOG=true in etc/config.properties. */
+    private static final boolean RAW_LOG = Boolean.getBoolean("dbboys.term.rawlog")
+            || Boolean.parseBoolean(ConfigManagerUtil.getProperty("TERM_RAWLOG", "false"));
     // Terminal font: zoomable with Ctrl + '+' / Ctrl + '-' and Ctrl + mouse wheel,
     // persisted in etc/config.properties (SSH_TERMINAL_FONT_SIZE)
     private static final String SSH_FONT_SIZE_KEY = "SSH_TERMINAL_FONT_SIZE";
@@ -949,6 +951,9 @@ public class SshTabController {
                                     curCol = curRow = scrollOff = 0;
                                     pendingWrap = false; // main-buffer wrap state must not leak into the alt screen
                                     wrapPendingEraseSuppress = false;
+                                    // DECRC/SCORC inside the alt screen without a prior DECSC
+                                    // goes to home, not to stale main-screen coordinates
+                                    savedCurCol = 0; savedCurRow = 0;
                                     scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
                                     scrollTop = 0; scrollBottom = rows - 1;
@@ -958,7 +963,10 @@ public class SshTabController {
                                     if (altSavedBuffer != null) {
                                         buffer.clear();
                                         buffer.addAll(altSavedBuffer);
-                                        curCol = altSavedCurCol; curRow = altSavedCurRow;
+                                        // Clamp the restored cursor: it may have been saved while
+                                        // pointing beyond the buffer end (stale-geometry CUP)
+                                        curCol = clamp(altSavedCurCol, 0, Math.max(0, cols - 1));
+                                        curRow = clamp(altSavedCurRow, 0, Math.max(0, buffer.size() - 1));
                                         scrollOff = altSavedScrollOff;
                                         altSavedBuffer = null;
                                         pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
@@ -975,6 +983,12 @@ public class SshTabController {
                                             scrollLock = false;
                                             scrollOff = Math.max(0, buffer.size() - rows);
                                         }
+                                        // Re-anchor the DECSC/DECRC slots to the restored cursor:
+                                        // a position saved before the screen switch is meaningless
+                                        // after the buffer has been replaced (and possibly reflowed),
+                                        // and would otherwise yank the cursor back to a stale row
+                                        savedCurCol = curCol;
+                                        savedCurRow = curRow;
                                     }
                                     scrollTop = 0; scrollBottom = -1;
                                 }
@@ -1026,7 +1040,7 @@ public class SshTabController {
                     case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
                     case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
                     case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, n - 1); } break;
-                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = Math.max(0, (inAltScreen ? 0 : pageTop()) + n - 1); break; }
+                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = clamp((inAltScreen ? 0 : pageTop()) + n - 1, 0, (inAltScreen ? 0 : pageTop()) + rows - 1); break; }
                     case 'H': case 'f': {
                         String[] xy = ps.split(";");
                         int row = xy.length > 0 && !xy[0].isEmpty() ? Integer.parseInt(xy[0]) - 1 : 0;
@@ -1034,8 +1048,11 @@ public class SshTabController {
                         boolean home = (row == 0 && col == 0);
                         if (originMode && row >= 0) row += scrollTop;
                         else if (!inAltScreen) row += pageTop(); // CUP addresses the visible page, not the scrollback (xterm semantics)
-                        curRow = Math.max(0, row);
-                        curCol = Math.max(0, col);
+                        // Clamp into the visible screen: after SIGWINCH an app may still
+                        // address rows of the previous geometry (e.g. nmon's exit CUP),
+                        // which would otherwise land the cursor beyond the buffer
+                        curRow = clamp(row, 0, (inAltScreen ? 0 : pageTop()) + rows - 1);
+                        curCol = clamp(col, 0, cols - 1);
                         pendingWrap = false;
                         // On home in normal screen, snap the viewport back to the page bottom
                         if (home && !inAltScreen) { scrollOff = Math.max(0, buffer.size() - rows); scrollLock = false; }
@@ -1098,8 +1115,9 @@ public class SshTabController {
                     case 'r': { // DECSTBM 闂?set scroll region (page-relative, like xterm)
                         String[] sr_ = ps.split(";");
                         int base = inAltScreen ? 0 : pageTop();
-                        scrollTop = base + (sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0);
-                        scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? base + Integer.parseInt(sr_[1]) - 1 : -1;
+                        int regionMax = base + rows - 1; // clamp the region to the current screen
+                        scrollTop = Math.min(base + (sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0), regionMax);
+                        scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? Math.min(base + Integer.parseInt(sr_[1]) - 1, regionMax) : -1;
                         curRow = scrollTop; curCol = 0;
                         pendingWrap = false;
                     } break;
@@ -1141,11 +1159,13 @@ public class SshTabController {
     }
     private void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
-        List<Cell> ln = ensureBuf(curRow);
+        if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        List<Cell> ln = buffer.get(curRow);
         for (int i = curCol; i < ln.size(); i++) ln.get(i).reset();
     }
     private void eraseBOL() {
-        List<Cell> ln = ensureBuf(curRow);
+        if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        List<Cell> ln = buffer.get(curRow);
         int end = Math.min(curCol, ln.size() - 1);
         for (int i = 0; i <= end && !ln.isEmpty(); i++) ln.remove(0);
     }
