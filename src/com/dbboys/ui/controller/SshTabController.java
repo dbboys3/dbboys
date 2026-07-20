@@ -217,7 +217,7 @@ public class SshTabController {
         });
         onScrollChanged = () -> {
             Platform.runLater(() -> {
-                int max = Math.max(0, buffer.size() - rows);
+                int max = inAltScreen ? 0 : Math.max(0, buffer.size() - rows);
                 scrollBar.setVisible(max > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
@@ -246,6 +246,11 @@ public class SshTabController {
                 if (newRows != rows) {
                     rows = newRows;
                     canvas.setHeight(rows * LINE_H);
+                    if (inAltScreen) {
+                        // Alt screen is a fixed page: keep the scroll region in sync with the visible size
+                        scrollTop = 0;
+                        scrollBottom = rows - 1;
+                    }
                     // Keep scrollOff valid after resize
                     if (scrollOff > Math.max(0, buffer.size() - rows)) {
                         scrollOff = Math.max(0, buffer.size() - rows);
@@ -412,10 +417,8 @@ public class SshTabController {
     }
     private void status(String s) {
         for (char c : s.toCharArray()) {
-            if (c == '\n') {
-                if (pendingWrap) pendingWrap = false; else nl();
-            }
-            else if (c == '\r') curCol = 0;
+            if (c == '\n') { pendingWrap = false; nl(); }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; }
             else put(c);
         }
         if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
@@ -462,16 +465,15 @@ public class SshTabController {
                 if (ni < 0) { pendingEsc = raw.substring(i); return; }
                 i = ni;
             }
-            else if (c == '\b') { if (curCol > 0) curCol--; }
-            else if (c == '\r') curCol = 0;
+            else if (c == '\b') { if (pendingWrap) { pendingWrap = false; curCol = cols - 1; } else if (curCol > 0) curCol--; }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; }
             else if (c == '\n') {
-                if (pendingWrap) {
-                    pendingWrap = false; // log.info("WRAP consumed r{} c{}", curRow, curCol); // auto-wrap
-                } else {
-                    nl();
-                }
+                // Deferred wrap: LF always moves down exactly one line, whether or
+                // not the previous line filled the last column (xterm semantics)
+                pendingWrap = false;
+                nl();
             }
-            else if (c == 0x09) { curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; curRow++; pendingWrap = true; } }
+            else if (c == 0x09) { pendingWrap = false; curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; pendingWrap = true; } }
             else if (c == 0x0E) { useG1 = true; } // SO - shift out, use G1 charset
             else if (c == 0x0F) { useG1 = false; } // SI - shift in, use G0 charset
             else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace
@@ -507,7 +509,43 @@ public class SshTabController {
     }
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
     private void put(char c) {
-        pendingWrap = false; wrapPendingEraseSuppress = false;
+        if (pendingWrap) {
+            // Deferred wrap (xterm semantics): the previous character filled the
+            // last column, but the line wrap only happens now that the next
+            // printable character arrives. This is what keeps full-screen apps
+            // (top, nmon) from scrolling the first line away / growing phantom
+            // rows when a frame ends on a full-width line.
+            pendingWrap = false; wrapPendingEraseSuppress = false;
+            curCol = 0;
+            curRow++;
+            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+            if (curRow > effectiveBottom) {
+                if (inAltScreen) {
+                    // Alt screen has no scrollback: scroll within region, discarding the top line
+                    buffer.remove(scrollTop);
+                    ensureBuf(effectiveBottom);
+                    buffer.get(effectiveBottom).clear();
+                    curRow = effectiveBottom;
+                } else if (!scrollLock) {
+                    if (scrollBottom >= 0) {
+                        // DECSTBM scroll region: scroll within region, discarding top line
+                        int top = scrollTop;
+                        int bottom = Math.max(scrollTop, effectiveBottom);
+                        deleteLine(top, bottom);
+                        ensureBuf(bottom);
+                        // blank the bottom line
+                        List<Cell> bottomLn = buffer.get(bottom);
+                        for (Cell cl : bottomLn) cl.reset();
+                        curRow = bottom;
+                    } else {
+                        // Normal mode: advance viewport, preserve history in buffer
+                        scrollOff = curRow - rows + 1;
+                    }
+                }
+            }
+        } else {
+            wrapPendingEraseSuppress = false;
+        }
         List<Cell> ln = ensureBuf(curRow);
         // Extend row to accommodate curCol
         if ((g0Charset == '0' && !useG1) || (g1Charset == '0' && useG1)) { c = mapDecSpecial(c); }
@@ -526,28 +564,10 @@ public class SshTabController {
         }
         curCol += w;
         if (curCol >= cols) {
+            // Last column filled: only mark the wrap as pending. curRow does not
+            // advance (and nothing scrolls) until the next printable character.
             curCol = 0;
-            curRow++;
             pendingWrap = true; wrapPendingEraseSuppress = true;
-            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-            if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
-                if (scrollBottom >= 0) {
-                    // DECSTBM scroll region: scroll within region, discarding top line
-                    int top = scrollTop;
-                    int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-                    bottom = Math.max(scrollTop, bottom);
-                    deleteLine(top, bottom);
-                    ensureBuf(bottom);
-                    // blank the bottom line
-                    List<Cell> bottomLn = buffer.get(bottom);
-                    for (Cell cl : bottomLn) cl.reset();
-                    curRow = bottom;
-                } else {
-                    // Normal mode: advance viewport, preserve history in buffer
-                    scrollOff = curRow - rows + 1;
-                }
-            }
-            ensureBuf(curRow);
         }
     }
     private List<Cell> ensureBuf(int r) {
@@ -618,6 +638,7 @@ public class SshTabController {
         scrollTop = 0; scrollBottom = -1; originMode = false;
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
+        pendingWrap = false;
         draw();
     }
 
@@ -666,6 +687,7 @@ public class SshTabController {
         sgrFg = savedSgrFg; sgrBg = savedSgrBg;
         sgrReverse = savedSgrReverse; sgrBold = savedSgrBold;
         sgrUnderline = savedSgrUnderline;
+        pendingWrap = false;
         ensureBuf(curRow);
     }
     private void reverseIndex() {
@@ -731,6 +753,7 @@ public class SshTabController {
                                     inAltScreen = true;
                                     buffer.clear(); buffer.add(new ArrayList<>());
                                     curCol = curRow = scrollOff = 0;
+                                    scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
                                     scrollTop = 0; scrollBottom = rows - 1;
                                 } else {
@@ -780,14 +803,14 @@ public class SshTabController {
                         }
                         break;
                     case 'm': sgr(ps); break;
-                    case 'A': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
-                    case 'B': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
-                    case 'C': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.min(cols - 1, curCol + n); } break;
-                    case 'D': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.max(0, curCol - n); } break;
-                    case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
-                    case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
-                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.max(0, n - 1); } break;
-                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curRow = Math.max(0, n - 1); break; }
+                    case 'A': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
+                    case 'B': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
+                    case 'C': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.min(cols - 1, curCol + n); } break;
+                    case 'D': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, curCol - n); } break;
+                    case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
+                    case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
+                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, n - 1); } break;
+                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = Math.max(0, n - 1); break; }
                     case 'H': case 'f': {
                         String[] xy = ps.split(";");
                         int row = xy.length > 0 && !xy[0].isEmpty() ? Integer.parseInt(xy[0]) - 1 : 0;
@@ -795,8 +818,8 @@ public class SshTabController {
                         if (originMode && row >= 0) row += scrollTop;
                         curRow = Math.max(0, row);
                         curCol = Math.max(0, col);
+                        pendingWrap = false;
                         // Only reset viewport on home in normal screen (not alt screen)
-                        if (row == 0 && col == 0) { pendingWrap = false; }
                         if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = false; }
                     } break;
                     case 'L': { // insert lines at current cursor row within scroll region
@@ -841,6 +864,7 @@ public class SshTabController {
                     } break;
                     case 'Z': { // cursor backward tab (CBT)
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
+                        pendingWrap = false;
                         for (int i = 0; i < n; i++) curCol = Math.max(0, ((curCol - 1) / 8) * 8);
                     } break;
                     case 'S': { // scroll up
@@ -858,6 +882,7 @@ public class SshTabController {
                         scrollTop = sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0;
                         scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? Integer.parseInt(sr_[1]) - 1 : -1;
                         curRow = scrollTop; curCol = 0;
+                        pendingWrap = false;
                     } break;
                     case 'h': case 'l':
                         if (ps.equals("6")) originMode = (c == 'h'); // DECOM
@@ -888,6 +913,7 @@ public class SshTabController {
     private void clearBuffer() {
         buffer.clear(); buffer.add(new ArrayList<>());
         curCol = curRow = 0;
+        pendingWrap = false;
     }
     private void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
@@ -1240,6 +1266,7 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnScroll(e -> {
+            if (inAltScreen) { e.consume(); return; } // alt screen has no scrollback to scroll
             int dir = -(int)Math.signum(e.getDeltaY());
             if (dir != 0) {
                 int maxOff = Math.max(0, buffer.size() - rows);
@@ -1373,8 +1400,8 @@ public class SshTabController {
     /** Write to terminal without trailing newline (for in-place progress). */
     private void progressStatus(String s) {
         for (char c : s.toCharArray()) {
-            if (c == '\n') { if (pendingWrap) pendingWrap = false; else nl(); }
-            else if (c == '\r') curCol = 0;
+            if (c == '\n') { pendingWrap = false; nl(); }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; }
             else put(c);
         }
         requestDraw();
