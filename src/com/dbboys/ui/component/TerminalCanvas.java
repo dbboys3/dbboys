@@ -24,7 +24,8 @@ import java.util.function.Consumer;
  */
 public class TerminalCanvas extends Canvas {
 
-    private static final Font FONT = Font.font("Consolas", 13);
+    public static final boolean CONSOLAS_AVAILABLE = Font.getFamilies().contains("Consolas");
+    private static final Font FONT = Font.font(CONSOLAS_AVAILABLE ? "Consolas" : "monospace", 13);
     public static final double CHAR_W;
     public static final double LINE_H;
     static {
@@ -146,7 +147,7 @@ public class TerminalCanvas extends Canvas {
             } else if (b == '\n') {
                 newLine();
             } else if (b == 0x07) {
-                // BEL â€” ignore
+                // BEL â€?ignore
             } else if (b >= 0x20 && b != 0x7F) {
                 putChar((char) b);
             }
@@ -257,11 +258,11 @@ public class TerminalCanvas extends Canvas {
                         else if (paramStr.equals("2")) { buffer.clear(); buffer.add(new StringBuilder()); cursorCol = 0; cursorRow = 0; }
                         break;
                     case 'm': applySGR(paramStr); break;
-                    case 'H': case 'f': break; // cursor positioning â€” ignore in append-only model
+                    case 'H': case 'f': break; // cursor positioning â€?ignore in append-only model
                     case 'A': case 'B': case 'C': case 'D': break;
-                    case 'h': case 'l': break; // DECSET/DECRST â€” ignore
-                    case 'r': break; // set scroll region â€” ignore
-                    case 'n': break; // DSR â€” ignore
+                    case 'h': case 'l': break; // DECSET/DECRST â€?ignore
+                    case 'r': break; // set scroll region â€?ignore
+                    case 'n': break; // DSR â€?ignore
                     default:  break;
                 }
                 return pos;
@@ -464,7 +465,7 @@ public class TerminalCanvas extends Canvas {
             selEndCol = clamp((int) (e.getX() / CHAR_W), 0, cols - 1);
             selEndRow = clamp(scrollOffset + (int) (e.getY() / LINE_H), 0, buffer.isEmpty() ? 0 : buffer.size() - 1);
             if (selStartRow == selEndRow && selStartCol == selEndCol) {
-                // Plain click â€” clear selection
+                // Plain click â€?clear selection
                 selStartCol = selEndCol = 0;
                 selStartRow = selEndRow = -1;
                 selEndRow = -1;
