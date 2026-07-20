@@ -89,6 +89,11 @@ public class CustomSshTab extends CustomTab {
     @Override
     protected void toggleMaximize() {
         super.toggleMaximize();
+        // Return keyboard focus to the terminal, otherwise the cursor is not
+        // drawn and input goes nowhere after maximize/restore
+        javafx.application.Platform.runLater(() -> {
+            if (controller != null) controller.requestFocus();
+        });
     }
 
     @Override
