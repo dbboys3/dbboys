@@ -98,7 +98,10 @@ public class SshTabController {
     /** Callback invoked when new server output arrives (not disconnect/status messages). */
     public Runnable onActivity;
     private ScrollBar scrollBar;
+    private ScrollBar hScrollBar;
     private boolean updatingScrollBar;
+    private int hScrollOff;   // leftmost visible column when content is wider than the view
+    private int maxLineLen;   // longest buffer line in columns; drives the horizontal scrollbar
     // Terminal state
     private Canvas canvas;
     private int cols = 80, rows = 24;
@@ -210,7 +213,6 @@ public class SshTabController {
         scrollBar.setBlockIncrement(10);
         scrollBar.getStyleClass().add("ssh-scroll-bar");
         scrollBar.setVisible(false);
-        scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
         scrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -224,16 +226,57 @@ public class SshTabController {
                 }
             }
         });
+        // Horizontal scrollbar: appears when the longest buffer line is wider than
+        // the visible area (e.g. after the window is made narrower), so wide output
+        // can still be viewed by dragging. Auto-hides when everything fits again.
+        hScrollBar = new ScrollBar();
+        hScrollBar.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
+        hScrollBar.setMin(0);
+        hScrollBar.setMax(0);
+        hScrollBar.setVisibleAmount(1);
+        hScrollBar.setUnitIncrement(4);
+        hScrollBar.setBlockIncrement(20);
+        hScrollBar.getStyleClass().add("ssh-scroll-bar");
+        hScrollBar.setVisible(false);
+        StackPane.setAlignment(hScrollBar, javafx.geometry.Pos.BOTTOM_LEFT);
+        terminalPane.getChildren().add(hScrollBar);
+        hScrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (!updatingScrollBar) {
+                int v = clamp(newVal.intValue(), 0, Math.max(0, maxLineLen - cols));
+                if (v != hScrollOff) {
+                    hScrollOff = v;
+                    draw();
+                }
+            }
+        });
+        // Each bar spans the pane minus the other bar's thickness, so they never
+        // overlap in the bottom-right corner.
+        scrollBar.prefHeightProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                () -> terminalPane.getHeight() - (hScrollBar.isVisible() ? hScrollBar.getHeight() : 0),
+                terminalPane.heightProperty(), hScrollBar.visibleProperty(), hScrollBar.heightProperty()));
+        hScrollBar.prefWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                () -> terminalPane.getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0),
+                terminalPane.widthProperty(), scrollBar.visibleProperty(), scrollBar.widthProperty()));
         onScrollChanged = () -> {
             Platform.runLater(() -> {
+                maxLineLen = 0;
+                for (List<Cell> rowCells : buffer) maxLineLen = Math.max(maxLineLen, rowCells.size());
                 int max = inAltScreen ? 0 : Math.max(0, buffer.size() - rows);
                 scrollBar.setVisible(max > 0);
+                int hMax = Math.max(0, maxLineLen - cols);
+                int hClamped = clamp(hScrollOff, 0, hMax);
+                if (hClamped != hScrollOff) { hScrollOff = hClamped; draw(); }
+                hScrollBar.setVisible(hMax > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
                                 int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
                                 scrollBar.setMax(max);
                 scrollBar.setVisibleAmount(visAmount);
                 scrollBar.setValue(scrollOff);
+                int hVisAmount = hMax > 0 ? Math.min(hMax, Math.max(cols, hMax / 8)) : 1;
+                hScrollBar.setMax(hMax);
+                hScrollBar.setVisibleAmount(hVisAmount);
+                hScrollBar.setValue(hScrollOff);
                 updatingScrollBar = false;
             });
         };
@@ -244,6 +287,7 @@ public class SshTabController {
                 if (newCols != cols) {
                     cols = newCols;
                     canvas.setWidth(cols * CHAR_W);
+                    hScrollOff = clamp(hScrollOff, 0, Math.max(0, maxLineLen - cols));
                     draw();
                     fireScrollChanged();
                 }
@@ -596,8 +640,10 @@ public class SshTabController {
     private void jumpToBottom() {
         int maxOff = Math.max(0, buffer.size() - rows);
         scrollLock = false; // typing means the user wants to follow output again
-        if (scrollOff != maxOff) {
-            scrollOff = maxOff;
+        boolean changed = scrollOff != maxOff || hScrollOff != 0;
+        scrollOff = maxOff;
+        hScrollOff = 0; // typing also snaps the horizontal view back to the prompt
+        if (changed) {
             draw();
             fireScrollChanged();
         }
@@ -1099,7 +1145,8 @@ public class SshTabController {
                         || (r == mr && r == Mr && col >= sl && col < sr2)
                         || (r == mr && r != Mr && col >= sl)
                         || (r == Mr && r != mr && col < sr2));
-                double x = col * CHAR_W;
+                double x = (col - hScrollOff) * CHAR_W;
+                if (x + cellW < 0 || x > w) continue; // outside the horizontally scrolled view
                 Color fg = cell.extFg >= 0 ? xtermColor(cell.extFg) : c(cell.fg);
 
                 Color bg = cell.extBg >= 0 ? xtermColor(cell.extBg) : c(cell.bg);
@@ -1128,8 +1175,9 @@ public class SshTabController {
         }
         if (cursorShown && cursorVis && focused) {
             int vr = curRow - scrollOff;
-            if (vr >= 0 && vr < rows) {
-                double cx = curCol * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
+            int hc = curCol - hScrollOff;
+            if (vr >= 0 && vr < rows && hc >= 0 && hc < cols) {
+                double cx = hc * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
                 double cursorHeight = LINE_H * 0.8;
                 char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).size())
                         ? buffer.get(curRow).get(curCol).ch : ' ';
@@ -1151,7 +1199,7 @@ public class SshTabController {
             canvas.requestFocus();
             if (e.getButton() == MouseButton.PRIMARY) {
                 selecting = true;
-                selStartCol = selEndCol = (int)(e.getX() / CHAR_W);
+                selStartCol = selEndCol = (int)(e.getX() / CHAR_W) + hScrollOff;
                 selStartRow = selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
             }
         });
@@ -1159,7 +1207,7 @@ public class SshTabController {
             if (!selecting) return;
             double ey = e.getY();
             double ch = canvas.getHeight();
-            int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
+            int col = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
             int maxOff = Math.max(0, buffer.size() - rows);
             int row;
             if (ey < 0) {
@@ -1188,7 +1236,7 @@ public class SshTabController {
             selecting = false;
             stopAutoScroll();
             if (e.getButton() == MouseButton.PRIMARY) {
-                selEndCol = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
+                selEndCol = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
                 selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
                 // Copy selection to clipboard on mouse release (drag-select)
                 String sel = selectedText();
@@ -1204,7 +1252,7 @@ public class SshTabController {
         canvas.setOnMouseClicked(e -> {
             if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
                 int row = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
-                int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
+                int col = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
                 String ln = line(row);
                 int start = col, end = col;
                 int ll = ln.length();
