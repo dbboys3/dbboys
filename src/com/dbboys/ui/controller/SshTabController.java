@@ -163,7 +163,7 @@ public class SshTabController {
     private boolean scrollLock;
     private int sgrExtFg = -1, sgrExtBg = -1; // 256-color extended colors
     private List<List<Cell>> altSavedBuffer;
-    private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
+    private int altSavedCurCol, altSavedCurRow, altSavedScrollOff, altSavedCols, altSavedRows;
     private boolean inAltScreen; // whether alternate screen buffer (?1049h) is active
     // Deferred draw: coalesce rapid write() calls into a single draw,
     // preventing the blink timer from rendering partially-updated screens.
@@ -274,7 +274,13 @@ public class SshTabController {
             if (n.doubleValue() > 0) {
                 int newCols = Math.max(1, (int) (n.doubleValue() / CHAR_W));
                 if (newCols != cols) {
-                    reflowBuffer(newCols);
+                    if (inAltScreen) {
+                        // Alt screen cannot be reflowed: clear it so the full-screen
+                        // app repaints a fresh frame after SIGWINCH (anti-residue)
+                        clearBuffer();
+                    } else {
+                        reflowBuffer(newCols);
+                    }
                     cols = newCols;
                     canvas.setWidth(cols * CHAR_W);
                     draw();
@@ -290,6 +296,9 @@ public class SshTabController {
                     rows = newRows;
                     canvas.setHeight(rows * LINE_H);
                     if (inAltScreen) {
+                        // Alt screen cannot be reflowed: clear it so the full-screen
+                        // app repaints a fresh frame after SIGWINCH (anti-residue)
+                        clearBuffer();
                         // Alt screen is a fixed page: keep the scroll region in sync with the visible size
                         scrollTop = 0;
                         scrollBottom = rows - 1;
@@ -400,7 +409,15 @@ public class SshTabController {
         LINE_H = fontSize * 1.4;
         int newCols = Math.max(1, (int) (terminalPane.getWidth() / CHAR_W));
         int newRows = Math.max(1, (int) (terminalPane.getHeight() / LINE_H));
-        if (newCols != cols) reflowBuffer(newCols);
+        boolean gridChanged = newCols != cols || newRows != rows;
+        if (inAltScreen && gridChanged) {
+            // The alt screen cannot be reflowed: clear it and let the full-screen
+            // app repaint after SIGWINCH, otherwise stale cells (e.g. nmon's
+            // frame) linger as residue around the new grid.
+            clearBuffer();
+        } else if (newCols != cols) {
+            reflowBuffer(newCols);
+        }
         cols = newCols;
         rows = newRows;
         canvas.setWidth(cols * CHAR_W);
@@ -547,15 +564,16 @@ public class SshTabController {
                 if (ni < 0) { pendingEsc = raw.substring(i); return; }
                 i = ni;
             }
-            else if (c == '\b') { if (pendingWrap) { pendingWrap = false; curCol = cols - 1; } else if (curCol > 0) curCol--; }
-            else if (c == '\r') { curCol = 0; pendingWrap = false; }
+            else if (c == '\b') { wrapPendingEraseSuppress = false; if (pendingWrap) { pendingWrap = false; curCol = cols - 1; } else if (curCol > 0) curCol--; }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; wrapPendingEraseSuppress = false; }
             else if (c == '\n') {
                 // Deferred wrap: LF always moves down exactly one line, whether or
                 // not the previous line filled the last column (xterm semantics)
                 pendingWrap = false;
+                wrapPendingEraseSuppress = false;
                 nl();
             }
-            else if (c == 0x09) { pendingWrap = false; curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; pendingWrap = true; } }
+            else if (c == 0x09) { pendingWrap = false; wrapPendingEraseSuppress = false; curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; pendingWrap = true; wrapPendingEraseSuppress = true; } }
             else if (c == 0x0E) { useG1 = true; } // SO - shift out, use G1 charset
             else if (c == 0x0F) { useG1 = false; } // SI - shift in, use G0 charset
             else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace
@@ -853,7 +871,10 @@ public class SshTabController {
         savedSgrUnderline = sgrUnderline;
     }
     private void restoreCursor() {
-        curCol = savedCurCol; curRow = savedCurRow;
+        // Clamp to current bounds: the saved position may come from a different
+        // grid (e.g. saved in the alt screen before a font/window resize)
+        curCol = clamp(savedCurCol, 0, Math.max(0, cols - 1));
+        curRow = clamp(savedCurRow, 0, Math.max(0, buffer.size() - 1));
         sgrFg = savedSgrFg; sgrBg = savedSgrBg;
         sgrReverse = savedSgrReverse; sgrBold = savedSgrBold;
         sgrUnderline = savedSgrUnderline;
@@ -922,22 +943,39 @@ public class SshTabController {
                                     }
                                     altSavedCurCol = curCol; altSavedCurRow = curRow;
                                     altSavedScrollOff = scrollOff;
+                                    altSavedCols = cols; altSavedRows = rows;
                                     inAltScreen = true;
                                     buffer.clear(); buffer.add(new Row());
                                     curCol = curRow = scrollOff = 0;
+                                    pendingWrap = false; // main-buffer wrap state must not leak into the alt screen
+                                    wrapPendingEraseSuppress = false;
                                     scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
                                     scrollTop = 0; scrollBottom = rows - 1;
                                 } else {
                                     // Restore saved buffer
+                                    inAltScreen = false;
                                     if (altSavedBuffer != null) {
                                         buffer.clear();
                                         buffer.addAll(altSavedBuffer);
                                         curCol = altSavedCurCol; curRow = altSavedCurRow;
                                         scrollOff = altSavedScrollOff;
                                         altSavedBuffer = null;
+                                        pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
+                                        wrapPendingEraseSuppress = false;
+                                        if (cols != altSavedCols || rows != altSavedRows) {
+                                            // Grid changed while in alt screen: re-lay the
+                                            // restored content at the current width, anchor the
+                                            // cursor to the end of the output and pin the viewport
+                                            // to the bottom, so the shell prompt lands at the
+                                            // bottom of the screen
+                                            if (cols != altSavedCols) reflowBuffer(cols);
+                                            curRow = Math.max(0, buffer.size() - 1);
+                                            curCol = 0;
+                                            scrollLock = false;
+                                            scrollOff = Math.max(0, buffer.size() - rows);
+                                        }
                                     }
-                                    inAltScreen = false;
                                     scrollTop = 0; scrollBottom = -1;
                                 }
                                 break;
