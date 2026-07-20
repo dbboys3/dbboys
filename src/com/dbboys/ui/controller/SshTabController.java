@@ -71,6 +71,14 @@ public class SshTabController {
             return c;
         }
     }
+    /** A buffer row. {@link #wrapped} is set when the row ends in an automatic
+     *  (soft) wrap, i.e. it logically continues onto the next row. Hard newlines
+     *  leave the flag false. The flag rides on the row object, so it survives the
+     *  row insertions/removals done by scroll/insert/delete operations, and lets
+     *  {@link #reflowBuffer(int)} re-wrap text when the terminal width changes. */
+    private static class Row extends ArrayList<Cell> {
+        boolean wrapped;
+    }
     @FXML public StackPane terminalPane;
     @FXML public Button connectButton;
     @FXML public Button disconnectButton;
@@ -98,10 +106,7 @@ public class SshTabController {
     /** Callback invoked when new server output arrives (not disconnect/status messages). */
     public Runnable onActivity;
     private ScrollBar scrollBar;
-    private ScrollBar hScrollBar;
     private boolean updatingScrollBar;
-    private int hScrollOff;   // leftmost visible column when content is wider than the view
-    private int maxLineLen;   // longest buffer line in columns; drives the horizontal scrollbar
     // Terminal state
     private Canvas canvas;
     private int cols = 80, rows = 24;
@@ -188,7 +193,7 @@ public class SshTabController {
             }
         });
         // Canvas terminal
-        buffer.add(new ArrayList<>());
+        buffer.add(new Row());
         canvas = new Canvas(cols * CHAR_W, rows * LINE_H);
         canvas.setFocusTraversable(true);
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
@@ -213,6 +218,7 @@ public class SshTabController {
         scrollBar.setBlockIncrement(10);
         scrollBar.getStyleClass().add("ssh-scroll-bar");
         scrollBar.setVisible(false);
+        scrollBar.prefHeightProperty().bind(terminalPane.heightProperty());
         StackPane.setAlignment(scrollBar, javafx.geometry.Pos.CENTER_RIGHT);
         terminalPane.getChildren().add(scrollBar);
         scrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -226,57 +232,16 @@ public class SshTabController {
                 }
             }
         });
-        // Horizontal scrollbar: appears when the longest buffer line is wider than
-        // the visible area (e.g. after the window is made narrower), so wide output
-        // can still be viewed by dragging. Auto-hides when everything fits again.
-        hScrollBar = new ScrollBar();
-        hScrollBar.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
-        hScrollBar.setMin(0);
-        hScrollBar.setMax(0);
-        hScrollBar.setVisibleAmount(1);
-        hScrollBar.setUnitIncrement(4);
-        hScrollBar.setBlockIncrement(20);
-        hScrollBar.getStyleClass().add("ssh-scroll-bar");
-        hScrollBar.setVisible(false);
-        StackPane.setAlignment(hScrollBar, javafx.geometry.Pos.BOTTOM_LEFT);
-        terminalPane.getChildren().add(hScrollBar);
-        hScrollBar.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (!updatingScrollBar) {
-                int v = clamp(newVal.intValue(), 0, Math.max(0, maxLineLen - cols));
-                if (v != hScrollOff) {
-                    hScrollOff = v;
-                    draw();
-                }
-            }
-        });
-        // Each bar spans the pane minus the other bar's thickness, so they never
-        // overlap in the bottom-right corner.
-        scrollBar.prefHeightProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
-                () -> terminalPane.getHeight() - (hScrollBar.isVisible() ? hScrollBar.getHeight() : 0),
-                terminalPane.heightProperty(), hScrollBar.visibleProperty(), hScrollBar.heightProperty()));
-        hScrollBar.prefWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
-                () -> terminalPane.getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0),
-                terminalPane.widthProperty(), scrollBar.visibleProperty(), scrollBar.widthProperty()));
         onScrollChanged = () -> {
             Platform.runLater(() -> {
-                maxLineLen = 0;
-                for (List<Cell> rowCells : buffer) maxLineLen = Math.max(maxLineLen, rowCells.size());
                 int max = inAltScreen ? 0 : Math.max(0, buffer.size() - rows);
                 scrollBar.setVisible(max > 0);
-                int hMax = Math.max(0, maxLineLen - cols);
-                int hClamped = clamp(hScrollOff, 0, hMax);
-                if (hClamped != hScrollOff) { hScrollOff = hClamped; draw(); }
-                hScrollBar.setVisible(hMax > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
                                 int visAmount = max > 0 ? Math.min(max, Math.max(rows, max / 8)) : 1;
                                 scrollBar.setMax(max);
                 scrollBar.setVisibleAmount(visAmount);
                 scrollBar.setValue(scrollOff);
-                int hVisAmount = hMax > 0 ? Math.min(hMax, Math.max(cols, hMax / 8)) : 1;
-                hScrollBar.setMax(hMax);
-                hScrollBar.setVisibleAmount(hVisAmount);
-                hScrollBar.setValue(hScrollOff);
                 updatingScrollBar = false;
             });
         };
@@ -285,9 +250,9 @@ public class SshTabController {
             if (n.doubleValue() > 0) {
                 int newCols = Math.max(1, (int) (n.doubleValue() / CHAR_W));
                 if (newCols != cols) {
+                    reflowBuffer(newCols);
                     cols = newCols;
                     canvas.setWidth(cols * CHAR_W);
-                    hScrollOff = clamp(hScrollOff, 0, Math.max(0, maxLineLen - cols));
                     draw();
                     fireScrollChanged();
                 }
@@ -578,6 +543,7 @@ public class SshTabController {
             pendingWrap = false; wrapPendingEraseSuppress = false;
             curCol = 0;
             curRow++;
+            markWrapped(curRow - 1); // soft wrap: the row just left continues onto the next one
             int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
             if (curRow > effectiveBottom) {
                 if (inAltScreen) {
@@ -625,7 +591,7 @@ public class SshTabController {
         }
     }
     private List<Cell> ensureBuf(int r) {
-        while (buffer.size() <= r) buffer.add(new ArrayList<>());
+        while (buffer.size() <= r) buffer.add(new Row());
         return buffer.get(r);
     }
     private String line(int r) {
@@ -640,13 +606,103 @@ public class SshTabController {
     private void jumpToBottom() {
         int maxOff = Math.max(0, buffer.size() - rows);
         scrollLock = false; // typing means the user wants to follow output again
-        boolean changed = scrollOff != maxOff || hScrollOff != 0;
-        scrollOff = maxOff;
-        hScrollOff = 0; // typing also snaps the horizontal view back to the prompt
-        if (changed) {
+        if (scrollOff != maxOff) {
+            scrollOff = maxOff;
             draw();
             fireScrollChanged();
         }
+    }
+    /** True if buffer row r ends in a soft (auto) wrap and continues onto row r+1. */
+    private boolean isWrapped(int r) {
+        List<Cell> row = buffer.get(r);
+        return row instanceof Row && ((Row) row).wrapped;
+    }
+    /** Mark buffer row r as soft-wrapped (it continues onto the next row). */
+    private void markWrapped(int r) {
+        if (r >= 0 && r < buffer.size() && buffer.get(r) instanceof Row) {
+            ((Row) buffer.get(r)).wrapped = true;
+        }
+    }
+    /** Re-wrap all buffer content to a new column count. Rows linked by soft wraps
+     *  are rejoined into their logical line and wrapped at the new width; hard
+     *  newlines are preserved. Cursor, scroll offset and the vertical scrollbar
+     *  then adapt to the resulting row count. Skipped on the alternate screen
+     *  (full-screen apps redraw themselves after SIGWINCH). */
+    private void reflowBuffer(int newCols) {
+        if (inAltScreen || buffer.isEmpty() || newCols < 2) return;
+        // Cursor position as a linear cell offset within its logical line
+        int cur = Math.min(curRow, buffer.size() - 1);
+        int curLogStart = cur;
+        while (curLogStart > 0 && isWrapped(curLogStart - 1)) curLogStart--;
+        int curOffset = 0;
+        for (int r = curLogStart; r < cur; r++) curOffset += buffer.get(r).size();
+        curOffset += pendingWrap ? buffer.get(cur).size() : Math.min(curCol, buffer.get(cur).size());
+        // First visible logical line, to keep the viewport stable when scrolled up
+        int visLogStart = Math.min(scrollOff, buffer.size() - 1);
+        while (visLogStart > 0 && isWrapped(visLogStart - 1)) visLogStart--;
+
+        List<Row> newBuf = new ArrayList<>(buffer.size());
+        int newCurLogStart = -1, newVisLogStart = 0;
+        int r = 0;
+        while (r < buffer.size()) {
+            int end = r;
+            while (end < buffer.size() - 1 && isWrapped(end)) end++;
+            if (r == curLogStart) newCurLogStart = newBuf.size();
+            if (r == visLogStart) newVisLogStart = newBuf.size();
+            Row out = new Row();
+            newBuf.add(out);
+            for (int i = r; i <= end; i++) {
+                List<Cell> src = buffer.get(i);
+                for (int k = 0; k < src.size(); k++) {
+                    Cell cell = src.get(k);
+                    if (cell.ch == '\0') continue; // continuation cells travel with their character
+                    boolean fw = isFullwidth(cell.ch);
+                    int w = fw ? 2 : 1;
+                    if (out.size() + w > newCols) {
+                        while (out.size() < newCols) out.add(new Cell()); // never split a fullwidth pair
+                        out.wrapped = true;
+                        out = new Row();
+                        newBuf.add(out);
+                    }
+                    out.add(cell);
+                    if (fw) {
+                        Cell cont;
+                        if (k + 1 < src.size() && src.get(k + 1).ch == '\0') { cont = src.get(k + 1); k++; }
+                        else { cont = new Cell(); cont.ch = '\0'; }
+                        out.add(cont);
+                    }
+                }
+            }
+            r = end + 1;
+        }
+        if (newCurLogStart < 0) newCurLogStart = Math.max(0, newBuf.size() - 1);
+        // Map the linear cursor offset back to row/column at the new width
+        int newCurRow, newCurCol;
+        boolean newPendingWrap = false;
+        if (curOffset > 0 && curOffset % newCols == 0) {
+            // Cursor sits just past a full row: keep deferred-wrap semantics
+            newCurRow = newCurLogStart + curOffset / newCols - 1;
+            newCurCol = 0;
+            newPendingWrap = true;
+        } else {
+            newCurRow = newCurLogStart + curOffset / newCols;
+            newCurCol = curOffset % newCols;
+        }
+        buffer.clear();
+        buffer.addAll(newBuf);
+        curRow = newCurRow;
+        curCol = newCurCol;
+        pendingWrap = newPendingWrap;
+        wrapPendingEraseSuppress = newPendingWrap; // pairs with pendingWrap (see put())
+        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
+        curRow = Math.max(0, curRow);
+        scrollOff = scrollLock
+                ? clamp(newVisLogStart, 0, Math.max(0, buffer.size() - rows)) // scrolled up: keep the same content in view
+                : Math.max(0, buffer.size() - rows);                        // following output: stay pinned to the bottom
+        // Selection and DECSTBM region no longer map to rows after reflow
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        scrollTop = 0;
+        scrollBottom = -1;
     }
     // ---- ANSI ----
     private int esc(String s, int p, int e) {
@@ -689,7 +745,7 @@ public class SshTabController {
         return -1;
     }
     private void resetTerminal() {
-        buffer.clear(); buffer.add(new ArrayList<>());
+        buffer.clear(); buffer.add(new Row());
         curCol = curRow = scrollOff = 0;
         scrollTop = 0; scrollBottom = -1; originMode = false;
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
@@ -764,7 +820,7 @@ public class SshTabController {
     private void insertLine(int at) {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         ensureBuf(bottom + 1);
-        buffer.add(at, new ArrayList<>());
+        buffer.add(at, new Row());
         if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
     }
     /** Scroll [top, bottom] up by one line: discard the top line and insert a blank
@@ -773,7 +829,7 @@ public class SshTabController {
     private void scrollRegionUp(int top, int bottom) {
         if (top < 0 || bottom < top || top >= buffer.size()) return;
         buffer.remove(top);
-        buffer.add(Math.min(bottom, buffer.size()), new ArrayList<>());
+        buffer.add(Math.min(bottom, buffer.size()), new Row());
     }
     private void deleteLines(int from, int count) {
         for (int i = 0; i < count && from < buffer.size(); i++) {
@@ -801,14 +857,15 @@ public class SshTabController {
                                     // Save current buffer and SGR state
                                     altSavedBuffer = new ArrayList<>(buffer.size());
                                     for (List<Cell> row : buffer) {
-                                        List<Cell> savedRow = new ArrayList<>(row.size());
+                                        Row savedRow = new Row();
+                                        savedRow.wrapped = row instanceof Row && ((Row) row).wrapped;
                                         for (Cell cl : row) savedRow.add(cl.copy());
                                         altSavedBuffer.add(savedRow);
                                     }
                                     altSavedCurCol = curCol; altSavedCurRow = curRow;
                                     altSavedScrollOff = scrollOff;
                                     inAltScreen = true;
-                                    buffer.clear(); buffer.add(new ArrayList<>());
+                                    buffer.clear(); buffer.add(new Row());
                                     curCol = curRow = scrollOff = 0;
                                     scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
@@ -893,7 +950,7 @@ public class SshTabController {
                         int insAt = Math.max(scrollTop, curRow);
                         for (int i = 0; i < n; i++) {
                             ensureBuf(bottom + 1);
-                            buffer.add(insAt, new ArrayList<>());
+                            buffer.add(insAt, new Row());
                             if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
                         }
                     } break;
@@ -904,7 +961,7 @@ public class SshTabController {
                         for (int i = 0; i < n && delFrom < buffer.size() && delFrom <= bottom; i++) {
                             buffer.remove(delFrom);
                         }
-                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new ArrayList<>());
+                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new Row());
                     } break;
                     case 'P': { // delete characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
@@ -935,12 +992,12 @@ public class SshTabController {
                     case 'S': { // scroll up (SU): region content moves up, blank lines appear at the bottom
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && top < buffer.size()) { buffer.remove(top); buffer.add(Math.min(bottom, buffer.size()), new ArrayList<>()); } }
+                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && top < buffer.size()) { buffer.remove(top); buffer.add(Math.min(bottom, buffer.size()), new Row()); } }
                     } break;
                     case 'T': { // scroll down (SD): region content moves down, blank lines appear at the top
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && bottom < buffer.size()) { buffer.remove(bottom); buffer.add(top, new ArrayList<>()); } }
+                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && bottom < buffer.size()) { buffer.remove(bottom); buffer.add(top, new Row()); } }
                     } break;
                     case 'r': { // DECSTBM 闂?set scroll region (page-relative, like xterm)
                         String[] sr_ = ps.split(";");
@@ -977,7 +1034,7 @@ public class SshTabController {
         return -1;
     }
     private void clearBuffer() {
-        buffer.clear(); buffer.add(new ArrayList<>());
+        buffer.clear(); buffer.add(new Row());
         curCol = curRow = 0;
         pendingWrap = false;
     }
@@ -1145,8 +1202,7 @@ public class SshTabController {
                         || (r == mr && r == Mr && col >= sl && col < sr2)
                         || (r == mr && r != Mr && col >= sl)
                         || (r == Mr && r != mr && col < sr2));
-                double x = (col - hScrollOff) * CHAR_W;
-                if (x + cellW < 0 || x > w) continue; // outside the horizontally scrolled view
+                double x = col * CHAR_W;
                 Color fg = cell.extFg >= 0 ? xtermColor(cell.extFg) : c(cell.fg);
 
                 Color bg = cell.extBg >= 0 ? xtermColor(cell.extBg) : c(cell.bg);
@@ -1175,9 +1231,8 @@ public class SshTabController {
         }
         if (cursorShown && cursorVis && focused) {
             int vr = curRow - scrollOff;
-            int hc = curCol - hScrollOff;
-            if (vr >= 0 && vr < rows && hc >= 0 && hc < cols) {
-                double cx = hc * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
+            if (vr >= 0 && vr < rows) {
+                double cx = curCol * CHAR_W, cy = vr * LINE_H + LINE_H * 0.2;
                 double cursorHeight = LINE_H * 0.8;
                 char atCursor = (curRow < buffer.size() && curCol < buffer.get(curRow).size())
                         ? buffer.get(curRow).get(curCol).ch : ' ';
@@ -1199,7 +1254,7 @@ public class SshTabController {
             canvas.requestFocus();
             if (e.getButton() == MouseButton.PRIMARY) {
                 selecting = true;
-                selStartCol = selEndCol = (int)(e.getX() / CHAR_W) + hScrollOff;
+                selStartCol = selEndCol = (int)(e.getX() / CHAR_W);
                 selStartRow = selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
             }
         });
@@ -1207,7 +1262,7 @@ public class SshTabController {
             if (!selecting) return;
             double ey = e.getY();
             double ch = canvas.getHeight();
-            int col = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
+            int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
             int maxOff = Math.max(0, buffer.size() - rows);
             int row;
             if (ey < 0) {
@@ -1236,7 +1291,7 @@ public class SshTabController {
             selecting = false;
             stopAutoScroll();
             if (e.getButton() == MouseButton.PRIMARY) {
-                selEndCol = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
+                selEndCol = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
                 selEndRow = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
                 // Copy selection to clipboard on mouse release (drag-select)
                 String sel = selectedText();
@@ -1252,7 +1307,7 @@ public class SshTabController {
         canvas.setOnMouseClicked(e -> {
             if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
                 int row = clamp(scrollOff + (int)(e.getY() / LINE_H), 0, Math.max(0, buffer.size() - 1));
-                int col = clamp((int)(e.getX() / CHAR_W) + hScrollOff, 0, Math.max(cols, maxLineLen) - 1);
+                int col = clamp((int)(e.getX() / CHAR_W), 0, cols - 1);
                 String ln = line(row);
                 int start = col, end = col;
                 int ll = ln.length();
