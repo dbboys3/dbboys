@@ -1,4 +1,4 @@
-package com.dbboys.ui.controller;
+﻿package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.infra.i18n.I18n;
@@ -41,14 +41,14 @@ import java.util.List;
 public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
     /** Dump raw terminal bytes (escapes shown) to the app log. Enable via
-     *  -Ddbboys.term.rawlog=true or TERM_RAWLOG=true in etc/config.properties. */
+     *  -Ddbboys.term.rawlog=true or SSH_TERMINAL_RAWLOG=true in etc/config.properties. */
     private static final boolean RAW_LOG = Boolean.getBoolean("dbboys.term.rawlog")
-            || Boolean.parseBoolean(ConfigManagerUtil.getProperty("TERM_RAWLOG", "false"));
+            || Boolean.parseBoolean(ConfigManagerUtil.getProperty("SSH_TERMINAL_RAWLOG", "false"));
     // Terminal font: zoomable with Ctrl + '+' / Ctrl + '-' and Ctrl + mouse wheel,
     // persisted in etc/config.properties (SSH_TERMINAL_FONT_SIZE)
     private static final String SSH_FONT_SIZE_KEY = "SSH_TERMINAL_FONT_SIZE";
     private static final int DEFAULT_FONT_SIZE = 13;
-    private static final int MIN_FONT_SIZE = 9;   // same bounds as the SQL editor
+    private static final int MIN_FONT_SIZE = 4;   // same bounds as the SQL editor
     private static final int MAX_FONT_SIZE = 40;
     private static final int FONT_SIZE_STEP = 1;
     private int fontSize = loadConfiguredFontSize();
@@ -335,7 +335,7 @@ public class SshTabController {
     }
     private void doConnect() {
         if (sshConnect == null) return;
-        if (connecting) return; // already connecting 閳?skip duplicate
+        if (connecting) return; // already connecting ��?skip duplicate
         connecting = true;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
@@ -460,10 +460,10 @@ public class SshTabController {
                     String out = new String(buf, 0, len, terminalCharset());
                     Platform.runLater(() -> write(out));
                 }
-                // read returned -1 or channel disconnected 閳?connection lost
+                // read returned -1 or channel disconnected ��?connection lost
                 Platform.runLater(this::onConnectionLost);
             } catch (Exception e) {
-                // read thread interrupted or IO error 閳?connection likely lost
+                // read thread interrupted or IO error ��?connection likely lost
                 Platform.runLater(this::onConnectionLost);
             }
         }, "term-reader");
@@ -796,20 +796,20 @@ public class SshTabController {
         if (c == '[') { int r = csi(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == ']') { int r = osc(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e, c == '('); return r < 0 ? -1 : r; }
-        // ESC 7 / ESC 8 闂?save/restore cursor (DECSC/DECRC)
+        // ESC 7 / ESC 8 ��?save/restore cursor (DECSC/DECRC)
         if (c == '7') { saveCursor(); return p; }
         if (c == '8') { restoreCursor(); return p; }
-        // ESC M 闂?reverse index (RI)
+        // ESC M ��?reverse index (RI)
         if (c == 'M') { reverseIndex(); return p; }
-        // ESC D 闂?index (IND, move down one line)
+        // ESC D ��?index (IND, move down one line)
         if (c == 'D') { indexDown(); return p; }
-        // ESC E 闂?next line (NEL)
+        // ESC E ��?next line (NEL)
         if (c == 'E') { curCol = 0; indexDown(); return p; }
-        // ESC H 闂?horizontal tab set
+        // ESC H ��?horizontal tab set
         if (c == 'H') return p;
-        // ESC > 闂?alternate keypad numeric; ESC = 闂?alternate keypad application
+        // ESC > ��?alternate keypad numeric; ESC = ��?alternate keypad application
         if (c == '>' || c == '=') return p;
-        // ESC c 闂?RIS (reset to initial state)
+        // ESC c ��?RIS (reset to initial state)
         // ESC O A/B/C/D -- SS3 cursor keys (when DECCKM is enabled)
         if (c == 'O' && p + 1 < e) {
             char oc = s.charAt(p + 1);
@@ -1004,7 +1004,7 @@ public class SshTabController {
                                 break;
                             }
                             break;
-                        case 'r': // DECSTBM 闂?handled below in standard CSI
+                        case 'r': // DECSTBM ��?handled below in standard CSI
                             if (inAltScreen && ps.isEmpty()) {
                                 // ?r without params: restore default scroll region
                                 scrollTop = 0; scrollBottom = rows - 1;
@@ -1128,7 +1128,7 @@ public class SshTabController {
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && bottom < buffer.size()) { buffer.remove(bottom); buffer.add(top, new Row()); } }
                     } break;
-                    case 'r': { // DECSTBM 闂?set scroll region (page-relative, like xterm)
+                    case 'r': { // DECSTBM ��?set scroll region (page-relative, like xterm)
                         String[] sr_ = ps.split(";");
                         int base = inAltScreen ? 0 : pageTop();
                         int regionMax = base + rows - 1; // clamp the region to the current screen
@@ -1142,8 +1142,8 @@ public class SshTabController {
                         break;
                     case 's': saveCursor(); break;
                     case 'u': restoreCursor(); break;
-                    case 'n': break; // DSR 闂?ignore
-                    case 'q': break; // DECSCUSR 闂?ignore cursor style
+                    case 'n': break; // DSR ��?ignore
+                    case 'q': break; // DECSCUSR ��?ignore cursor style
                 }
                 return p;
             } else {
@@ -1481,7 +1481,7 @@ public class SshTabController {
                 if (isZoomInKey(e)) { adjustFontSize(FONT_SIZE_STEP); e.consume(); return; }
                 if (isZoomOutKey(e)) { adjustFontSize(-FONT_SIZE_STEP); e.consume(); return; }
             }
-            // Disconnected 閳?Enter triggers reconnect
+            // Disconnected ��?Enter triggers reconnect
             if (shellChannel == null || !shellChannel.isConnected()) {
                 if (e.getCode() == KeyCode.ENTER) {
                     doConnect();
