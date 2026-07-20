@@ -190,6 +190,13 @@ public class SshTabController {
         canvas.setFocusTraversable(true);
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
         setupCanvasInput();
+        // The canvas is sized explicitly from terminalPane's current size, and Canvas
+        // is not resizable, so its size would otherwise become terminalPane's computed
+        // min size. That locks the layout after maximize: on restore the pane can never
+        // shrink below the canvas width, the width listener never fires and right-edge
+        // content (scrollbar, toolbar controls) stays clipped. Overriding the min size
+        // breaks this feedback loop so the pane (and canvas) can shrink again.
+        terminalPane.setMinSize(0, 0);
         terminalPane.getChildren().add(canvas);
         // Click on the tab body focuses the terminal
         sshTab.setOnMouseClicked(e -> canvas.requestFocus());
@@ -238,6 +245,7 @@ public class SshTabController {
                     cols = newCols;
                     canvas.setWidth(cols * CHAR_W);
                     draw();
+                    fireScrollChanged();
                 }
                 updatePtySize();
             }
