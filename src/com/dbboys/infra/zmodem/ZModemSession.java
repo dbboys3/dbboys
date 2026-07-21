@@ -65,6 +65,10 @@ public final class ZModemSession {
     private final OutputStream out;
     private final ZModemHandler handler;
 
+    // outbound staging: protocol bytes are composed here and flushed in batches —
+    // per-byte stream writes plus per-subpacket flushes were the upload bottleneck
+    private final ByteArrayOutputStream txBuf = new ByteArrayOutputStream(65536 + 8192);
+
     // negotiated receiver capabilities (send role)
     private boolean peerCanFcs32 = true;
     private boolean peerEscCtl;
@@ -436,6 +440,9 @@ public final class ZModemSession {
                 pos += n;
                 handler.onProgress(file.getName(), pos, size);
                 checkCancelled();
+                if (txBuf.size() >= 65536) {
+                    flushTx(); // batch: many subpackets per flush while streaming
+                }
                 // Peek at the peer between subpackets without ever blocking: count
                 // CAN bytes (peer abort) and drop everything else (rz's progress
                 // spam, stray tty noise). Parsing frames here could trap us in a
@@ -460,6 +467,7 @@ public final class ZModemSession {
             for (int attempt = 0; attempt < 6; attempt++) {
                 checkCancelled();
                 writeSubpacket(chunk, 0, 0, ZCRCW);
+                flushTx();
                 Frame f;
                 try {
                     f = readFrame();
@@ -539,9 +547,9 @@ public final class ZModemSession {
                     throw new EOFException("connection closed");
                 }
                 if (f.type == ZFIN) {
-                    out.write('O');
-                    out.write('O');
-                    out.flush();
+                    tx('O');
+                    tx('O');
+                    flushTx();
                     return;
                 }
                 if (f.type == ZCAN || f.type == ZABORT) {
@@ -784,27 +792,36 @@ public final class ZModemSession {
         for (int v : b) {
             crc = ZModemCrc.update(crc, v);
         }
-        ByteArrayOutputStream bos = new ByteArrayOutputStream(24);
-        bos.write(ZPAD);
-        bos.write(ZPAD);
-        bos.write(ZDLE);
-        bos.write(ZHEX);
+        tx(ZPAD);
+        tx(ZPAD);
+        tx(ZDLE);
+        tx(ZHEX);
         for (int v : b) {
-            bos.write(hexChar(v >> 4));
-            bos.write(hexChar(v));
+            tx(hexChar(v >> 4));
+            tx(hexChar(v));
         }
-        bos.write(hexChar(crc >> 12));
-        bos.write(hexChar(crc >> 8));
-        bos.write(hexChar(crc >> 4));
-        bos.write(hexChar(crc));
-        bos.write('\r');
-        bos.write('\n');
+        tx(hexChar(crc >> 12));
+        tx(hexChar(crc >> 8));
+        tx(hexChar(crc >> 4));
+        tx(hexChar(crc));
+        tx('\r');
+        tx('\n');
         if (type != ZFIN) {
-            bos.write(XON);
+            tx(XON);
         }
-        out.write(bos.toByteArray());
-        out.flush();
+        flushTx(); // control frame: goes out immediately
         log.debug(">> hex frame type={} pos={}", type, pos);
+    }
+
+    private void tx(int b) {
+        txBuf.write(b);
+    }
+
+    /** Push staged bytes to the wire and flush the underlying stream. */
+    private void flushTx() throws IOException {
+        txBuf.writeTo(out);
+        txBuf.reset();
+        out.flush();
     }
 
     private static int hexChar(int nibble) {
@@ -814,9 +831,9 @@ public final class ZModemSession {
 
     private void sendBinHeader(int type, long pos) throws IOException {
         boolean u32 = peerCanFcs32;
-        out.write(ZPAD);
-        out.write(ZDLE);
-        out.write(u32 ? ZBIN32 : ZBIN);
+        tx(ZPAD);
+        tx(ZDLE);
+        tx(u32 ? ZBIN32 : ZBIN);
         int[] b = {type & 0xFF, (int) (pos & 0xFF), (int) ((pos >> 8) & 0xFF),
                 (int) ((pos >> 16) & 0xFF), (int) ((pos >> 24) & 0xFF)};
         int c16 = 0;
@@ -838,11 +855,15 @@ public final class ZModemSession {
             zdleWrite((c16 >> 8) & 0xFF);
             zdleWrite(c16 & 0xFF);
         }
-        out.flush();
+        flushTx(); // control frame: goes out immediately
         log.debug(">> bin{} frame type={} pos={}", u32 ? 32 : 16, type, pos);
     }
 
-    /** Write one data subpacket (data + ZDLE end-marker + CRC), all ZDLE-escaped. */
+    /**
+     * Compose one data subpacket (data + ZDLE end-marker + CRC), all ZDLE-escaped,
+     * into the staging buffer. Callers decide when to {@link #flushTx()} —
+     * streaming batches many subpackets per flush.
+     */
     private void writeSubpacket(byte[] data, int off, int len, int endType) throws IOException {
         boolean u32 = peerCanFcs32;
         CRC32 c32 = new CRC32();
@@ -860,8 +881,8 @@ public final class ZModemSession {
         } else {
             c16 = ZModemCrc.update(c16, endType);
         }
-        out.write(ZDLE);
-        out.write(endType);
+        tx(ZDLE);
+        tx(endType);
         lastWritten = endType;
         if (u32) {
             long v = c32.getValue();
@@ -872,7 +893,6 @@ public final class ZModemSession {
             zdleWrite((c16 >> 8) & 0xFF);
             zdleWrite(c16 & 0xFF);
         }
-        out.flush();
     }
 
     /** Write one byte, ZDLE-escaping per the ZModem rules and the negotiated ESCCTL/ESC8. */
@@ -883,7 +903,7 @@ public final class ZModemSession {
                 if (lastWritten == '@' || peerEscCtl) {
                     writeEscaped(b);
                 } else {
-                    out.write(b);
+                    tx(b);
                     lastWritten = b;
                 }
             }
@@ -891,7 +911,7 @@ public final class ZModemSession {
                 if ((peerEscCtl && b < 0x20) || (peerEsc8 && (b & 0x80) != 0) || b == 0x8D && (lastWritten == '@' || peerEscCtl)) {
                     writeEscaped(b);
                 } else {
-                    out.write(b);
+                    tx(b);
                     lastWritten = b;
                 }
             }
@@ -899,8 +919,8 @@ public final class ZModemSession {
     }
 
     private void writeEscaped(int b) throws IOException {
-        out.write(ZDLE);
-        out.write(b ^ 0x40);
+        tx(ZDLE);
+        tx(b ^ 0x40);
         lastWritten = b;
     }
 
@@ -911,6 +931,7 @@ public final class ZModemSession {
                 + " 0 0 " + remaining + " 0\0";
         byte[] info = meta.getBytes(StandardCharsets.UTF_8);
         writeSubpacket(info, 0, info.length, ZCRCW);
+        flushTx(); // the receiver answers with ZRPOS/ZSKIP: must go out now
     }
 
     private void readOverAndOut() throws IOException {
@@ -942,8 +963,8 @@ public final class ZModemSession {
         try {
             byte[] cans = new byte[8];
             Arrays.fill(cans, (byte) CAN);
-            out.write(cans);
-            out.flush();
+            txBuf.write(cans, 0, cans.length);
+            flushTx();
         } catch (IOException ignored) {
             // best effort
         }
@@ -1030,8 +1051,8 @@ public final class ZModemSession {
                     return buf[pos++] & 0xFF;
                 }
                 if (in.available() > 0) {
-                    if (buf.length < 8192) {
-                        buf = new byte[8192];
+                    if (buf.length < 65536) {
+                        buf = new byte[65536];
                     }
                     pos = 0;
                     len = in.read(buf, 0, buf.length);

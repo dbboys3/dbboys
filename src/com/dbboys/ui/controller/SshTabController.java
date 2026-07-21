@@ -1769,6 +1769,15 @@ public class SshTabController {
             // swallow the aborted peer's in-flight bytes before the terminal resumes
             // rendering, otherwise they flood the screen as garbage
             zs.drainQuiet();
+            // the drain also eats the shell prompt printed after rz/sz dies;
+            // nudge the shell with a newline so it reprints the prompt
+            try {
+                OutputStream nos = shellChannel.getInvertedIn();
+                nos.write('\n');
+                nos.flush();
+            } catch (Exception ignored) {
+                // channel may already be gone
+            }
             String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
         } finally {
