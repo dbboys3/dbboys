@@ -163,6 +163,7 @@ public class SshTabController {
     private Thread readThread;
     private volatile boolean connecting;
     private volatile boolean transferCancelFlag; // Ctrl+C/Ctrl+U aborts the active file transfer
+    private volatile boolean transferCancelledByUser; // file-picker dialog was cancelled
     private volatile boolean zmodemActive; // true while a ZModem session owns the SSH stream
     private final StringBuilder inputBuffer = new StringBuilder(); // guards against concurrent connect attempts
     private int scrollOff, maxScroll = 5000;
@@ -1714,7 +1715,7 @@ public class SshTabController {
     }
 
     // ==================== ZModem (sz/rz) file transfer ====================
-    // Beacon hex header: '*','*',0x18,'B','0', then the type digit —
+    // Beacon hex header: '*','*',0x18,'B','0', then the type digit 鈥?
     // '0' = ZRQINIT sent by sz (download), '1' = ZRINIT sent by rz (upload).
     private static final byte[] ZMODEM_BEACON_SIG = {0x2A, 0x2A, 0x18, 0x42, 0x30};
 
@@ -1757,40 +1758,45 @@ public class SshTabController {
     /** Run a full ZModem session on the reader thread; binary bytes bypass the terminal renderer.
      * @param dir 1=upload (remote rz), 2=download (remote sz) */
     private void runZmodemSession(InputStream in, byte[] prefix, int dir) {
+        final String dirLabel = (dir == 2) ? "download" : "upload";
         zmodemActive = true;
         transferCancelFlag = false;
+        transferCancelledByUser = false;
         progressStartMs = 0;
         lastProgressMs = 0;
         ZModemSession zs = new ZModemSession(in, shellChannel.getInvertedIn(), prefix, zmodemHandler);
-        boolean ok = false;
         try {
             if (dir == 2) zs.receive(); else zs.send();
-            ok = true;
-            Platform.runLater(() -> statusGreen("\r\nZModem " + (dir == 2 ? "download" : "upload") + " finished\r\n"));
+            // user cancelled the session via Ctrl+C/Ctrl+U or file-picker dialog
+            if (transferCancelFlag || transferCancelledByUser) {
+                Platform.runLater(() -> statusRed("\r\nZModem " + dirLabel + " cancelled\r\n"));
+            } else {
+                Platform.runLater(() -> statusGreen("\r\nZModem " + dirLabel + " finished\r\n"));
+            }
         } catch (Exception ex) {
             log.warn("ZModem session ended: {}", ex.toString());
-            // swallow the aborted peer's in-flight bytes before the terminal resumes
-            // rendering, otherwise they flood the screen as garbage
-            zs.drainQuiet();
-            // the drain also eats the shell prompt printed after rz/sz dies;
-            // nudge the shell with a newline so it reprints the prompt
-            try {
-                OutputStream nos = shellChannel.getInvertedIn();
-                nos.write('\n');
-                nos.flush();
-            } catch (Exception ignored) {
-                // channel may already be gone
-            }
             String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
         } finally {
+            // Drain residual bytes (echoed ZRINIT/ZRQINIT headers, stray protocol bytes)
+            // that would otherwise be rendered as garbage or trigger a spurious
+            // ZModem beacon detection on the next read.
+            // drainQuiet reads and discards in-flight data until ~800 ms of silence,
+            // then returns.  The shell prompt is eaten in the process, so we nudge the
+            // remote shell with a newline so it reprints a clean prompt.
+            zs.drainQuiet();
+            try {
+                OutputStream nos = shellChannel.getInvertedIn();
+                if (nos != null) {
+                    nos.write('\n');
+                    nos.flush();
+                }
+            } catch (Exception ignored) {
+                // channel may already be gone
+            }
             zmodemActive = false;
         }
-        // give back bytes the engine buffered past the session end (e.g. the shell prompt)
-        byte[] rest = zs.drainPending();
-        if (ok && rest.length > 0) feedTerminal(rest, 0, rest.length);
     }
-
     private File lastTransferDir;
     private volatile long progressStartMs;
     private volatile long lastProgressMs;
@@ -1812,6 +1818,8 @@ public class SshTabController {
                     if (f != null) {
                         lastTransferDir = f.getParentFile();
                         canvas.requestFocus();
+                    } else {
+                        transferCancelledByUser = true;
                     }
                     ref.set(f);
                 } finally {
@@ -1837,6 +1845,8 @@ public class SshTabController {
                     if (files != null && !files.isEmpty()) {
                         lastTransferDir = files.get(0).getParentFile();
                         canvas.requestFocus();
+                    } else {
+                        transferCancelledByUser = true;
                     }
                     ref.set(files);
                 } finally {
