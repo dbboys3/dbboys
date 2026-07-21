@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.EOFException;
 import java.io.File;
@@ -420,7 +421,7 @@ public final class ZModemSession {
         long pos = offset;
         int canCount = 0; // CAN bytes seen while peeking at the peer mid-stream
         byte[] chunk = new byte[SUBPACKET_LEN];
-        FileInputStream fis = new FileInputStream(file);
+        InputStream fis = new BufferedInputStream(new FileInputStream(file), 65536);
         try {
             skipFully(fis, pos);
             sendBinHeader(ZDATA, pos);
@@ -440,7 +441,7 @@ public final class ZModemSession {
                 pos += n;
                 handler.onProgress(file.getName(), pos, size);
                 checkCancelled();
-                if (txBuf.size() >= 65536) {
+                if (txBuf.size() >= 262144) {
                     flushTx(); // batch: many subpackets per flush while streaming
                 }
                 // Peek at the peer between subpackets without ever blocking: count
@@ -741,23 +742,31 @@ public final class ZModemSession {
         int end = -1;
         subpacketBytes = 0;
         ByteArrayOutputStream raw = new ByteArrayOutputStream(SUBPACKET_LEN + 16);
+        byte[] scratch = new byte[SUBPACKET_LEN + 16];
+        boolean pendingZdle = false;
+        outer:
         for (;;) {
-            int c = in.read(IDLE_TIMEOUT_MS);
-            if (c < 0) {
+            int n = in.readChunk(scratch, IDLE_TIMEOUT_MS);
+            if (n < 0) {
                 throw new EOFException("connection closed");
             }
-            if (c == ZDLE) {
-                int c2 = in.read(IDLE_TIMEOUT_MS);
-                if (c2 < 0) {
-                    throw new EOFException("connection closed");
+            for (int i = 0; i < n; i++) {
+                int c = scratch[i] & 0xFF;
+                if (pendingZdle) {
+                    pendingZdle = false;
+                    if (c >= ZCRCE && c <= ZCRCW) {
+                        end = c;
+                        // readChunk grabs all buffered bytes; anything past the end
+                        // marker (CRC bytes, next frame) must be readable again
+                        in.pushback(n - i - 1);
+                        break outer;
+                    }
+                    raw.write(c ^ 0x40);
+                } else if (c == ZDLE) {
+                    pendingZdle = true;
+                } else {
+                    raw.write(c);
                 }
-                if (c2 >= ZCRCE && c2 <= ZCRCW) {
-                    end = c2;
-                    break;
-                }
-                raw.write(c2 ^ 0x40);
-            } else {
-                raw.write(c);
             }
         }
         byte[] data = raw.toByteArray();
@@ -819,9 +828,13 @@ public final class ZModemSession {
 
     /** Push staged bytes to the wire and flush the underlying stream. */
     private void flushTx() throws IOException {
+        int n = txBuf.size();
+        long t0 = System.nanoTime();
         txBuf.writeTo(out);
         txBuf.reset();
         out.flush();
+        // timing tells us whether the SSH stream's flush() itself is the throttle
+        log.debug("flushTx {} bytes in {} ms", n, (System.nanoTime() - t0) / 1_000_000L);
     }
 
     private static int hexChar(int nibble) {
@@ -1043,9 +1056,44 @@ public final class ZModemSession {
             }
         }
 
+        /** Push back k bytes read by the last read/readChunk call. */
+        void pushback(int k) {
+            if (k > 0) {
+                pos -= k;
+            }
+        }
+
+        /** Copy buffered bytes out; returns the count (0 when the buffer is empty). */
+        int drain(byte[] b, int off, int len) {
+            int n = Math.min(len, this.len - pos);
+            if (n > 0) {
+                System.arraycopy(buf, pos, b, off, n);
+                pos += n;
+            }
+            return n;
+        }
+
+        /**
+         * Read as many buffered bytes as possible: enforces the idle timeout for the
+         * first byte (refilling from the stream as needed), then grabs everything
+         * already buffered. Bulk entry point so hot loops don't pay a call per byte.
+         */
+        int readChunk(byte[] b, long timeoutMs) throws IOException {
+            int first = read(timeoutMs);
+            if (first < 0) {
+                return -1;
+            }
+            b[0] = (byte) first;
+            return 1 + drain(b, 1, b.length - 1);
+        }
+
         /** Next byte, waiting at most timeoutMs of idle time; -1 only on stream EOF. */
         int read(long timeoutMs) throws IOException {
-            long deadline = System.currentTimeMillis() + timeoutMs;
+            long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+            // Was Thread.sleep(20) per idle check: the OS timer granularity made each
+            // nap ~15-30ms, capping throughput on fast links. Nap 1ms instead.
+            // (A spin loop was tried and reverted: hammering available() starves the
+            // writer thread on the stream's monitor.)
             for (;;) {
                 if (pos < len) {
                     return buf[pos++] & 0xFF;
@@ -1062,11 +1110,11 @@ public final class ZModemSession {
                     if (len == 0) {
                         continue;
                     }
-                } else if (System.currentTimeMillis() >= deadline) {
+                } else if (System.nanoTime() - deadline >= 0) {
                     throw new ReadTimeout();
                 } else {
                     try {
-                        Thread.sleep(20);
+                        Thread.sleep(1);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new IOException("interrupted", e);
