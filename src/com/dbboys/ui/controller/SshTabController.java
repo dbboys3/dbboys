@@ -1759,11 +1759,16 @@ public class SshTabController {
         progressStartMs = 0;
         lastProgressMs = 0;
         ZModemSession zs = new ZModemSession(in, shellChannel.getInvertedIn(), prefix, zmodemHandler);
+        boolean ok = false;
         try {
             if (dir == 2) zs.receive(); else zs.send();
+            ok = true;
             Platform.runLater(() -> statusGreen("\r\nZModem " + (dir == 2 ? "download" : "upload") + " finished\r\n"));
         } catch (Exception ex) {
             log.warn("ZModem session ended: {}", ex.toString());
+            // swallow the aborted peer's in-flight bytes before the terminal resumes
+            // rendering, otherwise they flood the screen as garbage
+            zs.drainQuiet();
             String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
         } finally {
@@ -1771,7 +1776,7 @@ public class SshTabController {
         }
         // give back bytes the engine buffered past the session end (e.g. the shell prompt)
         byte[] rest = zs.drainPending();
-        if (rest.length > 0) feedTerminal(rest, 0, rest.length);
+        if (ok && rest.length > 0) feedTerminal(rest, 0, rest.length);
     }
 
     private File lastTransferDir;

@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
@@ -56,7 +57,9 @@ public final class ZModemSession {
     private static final long ZRINIT_FLAGS = (long) OUR_CAPS << 24;
     private static final long ZFILE_FLAGS = (long) ZCBIN << 24;
     private static final long IDLE_TIMEOUT_MS = 20000;
-    private static final int SUBPACKET_LEN = 1024;
+    // lrzsz peers accept subpackets up to MAX_BLOCK (8192); larger subpackets mean
+    // fewer flushes/acks and much better throughput than the classic 1024
+    private static final int SUBPACKET_LEN = 8192;
 
     private final In in;
     private final OutputStream out;
@@ -115,6 +118,27 @@ public final class ZModemSession {
     /** Bytes the engine buffered past the end of the session (e.g. the returning shell prompt). */
     public byte[] drainPending() {
         return in.leftover();
+    }
+
+    /**
+     * After an abort, read and discard incoming bytes until the stream goes quiet
+     * (peer died and in-flight data was drained), so protocol bytes don't end up
+     * rendered as terminal garbage. Bounded: returns on EOF, after ~800ms of
+     * silence, or after a 10s cap.
+     */
+    public void drainQuiet() {
+        long deadline = System.currentTimeMillis() + 10000;
+        for (;;) {
+            int c;
+            try {
+                c = in.read(800);
+            } catch (IOException e) { // ReadTimeout: stream went quiet — done
+                return;
+            }
+            if (c < 0 || System.currentTimeMillis() > deadline) {
+                return;
+            }
+        }
     }
 
     // ==================== receive role (remote sz -> local download) ====================
@@ -220,13 +244,15 @@ public final class ZModemSession {
     /** Receive ZDATA subpackets into the target file; returns the file position reached. */
     private long receiveFileData(File target, long startPos, FileOffer offer) throws IOException {
         long count = startPos;
-        try (OutputStream fos = new FileOutputStream(target, startPos > 0)) {
+        // buffered: a raw FileOutputStream would syscall once per subpacket (or worse)
+        try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(target, startPos > 0), 65536)) {
             for (;;) {
                 checkCancelled();
                 int end = readSubpacket(fos);
                 count += subpacketBytes;
                 handler.onProgress(offer.name, count, offer.size);
                 if (end == ZCRCQ || end == ZCRCW) {
+                    fos.flush(); // data on disk before we ack it
                     sendBinHeader(ZACK, count);
                 }
                 if (end == ZCRCW || end == ZCRCE) {
@@ -696,16 +722,17 @@ public final class ZModemSession {
     }
 
     /**
-     * Read one data subpacket into sink, verifying its CRC.
+     * Read one data subpacket into sink, verifying its CRC. Data is unescaped into
+     * a memory buffer first, then checksummed and written in bulk — per-byte file
+     * writes were the download bottleneck.
      *
      * @return the end marker (ZCRCE/ZCRCG/ZCRCQ/ZCRCW); {@link #subpacketBytes} holds the data length
      */
     private int readSubpacket(OutputStream sink) throws IOException {
         boolean u32 = peerCanFcs32;
-        CRC32 c32 = new CRC32();
-        int c16 = 0;
         int end = -1;
         subpacketBytes = 0;
+        ByteArrayOutputStream raw = new ByteArrayOutputStream(SUBPACKET_LEN + 16);
         for (;;) {
             int c = in.read(IDLE_TIMEOUT_MS);
             if (c < 0) {
@@ -720,25 +747,15 @@ public final class ZModemSession {
                     end = c2;
                     break;
                 }
-                int b = c2 ^ 0x40;
-                sink.write(b);
-                subpacketBytes++;
-                if (u32) {
-                    c32.update(b);
-                } else {
-                    c16 = ZModemCrc.update(c16, b);
-                }
+                raw.write(c2 ^ 0x40);
             } else {
-                sink.write(c);
-                subpacketBytes++;
-                if (u32) {
-                    c32.update(c);
-                } else {
-                    c16 = ZModemCrc.update(c16, c);
-                }
+                raw.write(c);
             }
         }
+        byte[] data = raw.toByteArray();
         if (u32) {
+            CRC32 c32 = new CRC32();
+            c32.update(data, 0, data.length);
             c32.update(end);
             long want = 0;
             for (int i = 0; i < 4; i++) {
@@ -748,12 +765,15 @@ public final class ZModemSession {
                 throw new IOException("ZModem data CRC32 error");
             }
         } else {
+            int c16 = ZModemCrc.crc16(data, 0, data.length);
             c16 = ZModemCrc.update(c16, end);
             int want = (zdlread() << 8) | zdlread();
             if (c16 != want) {
                 throw new IOException("ZModem data CRC16 error");
             }
         }
+        sink.write(data, 0, data.length);
+        subpacketBytes = data.length;
         return end;
     }
 
@@ -827,14 +847,13 @@ public final class ZModemSession {
         boolean u32 = peerCanFcs32;
         CRC32 c32 = new CRC32();
         int c16 = 0;
+        if (u32) {
+            c32.update(data, off, len); // bulk: intrinsified, far faster than per-byte
+        } else {
+            c16 = ZModemCrc.crc16(data, off, len);
+        }
         for (int i = off; i < off + len; i++) {
-            int v = data[i] & 0xFF;
-            if (u32) {
-                c32.update(v);
-            } else {
-                c16 = ZModemCrc.update(c16, v);
-            }
-            zdleWrite(v);
+            zdleWrite(data[i] & 0xFF);
         }
         if (u32) {
             c32.update(endType);
