@@ -3,12 +3,13 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.SshUtil;
+import com.dbboys.infra.zmodem.ZModemHandler;
+import com.dbboys.infra.zmodem.ZModemSession;
 import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import org.apache.sshd.client.channel.ChannelShell;
 import org.apache.sshd.client.session.ClientSession;
-import org.apache.sshd.sftp.client.SftpClient;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -30,10 +31,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.EnumSet;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -164,7 +162,8 @@ public class SshTabController {
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
     private Thread readThread;
     private volatile boolean connecting;
-    private volatile boolean sftpCancelFlag;
+    private volatile boolean transferCancelFlag; // Ctrl+C/Ctrl+U aborts the active file transfer
+    private volatile boolean zmodemActive; // true while a ZModem session owns the SSH stream
     private final StringBuilder inputBuffer = new StringBuilder(); // guards against concurrent connect attempts
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
@@ -459,14 +458,39 @@ public class SshTabController {
             try {
                 InputStream in = shellChannel.getInvertedOut();
                 byte[] buf = new byte[8192];
+                byte[] carry = new byte[0]; // unscanned tail: the beacon signature may span two reads
                 int len;
                 while (shellChannel.isOpen() && (len = in.read(buf, 0, buf.length)) != -1) {
-                    // Log raw bytes to file if enabled (do this BEFORE converting to String for display)
-                    if (logging && logWriter != null) {
-                        try { logWriter.write(stripAnsi(new String(buf, 0, len, terminalCharset()))); logWriter.flush(); } catch (Exception ignored) {}
+                    // Scan for a ZModem ZRQINIT/ZRINIT hex header; on a hit the raw stream is
+                    // handed to the ZModem engine until the file transfer session ends.
+                    byte[] data = buf;
+                    int dlen = len;
+                    if (carry.length > 0) {
+                        data = new byte[carry.length + len];
+                        System.arraycopy(carry, 0, data, 0, carry.length);
+                        System.arraycopy(buf, 0, data, carry.length, len);
+                        dlen = data.length;
+                        carry = new byte[0];
                     }
-                    String out = new String(buf, 0, len, terminalCharset());
-                    Platform.runLater(() -> write(out));
+                    int sig = indexOfZmodemBeacon(data, dlen);
+                    if (sig < 0) {
+                        // hold back only a trailing fragment that actually starts the
+                        // signature (e.g. "**\x18B0"); everything else renders at once,
+                        // otherwise an idle prompt would lose its last bytes
+                        int keep = zmodemBeaconTail(data, dlen);
+                        feedTerminal(data, 0, dlen - keep);
+                        carry = new byte[keep];
+                        System.arraycopy(data, dlen - keep, carry, 0, keep);
+                        continue;
+                    }
+                    feedTerminal(data, 0, sig);
+                    byte[] prefix = new byte[dlen - sig];
+                    System.arraycopy(data, sig, prefix, 0, prefix.length);
+                    carry = new byte[0];
+                    // the beacon's type digit decides the role: '0'=ZRQINIT from sz
+                    // (we download), '1'=ZRINIT from rz (we upload)
+                    int dir = data[sig + ZMODEM_BEACON_SIG.length] == '0' ? 2 : 1;
+                    runZmodemSession(in, prefix, dir);
                 }
                 // read returned -1 or channel disconnected ???connection lost
                 Platform.runLater(this::onConnectionLost);
@@ -1497,6 +1521,13 @@ public class SshTabController {
                 e.consume();
                 return;
             }
+            // During a ZModem session the stream belongs to the transfer engine;
+            // swallow all keys except Ctrl+C (cancel transfer)
+            if (zmodemActive) {
+                if (e.isControlDown() && e.getCode() == KeyCode.C) transferCancelFlag = true;
+                e.consume();
+                return;
+            }
             // Auto-jump to bottom before sending input
             jumpToBottom();
             byte[] b = key(e);
@@ -1511,6 +1542,7 @@ public class SshTabController {
         });
         canvas.setOnKeyTyped(e -> {
             if (shellChannel == null || !shellChannel.isOpen()) return;
+            if (zmodemActive) { e.consume(); return; } // transfer in progress: no terminal input
             if (e.isControlDown() || e.isAltDown()) return; // zoom/modified keys are not text input
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
@@ -1519,17 +1551,8 @@ public class SshTabController {
             try {
                 OutputStream os = shellChannel.getInvertedIn();
                 if (c == '\r' || c == '\n') {
-                    String cmd = inputBuffer.toString().trim();
-                    if (cmd.startsWith("sz ")) {
-                        os.write(0x03); os.write(10); os.flush();
-                        handleSzDownload(cmd.substring(3).trim());
-                    } else if (cmd.equals("rz")) {
-                        os.write(0x03); os.write(10); os.flush();
-                        handleRzUpload();
-                    } else {
-                        os.write(c);
-                        os.flush();
-                    }
+                    os.write(c);
+                    os.flush();
                     inputBuffer.setLength(0);
                 } else if (c >= 0x20 && c != 0x7F) {
                     inputBuffer.append(c);
@@ -1612,7 +1635,7 @@ public class SshTabController {
                 return null;
             }
             switch (k) {
-                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x03};
+                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:inputBuffer.setLength(0);transferCancelFlag=true;return new byte[]{0x03};
                 case D:return new byte[]{0x04}; case E:return new byte[]{0x05};
                 case F:return new byte[]{0x06}; case G:return new byte[]{0x07};
                 case H:return new byte[]{0x08}; case J:return new byte[]{0x0A};
@@ -1620,7 +1643,7 @@ public class SshTabController {
                 case N:return new byte[]{0x0E}; case O:return new byte[]{0x0F};
                 case P:return new byte[]{0x10}; case Q:return new byte[]{0x11};
                 case R:return new byte[]{0x12}; case S:return new byte[]{0x13};
-                case T:return new byte[]{0x14}; case U:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x15};
+                case T:return new byte[]{0x14}; case U:inputBuffer.setLength(0);transferCancelFlag=true;return new byte[]{0x15};
                 case W:return new byte[]{0x17}; case X:return new byte[]{0x18};
                 case Y:return new byte[]{0x19}; case Z:return new byte[]{0x1A};
                 default:return null;
@@ -1687,128 +1710,158 @@ public class SshTabController {
         requestDraw();
     }
 
-    /** Handle sz: download file via SFTP. */
-    private void handleSzDownload(String remotePath) {
-        AppExecutor.runAsync(() -> {
-            try {
-                Thread.sleep(200);
-                Platform.runLater(() -> {
+    // ==================== ZModem (sz/rz) file transfer ====================
+    // Beacon hex header: '*','*',0x18,'B','0', then the type digit —
+    // '0' = ZRQINIT sent by sz (download), '1' = ZRINIT sent by rz (upload).
+    private static final byte[] ZMODEM_BEACON_SIG = {0x2A, 0x2A, 0x18, 0x42, 0x30};
+
+    private static int indexOfZmodemBeacon(byte[] d, int len) {
+        outer:
+        for (int i = 0; i + ZMODEM_BEACON_SIG.length + 1 <= len; i++) {
+            if (d[i] != ZMODEM_BEACON_SIG[0]) continue;
+            for (int j = 1; j < ZMODEM_BEACON_SIG.length; j++) {
+                if (d[i + j] != ZMODEM_BEACON_SIG[j]) continue outer;
+            }
+            int typeDigit = d[i + ZMODEM_BEACON_SIG.length];
+            if (typeDigit == '0' || typeDigit == '1') return i;
+        }
+        return -1;
+    }
+
+    /** Length of the trailing bytes that form a proper prefix of the beacon signature (0..5). */
+    private static int zmodemBeaconTail(byte[] d, int len) {
+        int max = Math.min(ZMODEM_BEACON_SIG.length, len);
+        for (int k = max; k > 0; k--) {
+            boolean match = true;
+            for (int j = 0; j < k; j++) {
+                if (d[len - k + j] != ZMODEM_BEACON_SIG[j]) { match = false; break; }
+            }
+            if (match) return k;
+        }
+        return 0;
+    }
+
+    /** Log + decode + render terminal output (called on the reader thread). */
+    private void feedTerminal(byte[] data, int off, int len) {
+        if (len <= 0) return;
+        if (logging && logWriter != null) {
+            try { logWriter.write(stripAnsi(new String(data, off, len, terminalCharset()))); logWriter.flush(); } catch (Exception ignored) {}
+        }
+        String out = new String(data, off, len, terminalCharset());
+        Platform.runLater(() -> write(out));
+    }
+
+    /** Run a full ZModem session on the reader thread; binary bytes bypass the terminal renderer.
+     * @param dir 1=upload (remote rz), 2=download (remote sz) */
+    private void runZmodemSession(InputStream in, byte[] prefix, int dir) {
+        zmodemActive = true;
+        transferCancelFlag = false;
+        progressStartMs = 0;
+        lastProgressMs = 0;
+        ZModemSession zs = new ZModemSession(in, shellChannel.getInvertedIn(), prefix, zmodemHandler);
+        try {
+            if (dir == 2) zs.receive(); else zs.send();
+            Platform.runLater(() -> statusGreen("\r\nZModem " + (dir == 2 ? "download" : "upload") + " finished\r\n"));
+        } catch (Exception ex) {
+            log.warn("ZModem session ended: {}", ex.toString());
+            String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
+        } finally {
+            zmodemActive = false;
+        }
+        // give back bytes the engine buffered past the session end (e.g. the shell prompt)
+        byte[] rest = zs.drainPending();
+        if (rest.length > 0) feedTerminal(rest, 0, rest.length);
+    }
+
+    private File lastTransferDir;
+    private volatile long progressStartMs;
+    private volatile long lastProgressMs;
+
+    private final ZModemHandler zmodemHandler = new ZModemHandler() {
+        @Override
+        public File chooseSaveFile(String remoteName, long size) {
+            java.util.concurrent.atomic.AtomicReference<File> ref = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            Platform.runLater(() -> {
+                try {
+                    log.info("ZModem: showing save dialog for {}", remoteName);
                     javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
                     fc.setTitle("Save file");
-                    String name = remotePath.replace('\\', '/');
-                    int idx = name.lastIndexOf('/');
-                    if (idx >= 0) name = name.substring(idx + 1);
-                    fc.setInitialFileName(name);
-                    File file = fc.showSaveDialog(canvas.getScene().getWindow());
-                    if (file != null) {
+                    fc.setInitialFileName(remoteName);
+                    if (lastTransferDir != null && lastTransferDir.isDirectory()) fc.setInitialDirectory(lastTransferDir);
+                    File f = fc.showSaveDialog(canvas.getScene().getWindow());
+                    log.info("ZModem: save dialog closed, result={}", f);
+                    if (f != null) {
+                        lastTransferDir = f.getParentFile();
                         canvas.requestFocus();
-                        doSftpDownload(remotePath, file);
                     }
-                });
-            } catch (Exception ex) {
-                log.error("SFTP download failed", ex);
-                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
-            }
-        });
-    }
-    private void handleRzUpload() {
-        Platform.runLater(() -> {
-            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
-            fc.setTitle("Select file to upload");
-            File file = fc.showOpenDialog(canvas.getScene().getWindow());
-            if (file != null) {
+                    ref.set(f);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return ref.get();
+        }
+
+        @Override
+        public List<File> chooseUploadFiles() {
+            java.util.concurrent.atomic.AtomicReference<List<File>> ref = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            Platform.runLater(() -> {
+                try {
+                    log.info("ZModem: showing upload file dialog");
+                    javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+                    fc.setTitle("Select files to upload");
+                    if (lastTransferDir != null && lastTransferDir.isDirectory()) fc.setInitialDirectory(lastTransferDir);
+                    List<File> files = fc.showOpenMultipleDialog(canvas.getScene().getWindow());
+                    log.info("ZModem: upload dialog closed, files={}", files == null ? 0 : files.size());
+                    if (files != null && !files.isEmpty()) {
+                        lastTransferDir = files.get(0).getParentFile();
                         canvas.requestFocus();
-                AppExecutor.runAsync(() -> {
-                    try {
-                        Thread.sleep(200);
-                        String targetDir;
-                        try (SftpClient sftp = SshUtil.createSftpClient(session)) {
-                            targetDir = sftp.canonicalPath(".");
-                        }
-                        doSftpUpload(file, targetDir + "/" + file.getName());
-                    } catch (Exception ex) {
-                        log.error("SFTP upload failed", ex);
-                        Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
                     }
-                });
-            }
-        });
-    }
-    private void doSftpDownload(String remotePath, File localFile) {
-        sftpCancelFlag = false;
-        try {
-            try (SftpClient sftp = SshUtil.createSftpClient(session)) {
-                String target = remotePath;
-                if (!target.startsWith("/")) target = sftp.canonicalPath(".") + "/" + target;
-                final OutputStream shellOut = shellChannel.getInvertedIn();
-                long total = sftp.stat(target).getSize();
-                try (InputStream in = sftp.read(target);
-                     OutputStream fileOut = new FileOutputStream(localFile)) {
-                    sftpTransferWithProgress(in, fileOut, total, localFile.getName(), shellOut);
+                    ref.set(files);
+                } finally {
+                    latch.countDown();
                 }
-            }
-        } catch (Exception ex) {
-            if (!sftpCancelFlag) {
-                log.error("SFTP download failed", ex);
-                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
-            }
-            try { if (shellChannel != null && shellChannel.isOpen()) { shellChannel.getInvertedIn().write(10); shellChannel.getInvertedIn().flush(); } } catch (Exception e2) {}
+            });
+            try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return ref.get();
         }
-    }
-    private void doSftpUpload(File localFile, String remotePath) {
-        sftpCancelFlag = false;
-        try {
-            try (SftpClient sftp = SshUtil.createSftpClient(session)) {
-                String target = remotePath;
-                if (!target.startsWith("/")) target = sftp.canonicalPath(".") + "/" + target;
-                final OutputStream shellOut = shellChannel.getInvertedIn();
-                try (InputStream in = new FileInputStream(localFile);
-                     OutputStream sftpOut = sftp.write(target, EnumSet.of(SftpClient.OpenMode.Create, SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
-                    sftpTransferWithProgress(in, sftpOut, localFile.length(), localFile.getName(), shellOut);
-                }
+
+        @Override
+        public void onProgress(String name, long done, long total) {
+            long now = System.currentTimeMillis();
+            if (done == 0 || progressStartMs == 0) progressStartMs = now;
+            if (done < total && now - lastProgressMs < 100) return; // throttle UI updates
+            lastProgressMs = now;
+            String msg;
+            if (total > 0) {
+                int pct = (int) Math.min(100, done * 100 / total);
+                long elapsed = now - progressStartMs;
+                long bps = elapsed > 0 ? done * 1000 / elapsed : 0;
+                String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
+                long rem = total - done;
+                String eta = bps > 0 && rem > 0 ? " ETA:" + (rem / bps) + "s" : "";
+                msg = "\r" + name + ": " + pct + "% " + speed + eta;
+            } else {
+                msg = "\r" + name + ": " + (done / 1024) + "KB";
             }
-        } catch (Exception ex) {
-            if (!sftpCancelFlag) {
-                log.error("SFTP upload failed", ex);
-                Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
-            }
-            try { if (shellChannel != null && shellChannel.isOpen()) { shellChannel.getInvertedIn().write(10); shellChannel.getInvertedIn().flush(); } } catch (Exception e2) {}
-        }
-    }
-    /** Copy stream content while reporting progress to the terminal status line.
-     *  Mirrors the throttling of the old SftpProgressMonitor: refresh every >=10%
-     *  and at most every 100ms; honours sftpCancelFlag by aborting the copy. */
-    private void sftpTransferWithProgress(InputStream in, OutputStream out, long max,
-                                          String fileName, OutputStream shellOut) throws IOException {
-        long cnt = 0;
-        int lastPct = 0;
-        long startMs = System.currentTimeMillis();
-        progressStatus("\r" + fileName + "\r");
-        byte[] buf = new byte[32768];
-        int len;
-        while ((len = in.read(buf)) != -1) {
-            if (sftpCancelFlag) {
-                throw new IOException("SFTP transfer cancelled");
-            }
-            out.write(buf, 0, len);
-            cnt += len;
-            if (max <= 0) continue;
-            int pct = (int) (cnt * 100 / max);
-            if (pct < lastPct + 10 && cnt < max) continue;
-            lastPct = pct;
-            long elapsed = System.currentTimeMillis() - startMs;
-            if (elapsed < 100 && cnt < max) continue;
-            long bps = elapsed > 0 ? cnt * 1000 / elapsed : 0;
-            String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
-            long rem = max - cnt;
-            String eta = bps > 0 ? " ETA:" + (rem / bps) + "s" : "";
-            String msg = "\r" + fileName + ": " + pct + "% " + speed + eta;
             while (msg.length() < 80) msg += " ";
             progressStatus(msg);
         }
-        progressStatus("\r\n");
-        try { if (shellOut != null) { shellOut.write(13); shellOut.flush(); } } catch (Exception e2) { log.warn("shellOut write failed", e2); }
-    }
+
+        @Override
+        public void onMessage(String message) {
+            Platform.runLater(() -> status(message));
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return transferCancelFlag;
+        }
+    };
 private static String stripContinuationChars(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
