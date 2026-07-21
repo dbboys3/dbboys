@@ -1,4 +1,5 @@
 ### 20260721
+修复ssh连接空闲约10分钟被断开（心跳改到client级别设置——会话级设置无效，ClientConnectionService构造时已缓存；读线程断开时记录原因日志便于排查）  
 修复ssh终端执行rz卡死（rz信标ZRINIT未识别，仅识别了sz的ZRQINIT）  
 修复ssh终端rz传输大文件卡在0%（数据流中读取对端帧形成死锁，改为非阻塞CAN扫描）  
 修复ZModem能力协商字节序（标志位在末字节，恢复CRC32校验）  

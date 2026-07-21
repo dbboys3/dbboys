@@ -492,10 +492,13 @@ public class SshTabController {
                     int dir = data[sig + ZMODEM_BEACON_SIG.length] == '0' ? 2 : 1;
                     runZmodemSession(in, prefix, dir);
                 }
-                // read returned -1 or channel disconnected ???connection lost
+                // read returned -1 (clean EOF: server closed the channel) or channel died
+                log.info("SSH read loop ended: clean EOF, channelOpen={}",
+                        shellChannel != null && shellChannel.isOpen());
                 Platform.runLater(this::onConnectionLost);
             } catch (Exception e) {
                 // read thread interrupted or IO error ???connection likely lost
+                log.info("SSH read loop ended with error: {}", e.toString());
                 Platform.runLater(this::onConnectionLost);
             }
         }, "term-reader");

@@ -12,6 +12,7 @@ import org.apache.sshd.common.NamedResource;
 import org.apache.sshd.common.compression.BuiltinCompressions;
 import org.apache.sshd.common.config.keys.FilePasswordProvider;
 import org.apache.sshd.common.util.security.SecurityUtils;
+import org.apache.sshd.core.CoreModuleProperties;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
 
@@ -22,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.regex.Matcher;
@@ -46,6 +48,12 @@ public class SshUtil {
                     c.setServerKeyVerifier(AcceptAllServerKeyVerifier.INSTANCE);
                     c.setCompressionFactories(Arrays.asList(
                             BuiltinCompressions.delayedZlib, BuiltinCompressions.zlib, BuiltinCompressions.none));
+                    // 保活：30 秒一次应用层心跳，连续 5 次无响应判定断开。
+                    // 必须设置在 client 级别：ClientConnectionService 在会话建立时
+                    // 读取并缓存（final 字段），事后的会话级设置不会生效。
+                    // 防止 NAT/防火墙按空闲超时（常见约 10 分钟）静默断开空闲连接
+                    CoreModuleProperties.HEARTBEAT_INTERVAL.set(c, Duration.ofSeconds(30));
+                    CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(c, 5);
                     c.start();
                     final SshClient started = c;
                     Runtime.getRuntime().addShutdownHook(new Thread(started::stop));
@@ -221,6 +229,7 @@ public class SshUtil {
                                              long timeoutMs) throws Exception {
         ClientSession session = getClient().connect(user, host, port).verify(timeoutMs).getSession();
         try {
+            // 心跳保活在 client 级别统一配置（见 getClient()），会话级设置无效
             if (keyAuth) {
                 addKeyIdentity(session, keyPath, keyPassphrase);
             } else {
