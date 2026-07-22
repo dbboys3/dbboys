@@ -259,7 +259,7 @@ public class SftpDialogController {
     private static final class CellIconFactory {
         static void apply(TableCell<FileEntry, FileEntry> cell, FileEntry item, boolean empty) {
             if (empty || item == null) { cell.setGraphic(null); cell.setText(null); return; }
-            String iconPath = item.isDir ? IconPaths.CREATE_CONNECT_FOLDER : IconPaths.METADATA_CONNECT_OPEN_FILE_ITEM;
+            String iconPath = item.isDir ? IconPaths.CREATE_CONNECT_FOLDER : IconPaths.INSTANCE_SPACE_FILE_PATH_LABEL;
             SVGPath svg = new SVGPath();
             svg.setContent(iconPath);
             svg.setScaleX(0.5); svg.setScaleY(0.5);
@@ -281,7 +281,7 @@ public class SftpDialogController {
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
         Button up   = iconBtn(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.5, I18n.t("sftp.btn.up","Up"));
-        Button home = iconBtn(IconPaths.INSTANCE_SPACE_FILE_PATH_LABEL, 0.5, I18n.t("sftp.btn.home","Home"));
+        Button home = iconBtn(IconPaths.SFTP_HOME_DIR, 0.01, I18n.t("sftp.btn.home","Home"));
         Button ref  = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.5, I18n.t("sftp.btn.refresh","Refresh"));
         Button mk   = iconBtn(IconPaths.MARKDOWN_NEW_FOLDER_ITEM, 0.5, I18n.t("sftp.btn.newdir","New Dir"));
         Button del  = iconBtn(IconPaths.METADATA_DELETE_ITEM, 0.5, I18n.t("sftp.btn.delete","Delete"));
