@@ -679,7 +679,7 @@ public class SftpDialogController {
             try {
                 byte[] buf = new byte[BUF]; int len; long total = 0, last = 0;
                 while ((len = is.read(buf)) != -1) {
-                    if (r.cancelled) { r.fail("Cancelled"); return; }
+                    if (r.cancelled) { r.fail(I18n.t("sftp.status.cancelled","Cancelled")); return; }
                     sftp.write(h, total, buf, 0, len);
                     total += len;
                     if (System.currentTimeMillis() - last > 100) { r.tick(total); last = System.currentTimeMillis(); }
@@ -741,7 +741,7 @@ public class SftpDialogController {
                 long offset = 0, last = 0;
                 byte[] buf = new byte[BUF];
                 while (true) {
-                    if (r.cancelled) { r.fail("Cancelled"); return; }
+                    if (r.cancelled) { r.fail(I18n.t("sftp.status.cancelled","Cancelled")); return; }
                     int rd = sftp.read(h, offset, buf, 0, buf.length);
                     if (rd < 0) break;
                     os.write(buf, 0, rd);
