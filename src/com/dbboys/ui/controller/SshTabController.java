@@ -115,6 +115,7 @@ public class SshTabController {
     @FXML public Label connectionLabel;
     @FXML public Label charsetLabel;
     @FXML public ChoiceBox<String> charsetChoiceBox;
+    @FXML public Button sftpButton;
     @FXML public CheckBox logCheckBox;
     @FXML public VBox sshTab;
     private SshConnect sshConnect;
@@ -216,6 +217,12 @@ public class SshTabController {
                 }
             }
         });
+        // SFTP button
+        sftpButton.setGraphic(IconFactory.group(IconPaths.SFTP, 0.55));
+        sftpButton.setTooltip(new Tooltip(I18n.t("ssh.tab.sftp", "SFTP File Transfer")));
+        sftpButton.setDisable(true);
+        sftpButton.setOnAction(e -> openSftpDialog());
+
         // Log checkbox
         logCheckBox.textProperty().bind(I18n.bind("ssh.label.log"));
         logCheckBox.setOnAction(e -> {
@@ -361,6 +368,7 @@ public class SshTabController {
                     if (blink != null) blink.play(); // ensure blink is running after reconnect
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
+                    sftpButton.setDisable(false);
                     canvas.requestFocus();
                     if (onConnectionStateChanged != null) onConnectionStateChanged.accept(true);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
@@ -377,6 +385,7 @@ public class SshTabController {
                     draw();
                     connectButton.setDisable(false);
                     disconnectButton.setDisable(true);
+                    sftpButton.setDisable(true);
                     if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
@@ -395,6 +404,7 @@ public class SshTabController {
         draw();
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
+        sftpButton.setDisable(true);
         if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
         if (sshConnect != null) {
             connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
@@ -537,6 +547,7 @@ public class SshTabController {
                 : "") + " [" + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
+        sftpButton.setDisable(true);
     }
 
     /** Request a deferred draw. Coalesces rapid write() calls to prevent
@@ -908,6 +919,22 @@ public class SshTabController {
             logWriter = null;
         }
         logging = false;
+    }
+
+    /** Open the SFTP file transfer dialog. */
+    private void openSftpDialog() {
+        if (session == null || !session.isOpen()) {
+            return;
+        }
+        try {
+            org.apache.sshd.sftp.client.SftpClient sftpClient = SshUtil.createSftpClient(session);
+            com.dbboys.ui.controller.SftpDialogController.showDialog(
+                    canvas.getScene().getWindow(), sftpClient, sshConnect);
+        } catch (Exception ex) {
+            log.error("Failed to open SFTP dialog", ex);
+            com.dbboys.ui.notification.NotificationUtil.showMainNotification(
+                    "SFTP: " + ex.getMessage());
+        }
     }
 
     private void saveCursor() {
