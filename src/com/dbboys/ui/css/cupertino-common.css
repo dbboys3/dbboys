@@ -430,6 +430,7 @@ Text {
 .button.right-pill:hover, .button.right-pill:focused {
   -fx-background-insets: 0, 1px;
 }
+.alert-body .button.small:hover,
 .dialog-pane .button.small:hover,
 .dialog-pane .button.custom-button:hover,
 .button:hover {
@@ -3767,6 +3768,7 @@ Text {
   -fx-background-radius: 3;
   -fx-border-width: 0;
 }
+.alert-body .button.small,
 .dialog-pane .button.small{
   -fx-background-color: transparent;
   -fx-border-width: 0;

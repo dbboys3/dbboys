@@ -389,7 +389,7 @@ public class SftpDialogController {
                                 }
                             } finally { sftp.close(h); }
                             entries.sort((a,b) -> a.isDir != b.isDir ? (a.isDir?-1:1) : a.name.compareToIgnoreCase(b.name));
-                            Platform.runLater(() -> { browseItems.setAll(entries); browsePath.setText(p); });
+                            Platform.runLater(() -> { browseItems.setAll(entries); setPathText(browsePath, p); });
                         } catch (Exception ex) {
                             Platform.runLater(() -> AlertUtil.showAlert(I18n.t("sftp.error.title","Error"),
                                 I18n.t("sftp.error.dir_not_exist","Directory does not exist") + ": " + p));
@@ -585,8 +585,15 @@ public class SftpDialogController {
     private void navRemote(String p) { remotePath = p; updateRemotePathField(); loadRemote(p); }
     private void navLocal(File d)   { if (!d.isDirectory()) return; localDir = d; updateLocalPathField(); loadLocal(); }
 
-    private void updateRemotePathField() { if (remotePathField != null) { remotePathField.setText(remotePath); } }
-    private void updateLocalPathField()  { if (localPathField != null)  { localPathField.setText(localDir.getAbsolutePath()); } }
+    private void updateRemotePathField() { if (remotePathField != null) { setPathText(remotePathField, remotePath); } }
+    private void updateLocalPathField()  { if (localPathField != null)  { setPathText(localPathField, localDir.getAbsolutePath()); } }
+
+    /** TextField.setText() resets the caret to position 0; skip no-op writes and keep the caret at the end instead. */
+    private static void setPathText(TextField f, String text) {
+        if (f.getText().equals(text)) return;
+        f.setText(text);
+        f.positionCaret(text.length());
+    }
 
     // =========================== List ===========================
 
