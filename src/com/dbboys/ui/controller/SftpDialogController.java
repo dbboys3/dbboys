@@ -1110,7 +1110,7 @@ public class SftpDialogController {
         Button b = new Button();
         b.setFocusTraversable(false);
         b.setGraphic(IconFactory.group(iconPath, scale));
-        b.setStyle("-fx-font-size:13px;-fx-padding:1 5 1 5;");
+        b.getStyleClass().add("small");
         b.setTooltip(new Tooltip(tip));
         return b;
     }
@@ -1119,7 +1119,7 @@ public class SftpDialogController {
         Button b = new Button();
         b.setFocusTraversable(false);
         b.setGraphic(IconFactory.group(iconPath, scale, color));
-        b.setStyle("-fx-font-size:13px;-fx-padding:1 5 1 5;");
+        b.getStyleClass().add("small");
         b.setTooltip(new Tooltip(tip));
         return b;
     }

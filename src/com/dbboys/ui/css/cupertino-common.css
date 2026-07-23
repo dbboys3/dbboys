@@ -2658,7 +2658,6 @@ Text {
   -color-tab-bg-selected: -color-bg-default;
   -color-tab-fg-selected: -color-fg-default;
   -color-tab-border-selected: -color-accent-emphasis;
-  -color-button-fg: -color-fg-default;
 }
 .tab-pane > .tab-header-area {
   -fx-background-insets: 0;
@@ -2777,9 +2776,7 @@ Text {
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover {
   -fx-background-color: -color-button-bg-hover;
 }
-.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed {
-  -fx-background-color: -color-bg-subtle;
-}
+
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:disabled {
   -fx-opacity: 0.4;
 }
@@ -2787,13 +2784,13 @@ Text {
   -fx-shape: "M7 10l5 5 5-5z";
   -fx-scale-shape: false;
   -fx-padding: 0.22em 0.36em 0.22em 0.36em;
-  -fx-background-color: -color-accent-emphasis;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover > .arrow {
-  -fx-background-color: -color-accent-emphasis;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed > .arrow {
-  -fx-background-color: -color-accent-emphasis;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane.dense > .tab-header-area > .headers-region > .tab {
   -fx-padding: 0.2em 0.3em 0.2em 0.3em;
@@ -3771,6 +3768,7 @@ Text {
 }
 .alert-body .button.small,
 .dialog-pane .button.small{
+    -fx-padding: 2px 4px 2px 4px;
   -fx-background-color: transparent;
   -fx-border-width: 0;
 }
