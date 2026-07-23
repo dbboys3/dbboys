@@ -54,6 +54,10 @@ public class SshUtil {
                     // 防止 NAT/防火墙按空闲超时（常见约 10 分钟）静默断开空闲连接
                     CoreModuleProperties.HEARTBEAT_INTERVAL.set(c, Duration.ofSeconds(30));
                     CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(c, 5);
+                    // SFTP 吞吐优化：增大本地窗口和包尺寸，减少大文件传输时的窗口调整往返
+                    CoreModuleProperties.WINDOW_SIZE.set(c, 8388608L);       // 8 MB 本地窗口
+                    CoreModuleProperties.MAX_PACKET_SIZE.set(c, 262144L);    // 256 KB 单包上限
+                    CoreModuleProperties.REKEY_BYTES_LIMIT.set(c, 4294967296L); // 4 GB 重加密阈值，减少大传输中的重加密停顿
                     c.start();
                     final SshClient started = c;
                     Runtime.getRuntime().addShutdownHook(new Thread(started::stop));
