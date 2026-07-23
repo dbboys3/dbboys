@@ -330,7 +330,7 @@ public class SftpDialogController {
         Button home = iconBtn(IconPaths.SFTP_HOME_DIR, 0.012, I18n.t("sftp.btn.home","Home"));
         Button ref  = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.6, I18n.t("sftp.btn.refresh","Refresh"));
         Button mk   = iconBtn(IconPaths.MARKDOWN_NEW_FOLDER_ITEM, 0.6, I18n.t("sftp.btn.newdir","New Dir"));
-        Button del  = iconBtn(IconPaths.METADATA_DELETE_ITEM, 0.6, I18n.t("sftp.btn.delete","Delete"));
+        Button del  = iconBtn(IconPaths.METADATA_DELETE_ITEM, 0.6, IconFactory.dangerColor(), I18n.t("sftp.btn.delete","Delete"));
         Button ren  = iconBtn(IconPaths.METADATA_RENAME_ITEM, 0.6, I18n.t("sftp.btn.rename","Rename"));
         Button browse = iconBtn(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.6, I18n.t("sftp.btn.browse","Browse"));
 
@@ -1109,6 +1109,15 @@ public class SftpDialogController {
         Button b = new Button();
         b.setFocusTraversable(false);
         b.setGraphic(IconFactory.group(iconPath, scale));
+        b.setStyle("-fx-font-size:13px;-fx-padding:1 5 1 5;");
+        b.setTooltip(new Tooltip(tip));
+        return b;
+    }
+
+    private static Button iconBtn(String iconPath, double scale, javafx.scene.paint.Color color, String tip) {
+        Button b = new Button();
+        b.setFocusTraversable(false);
+        b.setGraphic(IconFactory.group(iconPath, scale, color));
         b.setStyle("-fx-font-size:13px;-fx-padding:1 5 1 5;");
         b.setTooltip(new Tooltip(tip));
         return b;
