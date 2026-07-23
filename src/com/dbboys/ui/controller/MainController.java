@@ -20,6 +20,7 @@ import com.dbboys.model.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -367,6 +368,27 @@ public class MainController {
         sqlTabPane.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.PRIMARY &&event.getClickCount() == 2) {
                 TabpaneUtil.addCustomSqlTab(null);
+            }
+        });
+
+        /*tab溢出下拉菜单项默认解析助记符，会把标题中的"_"吞掉，在菜单弹出时统一关闭*/
+        Window.getWindows().addListener((ListChangeListener<Window>) change -> {
+            while (change.next()) {
+                for (Window window : change.getAddedSubList()) {
+                    if (window instanceof ContextMenu contextMenu) {
+                        Node ownerNode = contextMenu.getOwnerNode();
+                        if (ownerNode != null && ownerNode.getStyleClass().contains("tab-down-button")) {
+                            //关闭菜单项的助记符解析，之后新建的菜单标签会继承该值
+                            contextMenu.getItems().forEach(item -> item.setMnemonicParsing(false));
+                            //已生成的菜单标签在构造时拷贝了旧值，需要同步关闭（会立即重算显示文本）
+                            contextMenu.getScene().getRoot().lookupAll(".label").forEach(node -> {
+                                if (node instanceof Labeled labeled) {
+                                    labeled.setMnemonicParsing(false);
+                                }
+                            });
+                        }
+                    }
+                }
             }
         });
     }
