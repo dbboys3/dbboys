@@ -1836,11 +1836,14 @@ public class SshTabController {
             if (dir == 2) zs.receive(); else zs.send();
             // user cancelled the session via Ctrl+C/Ctrl+U or file-picker dialog
             if (transferCancelFlag || transferCancelledByUser) {
+                cleanTempDownloads();
                 Platform.runLater(() -> statusRed("\r\nZModem " + dirLabel + " cancelled\r\n"));
             } else {
+                commitTempDownloads();
                 Platform.runLater(() -> statusGreen("\r\nZModem " + dirLabel + " finished\r\n"));
             }
         } catch (Exception ex) {
+            cleanTempDownloads();
             log.warn("ZModem session ended: {}", ex.toString());
             String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
@@ -1864,7 +1867,45 @@ public class SshTabController {
             zmodemActive = false;
         }
     }
-    private File lastTransferDir;
+
+    /** Rename all .temp download files to their final names (success path). */
+    private void commitTempDownloads() {
+        synchronized (pendingTempDownloads) {
+            for (java.util.Map.Entry<File, File> e : pendingTempDownloads.entrySet()) {
+                File temp = e.getKey();
+                File real = e.getValue();
+                if (temp.exists()) {
+                    if (real.exists()) real.delete();
+                    if (temp.renameTo(real)) {
+                        log.info("renamed temp {} to {}", temp.getName(), real.getName());
+                    } else {
+                        log.warn("failed to rename temp {} to {}", temp, real);
+                    }
+                }
+            }
+            pendingTempDownloads.clear();
+        }
+    }
+
+    /** Delete all temp files (cancel/error path). */
+    private void cleanTempDownloads() {
+        synchronized (pendingTempDownloads) {
+            for (File temp : pendingTempDownloads.keySet()) {
+                if (temp.exists()) {
+                    if (temp.delete()) {
+                        log.info("deleted temp file {}", temp);
+                    } else {
+                        log.warn("failed to delete temp file {}", temp);
+                    }
+                }
+            }
+            pendingTempDownloads.clear();
+        }
+    }
+
+    private File lastTransferDir = new File(System.getProperty("user.home"), "Desktop");
+    /** Maps .temp download files to their final names; renamed on success, deleted on cancel/error. */
+    private final java.util.Map<File, File> pendingTempDownloads = new java.util.LinkedHashMap<>();
     private volatile long progressStartMs;
     private volatile long lastProgressMs;
 
@@ -1884,11 +1925,15 @@ public class SshTabController {
                     log.info("ZModem: save dialog closed, result={}", f);
                     if (f != null) {
                         lastTransferDir = f.getParentFile();
+                        // write to .temp first; rename on success, delete on cancel/error
+                        File tempFile = new File(f.getParentFile(), f.getName() + ".temp");
+                        synchronized (pendingTempDownloads) { pendingTempDownloads.put(tempFile, f); }
+                        ref.set(tempFile);
                         canvas.requestFocus();
                     } else {
                         transferCancelledByUser = true;
+                        ref.set(null);
                     }
-                    ref.set(f);
                 } finally {
                     latch.countDown();
                 }
