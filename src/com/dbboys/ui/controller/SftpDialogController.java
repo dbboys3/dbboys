@@ -1018,7 +1018,6 @@ public class SftpDialogController {
 
         TextField renameField = new TextField(sel.name);
         renameField.setPrefWidth(200);
-        renameField.positionCaret(sel.name.length());
         hbox.getChildren().add(renameField);
 
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm","OK"), ButtonBar.ButtonData.OK_DONE);
@@ -1033,6 +1032,8 @@ public class SftpDialogController {
         });
 
         renameField.requestFocus();
+        // Deselect text — JavaFX selects all on focus; place caret at end instead
+        Platform.runLater(() -> { renameField.deselect(); renameField.positionCaret(sel.name.length()); });
         ButtonType result = dialog.showAndWait();
         if (result != buttonTypeOk) return;
 
