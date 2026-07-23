@@ -285,7 +285,13 @@ public final class InformixRemoteWorkflow {
         if (ctx.executeCommandWithExitStatus("tar -xvf " + ctx.shellQuote(ctx.remotePackagePath())) != 0) {
             throw new Exception(I18n.t("remote.install.error.extract_package_failed", "解压安装包【%s】失败！").formatted(ctx.remotePackagePath()));
         }
-        int status = ctx.executeCommandWithExitStatus("source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./ids_install -i silent -DLICENSE_ACCEPTED=TRUE");
+        String installCmd;
+        if (ctx.executeCommandWithExitStatus("test -f installserver") == 0) {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./installserver -silent -acceptlicense=yes -javahome none";
+        } else {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./ids_install -i silent -DLICENSE_ACCEPTED=TRUE";
+        }
+        int status = ctx.executeCommandWithExitStatus(installCmd);
         if (status != 0) {
             throw new Exception(I18n.t("remote.install.error.install_to_informixdir_failed", "安装数据库到$INFORMIXDIR失败！"));
         }
@@ -345,7 +351,7 @@ public final class InformixRemoteWorkflow {
                         "echo \"USER:daemon\" > /etc/informix/allowed.surrogates &&" +
                         "onmode -ky &&" +
                         "su - informix -c \"oninit\" &&" +
-                        "echo \"CREATE DEFAULT USER WITH PROPERTIES USER 'daemon'\" |dbaccess sysuser -";
+                        "(echo \"CREATE DEFAULT USER WITH PROPERTIES USER 'daemon'\" |dbaccess sysuser - || true)";
         if (ctx.executeCommandWithExitStatus(paramsCmd) != 0) {
             throw new Exception(I18n.t("remote.install.error.tune_params_failed", "优化配置参数失败！"));
         }
