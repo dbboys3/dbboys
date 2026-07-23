@@ -400,8 +400,12 @@ public class SshTabController {
         SshUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
+        // Leave the alternate screen if a full-screen app (nmon, vi) was running:
+        // the user should land back on the shell buffer with its scrollback and scrollbar
+        exitAltScreen();
         cursorShown = false;
         draw();
+        fireScrollChanged();
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
         sftpButton.setDisable(true);
@@ -538,6 +542,9 @@ public class SshTabController {
         SshUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
+        // Leave the alternate screen first so the disconnect notice lands in the
+        // restored main buffer (with scrollback/scrollbar), not the dead alt frame
+        exitAltScreen();
         statusRed("\r\nDisconnected\r\n");
         cursorShown = false;
         draw();
@@ -998,6 +1005,47 @@ public class SshTabController {
             buffer.remove(from);
         }
     }
+    /** Exit the alternate screen (?1049l): restore the saved main buffer, cursor
+     *  and viewport. Also invoked on disconnect, so a full-screen app (nmon, vi)
+     *  still running when the connection drops does not hide the shell scrollback
+     *  — and its scrollbar — behind a stale alt-screen frame. */
+    private void exitAltScreen() {
+        if (!inAltScreen) return;
+        inAltScreen = false;
+        // Selection rows refer to the alt screen just discarded
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        if (altSavedBuffer != null) {
+            buffer.clear();
+            buffer.addAll(altSavedBuffer);
+            // Clamp the restored cursor: it may have been saved while
+            // pointing beyond the buffer end (stale-geometry CUP)
+            curCol = clamp(altSavedCurCol, 0, Math.max(0, cols - 1));
+            curRow = clamp(altSavedCurRow, 0, Math.max(0, buffer.size() - 1));
+            scrollOff = altSavedScrollOff;
+            altSavedBuffer = null;
+            pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
+            wrapPendingEraseSuppress = false;
+            // Re-lay the restored content if the width changed in alt
+            if (cols != altSavedCols) reflowBuffer(cols);
+            // Always anchor the cursor to the end of the output and pin
+            // the viewport to the bottom. The position saved before the
+            // switch may have been moved by the app's stale-geometry
+            // cleanup sequences (nmon emits a pre-resize CUP between
+            // ?1049l and ?1049h on SIGWINCH), which would otherwise
+            // strand the shell prompt mid-buffer with stale rows below.
+            curRow = Math.max(0, buffer.size() - 1);
+            curCol = 0;
+            scrollLock = false;
+            scrollOff = Math.max(0, buffer.size() - rows);
+            // Re-anchor the DECSC/DECRC slots to the restored cursor:
+            // a position saved before the screen switch is meaningless
+            // after the buffer has been replaced (and possibly reflowed),
+            // and would otherwise yank the cursor back to a stale row
+            savedCurCol = curCol;
+            savedCurRow = curRow;
+        }
+        scrollTop = 0; scrollBottom = -1;
+    }
     private int csi(String s, int p, int e) {
         int st = p;
         boolean isPrivate = false; // CSI ? prefix
@@ -1043,40 +1091,7 @@ public class SshTabController {
                                     selStartCol = selEndCol = selStartRow = selEndRow = -1;
                                 } else {
                                     // Restore saved buffer
-                                    inAltScreen = false;
-                                    // Selection rows refer to the alt screen just discarded
-                                    selStartCol = selEndCol = selStartRow = selEndRow = -1;
-                                    if (altSavedBuffer != null) {
-                                        buffer.clear();
-                                        buffer.addAll(altSavedBuffer);
-                                        // Clamp the restored cursor: it may have been saved while
-                                        // pointing beyond the buffer end (stale-geometry CUP)
-                                        curCol = clamp(altSavedCurCol, 0, Math.max(0, cols - 1));
-                                        curRow = clamp(altSavedCurRow, 0, Math.max(0, buffer.size() - 1));
-                                        scrollOff = altSavedScrollOff;
-                                        altSavedBuffer = null;
-                                        pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
-                                        wrapPendingEraseSuppress = false;
-                                        // Re-lay the restored content if the width changed in alt
-                                        if (cols != altSavedCols) reflowBuffer(cols);
-                                        // Always anchor the cursor to the end of the output and pin
-                                        // the viewport to the bottom. The position saved before the
-                                        // switch may have been moved by the app's stale-geometry
-                                        // cleanup sequences (nmon emits a pre-resize CUP between
-                                        // ?1049l and ?1049h on SIGWINCH), which would otherwise
-                                        // strand the shell prompt mid-buffer with stale rows below.
-                                        curRow = Math.max(0, buffer.size() - 1);
-                                        curCol = 0;
-                                        scrollLock = false;
-                                        scrollOff = Math.max(0, buffer.size() - rows);
-                                        // Re-anchor the DECSC/DECRC slots to the restored cursor:
-                                        // a position saved before the screen switch is meaningless
-                                        // after the buffer has been replaced (and possibly reflowed),
-                                        // and would otherwise yank the cursor back to a stale row
-                                        savedCurCol = curCol;
-                                        savedCurRow = curRow;
-                                    }
-                                    scrollTop = 0; scrollBottom = -1;
+                                    exitAltScreen();
                                 }
                                 break;
                             }
