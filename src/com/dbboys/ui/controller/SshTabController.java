@@ -642,10 +642,11 @@ public class SshTabController {
     private void nl() {
         // Bottom margin must be computed before ensureBuf() may grow the buffer
         int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
+        boolean atMargin = curRow == effectiveBottom; // scrolling only happens from the margin
         curRow++;
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); }
-        if (!scrollLock && curRow > effectiveBottom) {
+        if (!scrollLock && curRow > effectiveBottom && atMargin) {
             if (scrollBottom >= 0 && scrollTop < effectiveBottom) {
                 // DECSTBM scroll region: scroll within region, discarding top line
                 scrollRegionUp(scrollTop, effectiveBottom);
@@ -656,6 +657,10 @@ public class SshTabController {
             }
         } else if (!scrollLock && curRow - scrollOff >= rows) {
             scrollOff = curRow - rows + 1;
+        } else if (inAltScreen && curRow > pageTop() + rows - 1) {
+            // Cursor below a partial scroll region: move down only to the screen
+            // bottom (alt screen has no scrollback to grow into)
+            curRow = pageTop() + rows - 1;
         }
     }
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
@@ -668,10 +673,11 @@ public class SshTabController {
             // rows when a frame ends on a full-width line.
             pendingWrap = false; wrapPendingEraseSuppress = false;
             curCol = 0;
+            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
+            boolean atMargin = curRow == effectiveBottom; // scrolling only happens from the margin
             curRow++;
             markWrapped(curRow - 1); // soft wrap: the row just left continues onto the next one
-            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
-            if (curRow > effectiveBottom) {
+            if (curRow > effectiveBottom && atMargin) {
                 if (inAltScreen) {
                     // Alt screen has no scrollback: scroll within region, discarding the top line
                     scrollRegionUp(scrollTop, effectiveBottom);
@@ -688,6 +694,10 @@ public class SshTabController {
                         scrollOff = curRow - rows + 1;
                     }
                 }
+            } else if (inAltScreen && curRow > pageTop() + rows - 1) {
+                // Cursor below a partial scroll region: move down only to the screen
+                // bottom (alt screen has no scrollback to grow into)
+                curRow = pageTop() + rows - 1;
             }
         } else {
             wrapPendingEraseSuppress = false;
@@ -734,6 +744,12 @@ public class SshTabController {
             if (c.ch != '\0') sb.append(c.ch);
         }
         return sb.toString();
+    }
+    /** Drop the current selection (e.g. because input or a screen switch made it stale). */
+    private void clearSelection() {
+        if (selStartRow < 0 && selEndRow < 0) return;
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        draw();
     }
     private void jumpToBottom() {
         int maxOff = Math.max(0, buffer.size() - rows);
@@ -884,6 +900,7 @@ public class SshTabController {
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
         pendingWrap = false;
         decawm = true; // RIS restores auto-wrap
+        selStartCol = selEndCol = selStartRow = selEndRow = -1; // selection no longer maps to rows
         draw();
     }
 
@@ -1029,9 +1046,13 @@ public class SshTabController {
                                     scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
                                     scrollTop = 0; scrollBottom = rows - 1;
+                                    // Selection rows refer to the main screen, not the new alt page
+                                    selStartCol = selEndCol = selStartRow = selEndRow = -1;
                                 } else {
                                     // Restore saved buffer
                                     inAltScreen = false;
+                                    // Selection rows refer to the alt screen just discarded
+                                    selStartCol = selEndCol = selStartRow = selEndRow = -1;
                                     if (altSavedBuffer != null) {
                                         buffer.clear();
                                         buffer.addAll(altSavedBuffer);
@@ -1111,7 +1132,7 @@ public class SshTabController {
                     case 'D': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, curCol - n); } break;
                     case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
                     case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
-                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, n - 1); } break;
+                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.min(cols - 1, Math.max(0, n - 1)); } break;
                     case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = clamp((inAltScreen ? 0 : pageTop()) + n - 1, 0, (inAltScreen ? 0 : pageTop()) + rows - 1); break; }
                     case 'H': case 'f': {
                         String[] xy = ps.split(";");
@@ -1230,6 +1251,7 @@ public class SshTabController {
         buffer.clear(); buffer.add(new Row());
         curCol = curRow = 0;
         pendingWrap = false;
+        selStartCol = selEndCol = selStartRow = selEndRow = -1; // selection no longer maps to rows
     }
     /** Erase the visible page (the last {@code rows} lines), preserving scrollback history. */
     private void eraseVisiblePage() {
@@ -1245,8 +1267,9 @@ public class SshTabController {
     private void eraseBOL() {
         if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
         List<Cell> ln = buffer.get(curRow);
+        // Blank the cells in place: removing them would shift the rest of the line left
         int end = Math.min(curCol, ln.size() - 1);
-        for (int i = 0; i <= end && !ln.isEmpty(); i++) ln.remove(0);
+        for (int i = 0; i <= end; i++) ln.get(i).reset();
     }
     private void eraseLine() {
         if (curRow < buffer.size()) buffer.get(curRow).clear();
@@ -1529,6 +1552,7 @@ public class SshTabController {
                 if (text != null && !text.isEmpty()) {
                     // Replace \n with \r as terminals expect \r for Enter
                     text = text.replace("\n", "\r");
+                    clearSelection(); // pasting invalidates the stale selection
                     try {
                         OutputStream os = shellChannel.getInvertedIn();
                         os.write(text.getBytes(terminalCharset()));
@@ -1563,6 +1587,7 @@ public class SshTabController {
             jumpToBottom();
             byte[] b = key(e);
             if (b != null) {
+                clearSelection(); // any terminal input invalidates the stale selection
                 try {
                     OutputStream os = shellChannel.getInvertedIn();
                     os.write(b);
@@ -1579,6 +1604,7 @@ public class SshTabController {
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
             jumpToBottom();
+            clearSelection(); // typed input invalidates the stale selection
             try {
                 OutputStream os = shellChannel.getInvertedIn();
                 if (c == '\r' || c == '\n') {
