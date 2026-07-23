@@ -752,7 +752,7 @@ public class RemoteInstallerUtil {
         content.setPadding(new Insets(10,20,10,20));
 
         Button browseButton = new Button("");
-        browseButton.setGraphic(IconFactory.group(BROWSE_ICON_PATH, 0.6, 0.6));
+        browseButton.setGraphic(IconFactory.group(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.6, 0.6));
         browseButton.getStyleClass().add("small");
         browseButton.setFocusTraversable(false);
         Tooltip browseTooltip = new Tooltip();
@@ -792,11 +792,16 @@ public class RemoteInstallerUtil {
         ));
         HBox downloadHBox = new HBox(downloadPrefixLabel, downloadButton, downloadSuffixLabel);
         HBox hBox = new HBox(10);
+        hBox.setAlignment(Pos.CENTER_LEFT);
         hBox.getChildren().addAll(installFilePathField,browseButton);
         // 浏览文件事件
         browseButton.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle(I18n.t("remote.install.step3.select_package", "选择安装包"));
+            File desktopDir = FileSystemView.getFileSystemView().getHomeDirectory();
+            if (desktopDir != null && desktopDir.isDirectory()) {
+                fileChooser.setInitialDirectory(desktopDir);
+            }
             selectedFile = fileChooser.showOpenDialog(parent);
             if (selectedFile != null) {
                 String localPath = selectedFile.getAbsolutePath();
