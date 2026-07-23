@@ -218,7 +218,7 @@ public class SshTabController {
             }
         });
         // SFTP button
-        sftpButton.setGraphic(IconFactory.group(IconPaths.SFTP, 0.55));
+        sftpButton.setGraphic(IconFactory.group(IconPaths.SFTP, 0.5));
         sftpButton.setTooltip(new Tooltip(I18n.t("ssh.tab.sftp", "SFTP File Transfer")));
         sftpButton.setDisable(true);
         sftpButton.setOnAction(e -> openSftpDialog());

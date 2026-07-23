@@ -254,9 +254,15 @@ public class SftpDialogController {
         outer.setDividerPositions(0.72);
 
         // --- window ---
-        CustomWindowFrameUtil.createModalPopup(stage, title, outer, 1050, 650, true, owner);
+        CustomWindowFrameUtil.createModalPopup(stage, title, outer, 955, 520, true, owner);
         stage.setOnCloseRequest(e -> close());
         stage.setTitle(title.get());
+        // Center on screen (must be done after stage is sized, before show)
+        stage.sizeToScene();
+        javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
+        javafx.geometry.Rectangle2D bounds = screen.getVisualBounds();
+        stage.setX((bounds.getWidth() - 955) / 2 + bounds.getMinX());
+        stage.setY((bounds.getHeight() - 520) / 2 + bounds.getMinY());
         stage.show();
 
         // Move focus away from text fields so they don't appear selected
@@ -306,16 +312,15 @@ public class SftpDialogController {
         toolbar.setPadding(new Insets(4, 6, 2, 6));
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
-        Button up   = iconBtn(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.5, I18n.t("sftp.btn.up","Up"));
-        Button home = iconBtn(IconPaths.SFTP_HOME_DIR, 0.01, I18n.t("sftp.btn.home","Home"));
-        Button ref  = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.5, I18n.t("sftp.btn.refresh","Refresh"));
-        Button mk   = iconBtn(IconPaths.MARKDOWN_NEW_FOLDER_ITEM, 0.5, I18n.t("sftp.btn.newdir","New Dir"));
-        Button del  = iconBtn(IconPaths.METADATA_DELETE_ITEM, 0.5, I18n.t("sftp.btn.delete","Delete"));
-        Button ren  = iconBtn(IconPaths.METADATA_RENAME_ITEM, 0.5, I18n.t("sftp.btn.rename","Rename"));
-        Button browse = iconBtn(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.5, I18n.t("sftp.btn.browse","Browse"));
+        Button up   = iconBtn(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.6, I18n.t("sftp.btn.up","Up"));
+        Button home = iconBtn(IconPaths.SFTP_HOME_DIR, 0.012, I18n.t("sftp.btn.home","Home"));
+        Button ref  = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.6, I18n.t("sftp.btn.refresh","Refresh"));
+        Button mk   = iconBtn(IconPaths.MARKDOWN_NEW_FOLDER_ITEM, 0.6, I18n.t("sftp.btn.newdir","New Dir"));
+        Button del  = iconBtn(IconPaths.METADATA_DELETE_ITEM, 0.6, I18n.t("sftp.btn.delete","Delete"));
+        Button ren  = iconBtn(IconPaths.METADATA_RENAME_ITEM, 0.6, I18n.t("sftp.btn.rename","Rename"));
+        Button browse = iconBtn(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.6, I18n.t("sftp.btn.browse","Browse"));
 
         TextField pathField = new TextField();
-        pathField.setStyle("-fx-font-family:monospace;-fx-font-size:11px;-fx-padding:1 4 1 4;");
         pathField.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(pathField, Priority.ALWAYS);
 
@@ -384,12 +389,12 @@ public class SftpDialogController {
                 browseTbl.setItems(browseItems);
 
                 TextField browsePath = new TextField(remotePath);
-                browsePath.setStyle("-fx-font-family:monospace;-fx-font-size:11px;");
+                browsePath.setStyle("-fx-font-family:monospace;-fx-font-size:13px;");
                 browsePath.setPrefWidth(350);
 
-                Button upBtn = iconBtn(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.5, I18n.t("sftp.btn.up","Up"));
+                Button upBtn = iconBtn(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.6, I18n.t("sftp.btn.up","Up"));
                 upBtn.getStyleClass().add("small");
-                Button goBtn = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.5, I18n.t("sftp.btn.refresh","Refresh"));
+                Button goBtn = iconBtn(IconPaths.METADATA_REFRESH_ITEM, 0.6, I18n.t("sftp.btn.refresh","Refresh"));
                 goBtn.getStyleClass().add("small");
 
                 Runnable loadBrowsePath = () -> {
@@ -603,7 +608,7 @@ public class SftpDialogController {
                 ? I18n.t("sftp.pane.remote","Remote") + ": " + ssh.getUsername() + "@" + ssh.getHost()
                 : I18n.t("sftp.pane.local","Local");
         Label sl = new Label(lbl);
-        sl.setStyle("-fx-font-weight:bold;-fx-font-size:11px;-fx-padding:2 6 2 6;");
+        sl.setStyle("-fx-font-weight:bold;-fx-font-size:13px;-fx-padding:2 6 2 6;");
         VBox w = new VBox(sl, pane);
         VBox.setVgrow(pane, Priority.ALWAYS);
         return w;
