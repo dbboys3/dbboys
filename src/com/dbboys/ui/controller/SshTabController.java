@@ -642,25 +642,23 @@ public class SshTabController {
     private void nl() {
         // Bottom margin must be computed before ensureBuf() may grow the buffer
         int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
-        boolean atMargin = curRow == effectiveBottom; // scrolling only happens from the margin
+        if (!scrollLock && curRow == effectiveBottom && scrollBottom >= 0 && scrollTop < effectiveBottom) {
+            // DECSTBM scroll region: scroll within region, discarding top line.
+            // No buffer growth — a row past the screen bottom would become
+            // reachable by jumpToBottom() and show up as a stray blank line.
+            scrollRegionUp(scrollTop, effectiveBottom);
+            return;
+        }
         curRow++;
         ensureBuf(curRow);
         while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); }
-        if (!scrollLock && curRow > effectiveBottom && atMargin) {
-            if (scrollBottom >= 0 && scrollTop < effectiveBottom) {
-                // DECSTBM scroll region: scroll within region, discarding top line
-                scrollRegionUp(scrollTop, effectiveBottom);
-                curRow = effectiveBottom;
-            } else {
-                // Normal mode: advance viewport, preserve history in buffer
-                scrollOff = curRow - rows + 1;
-            }
+        if (inAltScreen) {
+            // Alt screen is a fixed page: never grow the cursor or buffer past the bottom row
+            if (curRow > rows - 1) curRow = rows - 1;
+            while (buffer.size() > rows) buffer.remove(buffer.size() - 1);
         } else if (!scrollLock && curRow - scrollOff >= rows) {
+            // Normal mode: advance viewport, preserve history in buffer
             scrollOff = curRow - rows + 1;
-        } else if (inAltScreen && curRow > pageTop() + rows - 1) {
-            // Cursor below a partial scroll region: move down only to the screen
-            // bottom (alt screen has no scrollback to grow into)
-            curRow = pageTop() + rows - 1;
         }
     }
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
@@ -674,30 +672,25 @@ public class SshTabController {
             pendingWrap = false; wrapPendingEraseSuppress = false;
             curCol = 0;
             int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
-            boolean atMargin = curRow == effectiveBottom; // scrolling only happens from the margin
-            curRow++;
-            markWrapped(curRow - 1); // soft wrap: the row just left continues onto the next one
-            if (curRow > effectiveBottom && atMargin) {
+            if (!scrollLock && curRow == effectiveBottom && scrollBottom >= 0 && scrollTop < effectiveBottom) {
+                // Wrap at the region's bottom margin: scroll within the region,
+                // discarding the top line; the buffer does not grow
+                markWrapped(curRow); // the wrapped row continues onto the fresh bottom line
+                scrollRegionUp(scrollTop, effectiveBottom);
+            } else {
+                boolean atMargin = curRow == effectiveBottom;
+                curRow++;
+                markWrapped(curRow - 1); // soft wrap: the row just left continues onto the next one
                 if (inAltScreen) {
-                    // Alt screen has no scrollback: scroll within region, discarding the top line
-                    scrollRegionUp(scrollTop, effectiveBottom);
-                    curRow = effectiveBottom;
-                } else if (!scrollLock) {
-                    if (scrollBottom >= 0) {
-                        // DECSTBM scroll region: scroll within region, discarding top line
-                        int top = scrollTop;
-                        int bottom = Math.max(scrollTop, effectiveBottom);
-                        scrollRegionUp(top, bottom);
-                        curRow = bottom;
-                    } else {
-                        // Normal mode: advance viewport, preserve history in buffer
-                        scrollOff = curRow - rows + 1;
-                    }
+                    // Alt screen is a fixed page: never grow the cursor or buffer past the bottom row
+                    if (curRow > rows - 1) curRow = rows - 1;
+                    while (buffer.size() > rows) buffer.remove(buffer.size() - 1);
+                } else if (!scrollLock && atMargin && curRow > effectiveBottom) {
+                    // Normal mode: advance viewport, preserve history in buffer
+                    scrollOff = curRow - rows + 1;
+                } else if (!scrollLock && curRow - scrollOff >= rows) {
+                    scrollOff = curRow - rows + 1;
                 }
-            } else if (inAltScreen && curRow > pageTop() + rows - 1) {
-                // Cursor below a partial scroll region: move down only to the screen
-                // bottom (alt screen has no scrollback to grow into)
-                curRow = pageTop() + rows - 1;
             }
         } else {
             wrapPendingEraseSuppress = false;
@@ -752,7 +745,7 @@ public class SshTabController {
         draw();
     }
     private void jumpToBottom() {
-        int maxOff = Math.max(0, buffer.size() - rows);
+        int maxOff = inAltScreen ? 0 : Math.max(0, buffer.size() - rows); // alt screen has no scrollback
         scrollLock = false; // typing means the user wants to follow output again
         if (scrollOff != maxOff) {
             scrollOff = maxOff;
@@ -988,9 +981,9 @@ public class SshTabController {
     }
     private void insertLine(int at) {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-        ensureBuf(bottom + 1);
+        ensureBuf(bottom);
         buffer.add(at, new Row());
-        if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
+        if (buffer.size() > bottom + 1) buffer.remove(bottom + 1); // drop the line pushed past the margin
     }
     /** Scroll [top, bottom] up by one line: discard the top line and insert a blank
      *  line at the bottom. Lines below the region are preserved (remove+clear would
@@ -1155,19 +1148,25 @@ public class SshTabController {
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         int insAt = Math.max(scrollTop, curRow);
                         for (int i = 0; i < n; i++) {
-                            ensureBuf(bottom + 1);
+                            ensureBuf(bottom);
                             buffer.add(insAt, new Row());
-                            if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
+                            if (buffer.size() > bottom + 1) buffer.remove(bottom + 1); // drop the line pushed past the margin
                         }
                     } break;
                     case 'M': { // delete lines from current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         int delFrom = Math.max(scrollTop, curRow);
+                        int removed = 0;
                         for (int i = 0; i < n && delFrom < buffer.size() && delFrom <= bottom; i++) {
                             buffer.remove(delFrom);
+                            removed++;
                         }
-                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new Row());
+                        // Blanks go at the region bottom: re-insert them just ahead of
+                        // the first line below the region, so those lines end up back
+                        // at their original rows instead of being pulled into the region
+                        int insAt = Math.min(bottom + 1 - removed, buffer.size());
+                        for (int i = 0; i < removed; i++) buffer.add(insAt + i, new Row());
                     } break;
                     case 'P': { // delete characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
