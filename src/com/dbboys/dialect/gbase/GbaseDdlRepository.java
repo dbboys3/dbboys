@@ -1280,14 +1280,21 @@ public final class GbaseDdlRepository implements DdlRepository {
      */
     private static void appendCheckConstraints(StringBuilder ddl, ArrayList<CheckInfo> checks, String sqlmode, String patternConstraint) {
         for (CheckInfo check : checks) {
-            if ("Oracle".equalsIgnoreCase(sqlmode)) {
+            if ("Oracle".equalsIgnoreCase(sqlmode)) {       // Oracle模式下，约束名称在前
                 if (!Pattern.matches(patternConstraint, check.getConstrName())) {
                     ddl.append(",\n  CONSTRAINT ").append(getName(check.getConstrName(),sqlmode));
                     ddl.append("  CHECK ").append(check.getCheckText());
                 } else {
                     ddl.append(",\n  CHECK ").append(check.getCheckText());
                 }
-            } else {
+            } else if ("MySQL".equals(sqlmode)) {           // MySQL模式下，约束名称在前，但名称需要额外处理
+                if (!Pattern.matches(patternConstraint, check.getConstrName())) {
+                    ddl.append(",\n  CONSTRAINT ").append(getName(getIndexNameBySqlMode(patternConstraint, sqlmode),sqlmode));
+                    ddl.append("  CHECK ").append(check.getCheckText());
+                } else {
+                    ddl.append(",\n  CHECK ").append(check.getCheckText());
+                }
+            } else {                                        // 默认GBase模式
                 ddl.append(",\n  CHECK ").append(check.getCheckText());
                 if (!Pattern.matches(patternConstraint, check.getConstrName())) {
                     ddl.append(" CONSTRAINT ").append(getName(check.getConstrName(),sqlmode));
@@ -1323,14 +1330,26 @@ public final class GbaseDdlRepository implements DdlRepository {
                     ddl.append(primaryKey.getIdxCols()).append(")");
                 }
             } else if ("MySQL".equals(sqlmode)) {                   // mysql模式下，主键显示为P，唯一索引显示为K，普通索引显示为Q
-                if ("P".equals(primaryKey.getConstrType())) {
-                    ddl.append(",\n  PRIMARY KEY");
-                } else if ("K".equals(primaryKey.getConstrType())) {
-                    ddl.append(",\n  KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
-                } else if ("Q".equals(primaryKey.getConstrType())) {
-                    ddl.append(",\n  UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
-                }
-                ddl.append(" (").append(primaryKey.getIdxCols()).append(")");
+                if (!Pattern.matches(patternConstraint, primaryKey.getConstrName())) {
+                    ddl.append(",\n  CONSTRAINT ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                    if ("P".equals(primaryKey.getConstrType())) {
+                        ddl.append(" PRIMARY KEY");
+                    } else if ("K".equals(primaryKey.getConstrType())) {
+                        ddl.append(" KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                    } else if ("Q".equals(primaryKey.getConstrType())) {
+                        ddl.append(" UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                    }
+                    ddl.append(" (").append(primaryKey.getIdxCols()).append(")");
+                } else {
+                    if ("P".equals(primaryKey.getConstrType())) {
+                        ddl.append(",\n  PRIMARY KEY");
+                    } else if ("K".equals(primaryKey.getConstrType())) {
+                        ddl.append(",\n  KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                    } else if ("Q".equals(primaryKey.getConstrType())) {
+                        ddl.append(",\n  UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKey.getConstrName(),sqlmode),sqlmode));
+                    }
+                    ddl.append(" (").append(primaryKey.getIdxCols()).append(")");
+                }          
             } else {
                 if ("P".equals(primaryKey.getConstrType())) {
                     ddl.append(",\n  PRIMARY KEY(");
@@ -1495,15 +1514,16 @@ public final class GbaseDdlRepository implements DdlRepository {
 
         ArrayList<String> fkColumns = getColNameListByColumnsInfo(columns);
         for (ForeignKeyInfo foreignKey : foreignKeys) {
-            if ("Oracle".equals(foreignKey.getForeignKeyModeFunc())){
-                ddl.append("SET ENVIRONMENT SQLMODE 'Oracle';\n");
+            if ("Oracle".equals(foreignKey.getForeignKeyModeFunc()) 
+                || "MySQL".equals(foreignKey.getForeignKeyModeFunc())){     // Oracle和MySQL模式下，外键约束名称在前
+                ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
                 ddl.append("ALTER TABLE ").append(getName(foreignKey.getFkTabname()));
                 ddl.append(" ADD ");
                 if (!Pattern.matches(patternConstraint, foreignKey.getFkName())) {
                     ddl.append("CONSTRAINT ").append(getName(foreignKey.getFkName(),sqlmode));
                 }
                 ddl.append(" FOREIGN KEY(");
-            } else {
+            } else {                                                        // 默认GBase模式
                 if(displaySqlMode(getDataBaseProductVersionNumber(connection))){
                     ddl.append("SET ENVIRONMENT SQLMODE 'GBase';\n");
                 }
@@ -4135,31 +4155,28 @@ public final class GbaseDdlRepository implements DdlRepository {
         }
         // 检查约束
         if (checkInfoArrayList.size() > 0){
-            for(int i=0;i<checkInfoArrayList.size();i++){
-                // Oracle模式下，constraint在前
-                if ("Oracle".equalsIgnoreCase(sqlmode)){
+            for(int i=0;i<checkInfoArrayList.size();i++){               
+                if ("Oracle".equalsIgnoreCase(sqlmode) || "MySQL".equalsIgnoreCase(sqlmode)){   // Oracle及MySQL模式下，constraint在前
                     if (!Pattern.matches(parttern_constraint, checkInfoArrayList.get(i).getConstrName())) {
-                        ddl.append(",\n  CONSTRAINT ").append(getName(checkInfoArrayList.get(i).getConstrName()));
+                        ddl.append(",\n  CONSTRAINT ").append(getName(checkInfoArrayList.get(i).getConstrName(),sqlmode));
                         ddl.append("  CHECK ").append(checkInfoArrayList.get(i).getCheckText());
                     } else {
                         ddl.append(",\n  CHECK ").append(checkInfoArrayList.get(i).getCheckText());
-                    }
-                    // default GBase模式
-                } else {
+                    }                    
+                } else {                                            // default GBase模式
                     ddl.append(",\n  CHECK ").append(checkInfoArrayList.get(i).getCheckText());
                     if (!Pattern.matches(parttern_constraint, checkInfoArrayList.get(i).getConstrName())) {
-                        ddl.append(" CONSTRAINT ").append(getName(checkInfoArrayList.get(i).getConstrName()));
+                        ddl.append(" CONSTRAINT ").append(getName(checkInfoArrayList.get(i).getConstrName(),sqlmode));
                     }
                 }
             }
         }
         // 主键约束及唯一约束
         if (primaryKeyInfoArrayList.size() > 0){
-            for(int i=0;i<primaryKeyInfoArrayList.size();i++){
-                // Oracle模式
-                if ("Oracle".equalsIgnoreCase(sqlmode)){
+            for(int i=0;i<primaryKeyInfoArrayList.size();i++){                
+                if ("Oracle".equalsIgnoreCase(sqlmode)){   // Oracle及MySQL模式下，constraint在前
                     if (!Pattern.matches(parttern_constraint, primaryKeyInfoArrayList.get(i).getConstrName())) {
-                        ddl.append(",\n  CONSTRAINT ").append(getName(primaryKeyInfoArrayList.get(i).getConstrName()));
+                        ddl.append(",\n  CONSTRAINT ").append(getName(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode));
                         if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
                             ddl.append("  PRIMARY KEY(");
                         } else if ("U".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
@@ -4174,8 +4191,28 @@ public final class GbaseDdlRepository implements DdlRepository {
                         }
                         ddl.append(primaryKeyInfoArrayList.get(i).getIdxCols()).append(")");
                     }
-                    // default GBase模式
-                } else {
+                } else if ("MySQL".equalsIgnoreCase(sqlmode)) {     // Mysql模式, 约束名称需要额外处理
+                    if (!Pattern.matches(parttern_constraint, primaryKeyInfoArrayList.get(i).getConstrName())) {
+                        ddl.append(",\n  CONSTRAINT ").append(getName(getIndexNameBySqlMode(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode),sqlmode));
+                        if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(" PRIMARY KEY");
+                        } else if ("K".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(" KEY ").append(getName(getIndexNameBySqlMode(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode),sqlmode));
+                        } else if ("Q".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(" UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode),sqlmode));
+                        }
+                        ddl.append(" (").append(primaryKeyInfoArrayList.get(i).getIdxCols()).append(")");
+                    } else {
+                        if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(",\n  PRIMARY KEY");
+                        } else if ("K".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(",\n  KEY ").append(getName(getIndexNameBySqlMode(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode),sqlmode));
+                        } else if ("Q".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
+                            ddl.append(",\n  UNIQUE KEY ").append(getName(getIndexNameBySqlMode(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode),sqlmode));
+                        }
+                        ddl.append(" (").append(primaryKeyInfoArrayList.get(i).getIdxCols()).append(")");
+                    }
+                } else {                                            // default GBase模式
                     if ("P".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
                         ddl.append(",\n  PRIMARY KEY(");
                     } else if ("U".equals(primaryKeyInfoArrayList.get(i).getConstrType())) {
@@ -4183,7 +4220,7 @@ public final class GbaseDdlRepository implements DdlRepository {
                     }
                     ddl.append(primaryKeyInfoArrayList.get(i).getIdxCols()).append(")");
                     if (!Pattern.matches(parttern_constraint, primaryKeyInfoArrayList.get(i).getConstrName())) {
-                        ddl.append("  CONSTRAINT ").append(getName(primaryKeyInfoArrayList.get(i).getConstrName()));
+                        ddl.append("  CONSTRAINT ").append(getName(primaryKeyInfoArrayList.get(i).getConstrName(),sqlmode));
                     }
                 }
             }
