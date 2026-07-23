@@ -118,21 +118,25 @@ public class CustomSshTab extends CustomTab {
         }
     }
 
-    /** Pulse the icon: scale up by 10% then back to normal, loop until stopped. */
+    /** Pulse the icon: shrink by 20% then grow by 20%, loop until stopped. */
     private void pulseIcon() {
         if (getGraphic() == null) return;
         if (pulseTimeline != null) return; // already pulsing
         javafx.scene.Node graphic = getGraphic();
         double base = graphic.getScaleX();
-        double target = base * 1.1;
+        double min = base * 0.9;
+        double max = base * 1.1;
         pulseTimeline = new Timeline(
                 new KeyFrame(Duration.ZERO,
                         new KeyValue(graphic.scaleXProperty(), base),
                         new KeyValue(graphic.scaleYProperty(), base)),
                 new KeyFrame(Duration.millis(400),
-                        new KeyValue(graphic.scaleXProperty(), target),
-                        new KeyValue(graphic.scaleYProperty(), target)),
+                        new KeyValue(graphic.scaleXProperty(), min),
+                        new KeyValue(graphic.scaleYProperty(), min)),
                 new KeyFrame(Duration.millis(800),
+                        new KeyValue(graphic.scaleXProperty(), max),
+                        new KeyValue(graphic.scaleYProperty(), max)),
+                new KeyFrame(Duration.millis(1200),
                         new KeyValue(graphic.scaleXProperty(), base),
                         new KeyValue(graphic.scaleYProperty(), base))
         );
