@@ -1,21 +1,22 @@
-### 20260721
-修复ssh连接空闲约10分钟被断开（心跳改到client级别设置——会话级设置无效，ClientConnectionService构造时已缓存；读线程断开时记录原因日志便于排查）  
-修复ssh终端执行rz卡死（rz信标ZRINIT未识别，仅识别了sz的ZRQINIT）  
-修复ssh终端rz传输大文件卡在0%（数据流中读取对端帧形成死锁，改为非阻塞CAN扫描）  
-修复ZModem能力协商字节序（标志位在末字节，恢复CRC32校验）  
-修复ssh终端sz下载中Ctrl+C取消后屏幕刷乱码（中止后排空通道再交还终端）  
-修复ssh终端sz/rz取消后不显示命令提示符（排空后补发换行使shell重打提示符）  
-优化ZModem传输速度（子包1KB提升至8KB、下载写盘加缓冲、CRC批量计算、发送侧256KB批量刷写、空闲等待1ms、子包批量读取，引擎基准上行25MB/s下行39MB/s）  
-
-
-### 20260720
+### 20260726
+新增informix11.5支持  
 新增ssh终端支持sz/rz（ZModem协议）文件传输  
+新增ssh sftp文件传输  
 新增ssh 支持字体缩放  
+新增eddsa-0.3.0.jar  
+新增sshd-common-2.19.0.jar  
+新增sshd-core-2.19.0.jar  
+新增sshd-sftp-2.19.0.jar  
+删除jsch-2.27.6.jar  
+修改ssh 连接组件jsch为sshd  
 修复ssh top出现滚动条不显示第一行  
-修复ssh界面最大化后光标丢失   
+修复ssh 界面最大化后光标丢失   
 修复ssh arm nmon没对齐  
 修复ssh 最大化光标丢失  
 修复ssh 界面缩放滚动条异常  
+修复ssh less最后多一行空格  
+修复ssh vi/more/less等选区未及时清理  
+修复ssh 光标没有始终保持在最后  
 
 
 ### 20260719
