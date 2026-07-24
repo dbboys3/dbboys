@@ -71,7 +71,7 @@ public final class InstanceHealthCheckUtil {
             onstat_ = SshUtil.executeCommand(session, env + "onstat -||true", true);
             onstat_g_seg_greped = SshUtil.executeCommand(session, env + "onstat -g seg|grep -c ' V '");
             onstat_g_seg = SshUtil.executeCommand(session, env + "onstat -g seg");
-            onstat_g_cluster = SshUtil.executeCommand(session, env + "onstat -g cluster");
+            onstat_g_cluster = SshUtil.executeCommand(session, env + "onstat -g cluster||true");
             onstat_l = SshUtil.executeCommand(session, env + "onstat -l");
             onstat_l_llog = SshUtil.executeCommand(session, env + "onstat -l |grep -c 'U------'||true");
             onstat_d_greped = SshUtil.executeCommand(session, env + "onstat -d|grep -c PD||true");
