@@ -288,12 +288,15 @@ public final class InformixRemoteWorkflow {
         String installCmd;
         if (ctx.executeCommandWithExitStatus("test -f installserver") == 0) {
             installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./installserver -silent -acceptlicense=yes -javahome none";
-        } else {
+        }else if (ctx.executeCommandWithExitStatus("test -f SERVER/installserver") == 0) {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && cd SERVER && ./installserver -silent -acceptlicense=yes -javahome none";
+        }
+         else {
             installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./ids_install -i silent -DLICENSE_ACCEPTED=TRUE";
         }
         int status = ctx.executeCommandWithExitStatus(installCmd);
         if (status != 0) {
-            throw new Exception(I18n.t("remote.install.error.install_to_informixdir_failed", "安装数据库到$INFORMIXDIR失败！"));
+            throw new Exception(I18n.t("remote.install.error.install_to_informixdir_failed", "安装数据库到$INFORMIXDIR失败！请检查/etc/security/limits.conf相关参数是否超过65536。"));
         }
     }
 
