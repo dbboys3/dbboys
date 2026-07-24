@@ -408,7 +408,7 @@ public final class InformixRemoteWorkflow {
             }
         }
         String tempdbsCmd = "source ~informix/.bash_profile && DATADIR="
-                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "onmode -wf DBSPACETEMP=" + dbspaceTemp+"||true";
+                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "(onmode -wf DBSPACETEMP=" + dbspaceTemp+"||true)";
         if (ctx.executeCommandWithExitStatus(tempdbsCmd) != 0) {
             throw new Exception(I18n.t("remote.install.error.tune_temp_space_failed", "优化临时空间失败！"));
         }
