@@ -347,7 +347,6 @@ public final class InformixRemoteWorkflow {
                         "sed -i \"s#^USERMAPPING.*#USERMAPPING ADMIN#g\" $INFORMIXDIR/etc/$ONCONFIG && " +
                         "sed -i \"s#^BUFFERPOOL size=2k.*#BUFFERPOOL " + ctx.fieldValue(InformixRemoteFields.BUFFERPOOL_2K) + "#g\" $INFORMIXDIR/etc/$ONCONFIG &&" +
                         "echo \"BUFFERPOOL " + ctx.fieldValue(InformixRemoteFields.BUFFERPOOL_16K) + "\">>$INFORMIXDIR/etc/$ONCONFIG &&" +
-                        "echo \"ENABLE_NULL_STRING 0\">>$INFORMIXDIR/etc/$ONCONFIG &&" +
                         "touch $INFORMIXDIR/etc/sysadmin/stop &&" +
                         "chown informix:informix $INFORMIXDIR/etc/sysadmin/stop &&" +
                         "mkdir -p /etc/informix &&" +

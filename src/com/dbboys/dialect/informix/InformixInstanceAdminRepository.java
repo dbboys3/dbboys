@@ -210,10 +210,16 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
 
     @Override
     public double getMaxStorageSpaceUsage(Connection conn) throws SQLException {
+        int dbVersion = InformixDdlRepository.getDataBaseProductVersionNumber(conn);
+        boolean isLegacy = dbVersion > 0 && dbVersion <= 1170;
+        String extendableCol = isLegacy ? "0" : "sum(is_extendable)";
+        String havingClause = isLegacy
+                ? "having 0=0 and sum(e.extents)>0"
+                : "having sum(is_extendable)=0 and sum(e.extents)>0";
         String sql = """
                 SELECT first 1
                   trim(B.name) as name,
-                  sum(is_extendable),
+                  %s,
                   case when
                   round(
                   (sum(case when is_sbchunk==1 then udsize-udfree when is_blobchunk==1 then chksize-nfree*a.pagesize/2048  else chksize-nfree end)*2/1024/1024)
@@ -231,10 +237,9 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
                   FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
                   left join (select chunk,count(*) as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                   group by 1
-                  having sum(is_extendable) =0
-                  and sum(e.extents)>0
+                  %s
                   order by percent desc;
-                """;
+                """.formatted(extendableCol, havingClause);
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             if (rs.next()) {
