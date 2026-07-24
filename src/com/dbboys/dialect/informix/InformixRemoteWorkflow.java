@@ -251,10 +251,10 @@ public final class InformixRemoteWorkflow {
         ctx.executeCommandWithExitStatus("systemctl restart systemd-logind");
         ctx.executeCommandWithExitStatus("sed -i '/^[[:space:]]*\\*[[:space:]]\\+\\(soft\\|hard\\)[[:space:]]/d' /etc/security/limits.conf");
         ctx.executeCommandWithExitStatus("sed -i '/^[[:space:]]*\\*[[:space:]]\\+\\(soft\\|hard\\)[[:space:]]/d' /etc/security/limits.d/20-nproc.conf");
-        ctx.executeCommandWithExitStatus("echo \"* soft nproc 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* hard nproc 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* soft nofile 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* hard nofile 1048576\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* soft nproc 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* hard nproc 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* soft nofile 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* hard nofile 65536\">> /etc/security/limits.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmmni.*/d\" /etc/sysctl.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmmax.*/d\" /etc/sysctl.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmall.*/d\" /etc/sysctl.conf");
@@ -406,7 +406,7 @@ public final class InformixRemoteWorkflow {
             }
         }
         String tempdbsCmd = "source ~informix/.bash_profile && DATADIR="
-                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "onmode -wf DBSPACETEMP=" + dbspaceTemp;
+                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "onmode -wf DBSPACETEMP=" + dbspaceTemp+"||true";
         if (ctx.executeCommandWithExitStatus(tempdbsCmd) != 0) {
             throw new Exception(I18n.t("remote.install.error.tune_temp_space_failed", "优化临时空间失败！"));
         }
