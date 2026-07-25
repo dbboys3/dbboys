@@ -5,13 +5,9 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.remote.RemoteInstallExecutionContext;
 import com.dbboys.remote.RemoteUninstallExecutionContext;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import java.io.File;
 
 public final class DamengRemoteWorkflow {
     private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
-    private static final Logger log = LogManager.getLogger(DamengRemoteWorkflow.class);
 
     private DamengRemoteWorkflow() {
     }
@@ -310,10 +306,13 @@ public final class DamengRemoteWorkflow {
         ctx.executeCommand("echo 'DMINIT_PREFLIGHT:' > /tmp/dm_preflight.log 2>/dev/null; " +
                 "echo '" + preflight.replace("'", "'\\''") + "' >> /tmp/dm_preflight.log 2>/dev/null || true");
 
-        // Build dminit command with logging - use a shell script approach to avoid quoting issues
+        // Build dminit command with logging
         String logFile = "/tmp/dm_init_" + instanceName + ".log";
         String initScript = "/tmp/dm_init_" + instanceName + ".sh";
         String sysdbaPwd = ctx.fieldValue(DamengRemoteFields.SYSDBA_PASSWORD);
+
+        // Escape single quotes in password for shell script
+        String escapedPwd = sysdbaPwd.replace("'", "'\\''");
 
         // Write a wrapper script that dmdba can execute
         String scriptContent =
@@ -331,8 +330,8 @@ public final class DamengRemoteWorkflow {
                 " BLANK_PAD_MODE=" + blankPadMode +
                 " LOG_SIZE=" + logSize +
                 " BUFFER=" + buffer +
-                " SYSDBA_PWD=" + ctx.shellQuote(sysdbaPwd) +
-                " SYSAUDITOR_PWD=" + ctx.shellQuote(sysdbaPwd) +
+                " SYSDBA_PWD='" + escapedPwd + "'" +
+                " SYSAUDITOR_PWD='" + escapedPwd + "'" +
                 " > " + logFile + " 2>&1\n" +
                 "echo EXIT_CODE:$? >> " + logFile + "\n";
 
@@ -467,32 +466,27 @@ public final class DamengRemoteWorkflow {
     // ==================== Result and Connect ====================
 
     public static void populateInstallResult(RemoteInstallExecutionContext ctx, CustomInlineCssTextArea databaseInfoArea) throws Exception {
-        String packageName = ctx.remotePackagePath() == null ? "" : new File(ctx.remotePackagePath()).getName();
         String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
         String dataPath = ctx.fieldValue(DamengRemoteFields.DATA_PATH);
+        String instanceName = ctx.fieldValue(DamengRemoteFields.INSTANCE_NAME);
         String port = ctx.fieldValue(DamengRemoteFields.PORT);
         String password = ctx.fieldValue(DamengRemoteFields.SYSDBA_PASSWORD);
         String charset = ctx.fieldValue(DamengRemoteFields.CHARSET);
         String pageSize = ctx.fieldValue(DamengRemoteFields.PAGE_SIZE);
         String caseSensitive = ctx.fieldValue(DamengRemoteFields.CASE_SENSITIVE);
         String compatibleMode = ctx.fieldValue(DamengRemoteFields.COMPATIBLE_MODE);
-        String disql = findBin(installPath, ctx, "disql");
 
         databaseInfoArea.replaceText("");
 
         databaseInfoArea.append(I18n.t("remote.install.result.db_version", "Database version") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(packageName + "\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        if (disql != null) {
-            databaseInfoArea.append(ctx.executeCommand(
-                    ctx.shellQuote(disql) + " SYSDBA/" + password.replace("\"", "\\\"") +
-                    "@localhost:" + port + " -e \"select id_code()\" 2>/dev/null || echo ''") + "\n\n",
-                    "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        }
+        databaseInfoArea.append("DM8\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
         databaseInfoArea.append(I18n.t("remote.install.result.db_instance_info", "Database instance info") + "\n", RESULT_TITLE_STYLE);
         databaseInfoArea.append(I18n.t("remote.install.result.install_path", "Install path") + ": " + installPath + "\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.data_path", "Data path") + ": " + dataPath + "\n",
+                "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.result.instance_name", "Instance") + ": " + instanceName + "\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.listen_ip", "Listen IP") + ": 0.0.0.0\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
@@ -507,17 +501,8 @@ public final class DamengRemoteWorkflow {
         databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.case_sensitive.name", "Case sensitive") + ": " +
                 ("1".equals(caseSensitive) ? "Y" : "N") + "\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.compatible_mode.name", "Compatible mode") + ": " + compatibleMode + "\n\n",
+        databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.compatible_mode.name", "Compatible mode") + ": " + compatibleMode + "\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-        if (disql != null) {
-            databaseInfoArea.append(I18n.t("remote.install.dameng.result.variables", "Dameng variables") + "\n", RESULT_TITLE_STYLE);
-            databaseInfoArea.append(ctx.executeCommand(
-                    ctx.shellQuote(disql) + " SYSDBA/" + password.replace("\"", "\\\"") +
-                    "@localhost:" + port + " -e \"select name, value from v\\$parameter where name in " +
-                    "('INSTANCE_NAME','DB_NAME','PORT_NUM','PAGE_SIZE','CASE_SENSITIVE','CHARSET','COMPATIBLE_MODE','LENGTH_IN_CHAR')\" 2>/dev/null || echo ''") +
-                    "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        }
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
