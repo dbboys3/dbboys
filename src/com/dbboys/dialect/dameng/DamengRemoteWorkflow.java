@@ -7,7 +7,7 @@ import com.dbboys.remote.RemoteInstallExecutionContext;
 import com.dbboys.remote.RemoteUninstallExecutionContext;
 
 public final class DamengRemoteWorkflow {
-    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
+    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;";
 
     private DamengRemoteWorkflow() {
     }

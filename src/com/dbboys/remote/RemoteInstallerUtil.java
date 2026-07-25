@@ -8,6 +8,7 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
+import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.infra.util.DownloadManagerUtil;
 import com.dbboys.infra.util.MenuItemUtil;
 import com.dbboys.model.Connect;
@@ -1412,8 +1413,7 @@ public class RemoteInstallerUtil {
         Platform.runLater(() -> {
             String msg = I18n.t("remote.install.result.saved_to_desktop",
                     "Install info saved to desktop: %s").formatted(savedFileRef.getName());
-            AlertUtil.showAlert(I18n.t("remote.install.title.product.format",
-                    "%s Install Wizard").formatted(activeProviderName()), msg);
+            NotificationUtil.showMainNotification(msg);
         });
     }
 
