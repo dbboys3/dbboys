@@ -20,7 +20,7 @@ public final class DamengRemoteWorkflow {
                 cleanupExistingInstall(ctx);
                 return;
             case 2:
-                checkSystemDependencies(ctx);
+                //checkSystemDependencies(ctx);
                 return;
             case 3:
                 createUserAndDirectories(ctx);
