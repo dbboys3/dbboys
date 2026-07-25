@@ -37,6 +37,9 @@ public final class DamengRemoteWorkflow {
             case 7:
                 registerService(ctx);
                 return;
+            case 8:
+                startService(ctx);
+                return;
             default:
                 throw new IllegalArgumentException("Unknown Dameng install step: " + stepNo);
         }
@@ -383,6 +386,26 @@ public final class DamengRemoteWorkflow {
         ctx.executeCommandWithExitStatus("systemctl enable " + serviceName + ".service 2>/dev/null || true");
     }
 
+    private static void startService(RemoteInstallExecutionContext ctx) throws Exception {
+        String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
+        String dataPath = ctx.fieldValue(DamengRemoteFields.DATA_PATH);
+        String instanceName = ctx.fieldValue(DamengRemoteFields.INSTANCE_NAME);
+        String serviceName = DamengRemoteFields.SERVICE_PREFIX + instanceName;
+        String userName = DamengRemoteFields.USER_NAME;
+
+        // Start via systemctl, fall back to direct dmserver launch
+        if (ctx.executeCommandWithExitStatus("systemctl start " + serviceName + ".service 2>/dev/null") != 0) {
+            String dmIni = dataPath + "/" + instanceName + "/dm.ini";
+            String dmserverBin = findBin(installPath, ctx, "dmserver");
+            if (dmserverBin != null) {
+                ctx.executeCommandWithExitStatus(
+                        "su - " + userName + " -c " +
+                        ctx.shellQuote(dmserverBin + " " + dmIni) +
+                        " &>/dev/null &");
+            }
+        }
+    }
+
 
 
     // ==================== Uninstall Step Implementations ====================
@@ -438,8 +461,8 @@ public final class DamengRemoteWorkflow {
         ctx.executeCommandWithExitStatus("rm -f /etc/security/limits.d/dameng.conf 2>/dev/null || true");
         ctx.executeCommandWithExitStatus("sed -i '/dmdba/d' /etc/security/limits.conf 2>/dev/null || true");
         ctx.executeCommandWithExitStatus("rm -f /tmp/auto_install.xml /tmp/dm_install.log /tmp/dm_init.log 2>/dev/null || true");
-        ctx.executeCommandWithExitStatus("umount /mnt/dm8_iso 2>/dev/null || true");
-        ctx.executeCommandWithExitStatus("rm -rf /mnt/dm8_iso 2>/dev/null || true");
+        ctx.executeCommandWithExitStatus("umount /dm8_iso 2>/dev/null || true");
+        ctx.executeCommandWithExitStatus("rm -rf /dm8_iso 2>/dev/null || true");
     }
 
     // ==================== Helpers ====================
@@ -501,8 +524,25 @@ public final class DamengRemoteWorkflow {
         databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.case_sensitive.name", "Case sensitive") + ": " +
                 ("1".equals(caseSensitive) ? "Y" : "N") + "\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.compatible_mode.name", "Compatible mode") + ": " + compatibleMode + "\n",
+        databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.compatible_mode.name", "Compatible mode") + ": " + compatibleMode + "\n\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+
+        databaseInfoArea.append(I18n.t("remote.install.info.machine", "Machine") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.os", "OS") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.kernel", "Kernel") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.cpu", "CPU") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.memory", "Memory") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.disk", "Disk") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.info.filesystem", "Filesystem") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.executeCommand("df -h") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        databaseInfoArea.append(I18n.t("remote.install.result.kernel_params", "Kernel params") + "\n", RESULT_TITLE_STYLE);
+        databaseInfoArea.append(ctx.executeCommand("ulimit -a") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {

@@ -179,7 +179,7 @@ public final class DamengRemoteProvider implements RemoteDatabaseProvider {
                         "检查unzip、libaio、磁盘空间(>/opt ≥5G)等系统依赖。", true, true),
                 new RemoteInstallStepSpec("remote.install.dameng.step3.name", "创建用户和目录",
                         "remote.install.dameng.step3.desc",
-                        "创建dinstall组和dmdba用户，设置密码，创建安装和数据目录，配置文件描述符限制。", true, true),
+                        "创建dinstall组和dmdba用户，创建安装和数据目录，配置文件描述符限制。", true, true),
                 new RemoteInstallStepSpec("remote.install.dameng.step4.name", "解压并挂载ISO",
                         "remote.install.dameng.step4.desc",
                         "解压zip安装包获取ISO镜像文件，挂载ISO至/mnt/dm8_iso。", true, true),
@@ -191,7 +191,10 @@ public final class DamengRemoteProvider implements RemoteDatabaseProvider {
                         "使用dminit工具初始化数据库实例，配置字符集、页大小、大小写敏感、兼容模式等参数。", true, true),
                 new RemoteInstallStepSpec("remote.install.dameng.step7.name", "注册系统服务",
                         "remote.install.dameng.step7.desc",
-                        "使用dm_service_installer.sh注册systemd系统服务，设置开机自启。", true, true)
+                        "使用dm_service_installer.sh注册systemd系统服务，设置开机自启。", true, true),
+                new RemoteInstallStepSpec("remote.install.dameng.step8.name", "启动服务",
+                        "remote.install.dameng.step8.desc",
+                        "启动达梦数据库服务(systemctl start DmService)。", true, true)
         );
     }
 
