@@ -4,6 +4,7 @@ import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.remote.RemoteInstallExecutionContext;
+import com.dbboys.remote.RemoteSystemInfoCollector;
 import com.dbboys.remote.RemoteUninstallExecutionContext;
 
 public final class DamengRemoteWorkflow {
@@ -527,22 +528,11 @@ public final class DamengRemoteWorkflow {
         databaseInfoArea.append(I18n.t("remote.install.dameng.cfg.compatible_mode.name", "Compatible mode") + ": " + compatibleMode + "\n\n",
                 "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
 
-        databaseInfoArea.append(I18n.t("remote.install.info.machine", "Machine") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.os", "OS") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.kernel", "Kernel") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.cpu", "CPU") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.memory", "Memory") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.disk", "Disk") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.filesystem", "Filesystem") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("df -h") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.kernel_params", "Kernel params") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("ulimit -a") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        // System info goes through the unified renderer (same interface and
+        // title/text styles as the wizard's step-2 system-info panel)
+        RemoteSystemInfoCollector.appendSystemInfo(databaseInfoArea, ctx);
+        RemoteSystemInfoCollector.appendSection(databaseInfoArea,
+                I18n.t("remote.install.result.kernel_params", "Kernel params"), ctx.executeCommand("ulimit -a"));
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {

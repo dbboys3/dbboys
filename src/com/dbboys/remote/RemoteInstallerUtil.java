@@ -320,34 +320,7 @@ public class RemoteInstallerUtil {
                                         // 显示信息
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(machineInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            // 省略其他信息的显示代码（与原逻辑相同）
-                                            systemInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(osInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(kernelInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(cpuInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(memInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(diskInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(fileSystemInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-
-
-                                            //systemInfoArea.append("内核参数\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            //systemInfoArea.append(kernelParams + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
+                                            RemoteSystemInfoCollector.appendSystemInfo(systemInfoArea, snapshot);
                                             systemInfoArea.showParagraphAtTop(0);
                                         });
                                     } catch (Exception e) {

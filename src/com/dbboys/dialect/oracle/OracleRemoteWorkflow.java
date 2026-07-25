@@ -101,21 +101,17 @@ public final class OracleRemoteWorkflow {
         area.append(I18n.t("remote.install.result.data_path", "Data File Path") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_DATA_DIR) + "\n", RESULT_BODY_STYLE);
         area.append(I18n.t("remote.install.result.recovery_area", "Recovery Area") + "：" + ctx.fieldValue(OracleRemoteFields.ORACLE_RECOVERY_AREA) + "\n\n", RESULT_BODY_STYLE);
 
+        // System info goes through the unified renderer (same interface and
+        // title/text styles as the wizard's step-2 system-info panel)
         try {
             String diskInfo = ctx.executeCommand("df -h");
-            area.append(I18n.t("remote.install.result.disk_usage", "Disk Usage") + "\n", RESULT_TITLE_STYLE);
-            area.append(diskInfo + "\n\n", RESULT_BODY_STYLE);
+            RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.result.disk_usage", "Disk Usage"), diskInfo);
         } catch (Exception ignored) {}
-        area.append(I18n.t("remote.install.info.machine", "Server Model") + "\n", RESULT_TITLE_STYLE);
-        area.append(ctx.machineInfo() + "\n\n", RESULT_BODY_STYLE);
-        area.append(I18n.t("remote.install.info.os", "Operating System") + "\n", RESULT_TITLE_STYLE);
-        area.append(ctx.osInfo() + "\n\n", RESULT_BODY_STYLE);
-        area.append(I18n.t("remote.install.info.kernel", "Kernel Version") + "\n", RESULT_TITLE_STYLE);
-        area.append(ctx.kernelInfo() + "\n\n", RESULT_BODY_STYLE);
-        area.append(I18n.t("remote.install.info.cpu", "CPU Information") + "\n", RESULT_TITLE_STYLE);
-        area.append(ctx.cpuInfo() + "\n\n", RESULT_BODY_STYLE);
-        area.append(I18n.t("remote.install.info.memory", "Memory Information") + "\n", RESULT_TITLE_STYLE);
-        area.append(ctx.memoryInfo() + "\n\n", RESULT_BODY_STYLE);
+        RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.info.machine", "Server Model"), ctx.machineInfo());
+        RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.info.os", "Operating System"), ctx.osInfo());
+        RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.info.kernel", "Kernel Version"), ctx.kernelInfo());
+        RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.info.cpu", "CPU Information"), ctx.cpuInfo());
+        RemoteSystemInfoCollector.appendSection(area, I18n.t("remote.install.info.memory", "Memory Information"), ctx.memoryInfo());
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
