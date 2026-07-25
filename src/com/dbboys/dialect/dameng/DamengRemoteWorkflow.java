@@ -41,12 +41,6 @@ public final class DamengRemoteWorkflow {
             case 7:
                 registerService(ctx);
                 return;
-            case 8:
-                startAndSetPassword(ctx);
-                return;
-            case 9:
-                installSampleData(ctx);
-                return;
             default:
                 throw new IllegalArgumentException("Unknown Dameng install step: " + stepNo);
         }
@@ -144,7 +138,7 @@ public final class DamengRemoteWorkflow {
 
         String script =
                 "getent group " + groupName + " >/dev/null || groupadd " + groupName + ";" +
-                "id " + userName + " >/dev/null 2>&1 || useradd -r -g " + groupName + " -s /bin/bash " + userName + ";" +
+                "id " + userName + " >/dev/null 2>&1 || useradd -g " + groupName + " -d /home/" + userName + " -m -s /bin/bash " + userName + ";" +
                 "echo \"" + userName + ":" + password + "\" | chpasswd;" +
                 "mkdir -p " + ctx.shellQuote(installPath) + " " + ctx.shellQuote(dataPath) + ";" +
                 "chown -R " + userName + ":" + groupName + " " + ctx.shellQuote(installPath) + " " + ctx.shellQuote(dataPath) + ";";
@@ -229,6 +223,7 @@ public final class DamengRemoteWorkflow {
                 "    <KEY></KEY>\n" +
                 "    <INSTALL_TYPE>1</INSTALL_TYPE>\n" +
                 "    <INSTALL_PATH>" + installPath + "</INSTALL_PATH>\n" +
+                "    <INIT_DB>N</INIT_DB>\n" +
                 "    <INI_FILE_PATH></INI_FILE_PATH>\n" +
                 "    <BOOLEAN_KEYS>1</BOOLEAN_KEYS>\n" +
                 "</DATABASE>";
@@ -250,21 +245,28 @@ public final class DamengRemoteWorkflow {
                     "DMInstall.bin not found in mounted ISO. Contents:\n") + isoContents);
         }
 
-        // Run silent installer as dmdba
+        // Run silent installer as dmdba (exit code 1 is OK — just means dmdba can't run root_installer.sh)
         ctx.executeCommandWithExitStatus("chmod a+x " + ctx.shellQuote(installerBin));
         String runCmd = "su - " + userName + " -c " +
                 ctx.shellQuote(installerBin + " -q /tmp/auto_install.xml > /tmp/dm_install.log 2>&1; echo EXIT_CODE:$?");
-        String output = ctx.executeCommand(runCmd);
+        ctx.executeCommand(runCmd);
+
+        // Run root_installer.sh as root
+        ctx.executeCommandWithExitStatus(installPath + "/script/root/root_installer.sh > /tmp/dm_root_install.log 2>&1 || true");
 
         // Log install output
-        ctx.executeCommand("{ echo '=== install stdout ==='; echo '" + output.replace("'", "'\\''") +
-                "'; echo '=== install log ==='; cat /tmp/dm_install.log 2>/dev/null || true; " +
+        ctx.executeCommand("{ echo '=== install stdout ==='; cat /tmp/dm_install.log 2>/dev/null || true; " +
+                "echo '=== root_installer ==='; cat /tmp/dm_root_install.log 2>/dev/null || true; " +
                 "} > /tmp/dm_install_diag.log 2>/dev/null; chmod 644 /tmp/dm_install_diag.log 2>/dev/null || true");
 
-        // Check if install succeeded by looking for key binaries
-        String checkBin = ctx.executeCommand("test -f " + ctx.shellQuote(installPath + "/bin/dminit") +
-                " -o -f $(find " + ctx.shellQuote(installPath) + " -name 'dminit' -type f 2>/dev/null | head -1 || echo '')" +
-                " && echo 'OK' || echo 'FAIL'").trim();
+        // Check if install succeeded by looking for key binaries (DMInstall exits 1 when root_installer.sh fails, that's OK)
+        String checkBin = ctx.executeCommand(
+                "test -f " + ctx.shellQuote(installPath + "/bin/dminit") + " && echo 'OK' || echo 'FIND'").trim();
+        if (!"OK".equals(checkBin)) {
+            checkBin = ctx.executeCommand("test -d " + ctx.shellQuote(installPath) +
+                    " && test -n \"$(find " + ctx.shellQuote(installPath) +
+                    " -name 'dminit' -type f 2>/dev/null | head -1)\" && echo 'OK' || echo 'FAIL'").trim();
+        }
         if (!"OK".equals(checkBin)) {
             String diagLog = ctx.executeCommand("cat /tmp/dm_install_diag.log 2>/dev/null || echo '<no log>'");
             throw new Exception(I18n.t("remote.install.dameng.error.install_failed",
@@ -288,7 +290,6 @@ public final class DamengRemoteWorkflow {
         String compatibleMode = ctx.fieldValue(DamengRemoteFields.COMPATIBLE_MODE);
         String extentSize = ctx.fieldValue(DamengRemoteFields.EXTENT_SIZE);
         String blankPadMode = ctx.fieldValue(DamengRemoteFields.BLANK_PAD_MODE);
-        String lengthInChar = ctx.fieldValue(DamengRemoteFields.LENGTH_IN_CHAR);
         String logSize = ctx.fieldValue(DamengRemoteFields.LOG_SIZE);
         String buffer = ctx.fieldValue(DamengRemoteFields.BUFFER);
         String userName = DamengRemoteFields.USER_NAME;
@@ -312,6 +313,7 @@ public final class DamengRemoteWorkflow {
         // Build dminit command with logging - use a shell script approach to avoid quoting issues
         String logFile = "/tmp/dm_init_" + instanceName + ".log";
         String initScript = "/tmp/dm_init_" + instanceName + ".sh";
+        String sysdbaPwd = ctx.fieldValue(DamengRemoteFields.SYSDBA_PASSWORD);
 
         // Write a wrapper script that dmdba can execute
         String scriptContent =
@@ -327,9 +329,10 @@ public final class DamengRemoteWorkflow {
                         ? " COMPATIBLE_MODE=" + compatibleMode : "") +
                 " EXTENT_SIZE=" + extentSize +
                 " BLANK_PAD_MODE=" + blankPadMode +
-                " LENGTH_IN_CHAR=" + lengthInChar +
                 " LOG_SIZE=" + logSize +
                 " BUFFER=" + buffer +
+                " SYSDBA_PWD=" + ctx.shellQuote(sysdbaPwd) +
+                " SYSAUDITOR_PWD=" + ctx.shellQuote(sysdbaPwd) +
                 " > " + logFile + " 2>&1\n" +
                 "echo EXIT_CODE:$? >> " + logFile + "\n";
 
@@ -348,10 +351,11 @@ public final class DamengRemoteWorkflow {
                 " 2>&1 || echo '<no log>'; echo; echo '=== stdout ==='; " +
                 "echo '" + output.replace("'", "'\\''") + "'; echo; " +
                 "echo '=== preflight ==='; cat /tmp/dm_preflight.log 2>&1 || true; " +
-                "} > /tmp/dm_init_diag.log 2>&1; chmod 644 /tmp/dm_init_diag.log 2>2>&1 || true");
+                "} > /tmp/dm_init_diag.log 2>&1; chmod 644 /tmp/dm_init_diag.log 2>&1 || true");
 
         // Verify init succeeded by checking for dm.ini
-        String checkOutput = ctx.executeCommand("test -f " + ctx.shellQuote(dataPath + "/" + instanceName + "/dm.ini") + " && echo 'OK' || echo 'FAIL'").trim();
+        String checkOutput = ctx.executeCommand(
+                "test -f " + ctx.shellQuote(dataPath + "/" + instanceName + "/dm.ini") + " && echo 'OK' || echo 'FAIL'").trim();
         if (!"OK".equals(checkOutput)) {
             String diagLog = ctx.executeCommand("cat /tmp/dm_init_diag.log 2>/dev/null || echo '<no diag log>'");
             throw new Exception(I18n.t("remote.install.dameng.error.init_failed",
@@ -380,108 +384,7 @@ public final class DamengRemoteWorkflow {
         ctx.executeCommandWithExitStatus("systemctl enable " + serviceName + ".service 2>/dev/null || true");
     }
 
-    private static void startAndSetPassword(RemoteInstallExecutionContext ctx) throws Exception {
-        String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
-        String instanceName = ctx.fieldValue(DamengRemoteFields.INSTANCE_NAME);
-        String port = ctx.fieldValue(DamengRemoteFields.PORT);
-        String newPassword = ctx.fieldValue(DamengRemoteFields.SYSDBA_PASSWORD);
-        String serviceName = DamengRemoteFields.SERVICE_PREFIX + instanceName;
-        String userName = DamengRemoteFields.USER_NAME;
 
-        // Start service
-        if (ctx.executeCommandWithExitStatus("systemctl start " + serviceName + ".service 2>/dev/null") != 0) {
-            // Try starting directly as dmdba user
-            String dmIni = ctx.fieldValue(DamengRemoteFields.DATA_PATH) + "/" + instanceName + "/dm.ini";
-            ctx.executeCommandWithExitStatus(
-                    "su - " + userName + " -c " +
-                    ctx.shellQuote(findBin(installPath, ctx, "dmserver") + " " + dmIni) +
-                    " &>/dev/null &");
-        }
-
-        // Wait for instance to be ready (poll with disql, up to 120 seconds)
-        String disql = findBin(installPath, ctx, "disql");
-        String waitScript =
-                "for i in $(seq 1 60); do " +
-                "  " + ctx.shellQuote(disql) + " SYSDBA/" + DamengRemoteFields.DEFAULT_PASSWORD +
-                "@localhost:" + port + " -e \"select 1 from dual\" >/dev/null 2>&1 && break; " +
-                "  sleep 2; " +
-                "done; " +
-                ctx.shellQuote(disql) + " SYSDBA/" + DamengRemoteFields.DEFAULT_PASSWORD +
-                "@localhost:" + port + " -e \"select 1 from dual\" >/dev/null 2>&1 && echo 'READY' || echo 'TIMEOUT'";
-        String result = ctx.executeCommand(waitScript).trim();
-
-        if ("TIMEOUT".equals(result)) {
-            throw new Exception(I18n.t("remote.install.dameng.error.start_service_failed",
-                    "Dameng service did not become ready within 120 seconds."));
-        }
-
-        // Change SYSDBA password
-        String alterPwdScript = disql + " SYSDBA/" + DamengRemoteFields.DEFAULT_PASSWORD +
-                "@localhost:" + port + " <<'DM_EOF'\n" +
-                "ALTER USER SYSDBA IDENTIFIED BY \"" + newPassword.replace("\"", "\\\"") + "\";\n" +
-                "EXIT;\n" +
-                "DM_EOF";
-        String alterOutput = ctx.executeCommand(alterPwdScript + " 2>&1");
-        if (alterOutput.contains("error") || alterOutput.contains("ERROR") || alterOutput.contains("fail")) {
-            ctx.executeCommand("echo 'WARN: Failed to change SYSDBA password: " + alterOutput + "'");
-        }
-    }
-
-    private static void installSampleData(RemoteInstallExecutionContext ctx) throws Exception {
-        String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
-        String port = ctx.fieldValue(DamengRemoteFields.PORT);
-        String password = ctx.fieldValue(DamengRemoteFields.SYSDBA_PASSWORD);
-        String disql = findBin(installPath, ctx, "disql");
-
-        // Look for sample scripts in common locations
-        String[] sampleDirs = {
-                installPath + "/samples",
-                installPath + "/sample",
-                installPath + "/demo",
-                installPath + "/web/samples"
-        };
-
-        boolean foundSample = false;
-        for (String dir : sampleDirs) {
-            if (ctx.executeCommandWithExitStatus("test -d " + ctx.shellQuote(dir)) == 0) {
-                String[] possibleScripts = {"dmhr_cre.sql", "DMHR_CRE.sql", "sample.sql", "demo.sql"};
-                for (String script : possibleScripts) {
-                    String scriptPath = dir + "/" + script;
-                    if (ctx.executeCommandWithExitStatus("test -f " + ctx.shellQuote(scriptPath)) == 0) {
-                        String runSample = disql + " SYSDBA/" + password.replace("\"", "\\\"") +
-                                "@localhost:" + port + " <<'DM_SAMPLE_EOF'\n" +
-                                "START " + scriptPath + ";\n" +
-                                "EXIT;\n" +
-                                "DM_SAMPLE_EOF";
-                        ctx.executeCommand(runSample + " 2>&1 || true");
-                        foundSample = true;
-                        break;
-                    }
-                }
-            }
-            if (foundSample) break;
-        }
-
-        if (foundSample) {
-            for (String dir : sampleDirs) {
-                if (ctx.executeCommandWithExitStatus("test -d " + ctx.shellQuote(dir)) == 0) {
-                    String[] dataScripts = {"dmhr_data.sql", "DMHR_DATA.sql", "sample_data.sql", "demo_data.sql"};
-                    for (String script : dataScripts) {
-                        String scriptPath = dir + "/" + script;
-                        if (ctx.executeCommandWithExitStatus("test -f " + ctx.shellQuote(scriptPath)) == 0) {
-                            String runData = disql + " SYSDBA/" + password.replace("\"", "\\\"") +
-                                    "@localhost:" + port + " <<'DM_DATA_EOF'\n" +
-                                    "START " + scriptPath + ";\n" +
-                                    "EXIT;\n" +
-                                    "DM_DATA_EOF";
-                            ctx.executeCommand(runData + " 2>&1 || true");
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     // ==================== Uninstall Step Implementations ====================
 
