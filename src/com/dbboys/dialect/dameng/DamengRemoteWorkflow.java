@@ -5,11 +5,13 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.remote.RemoteInstallExecutionContext;
 import com.dbboys.remote.RemoteUninstallExecutionContext;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.io.File;
 
 public final class DamengRemoteWorkflow {
     private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
+    private static final Logger log = LogManager.getLogger(DamengRemoteWorkflow.class);
 
     private DamengRemoteWorkflow() {
     }
@@ -28,18 +30,21 @@ public final class DamengRemoteWorkflow {
                 createUserAndDirectories(ctx);
                 return;
             case 4:
-                extractPackage(ctx);
+                extractAndMountIso(ctx);
                 return;
             case 5:
-                initializeInstance(ctx);
+                silentInstall(ctx);
                 return;
             case 6:
-                registerService(ctx);
+                initializeInstance(ctx);
                 return;
             case 7:
-                startAndSetPassword(ctx);
+                registerService(ctx);
                 return;
             case 8:
+                startAndSetPassword(ctx);
+                return;
+            case 9:
                 installSampleData(ctx);
                 return;
             default:
@@ -161,65 +166,115 @@ public final class DamengRemoteWorkflow {
         ctx.executeCommandWithExitStatus(setLimits);
     }
 
-    private static void extractPackage(RemoteInstallExecutionContext ctx) throws Exception {
+    /**
+     * Step 4: Extract zip to get ISO, then mount the ISO.
+     * The downloaded .zip contains a Dameng DM8 .iso file.
+     */
+    private static void extractAndMountIso(RemoteInstallExecutionContext ctx) throws Exception {
         String packagePath = ctx.remotePackagePath();
-        String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
         String userName = DamengRemoteFields.USER_NAME;
         String groupName = DamengRemoteFields.GROUP_NAME;
         String lowerPkg = packagePath == null ? "" : packagePath.toLowerCase();
+        String mountPoint = "/dm8_iso";
+
+        // Cleanup any previous mount
+        ctx.executeCommandWithExitStatus("umount " + mountPoint + " 2>/dev/null || true");
+        ctx.executeCommandWithExitStatus("rm -rf " + mountPoint);
 
         if (lowerPkg.endsWith(".zip")) {
-            // Extract zip to install path
+            // Zip contains an ISO file. Extract the zip, find the ISO, then mount it.
+            String extractDir = "/tmp/dm8_extract";
             String script =
-                    "rm -rf " + ctx.shellQuote(installPath) + "/*;" +
-                    "mkdir -p " + ctx.shellQuote(installPath) + ";" +
-                    "unzip -o " + ctx.shellQuote(packagePath) + " -d " + ctx.shellQuote(installPath) + ";" +
-                    "chown -R " + userName + ":" + groupName + " " + ctx.shellQuote(installPath);
+                    "rm -rf " + ctx.shellQuote(extractDir) + "&&" +
+                    "mkdir -p " + ctx.shellQuote(extractDir) + " " + mountPoint + "&&" +
+                    "unzip -o " + ctx.shellQuote(packagePath) + " -d " + ctx.shellQuote(extractDir) + " &&" +
+                    // Find the ISO file inside the extracted content
+                    "iso_file=$(find " + ctx.shellQuote(extractDir) + " -name '*.iso' -type f | head -1)&&" +
+                
+                    "mount -o loop \"$iso_file\" " + mountPoint  ;
             if (ctx.executeCommandWithExitStatus(script) != 0) {
-                throw new Exception(I18n.t("remote.install.dameng.error.extract_failed",
-                        "Failed to extract ZIP package: ") + packagePath);
-            }
-        } else if (lowerPkg.endsWith(".tar.gz") || lowerPkg.endsWith(".tgz")) {
-            String script =
-                    "rm -rf " + ctx.shellQuote(installPath) + "/*;" +
-                    "mkdir -p " + ctx.shellQuote(installPath) + ";" +
-                    "tar -xzf " + ctx.shellQuote(packagePath) + " -C " + ctx.shellQuote(installPath) + " --strip-components=1;" +
-                    "chown -R " + userName + ":" + groupName + " " + ctx.shellQuote(installPath);
-            if (ctx.executeCommandWithExitStatus(script) != 0) {
-                throw new Exception(I18n.t("remote.install.dameng.error.extract_failed",
-                        "Failed to extract tar.gz package: ") + packagePath);
-            }
-        } else if (lowerPkg.endsWith(".tar")) {
-            String script =
-                    "rm -rf " + ctx.shellQuote(installPath) + "/*;" +
-                    "mkdir -p " + ctx.shellQuote(installPath) + ";" +
-                    "tar -xf " + ctx.shellQuote(packagePath) + " -C " + ctx.shellQuote(installPath) + " --strip-components=1;" +
-                    "chown -R " + userName + ":" + groupName + " " + ctx.shellQuote(installPath);
-            if (ctx.executeCommandWithExitStatus(script) != 0) {
-                throw new Exception(I18n.t("remote.install.dameng.error.extract_failed",
-                        "Failed to extract tar package: ") + packagePath);
+                throw new Exception(I18n.t("remote.install.dameng.error.mount_failed",
+                        "Failed to extract zip or mount ISO from: ") + packagePath);
             }
         } else if (lowerPkg.endsWith(".iso")) {
-            // Fallback ISO mount + copy approach
-            String mountPoint = "/mnt/dm8_iso";
+            // Directly mount the ISO
             ctx.executeCommandWithExitStatus("mkdir -p " + mountPoint);
             if (ctx.executeCommandWithExitStatus("mount -o loop " + ctx.shellQuote(packagePath) + " " + mountPoint) != 0) {
                 throw new Exception(I18n.t("remote.install.dameng.error.mount_failed",
                         "Failed to mount ISO file: ") + packagePath);
             }
-            String script =
-                    "rm -rf " + ctx.shellQuote(installPath) + "/*;" +
-                    "mkdir -p " + ctx.shellQuote(installPath) + ";" +
-                    "cp -r " + mountPoint + "/* " + ctx.shellQuote(installPath) + "/;" +
-                    "chown -R " + userName + ":" + groupName + " " + ctx.shellQuote(installPath) + ";";
-            int status = ctx.executeCommandWithExitStatus(script);
-            ctx.executeCommandWithExitStatus("umount /mnt/dm8_iso 2>/dev/null || true");
-            ctx.executeCommandWithExitStatus("rm -rf /mnt/dm8_iso");
-            if (status != 0) {
-                throw new Exception(I18n.t("remote.install.dameng.error.extract_failed",
-                        "Failed to copy files from ISO: ") + packagePath);
-            }
+        } else {
+            throw new Exception(I18n.t("remote.install.dameng.error.extract_failed",
+                    "Unsupported package format. Expected .zip or .iso: ") + packagePath);
         }
+
+        ctx.executeCommandWithExitStatus("chown -R " + userName + ":" + groupName + " " + mountPoint);
+    }
+
+    /**
+     * Step 5: Run DMInstall.bin from the mounted ISO in silent mode.
+     */
+    private static void silentInstall(RemoteInstallExecutionContext ctx) throws Exception {
+        String installPath = ctx.fieldValue(DamengRemoteFields.INSTALL_PATH);
+        String userName = DamengRemoteFields.USER_NAME;
+        String groupName = DamengRemoteFields.GROUP_NAME;
+        String mountPoint = "/dm8_iso";
+
+        // Write auto_install.xml for silent install
+        String xmlContent =
+                "<?xml version=\"1.0\"?>\n" +
+                "<DATABASE>\n" +
+                "    <LANGUAGE>en</LANGUAGE>\n" +
+                "    <TIMEZONE>+08:00</TIMEZONE>\n" +
+                "    <KEY></KEY>\n" +
+                "    <INSTALL_TYPE>1</INSTALL_TYPE>\n" +
+                "    <INSTALL_PATH>" + installPath + "</INSTALL_PATH>\n" +
+                "    <INI_FILE_PATH></INI_FILE_PATH>\n" +
+                "    <BOOLEAN_KEYS>1</BOOLEAN_KEYS>\n" +
+                "</DATABASE>";
+
+        ctx.executeCommand("cat > /tmp/auto_install.xml <<'DM_XML_EOF'\n" + xmlContent + "\nDM_XML_EOF");
+        ctx.executeCommandWithExitStatus("chown " + userName + ":" + groupName + " /tmp/auto_install.xml");
+
+        // Find DMInstall.bin in mounted ISO
+        String installerBin = ctx.executeCommand(
+                "find " + mountPoint + " -name 'DMInstall.bin' -type f 2>/dev/null | head -1").trim();
+        if (installerBin.isEmpty()) {
+            installerBin = ctx.executeCommand(
+                    "find " + mountPoint + " -name '*.bin' -type f 2>/dev/null | head -1").trim();
+        }
+        if (installerBin.isEmpty()) {
+            // Log ISO contents for debugging
+            String isoContents = ctx.executeCommand("ls -laR " + ctx.shellQuote(mountPoint) + " 2>/dev/null | head -50 || echo '<empty>'");
+            throw new Exception(I18n.t("remote.install.dameng.error.installer_not_found",
+                    "DMInstall.bin not found in mounted ISO. Contents:\n") + isoContents);
+        }
+
+        // Run silent installer as dmdba
+        ctx.executeCommandWithExitStatus("chmod a+x " + ctx.shellQuote(installerBin));
+        String runCmd = "su - " + userName + " -c " +
+                ctx.shellQuote(installerBin + " -q /tmp/auto_install.xml > /tmp/dm_install.log 2>&1; echo EXIT_CODE:$?");
+        String output = ctx.executeCommand(runCmd);
+
+        // Log install output
+        ctx.executeCommand("{ echo '=== install stdout ==='; echo '" + output.replace("'", "'\\''") +
+                "'; echo '=== install log ==='; cat /tmp/dm_install.log 2>/dev/null || true; " +
+                "} > /tmp/dm_install_diag.log 2>/dev/null; chmod 644 /tmp/dm_install_diag.log 2>/dev/null || true");
+
+        // Check if install succeeded by looking for key binaries
+        String checkBin = ctx.executeCommand("test -f " + ctx.shellQuote(installPath + "/bin/dminit") +
+                " -o -f $(find " + ctx.shellQuote(installPath) + " -name 'dminit' -type f 2>/dev/null | head -1 || echo '')" +
+                " && echo 'OK' || echo 'FAIL'").trim();
+        if (!"OK".equals(checkBin)) {
+            String diagLog = ctx.executeCommand("cat /tmp/dm_install_diag.log 2>/dev/null || echo '<no log>'");
+            throw new Exception(I18n.t("remote.install.dameng.error.install_failed",
+                    "Silent install failed. Check /tmp/dm_install_diag.log on remote server.\n") + diagLog);
+        }
+
+        // Cleanup: unmount ISO
+        ctx.executeCommandWithExitStatus("umount " + mountPoint + " 2>/dev/null || true");
+        ctx.executeCommandWithExitStatus("rm -rf " + mountPoint);
+        ctx.executeCommandWithExitStatus("rm -f /tmp/auto_install.xml");
     }
 
     private static void initializeInstance(RemoteInstallExecutionContext ctx) throws Exception {
@@ -241,36 +296,66 @@ public final class DamengRemoteWorkflow {
         // find dminit binary
         String dminitBin = findBin(installPath, ctx, "dminit");
         if (dminitBin == null) {
+            // List contents of installPath for diagnostics
+            String lsOutput = ctx.executeCommand("ls -la " + ctx.shellQuote(installPath) + " 2>/dev/null | head -30 || echo '<empty>'");
             throw new Exception(I18n.t("remote.install.dameng.error.init_failed",
-                    "dminit not found under install path: ") + installPath);
+                    "dminit not found under install path: ") + installPath + "\nInstall path contents:\n" + lsOutput);
         }
 
-        // Build dminit command
-        StringBuilder cmd = new StringBuilder();
-        cmd.append(dminitBin);
-        cmd.append(" PATH=").append(ctx.shellQuote(dataPath));
-        cmd.append(" DB_NAME=").append(instanceName);
-        cmd.append(" INSTANCE_NAME=").append(instanceName);
-        cmd.append(" PORT_NUM=").append(port);
-        cmd.append(" PAGE_SIZE=").append(pageSize);
-        cmd.append(" CASE_SENSITIVE=").append(caseSensitive);
-        cmd.append(" CHARSET=").append(charset);
-        if (compatibleMode != null && !compatibleMode.isBlank() && !"0".equals(compatibleMode)) {
-            cmd.append(" COMPATIBLE_MODE=").append(compatibleMode);
-        }
-        cmd.append(" EXTENT_SIZE=").append(extentSize);
-        cmd.append(" BLANK_PAD_MODE=").append(blankPadMode);
-        cmd.append(" LENGTH_IN_CHAR=").append(lengthInChar);
-        cmd.append(" LOG_SIZE=").append(logSize);
-        cmd.append(" BUFFER=").append(buffer);
+        // Pre-flight: verify dminit can actually run (check if it's a valid binary)
+        String preflight = ctx.executeCommand("file " + ctx.shellQuote(dminitBin) + " 2>/dev/null; " +
+                "ldd " + ctx.shellQuote(dminitBin) + " 2>&1 | head -10; " +
+                "ls -la " + ctx.shellQuote(dminitBin) + " 2>/dev/null");
+        ctx.executeCommand("echo 'DMINIT_PREFLIGHT:' > /tmp/dm_preflight.log 2>/dev/null; " +
+                "echo '" + preflight.replace("'", "'\\''") + "' >> /tmp/dm_preflight.log 2>/dev/null || true");
 
-        String output = ctx.executeCommand("su - " + userName + " -c " + ctx.shellQuote(cmd.toString()) + " 2>&1");
+        // Build dminit command with logging - use a shell script approach to avoid quoting issues
+        String logFile = "/tmp/dm_init_" + instanceName + ".log";
+        String initScript = "/tmp/dm_init_" + instanceName + ".sh";
+
+        // Write a wrapper script that dmdba can execute
+        String scriptContent =
+                "#!/bin/bash\n" +
+                dminitBin + " PATH='" + dataPath + "'" +
+                " DB_NAME=" + instanceName +
+                " INSTANCE_NAME=" + instanceName +
+                " PORT_NUM=" + port +
+                " PAGE_SIZE=" + pageSize +
+                " CASE_SENSITIVE=" + caseSensitive +
+                " CHARSET=" + charset +
+                (compatibleMode != null && !compatibleMode.isBlank() && !"0".equals(compatibleMode)
+                        ? " COMPATIBLE_MODE=" + compatibleMode : "") +
+                " EXTENT_SIZE=" + extentSize +
+                " BLANK_PAD_MODE=" + blankPadMode +
+                " LENGTH_IN_CHAR=" + lengthInChar +
+                " LOG_SIZE=" + logSize +
+                " BUFFER=" + buffer +
+                " > " + logFile + " 2>&1\n" +
+                "echo EXIT_CODE:$? >> " + logFile + "\n";
+
+        ctx.executeCommand("cat > " + ctx.shellQuote(initScript) + " << 'INIT_SCRIPT_EOF'\n" + scriptContent + "INIT_SCRIPT_EOF");
+        ctx.executeCommandWithExitStatus("chmod +x " + ctx.shellQuote(initScript));
+        ctx.executeCommandWithExitStatus("chown " + userName + ":" + DamengRemoteFields.GROUP_NAME + " " + ctx.shellQuote(initScript));
+
+        // Run the init script as dmdba, capture both stdout and stderr
+        String runCmd = "su - " + userName + " -c " + ctx.shellQuote(initScript + " 2>&1");
+        String output = ctx.executeCommand(runCmd);
+        ctx.executeCommand("echo 'DMINIT_STDOUT: " + output.replace("'", "'\\''") + "' >> /tmp/dm_preflight.log 2>/dev/null || true");
+
+        // Read the log for diagnostics, and dump everything to /tmp/dm_init_diag.log on remote
+        ctx.executeCommand(
+                "{ echo '=== dminit log ==='; cat " + ctx.shellQuote(logFile) +
+                " 2>&1 || echo '<no log>'; echo; echo '=== stdout ==='; " +
+                "echo '" + output.replace("'", "'\\''") + "'; echo; " +
+                "echo '=== preflight ==='; cat /tmp/dm_preflight.log 2>&1 || true; " +
+                "} > /tmp/dm_init_diag.log 2>&1; chmod 644 /tmp/dm_init_diag.log 2>2>&1 || true");
 
         // Verify init succeeded by checking for dm.ini
         String checkOutput = ctx.executeCommand("test -f " + ctx.shellQuote(dataPath + "/" + instanceName + "/dm.ini") + " && echo 'OK' || echo 'FAIL'").trim();
         if (!"OK".equals(checkOutput)) {
+            String diagLog = ctx.executeCommand("cat /tmp/dm_init_diag.log 2>/dev/null || echo '<no diag log>'");
             throw new Exception(I18n.t("remote.install.dameng.error.init_failed",
-                    "Database instance initialization failed. Output: ") + output);
+                    "Database instance initialization failed. Check /tmp/dm_init_diag.log on remote server.\n") + diagLog);
         }
     }
 
@@ -288,7 +373,7 @@ public final class DamengRemoteWorkflow {
         }
 
         String cmd = serviceInstaller + " -t dmserver -p " + instanceName + " -dm_ini " + ctx.shellQuote(dmIni);
-        String output = ctx.executeCommand(cmd + " 2>&1");
+        ctx.executeCommand(cmd + " 2>&1");
 
         ctx.executeCommandWithExitStatus("systemctl daemon-reload");
         String serviceName = DamengRemoteFields.SERVICE_PREFIX + instanceName;
@@ -458,7 +543,13 @@ public final class DamengRemoteWorkflow {
     // ==================== Helpers ====================
 
     private static String findBin(String installPath, RemoteInstallExecutionContext ctx, String binName) throws Exception {
-        String result = ctx.executeCommand("find " + ctx.shellQuote(installPath) + " -name '" + binName + "' -type f 2>/dev/null | head -1").trim();
+        String result = ctx.executeCommand(
+                "find " + ctx.shellQuote(installPath) + " -name '" + binName + "' -type f 2>/dev/null | head -1"
+        ).trim();
+        if (!result.isEmpty()) {
+            // Ensure it's executable after zip extraction
+            ctx.executeCommandWithExitStatus("chmod a+x " + ctx.shellQuote(result) + " 2>/dev/null || true");
+        }
         return result.isEmpty() ? null : result;
     }
 
