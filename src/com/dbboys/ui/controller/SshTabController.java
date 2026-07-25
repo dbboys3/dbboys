@@ -121,7 +121,12 @@ public class SshTabController {
     private SshConnect sshConnect;
     private ClientSession session;
     private ChannelShell shellChannel;
-    private String charset = "UTF-8"; // terminal encoding, synced from SshConnect.charset
+    private volatile String charset = "UTF-8"; // terminal encoding, synced from SshConnect.charset
+    /** Stateful decoder carried across reads: a multi-byte char (GB18030/UTF-8)
+     *  split by a read boundary is completed by the next chunk instead of
+     *  decaying into replacement chars. Reader-thread only; recreated when the
+     *  charset changes or a new session starts. */
+    private volatile java.nio.charset.CharsetDecoder streamDecoder;
 
     /** Get the current terminal charset, fallback to UTF-8 if invalid. */
     private java.nio.charset.Charset terminalCharset() {
@@ -183,6 +188,12 @@ public class SshTabController {
     // Logging
     private java.io.BufferedWriter logWriter;
     private boolean logging;
+    /** Next buffer row to write to the session log (rows before it are logged).
+     *  Logging is screen-faithful: logical lines are taken from the terminal
+     *  buffer once a hard newline finalizes them, so the file shows exactly
+     *  what the screen shows — echo quirks, backspace edits and wide-char
+     *  (CJK) handling are already resolved by the emulator. */
+    private int sessionLogRow;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
@@ -469,6 +480,7 @@ public class SshTabController {
     // ==================== Terminal engine ====================
     private void start() {
         if (shellChannel == null || !shellChannel.isOpen()) return;
+        streamDecoder = null; // drop any partial char left over from a previous session
         readThread = new Thread(() -> {
             try {
                 InputStream in = shellChannel.getInvertedOut();
@@ -656,9 +668,10 @@ public class SshTabController {
             scrollRegionUp(scrollTop, effectiveBottom);
             return;
         }
+        sessionLogFinalize(curRow); // hard newline: the logical line ending here is final
         curRow++;
         ensureBuf(curRow);
-        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); }
+        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); if (sessionLogRow > 0) sessionLogRow--; }
         if (inAltScreen) {
             // Alt screen is a fixed page: never grow the cursor or buffer past the bottom row
             if (curRow > rows - 1) curRow = rows - 1;
@@ -782,6 +795,9 @@ public class SshTabController {
         int cur = Math.min(curRow, buffer.size() - 1);
         int curLogStart = cur;
         while (curLogStart > 0 && isWrapped(curLogStart - 1)) curLogStart--;
+        // Rows above the cursor's logical line are final: log them before the
+        // rebuild, then re-anchor the mark to that line's new index below
+        sessionLogFinalize(curLogStart - 1);
         int curOffset = 0;
         for (int r = curLogStart; r < cur; r++) curOffset += buffer.get(r).size();
         curOffset += pendingWrap ? buffer.get(cur).size() : Math.min(curCol, buffer.get(cur).size());
@@ -851,6 +867,9 @@ public class SshTabController {
         selStartCol = selEndCol = selStartRow = selEndRow = -1;
         scrollTop = 0;
         scrollBottom = -1;
+        // Re-anchor the session-log mark to the cursor's logical line (rows above
+        // it were logged before the rebuild)
+        sessionLogRow = Math.max(0, logicalLineStart(curRow));
     }
     // ---- ANSI ----
     private int esc(String s, int p, int e) {
@@ -915,6 +934,8 @@ public class SshTabController {
             logWriter = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
                     new java.io.FileOutputStream(logFile), terminalCharset()));
             logging = true;
+            // Log from the current line on; screen history above stays out of the file
+            sessionLogRow = Math.max(0, logicalLineStart(curRow));
             try { logWriter.flush(); } catch (Exception ignored) {}
             com.dbboys.ui.notification.NotificationUtil.showMainNotification(
                     I18n.t("ssh.notice.log_started", "Logging started") + ": " + new File(logFile).getName());
@@ -932,10 +953,52 @@ public class SshTabController {
 
     private void closeLogWriter() {
         if (logWriter != null) {
+            sessionLogDumpRest();
             try { logWriter.close(); } catch (Exception ignored) {}
             logWriter = null;
         }
         logging = false;
+    }
+
+    /** First buffer row of the logical line containing row r (follows soft wraps up). */
+    private int logicalLineStart(int r) {
+        r = Math.min(r, buffer.size() - 1);
+        while (r > 0 && isWrapped(r - 1)) r--;
+        return r;
+    }
+
+    /** Write every complete logical line in [sessionLogRow, endRow] to the session
+     *  log. Text comes from the screen buffer, so it matches the display exactly.
+     *  Skipped on the alternate screen, where full-screen apps (vi, top, less)
+     *  constantly redraw in place and would flood the log with frames. */
+    private void sessionLogFinalize(int endRow) {
+        if (!logging || logWriter == null || inAltScreen) return;
+        if (endRow < sessionLogRow) return; // already logged (cursor moved up and re-newlined)
+        try {
+            int r = sessionLogRow;
+            int last = Math.min(endRow, buffer.size() - 1);
+            while (r <= last) {
+                int ge = r;
+                while (ge < last && isWrapped(ge)) ge++; // join soft-wrapped rows into one logical line
+                StringBuilder sb = new StringBuilder();
+                for (int k = r; k <= ge; k++) sb.append(line(k));
+                int len = sb.length();
+                while (len > 0 && sb.charAt(len - 1) == ' ') len--; // trailing blanks are not content
+                logWriter.write(sb.substring(0, len));
+                logWriter.write("\r\n");
+                r = ge + 1;
+            }
+            sessionLogRow = r;
+            logWriter.flush();
+        } catch (Exception ignored) {}
+    }
+
+    /** Log the remaining, possibly incomplete current logical line when logging stops. */
+    private void sessionLogDumpRest() {
+        if (!logging || logWriter == null || inAltScreen) return;
+        int end = Math.min(curRow, buffer.size() - 1);
+        while (end < buffer.size() - 1 && isWrapped(end)) end++; // include the whole current logical line
+        sessionLogFinalize(end);
     }
 
     /** Open the SFTP file transfer dialog. */
@@ -990,7 +1053,8 @@ public class SshTabController {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
         ensureBuf(bottom);
         buffer.add(at, new Row());
-        if (buffer.size() > bottom + 1) buffer.remove(bottom + 1); // drop the line pushed past the margin
+        if (logging && !inAltScreen && at <= sessionLogRow) sessionLogRow++;
+        if (buffer.size() > bottom + 1) { buffer.remove(bottom + 1); if (logging && !inAltScreen && bottom + 1 < sessionLogRow) sessionLogRow--; } // drop the line pushed past the margin
     }
     /** Scroll [top, bottom] up by one line: discard the top line and insert a blank
      *  line at the bottom. Lines below the region are preserved (remove+clear would
@@ -998,11 +1062,15 @@ public class SshTabController {
     private void scrollRegionUp(int top, int bottom) {
         if (top < 0 || bottom < top || top >= buffer.size()) return;
         buffer.remove(top);
-        buffer.add(Math.min(bottom, buffer.size()), new Row());
+        if (logging && !inAltScreen && top < sessionLogRow) sessionLogRow--;
+        int addAt = Math.min(bottom, buffer.size());
+        buffer.add(addAt, new Row());
+        if (logging && !inAltScreen && addAt <= sessionLogRow) sessionLogRow++;
     }
     private void deleteLines(int from, int count) {
         for (int i = 0; i < count && from < buffer.size(); i++) {
             buffer.remove(from);
+            if (logging && !inAltScreen && from < sessionLogRow) sessionLogRow--;
         }
     }
     /** Exit the alternate screen (?1049l): restore the saved main buffer, cursor
@@ -1045,6 +1113,9 @@ public class SshTabController {
             savedCurRow = curRow;
         }
         scrollTop = 0; scrollBottom = -1;
+        // The main buffer was replaced wholesale while away: re-anchor the
+        // session-log mark to the restored cursor line instead of a stale index
+        if (logging) sessionLogRow = Math.max(0, logicalLineStart(curRow));
     }
     private int csi(String s, int p, int e) {
         int st = p;
@@ -1815,11 +1886,38 @@ public class SshTabController {
     /** Log + decode + render terminal output (called on the reader thread). */
     private void feedTerminal(byte[] data, int off, int len) {
         if (len <= 0) return;
-        if (logging && logWriter != null) {
-            try { logWriter.write(stripAnsi(new String(data, off, len, terminalCharset()))); logWriter.flush(); } catch (Exception ignored) {}
-        }
-        String out = new String(data, off, len, terminalCharset());
+        // Session logging happens on the FX thread, from the rendered screen
+        // buffer (see sessionLogFinalize), not from this raw byte stream.
+        String out = decodeStream(data, off, len);
+        if (out.isEmpty()) return; // chunk ended inside a split multi-byte char
         Platform.runLater(() -> write(out));
+    }
+
+    /** Incrementally decode the byte stream. Bytes of an incomplete trailing
+     *  multi-byte sequence stay buffered inside the decoder and are completed
+     *  by the next chunk — this is what keeps GB18030/UTF-8 CJK text intact
+     *  across read boundaries. */
+    private String decodeStream(byte[] data, int off, int len) {
+        java.nio.charset.Charset cs = terminalCharset();
+        java.nio.charset.CharsetDecoder dec = streamDecoder;
+        if (dec == null || !dec.charset().equals(cs)) {
+            dec = cs.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPLACE)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPLACE);
+            streamDecoder = dec;
+        }
+        StringBuilder sb = new StringBuilder(len + 8);
+        char[] tmp = new char[4096];
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(data, off, len);
+        java.nio.CharBuffer cb = java.nio.CharBuffer.wrap(tmp);
+        for (;;) {
+            java.nio.charset.CoderResult cr = dec.decode(bb, cb, false);
+            sb.append(tmp, 0, cb.position());
+            cb.clear();
+            if (cr.isUnderflow()) break; // done; a trailing partial char stays in the decoder
+            if (!cr.isOverflow() && !cr.isMalformed() && !cr.isUnmappable()) break; // defensive
+        }
+        return sb.toString();
     }
 
     /** Run a full ZModem session on the reader thread; binary bytes bypass the terminal renderer.
@@ -2035,48 +2133,6 @@ private static String stripContinuationChars(String s) {
         return sb.toString();
     }
 
-    /** Strip ANSI escape sequences from a string, returning clean visible text. */
-    private static String stripAnsi(String s) {
-        if (s == null || s.isEmpty()) return s;
-        StringBuilder sb = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == 0x1B) {
-                // ESC - skip the escape sequence
-                i++;
-                if (i >= s.length()) break;
-                c = s.charAt(i);
-                if (c == '[') {
-                    // CSI sequence: ESC [ params... finalChar
-                    i++;
-                    while (i < s.length()) {
-                        c = s.charAt(i);
-                        if (c >= '@' && c <= '~') break; // final char
-                        i++;
-                    }
-                } else if (c == ']') {
-                    // OSC sequence: ESC ] ... terminated by BEL or ST
-                    i++;
-                    while (i < s.length()) {
-                        c = s.charAt(i);
-                        if (c == 0x07) break; // BEL
-                        if (c == 0x1B && i + 1 < s.length() && s.charAt(i + 1) == '\\') break; // ST
-                        i++;
-                    }
-                } else if (c == '(' || c == ')') {
-                    // Charset selection: ESC ( <char>
-                    if (i + 1 < s.length()) i++; // skip the charset char
-                } else if (c == 'O') {
-                    // SS3: ESC O <char>
-                    if (i + 1 < s.length()) i++; // skip the key code
-                }
-                // else: single-char ESC command (7 8 M D E H c) - already consumed by i++
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
     /** Dump the current buffer content to log. */
     private void dumpBuffer() {
         StringBuilder sb = new StringBuilder();
