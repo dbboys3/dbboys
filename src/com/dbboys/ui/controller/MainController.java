@@ -135,6 +135,12 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuConfigUninstallOracle;
     @FXML
+    private Menu menuConfigDameng;
+    @FXML
+    private CustomShortcutMenuItem menuConfigInstallDameng;
+    @FXML
+    private CustomShortcutMenuItem menuConfigUninstallDameng;
+    @FXML
     private Menu menuSettings;
     @FXML
     private Menu menuSettingsLanguage;
@@ -288,6 +294,9 @@ public class MainController {
         menuConfigOracle.setGraphic(IconFactory.group(IconPaths.ORACLE_LOGO, 0.5));
         menuConfigInstallOracle.setGraphic(null);
         menuConfigUninstallOracle.setGraphic(null);
+        menuConfigDameng.setGraphic(IconFactory.group(IconPaths.DAMENG_LOGO, 0.02));
+        menuConfigInstallDameng.setGraphic(null);
+        menuConfigUninstallDameng.setGraphic(null);
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
         menuSettingsTheme.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_THEME, 0.68));
         menuSettingsReset.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_RESET, 0.6));
@@ -749,6 +758,9 @@ public class MainController {
         bindText(menuConfigOracle, "main.menu.config.oracle");
         bindText(menuConfigInstallOracle, "main.menu.config.install_oracle");
         bindText(menuConfigUninstallOracle, "main.menu.config.uninstall_oracle");
+        bindText(menuConfigDameng, "main.menu.config.dameng");
+        bindText(menuConfigInstallDameng, "main.menu.config.install_dameng");
+        bindText(menuConfigUninstallDameng, "main.menu.config.uninstall_dameng");
 
         bindText(menuSettings, "main.menu.settings");
         bindText(menuSettingsLanguage, "main.menu.settings.language");
@@ -1662,6 +1674,14 @@ public class MainController {
 
     public void unInstallOracle(){
         RemoteDatabaseProviders.oracle().startUninstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void installDameng(){
+        RemoteDatabaseProviders.dameng().startInstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void unInstallDameng(){
+        RemoteDatabaseProviders.dameng().startUninstallWizard((Stage) AppState.getWindow());
     }
 
     public void setLanguageZh() {

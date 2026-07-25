@@ -78,15 +78,14 @@
                                 </items>
                             </CustomMenu>
 
-                            <!--
-                            <MenuItem mnemonicParsing="false"  text="安装PG(Install POSTGRESQL)">
-                            </MenuItem>
-                            <MenuItem mnemonicParsing="false"  text="安装DAMENG(Install DAMENG)">
-                            </MenuItem>
-
-                            <MenuItem mnemonicParsing="false"  text="安装KINGBASE(Install KINGBASE)">
-                            </MenuItem>
-                             -->
+                            <CustomMenu fx:id="menuConfigDameng" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuConfigInstallDameng" mnemonicParsing="false" onAction="#installDameng">
+                                    </CustomShortcutMenuItem>
+                                    <CustomShortcutMenuItem fx:id="menuConfigUninstallDameng" mnemonicParsing="false" onAction="#unInstallDameng">
+                                    </CustomShortcutMenuItem>
+                                </items>
+                            </CustomMenu>
                         </items>
                     </Menu>
                     <Menu fx:id="menuSettings" mnemonicParsing="false" >
