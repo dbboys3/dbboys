@@ -145,11 +145,17 @@ public class CustomInstanceTab extends CustomTab {
                         instanceIpText.get(),
                         instancePortText.get()
                 )
-                        : String.format(
+                        : !instanceNameText.get().isEmpty()
+                        ? String.format(
                         I18n.t("instance.info.current.format", "当前实例信息 ( IP：%s   端口：%s   实例名：%s )"),
                         instanceIpText.get(),
                         instancePortText.get(),
                         instanceNameText.get()
+                )
+                        : String.format(
+                        I18n.t("instance.info.current.no_name.format", "当前实例信息 ( IP：%s   端口：%s )"),
+                        instanceIpText.get(),
+                        instancePortText.get()
                 ),
                 instanceIpText,
                 instancePortText,

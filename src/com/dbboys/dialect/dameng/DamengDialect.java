@@ -679,10 +679,10 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
         if (connect == null) {
             return "";
         }
-        String host = connect.getIp() == null ? "" : connect.getIp().trim();
-        String port = connect.getPort() == null ? "" : connect.getPort().trim();
-        String catalog = connect.getCatalog() == null ? "" : connect.getCatalog().trim();
-        return catalog + "@" + host + (port.isEmpty() ? "" : ":" + port);
+        // 从建连时写入的 info 中提取真实实例名 (v$instance.instance_name)
+        String infoName = InstanceTabCapability.extractInfoValue(
+                connect.getInfo(), "instance_name");
+        return infoName == null ? "" : infoName.trim();
     }
 
     @Override
