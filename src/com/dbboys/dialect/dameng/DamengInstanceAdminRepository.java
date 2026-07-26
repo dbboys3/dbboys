@@ -156,7 +156,7 @@ order by ts.id
 
         List<SpaceUsage> schemaUsage = new ArrayList<>();
         String schemaSql = """
-                select owner, round(sum(bytes)/1024/1024/1024,2) total_gb,
+                select owner, round(sum(bytes::number)/1024/1024/1024,2) total_gb,
                        count(distinct segment_name) seg_count
                 from dba_segments
                 group by owner order by sum(bytes) desc
@@ -175,7 +175,7 @@ order by ts.id
         List<SpaceUsage> tableUsage = new ArrayList<>();
         String tableSql = """
                 select owner, segment_name, segment_type,
-                       round(sum(bytes)/1024/1024/1024,2) total_gb
+                       round(sum(bytes::number)/1024/1024/1024,2) total_gb
                 from dba_segments
                 group by owner, segment_name, segment_type
                 order by sum(bytes) desc
