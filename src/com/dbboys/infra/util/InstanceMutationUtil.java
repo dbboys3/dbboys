@@ -1,8 +1,12 @@
 package com.dbboys.infra.util;
 
 import com.dbboys.core.ConnectionService;
+import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.app.AppContext;
+import com.dbboys.dialect.dameng.DamengInstanceAdminRepository;
+import com.dbboys.dialect.oracle.OracleInstanceAdminRepository;
 import com.dbboys.model.Connect;
 import org.apache.sshd.client.session.ClientSession;
 
@@ -250,40 +254,30 @@ public final class InstanceMutationUtil {
      * 不允许 DROP 的 Oracle 表空间（系统/撤销/常见临时名）。
      */
     public static boolean isOracleProtectedTablespace(String name) {
-        if (name == null || name.isBlank()) {
-            return true;
-        }
-        String u = name.trim().toUpperCase(Locale.ROOT);
-        if ("SYSTEM".equals(u) || "SYSAUX".equals(u)) {
-            return true;
-        }
-        if (u.startsWith("UNDO")) {
-            return true;
-        }
-        return "TEMP".equals(u);
+        return ORACLE_ADMIN.isProtectedTablespace(name);
     }
 
     /** 达梦系统关键表空间，禁止删除或删除其数据文件。 */
     public static boolean isDamengProtectedTablespace(String name) {
-        if (name == null || name.isBlank()) {
-            return true;
-        }
-        String u = name.trim().toUpperCase(Locale.ROOT);
-        return "SYSTEM".equals(u) || "RLOG".equals(u) || "ROLL".equals(u) || "TEMP".equals(u)
-                || "MAIN".equals(u) || "HMAIN".equals(u);
+        return DAMENG_ADMIN.isProtectedTablespace(name);
     }
 
-    private static boolean isDameng(Connect connect) {
-        return connect != null && connect.getDbtype() != null
-                && "DAMENG".equalsIgnoreCase(connect.getDbtype().trim());
-    }
-
-    /** 按数据库类型判断系统关键表空间（Oracle 与达梦的名单不同）。 */
+    /** 按数据库类型判断系统关键表空间（名单由各 dialect 的仓储持有）。 */
     public static boolean isProtectedTablespace(String dbtype, String name) {
-        if (dbtype != null && "DAMENG".equalsIgnoreCase(dbtype.trim())) {
-            return isDamengProtectedTablespace(name);
-        }
-        return isOracleProtectedTablespace(name);
+        return (isDamengDbtype(dbtype) ? DAMENG_ADMIN : ORACLE_ADMIN).isProtectedTablespace(name);
+    }
+
+    /** Stateless dialect repositories, kept for name-list lookups. */
+    private static final InstanceAdminRepository ORACLE_ADMIN = new OracleInstanceAdminRepository();
+    private static final InstanceAdminRepository DAMENG_ADMIN = new DamengInstanceAdminRepository();
+
+    private static boolean isDamengDbtype(String dbtype) {
+        return dbtype != null && "DAMENG".equalsIgnoreCase(dbtype.trim());
+    }
+
+    /** Resolve the dialect-owned admin repository (space DDL syntax lives there). */
+    private static InstanceAdminRepository admin(Connect connect) {
+        return DatabasePlatformResolver.getInstance().admin(connect);
     }
 
     private static void assertOracleTablespaceIdentifier(String rawName) {
@@ -376,16 +370,8 @@ public final class InstanceMutationUtil {
             throw new IllegalArgumentException("Initial size (MB) must be between 1 and 8388608");
         }
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        StringBuilder sql = new StringBuilder();
-        sql.append("CREATE TABLESPACE ").append(ts);
-        sql.append(" DATAFILE ").append(quotedPath);
-        // DM8 wants a bare MB number; Oracle takes the M suffix
-        sql.append(" SIZE ").append(initialSizeMb).append(isDameng(connect) ? "" : "M");
-        if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10").append(isDameng(connect) ? "" : "M").append(" MAXSIZE UNLIMITED");
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).createTablespaceSql(ts, datafilePath.trim(), initialSizeMb, autoextendUnlimited);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /**
@@ -395,23 +381,13 @@ public final class InstanceMutationUtil {
                                           String tablespaceName,
                                           boolean includingContentsAndDatafiles,
                                           AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isProtectedTablespace(connect.getDbtype(), tablespaceName)) {
+        if (admin(connect).isProtectedTablespace(tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        StringBuilder sql;
-        if (isDameng(connect)) {
-            // DM8 has no INCLUDING CONTENTS clause: only an empty user tablespace
-            // can be dropped, and its datafiles are removed together with it
-            sql = new StringBuilder("DROP TABLESPACE ").append(ts);
-        } else {
-            sql = new StringBuilder("DROP TABLESPACE ").append(ts).append(" INCLUDING CONTENTS");
-            if (includingContentsAndDatafiles) {
-                sql.append(" AND DATAFILES");
-            }
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).dropTablespaceSql(ts, includingContentsAndDatafiles);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /**
@@ -429,16 +405,8 @@ public final class InstanceMutationUtil {
             throw new IllegalArgumentException("Size (MB) must be between 1 and 8388608");
         }
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        StringBuilder sql = new StringBuilder();
-        sql.append("ALTER TABLESPACE ").append(ts);
-        sql.append(" ADD DATAFILE ").append(quotedPath);
-        // DM8 wants a bare MB number; Oracle takes the M suffix
-        sql.append(" SIZE ").append(sizeMb).append(isDameng(connect) ? "" : "M");
-        if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10").append(isDameng(connect) ? "" : "M").append(" MAXSIZE UNLIMITED");
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).addDatafileSql(ts, datafilePath.trim(), sizeMb, autoextendUnlimited);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /** 从 Oracle 数据文件图标签解析表空间名，格式为：{@code 文件全路径 [ TABLESPACE_NAME ]}。 */
@@ -465,19 +433,8 @@ public final class InstanceMutationUtil {
                                                    AtomicReference<Statement> cancellableStatement) throws Exception {
         assertOracleTablespaceIdentifier(tablespaceName);
         assertOracleDatafilePath(datafilePath);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        String sql;
-        if (isDameng(connect)) {
-            // DM8: ALTER TABLESPACE <ts> DATAFILE '<path>' AUTOEXTEND ... (no ALTER DATABASE form)
-            String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-            sql = enable
-                    ? "ALTER TABLESPACE " + ts + " DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10 MAXSIZE UNLIMITED"
-                    : "ALTER TABLESPACE " + ts + " DATAFILE " + quotedPath + " AUTOEXTEND OFF";
-        } else {
-            sql = enable
-                    ? "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
-                    : "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND OFF";
-        }
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        String sql = admin(connect).setDatafileAutoextendSql(ts, datafilePath.trim(), enable);
         executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
@@ -488,14 +445,13 @@ public final class InstanceMutationUtil {
                                         String tablespaceName,
                                         String datafilePath,
                                         AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isProtectedTablespace(connect.getDbtype(), tablespaceName)) {
+        if (admin(connect).isProtectedTablespace(tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a datafile from a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);
         assertOracleDatafilePath(datafilePath);
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        String sql = "ALTER TABLESPACE " + ts + " DROP DATAFILE " + quotedPath;
+        String sql = admin(connect).dropDatafileSql(ts, datafilePath.trim());
         executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 }

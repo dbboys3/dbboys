@@ -876,7 +876,7 @@ public class CustomInstanceTab extends CustomTab {
                 Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
                 CustomUserTextField sizeField = new CustomUserTextField();
                 sizeField.setMinWidth(120);
-                sizeField.setText("100");
+                sizeField.setText("128");
                 sizeField.textProperty().addListener((obs, ov, nv) -> {
                     if (nv != null && !nv.matches("\\d*")) {
                         sizeField.setText(nv.replaceAll("\\D", ""));
@@ -1210,7 +1210,7 @@ public class CustomInstanceTab extends CustomTab {
                 Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
                 CustomUserTextField sizeField = new CustomUserTextField();
                 sizeField.setMinWidth(120);
-                sizeField.setText("100");
+                sizeField.setText("128");
                 sizeField.textProperty().addListener((obs, ov, nv) -> {
                     if (nv != null && !nv.matches("\\d*")) {
                         sizeField.setText(nv.replaceAll("\\D", ""));

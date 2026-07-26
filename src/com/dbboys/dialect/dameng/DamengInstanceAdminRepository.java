@@ -322,4 +322,63 @@ order by ts.id
             throw new IllegalArgumentException("Invalid Dameng session id: " + owner);
         }
     }
+
+    // ==================== Space DDL (DM8 syntax) ====================
+
+    @Override
+    public boolean isProtectedTablespace(String tablespaceName) {
+        if (tablespaceName == null || tablespaceName.isBlank()) {
+            return true;
+        }
+        String u = tablespaceName.trim().toUpperCase(java.util.Locale.ROOT);
+        return "SYSTEM".equals(u) || "RLOG".equals(u) || "ROLL".equals(u) || "TEMP".equals(u)
+                || "MAIN".equals(u) || "HMAIN".equals(u);
+    }
+
+    private static String quotePath(String datafilePath) {
+        return "'" + datafilePath.trim().replace("'", "''") + "'";
+    }
+
+    @Override
+    public String createTablespaceSql(String tablespaceName, String datafilePath, long sizeMb, boolean autoextendUnlimited) {
+        // DM8: SIZE is a bare MB number; MAXSIZE UNLIMITED is allowed
+        StringBuilder sql = new StringBuilder("CREATE TABLESPACE ").append(tablespaceName);
+        sql.append(" DATAFILE ").append(quotePath(datafilePath));
+        sql.append(" SIZE ").append(sizeMb);
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10 MAXSIZE UNLIMITED");
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public String addDatafileSql(String tablespaceName, String datafilePath, long sizeMb, boolean autoextendUnlimited) {
+        StringBuilder sql = new StringBuilder("ALTER TABLESPACE ").append(tablespaceName);
+        sql.append(" ADD DATAFILE ").append(quotePath(datafilePath));
+        sql.append(" SIZE ").append(sizeMb);
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10 MAXSIZE UNLIMITED");
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public String dropTablespaceSql(String tablespaceName, boolean includingContentsAndDatafiles) {
+        // DM8 has no INCLUDING CONTENTS clause: only an empty user tablespace can
+        // be dropped, and its datafiles are removed together with it
+        return "DROP TABLESPACE " + tablespaceName;
+    }
+
+    @Override
+    public String setDatafileAutoextendSql(String tablespaceName, String datafilePath, boolean enable) {
+        // DM8: ALTER TABLESPACE <ts> DATAFILE '<path>' AUTOEXTEND ... (no ALTER DATABASE form)
+        return enable
+                ? "ALTER TABLESPACE " + tablespaceName + " DATAFILE " + quotePath(datafilePath) + " AUTOEXTEND ON NEXT 10 MAXSIZE UNLIMITED"
+                : "ALTER TABLESPACE " + tablespaceName + " DATAFILE " + quotePath(datafilePath) + " AUTOEXTEND OFF";
+    }
+
+    @Override
+    public String dropDatafileSql(String tablespaceName, String datafilePath) {
+        return "ALTER TABLESPACE " + tablespaceName + " DROP DATAFILE " + quotePath(datafilePath);
+    }
 }
