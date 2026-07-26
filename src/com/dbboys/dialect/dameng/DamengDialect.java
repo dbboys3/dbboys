@@ -34,9 +34,60 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
     private static final String DRIVER_CLASS = "dm.jdbc.driver.DmDriver";
     private static final String DEFAULT_DRIVER = "DmJdbcDriver11.jar";
     private static final String DEFAULT_CONNECTION_PROPS = buildDefaultConnectionProps(
+            // ── 基础属性 ──
             "schema", "",
+            "loginMode", "",
             "connectTimeout", "",
-            "socketTimeout", ""
+            "socketTimeout", "",
+            "appName", "",
+            "osName", "",
+            "localHost", "",
+            // ── 加密与安全 ──
+            "loginEncrypt", "",
+            "encrypt", "",
+            "encryptType", "",
+            "certPath", "",
+            "sslFiles", "",
+            // ── 读写分离与集群 ──
+            "doSwitch", "",
+            "autoReconnect", "",
+            "reconnectCount", "",
+            "reconnectInterval", "",
+            "rwSeparate", "",
+            "rwPercent", "",
+            "epSelector", "",
+            // ── 压缩 ──
+            "compress", "",
+            "compressID", "",
+            // ── 结果集与字段 ──
+            "clobAsString", "",
+            "columnNameCase", "",
+            "columnNameUpperCase", "",
+            "ignoreCase", "",
+            "bufferFetchSize", "",
+            "scrollResultSet", "",
+            "lobPrefetchSize", "",
+            // ── 性能与批处理 ──
+            "batchType", "",
+            "prepareOptimize", "",
+            // ── 会话参数 ──
+            "keyWords", "",
+            "dbmdChkPrv", "",
+            "exceedMaxRows", "",
+            "sendBlobAsStream", "",
+            // ── 兼容模式 ──
+            "compatibleMode", "",
+            "compatibleOjdbc", "",
+            "checkExecCount", "",
+            // ── 其他 ──
+            "quoteReplace", "",
+            "schemaAlias", "",
+            "bindParamWithQuestionMark", "",
+            "maxColumnNameLength", "",
+            // ── 连接池相关 ──
+            "connPoolInitSize", "",
+            "connPoolMaxSize", "",
+            "connPoolIdleTime", ""
     );
 
     private final MetadataRepository metadataRepository = new DamengMetadataRepository();
