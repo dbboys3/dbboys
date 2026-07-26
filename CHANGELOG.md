@@ -1,5 +1,6 @@
 ### 20260726
 新增informix11.5支持  
+新增dameng安装、卸载、实例管理  
 新增ssh终端支持sz/rz（ZModem协议）文件传输  
 新增ssh sftp文件传输  
 新增ssh 支持字体缩放  
