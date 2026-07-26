@@ -69,7 +69,8 @@ public final class RemoteSystemInfoCollector {
     }
 
     /** Same standard sections, taken from an install execution context.
-     *  Re-runs df -h after install to capture accurate post-install disk usage. */
+     *  Re-runs df -h and free -h after install to capture accurate post-install
+     *  disk and memory usage. */
     public static void appendSystemInfo(CustomInlineCssTextArea area, RemoteInstallExecutionContext ctx) {
         String fileSystemInfo;
         try {
@@ -77,8 +78,14 @@ public final class RemoteSystemInfoCollector {
         } catch (IOException e) {
             fileSystemInfo = ctx.fileSystemInfo();
         }
+        String memoryInfo;
+        try {
+            memoryInfo = ctx.getRemoteClient().executeCommand("free -h");
+        } catch (IOException e) {
+            memoryInfo = ctx.memoryInfo();
+        }
         appendSystemInfo(area, new RemoteSystemInfoSnapshot(
                 ctx.machineInfo(), ctx.osInfo(), ctx.kernelInfo(), ctx.cpuInfo(),
-                ctx.memoryInfo(), ctx.diskInfo(), fileSystemInfo));
+                memoryInfo, ctx.diskInfo(), fileSystemInfo));
     }
 }
