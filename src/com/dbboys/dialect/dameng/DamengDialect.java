@@ -519,6 +519,29 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
 
     // ==================== InstanceTabCapability ====================
 
+    private static final Map<String, String> DAMENG_CHECK_ENTRY_I18N_KEYS = Map.of(
+            "数据库版本", "instance.check.dameng.item.db_version",
+            "实例状态", "instance.check.dameng.item.instance_status",
+            "启动时间", "instance.check.dameng.item.startup_time",
+            "数据库模式", "instance.check.dameng.item.database_mode",
+            "活动会话数", "instance.check.dameng.item.active_sessions",
+            "阻塞锁数量", "instance.check.dameng.item.blocked_locks",
+            "缓冲区命中率", "instance.check.dameng.item.buffer_hit_ratio",
+            "内存池总大小(MB)", "instance.check.dameng.item.memory_pool_size"
+    );
+
+    private static final Map<String, String> DAMENG_CHECK_EXPECTED_I18N_KEYS = Map.of(
+            "应可获取", "instance.check.dameng.expected.available",
+            "应为 OPEN", "instance.check.dameng.expected.should_be_open",
+            "应为 NORMAL", "instance.check.dameng.expected.should_be_normal",
+            "应可用", "instance.check.dameng.expected.should_be_available",
+            "建议持续关注", "instance.check.dameng.expected.monitor",
+            "应为 0", "instance.check.dameng.expected.should_be_zero",
+            ">=95%", "instance.check.dameng.expected.buffer_hit_ge_95",
+            "应可统计", "instance.check.dameng.expected.should_be_measurable",
+            "获取失败", "instance.check.dameng.expected.fetch_failed"
+    );
+
     @Override
     public boolean supportsInfoTab(Connect connect) {
         return true;
@@ -589,13 +612,46 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
         List<CheckRow> rows = new ArrayList<>();
         for (HealthCheck check : loadHealthChecks(connect)) {
             Map<String, String> values = new LinkedHashMap<>();
+            Map<String, String> valueI18nKeys = new LinkedHashMap<>();
             values.put("entry", check.getEntry());
             values.put("currentValue", check.getCurrentValue());
             values.put("healthValue", check.getHealthValue());
             values.put("status", check.getStatus());
-            rows.add(new CheckRow(values, Map.of(), check.getCmd(), check.getCmdOutput(), false));
+            valueI18nKeys.put("entry", i18nEntryKey(check.getEntry()));
+            valueI18nKeys.put("healthValue", i18nExpectedKey(check.getHealthValue()));
+            rows.add(new CheckRow(values, valueI18nKeys, check.getCmd(), check.getCmdOutput(), false));
         }
         return new CheckTableModel(columns, rows);
+    }
+
+    private static String i18nEntryKey(String entry) {
+        if (entry == null || entry.isBlank()) {
+            return "";
+        }
+        String exact = DAMENG_CHECK_ENTRY_I18N_KEYS.get(entry);
+        if (exact != null) {
+            return exact;
+        }
+        // Handle "表空间 X" pattern — use the base entry text for lookup
+        if (entry.startsWith("表空间 ")) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String i18nExpectedKey(String expected) {
+        if (expected == null || expected.isBlank()) {
+            return "";
+        }
+        String exact = DAMENG_CHECK_EXPECTED_I18N_KEYS.get(expected);
+        if (exact != null) {
+            return exact;
+        }
+        // Handle "获取失败: ..." pattern
+        if (expected.startsWith("获取失败")) {
+            return DAMENG_CHECK_EXPECTED_I18N_KEYS.get("获取失败");
+        }
+        return "";
     }
 
     @Override
