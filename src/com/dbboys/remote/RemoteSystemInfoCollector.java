@@ -68,10 +68,17 @@ public final class RemoteSystemInfoCollector {
         appendSection(area, I18n.t("remote.install.info.filesystem", "文件系统信息"), s.fileSystemInfo());
     }
 
-    /** Same standard sections, taken from an install execution context. */
+    /** Same standard sections, taken from an install execution context.
+     *  Re-runs df -h after install to capture accurate post-install disk usage. */
     public static void appendSystemInfo(CustomInlineCssTextArea area, RemoteInstallExecutionContext ctx) {
+        String fileSystemInfo;
+        try {
+            fileSystemInfo = ctx.getRemoteClient().executeCommand("df -h");
+        } catch (IOException e) {
+            fileSystemInfo = ctx.fileSystemInfo();
+        }
         appendSystemInfo(area, new RemoteSystemInfoSnapshot(
                 ctx.machineInfo(), ctx.osInfo(), ctx.kernelInfo(), ctx.cpuInfo(),
-                ctx.memoryInfo(), ctx.diskInfo(), ctx.fileSystemInfo()));
+                ctx.memoryInfo(), ctx.diskInfo(), fileSystemInfo));
     }
 }
