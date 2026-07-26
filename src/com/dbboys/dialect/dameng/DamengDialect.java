@@ -170,15 +170,66 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
         if (connection == null || connect == null) {
             return "";
         }
-        DatabaseMetaData metaData = connection.getMetaData();
         StringBuilder info = new StringBuilder();
-        appendInfoLine(info, "product_name", metaData.getDatabaseProductName());
-        appendInfoLine(info, "product_version", metaData.getDatabaseProductVersion());
-        appendInfoLine(info, "driver_name", metaData.getDriverName());
-        appendInfoLine(info, "driver_version", metaData.getDriverVersion());
-        appendInfoLine(info, "current_schema", currentSchema(connection));
-        // 达梦兼容 Oracle 模式下 getDatabaseProductName() 返回 Oracle，强制显示 DM 前缀
-        connect.setDbversion("DM " + trimToEmpty(metaData.getDatabaseProductVersion()));
+        String dbVersion = trimToEmpty(connection.getMetaData().getDatabaseProductVersion());
+        connect.setDbversion("DM " + dbVersion);
+
+        // ── 实例信息 ──
+        appendSectionQuery(info, "Instance Information",
+                connection,
+                "select instance_name, host_name, status$, mode$, " +
+                "to_char(start_time,'yyyy-mm-dd hh24:mi:ss') as start_time, " +
+                "datediff(dd, start_time, sysdate) || ' 天' as uptime_days " +
+                "from v$instance");
+
+        // ── 数据库信息 ──
+        appendSectionQuery(info, "Database Information",
+                connection,
+                "select name, global_name, arch_mode, " +
+                "to_char(create_time,'yyyy-mm-dd hh24:mi:ss') as create_time " +
+                "from v$database");
+
+        // ── 内存与性能概况 ──
+        appendSectionQuery(info, "Memory & Buffer Pool",
+                connection,
+                "select " +
+                "nvl(sum(nvl(total_size,0))/1024/1024,0) || ' MB' as memory_pool_total_mb, " +
+                "nvl(sum(nvl(n_logic_reads,0)),0) as buffer_logical_reads, " +
+                "nvl(sum(nvl(n_phy_reads,0)),0) as buffer_physical_reads, " +
+                "case when nvl(sum(nvl(n_logic_reads,0))+sum(nvl(n_phy_reads,0)),0) > 0 " +
+                "then round(nvl(sum(nvl(n_logic_reads,0)),0)*100.0/" +
+                "nvl(sum(nvl(n_logic_reads,0))+sum(nvl(n_phy_reads,0)),1),2) || '%' " +
+                "else 'N/A' end as buffer_hit_ratio " +
+                "from v$bufferpool");
+
+        // ── 会话与连接 ──
+        appendSectionQuery(info, "Sessions & Connections",
+                connection,
+                "select " +
+                "(select count(*) from v$sessions) as total_sessions, " +
+                "(select count(*) from v$sessions where state='ACTIVE') as active_sessions, " +
+                "(select count(*) from v$lock where blocked=1) as blocked_locks, " +
+                "(select max_sessions from v$dm_ini where para_name='MAX_SESSIONS') as max_sessions_limit");
+
+        // ── 当前模式信息 ──
+        String schema = currentSchema(connection);
+        appendSectionQuery(info, "Current Schema",
+                connection,
+                "select user() as current_user, " +
+                "sys_context('USERENV','CURRENT_SCHEMA') as current_schema, " +
+                "sys_context('USERENV','LANGUAGE') as language, " +
+                "sys_context('USERENV','IP_ADDRESS') as client_ip");
+
+        // ── 数据库模式/兼容性参数 ──
+        appendSectionQuery(info, "Database Configuration",
+                connection,
+                "select para_name, para_value from v$dm_ini " +
+                "where para_name in (" +
+                "'COMPATIBLE_MODE','BLANK_PAD_MODE'," +
+                "'LENGTH_IN_CHAR','CASE_SENSITIVE','CHARSET','PAGE_SIZE'," +
+                "'EXTENT_SIZE','PK_WITH_CLUSTER'" +
+                ") order by para_name");
+
         connect.setInfo(info.toString());
         return "";
     }
@@ -872,6 +923,28 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
         } catch (Exception e) {
             String message = e.getMessage();
             addCheck(checks, entry, cmd, expected, "获取失败: " + (message == null ? e.toString() : message), false);
+        }
+    }
+
+    /** Populates the info StringBuilder with a titled section from a SQL query.
+     *  Each result set row is appended as "col_label     col_value". Silently
+     *  skips the section if the query fails (view may be inaccessible). */
+    private static void appendSectionQuery(StringBuilder info, String title, Connection connection, String sql) {
+        try (var stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (!rs.next()) {
+                return;
+            }
+            info.append("\n");
+            info.append("##########################################################################################\n");
+            info.append(title).append("\n");
+            info.append("##########################################################################################\n");
+            java.sql.ResultSetMetaData md = rs.getMetaData();
+            for (int i = 1; i <= md.getColumnCount(); i++) {
+                appendInfoLine(info, md.getColumnLabel(i), rs.getString(i));
+            }
+        } catch (SQLException ignored) {
+            // Optional DM views like v$dm_ini may be inaccessible to low-privilege accounts.
         }
     }
 
