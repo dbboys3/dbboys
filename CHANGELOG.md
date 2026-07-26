@@ -10,6 +10,7 @@
 新增sshd-sftp-2.19.0.jar  
 删除jsch-2.27.6.jar  
 修改ssh 连接组件jsch为sshd  
+修改gbase8s/informix 分片表rowid使用ifx_row_id  
 修复ssh top出现滚动条不显示第一行  
 修复ssh 界面最大化后光标丢失   
 修复ssh arm nmon没对齐  
