@@ -89,16 +89,22 @@ public final class DamengInstanceAdminRepository implements InstanceAdminReposit
     public List<List<SpaceUsage>> getStorageSpaceUsage(Connection conn) throws SQLException {
         List<SpaceUsage> tablespaceUsage = new ArrayList<>();
         String tsSql = """
-                select t.name tablespace_name,
-                       round(sum(f.bytes)/1024/1024/1024,2) total_gb,
-                       round((sum(f.bytes) - nvl(max(fs.free_bytes),0))/1024/1024/1024,2) used_gb,
-                       count(*) file_count
-                from dba_data_files f
-                join v$tablespace t on t.name = f.tablespace_name
-                left join (select tablespace_name, sum(bytes) as free_bytes from dba_free_space group by tablespace_name) fs
-                  on fs.tablespace_name = f.tablespace_name
-                group by t.name
-                order by sum(f.bytes) desc
+                SELECT
+    a.tablespace_name tablespace_name,
+    total::number / (1024 * 1024*1024) total_gb,
+    free / (1024 * 1024*1024) free_gb,
+    (total - free) / (1024 * 1024*1024) used_gb,
+    round((total - free) / total, 4) * 100 as used_percent,
+ file_count,
+extendable
+FROM
+    (SELECT tablespace_name, SUM(bytes) free,count(*) file_count FROM dba_free_space GROUP BY tablespace_name) a,
+    (SELECT tablespace_name, SUM(bytes) total,max(case when autoextensible='YES' then 1 else 0 end) extendable FROM dba_data_files GROUP BY tablespace_name) b
+LEFT JOIN V$TABLESPACE ts ON b.tablespace_name=ts.name
+
+WHERE
+    a.tablespace_name = b.tablespace_name
+order by ts.id;
                 """;
         try (PreparedStatement ps = conn.prepareStatement(tsSql);
              ResultSet rs = ps.executeQuery()) {
@@ -106,22 +112,26 @@ public final class DamengInstanceAdminRepository implements InstanceAdminReposit
             while (rs.next()) {
                 double total = rs.getDouble("total_gb");
                 double used = rs.getDouble("used_gb");
+                int extendable = rs.getInt("extendable");
                 tablespaceUsage.add(new SpaceUsage(
                         no++, rs.getString("tablespace_name"), rs.getString("tablespace_name"),
-                        0, total, used, rs.getInt("file_count"), 0, 0, 0, total - used));
+                        extendable, total, used, rs.getInt("file_count"), 0, 0, 0, total - used));
             }
         }
 
         List<SpaceUsage> datafileUsage = new ArrayList<>();
         String dfSql = """
-                select f.file_id, f.file_name, f.tablespace_name,
-                       round(f.bytes/1024/1024/1024,2) total_gb,
-                       round(f.bytes/1024/1024/1024 - nvl(fs.free_bytes,0)/1024/1024/1024,2) used_gb,
-                       case when f.autoextensible = 'YES' then 1 else 0 end autoextend
-                from dba_data_files f
-                left join (select file_id, sum(bytes) as free_bytes from dba_free_space group by file_id) fs
-                  on fs.file_id = f.file_id
-                order by f.bytes desc
+                SELECT
+df.group_id file_id,
+    ts.NAME AS tablespace_name,
+    df.PATH AS file_name,
+((df.TOTAL_SIZE) * page_size::number / 1024 / 1024/1024)  AS total_gb,
+    ((df.TOTAL_SIZE - df.FREE_SIZE) * page_size::number / 1024 / 1024/1024 )  AS used_gb,
+df.auto_extend autoextend
+FROM
+    V$DATAFILE df
+LEFT JOIN V$TABLESPACE ts ON ts.ID = df.GROUP_ID
+order by ts.id
                 """;
         try (PreparedStatement ps = conn.prepareStatement(dfSql);
              ResultSet rs = ps.executeQuery()) {
@@ -129,9 +139,9 @@ public final class DamengInstanceAdminRepository implements InstanceAdminReposit
             while (rs.next()) {
                 double total = rs.getDouble("total_gb");
                 double used = rs.getDouble("used_gb");
-                String name = new java.io.File(rs.getString("file_name")).getName();
+                String name = "["+rs.getString("tablespace_name")+"] "+rs.getString("file_name");
                 SpaceUsage su = new SpaceUsage(
-                        rs.getInt("file_id"), name, rs.getString("tablespace_name"),
+                        rs.getInt("file_id"), name, rs.getString("file_name"),
                         rs.getInt("autoextend"),
                         total, used, 0, 0, 0, 0, total - used);
                 datafileUsage.add(su);
