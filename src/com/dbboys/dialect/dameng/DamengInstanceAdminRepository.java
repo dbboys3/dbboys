@@ -53,12 +53,15 @@ public final class DamengInstanceAdminRepository implements InstanceAdminReposit
 
     @Override
     public void setStorageSegmentExtendable(Connection conn, int segmentId, boolean extendable) throws SQLException {
-        String sql = "select file_name from dba_data_files where file_id = " + segmentId;
+        // DM8: ALTER TABLESPACE <ts> DATAFILE '<path>' AUTOEXTEND ON|OFF (no ALTER DATABASE form)
+        String sql = "select tablespace_name, file_name from dba_data_files where file_id = " + segmentId;
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             if (rs.next()) {
-                String filePath = rs.getString(1);
-                String alterSql = "ALTER DATABASE DATAFILE '" + filePath.replace("'", "''") + "' AUTOEXTEND " + (extendable ? "ON" : "OFF");
+                String tsName = rs.getString(1);
+                String filePath = rs.getString(2);
+                String alterSql = "ALTER TABLESPACE \"" + tsName.replace("\"", "\"\"") + "\" DATAFILE '"
+                        + filePath.replace("'", "''") + "' AUTOEXTEND " + (extendable ? "ON" : "OFF");
                 try (Statement alterStmt = conn.createStatement()) {
                     alterStmt.execute(alterSql);
                 }
@@ -139,9 +142,12 @@ order by ts.id
             while (rs.next()) {
                 double total = rs.getDouble("total_gb");
                 double used = rs.getDouble("used_gb");
-                String name = "["+rs.getString("tablespace_name")+"] "+rs.getString("file_name");
+                String fileName = rs.getString("file_name");
+                String tsName = rs.getString("tablespace_name");
+                // Label follows the Oracle convention (path [ TS ]) so the
+                // space-mutation menus (add/drop/autoextend) work unchanged
                 SpaceUsage su = new SpaceUsage(
-                        rs.getInt("file_id"), name, rs.getString("file_name"),
+                        rs.getInt("file_id"), fileName + " [ " + tsName + " ]", fileName,
                         rs.getInt("autoextend"),
                         total, used, 0, 0, 0, 0, total - used);
                 datafileUsage.add(su);

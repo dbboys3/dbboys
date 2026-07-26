@@ -263,6 +263,29 @@ public final class InstanceMutationUtil {
         return "TEMP".equals(u);
     }
 
+    /** 达梦系统关键表空间，禁止删除或删除其数据文件。 */
+    public static boolean isDamengProtectedTablespace(String name) {
+        if (name == null || name.isBlank()) {
+            return true;
+        }
+        String u = name.trim().toUpperCase(Locale.ROOT);
+        return "SYSTEM".equals(u) || "RLOG".equals(u) || "ROLL".equals(u) || "TEMP".equals(u)
+                || "MAIN".equals(u) || "HMAIN".equals(u);
+    }
+
+    private static boolean isDameng(Connect connect) {
+        return connect != null && connect.getDbtype() != null
+                && "DAMENG".equalsIgnoreCase(connect.getDbtype().trim());
+    }
+
+    /** 按数据库类型判断系统关键表空间（Oracle 与达梦的名单不同）。 */
+    public static boolean isProtectedTablespace(String dbtype, String name) {
+        if (dbtype != null && "DAMENG".equalsIgnoreCase(dbtype.trim())) {
+            return isDamengProtectedTablespace(name);
+        }
+        return isOracleProtectedTablespace(name);
+    }
+
     private static void assertOracleTablespaceIdentifier(String rawName) {
         if (rawName == null || rawName.isBlank()) {
             throw new IllegalArgumentException("Tablespace name is required");
@@ -357,9 +380,10 @@ public final class InstanceMutationUtil {
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE TABLESPACE ").append(ts);
         sql.append(" DATAFILE ").append(quotedPath);
-        sql.append(" SIZE ").append(initialSizeMb).append("M");
+        // DM8 wants a bare MB number; Oracle takes the M suffix
+        sql.append(" SIZE ").append(initialSizeMb).append(isDameng(connect) ? "" : "M");
         if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+            sql.append(" AUTOEXTEND ON NEXT 10").append(isDameng(connect) ? "" : "M").append(" MAXSIZE UNLIMITED");
         }
         executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
     }
@@ -371,14 +395,21 @@ public final class InstanceMutationUtil {
                                           String tablespaceName,
                                           boolean includingContentsAndDatafiles,
                                           AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isOracleProtectedTablespace(tablespaceName)) {
+        if (isProtectedTablespace(connect.getDbtype(), tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        StringBuilder sql = new StringBuilder("DROP TABLESPACE ").append(ts).append(" INCLUDING CONTENTS");
-        if (includingContentsAndDatafiles) {
-            sql.append(" AND DATAFILES");
+        StringBuilder sql;
+        if (isDameng(connect)) {
+            // DM8 has no INCLUDING CONTENTS clause: only an empty user tablespace
+            // can be dropped, and its datafiles are removed together with it
+            sql = new StringBuilder("DROP TABLESPACE ").append(ts);
+        } else {
+            sql = new StringBuilder("DROP TABLESPACE ").append(ts).append(" INCLUDING CONTENTS");
+            if (includingContentsAndDatafiles) {
+                sql.append(" AND DATAFILES");
+            }
         }
         executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
     }
@@ -402,9 +433,10 @@ public final class InstanceMutationUtil {
         StringBuilder sql = new StringBuilder();
         sql.append("ALTER TABLESPACE ").append(ts);
         sql.append(" ADD DATAFILE ").append(quotedPath);
-        sql.append(" SIZE ").append(sizeMb).append("M");
+        // DM8 wants a bare MB number; Oracle takes the M suffix
+        sql.append(" SIZE ").append(sizeMb).append(isDameng(connect) ? "" : "M");
         if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+            sql.append(" AUTOEXTEND ON NEXT 10").append(isDameng(connect) ? "" : "M").append(" MAXSIZE UNLIMITED");
         }
         executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
     }
@@ -434,9 +466,18 @@ public final class InstanceMutationUtil {
         assertOracleTablespaceIdentifier(tablespaceName);
         assertOracleDatafilePath(datafilePath);
         String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        String sql = enable
-                ? "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
-                : "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND OFF";
+        String sql;
+        if (isDameng(connect)) {
+            // DM8: ALTER TABLESPACE <ts> DATAFILE '<path>' AUTOEXTEND ... (no ALTER DATABASE form)
+            String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+            sql = enable
+                    ? "ALTER TABLESPACE " + ts + " DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10 MAXSIZE UNLIMITED"
+                    : "ALTER TABLESPACE " + ts + " DATAFILE " + quotedPath + " AUTOEXTEND OFF";
+        } else {
+            sql = enable
+                    ? "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
+                    : "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND OFF";
+        }
         executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
@@ -447,7 +488,7 @@ public final class InstanceMutationUtil {
                                         String tablespaceName,
                                         String datafilePath,
                                         AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isOracleProtectedTablespace(tablespaceName)) {
+        if (isProtectedTablespace(connect.getDbtype(), tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a datafile from a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);

@@ -1019,7 +1019,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onOracleDropTablespace(SpaceUsage spaceUsage) {
                 String tsName = spaceUsage.getName();
-                if (InstanceMutationUtil.isOracleProtectedTablespace(tsName)) {
+                if (InstanceMutationUtil.isProtectedTablespace(connect.getDbtype(), tsName)) {
                     AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("instance.error.oracle_ts_protected",
@@ -1382,7 +1382,7 @@ public class CustomInstanceTab extends CustomTab {
                             I18n.t("instance.error.oracle_datafile_label", "无法解析数据文件所属表空间。"));
                     return;
                 }
-                if (InstanceMutationUtil.isOracleProtectedTablespace(ts)) {
+                if (InstanceMutationUtil.isProtectedTablespace(connect.getDbtype(), ts)) {
                     AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("instance.error.oracle_datafile_drop_protected", "不允许在系统关键表空间上删除数据文件。"));
