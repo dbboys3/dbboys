@@ -761,18 +761,19 @@ public class SftpDialogController {
         String tmp = dest + ".temp";
         long total = 0;
         try {
-            try (InputStream is = new FileInputStream(src)) {
-                SftpClient.CloseableHandle h = sftp.open(tmp, EnumSet.of(SftpClient.OpenMode.Create, SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate));
-                try {
-                    byte[] buf = new byte[BUF]; int len; long last = 0;
-                    while ((len = is.read(buf)) != -1) {
-                        if (r.cancelled) break;
-                        sftp.write(h, total, buf, 0, len);
-                        total += len;
-                        if (System.currentTimeMillis() - last > 250) { r.tick(total); last = System.currentTimeMillis(); }
-                    }
-                    r.tick(total);
-                } finally { sftp.close(h); }
+            // SftpOutputStreamAsync pipelines SSH_FXP_WRITE requests (pending-ack window)
+            // instead of one synchronous round-trip per buffer — much faster on high-RTT links
+            try (InputStream is = new FileInputStream(src);
+                 OutputStream os = sftp.write(tmp, EnumSet.of(SftpClient.OpenMode.Create,
+                         SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
+                byte[] buf = new byte[BUF]; int len; long last = 0;
+                while ((len = is.read(buf)) != -1) {
+                    if (r.cancelled) break;
+                    os.write(buf, 0, len);
+                    total += len;
+                    if (System.currentTimeMillis() - last > 250) { r.tick(total); last = System.currentTimeMillis(); }
+                }
+                r.tick(total);
             }
             if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
@@ -793,19 +794,18 @@ public class SftpDialogController {
     private void upFileInDir(File src, String dest, XferRow row, AtomicLong cumulative) {
         String tmp = dest + ".temp";
         try {
-            try (InputStream is = new FileInputStream(src)) {
-                SftpClient.CloseableHandle h = sftp.open(tmp, EnumSet.of(SftpClient.OpenMode.Create, SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate));
-                try {
-                    byte[] buf = new byte[BUF]; int len; long fileTotal = 0, last = 0;
-                    while ((len = is.read(buf)) != -1) {
-                        if (row.cancelled) break;
-                        sftp.write(h, fileTotal, buf, 0, len);
-                        fileTotal += len;
-                        if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileTotal); last = System.currentTimeMillis(); }
-                    }
-                    cumulative.addAndGet(fileTotal);
-                    row.tick(cumulative.get());
-                } finally { sftp.close(h); }
+            try (InputStream is = new FileInputStream(src);
+                 OutputStream os = sftp.write(tmp, EnumSet.of(SftpClient.OpenMode.Create,
+                         SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
+                byte[] buf = new byte[BUF]; int len; long fileTotal = 0, last = 0;
+                while ((len = is.read(buf)) != -1) {
+                    if (row.cancelled) break;
+                    os.write(buf, 0, len);
+                    fileTotal += len;
+                    if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileTotal); last = System.currentTimeMillis(); }
+                }
+                cumulative.addAndGet(fileTotal);
+                row.tick(cumulative.get());
             }
             if (row.cancelled) { row.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
@@ -871,21 +871,20 @@ public class SftpDialogController {
         File tmp = new File(lf.getParentFile(), lf.getName() + ".temp");
         long offset = 0;
         try {
-            try (OutputStream os = new FileOutputStream(tmp)) {
-                SftpClient.CloseableHandle h = sftp.open(rp, EnumSet.of(SftpClient.OpenMode.Read));
-                try {
-                    long last = 0;
-                    byte[] buf = new byte[BUF];
-                    while (true) {
-                        if (r.cancelled) break;
-                        int rd = sftp.read(h, offset, buf, 0, buf.length);
-                        if (rd < 0) break;
-                        os.write(buf, 0, rd);
-                        offset += rd;
-                        if (System.currentTimeMillis() - last > 250) { r.tick(offset); last = System.currentTimeMillis(); }
-                    }
-                    r.tick(offset);
-                } finally { sftp.close(h); }
+            // SftpInputStreamAsync issues read-ahead SSH_FXP_READ requests (pipelined)
+            // instead of one synchronous round-trip per buffer — much faster on high-RTT links
+            try (InputStream in = sftp.read(rp);
+                 OutputStream os = new FileOutputStream(tmp)) {
+                long last = 0;
+                byte[] buf = new byte[BUF];
+                int rd;
+                while ((rd = in.read(buf)) != -1) {
+                    if (r.cancelled) break;
+                    os.write(buf, 0, rd);
+                    offset += rd;
+                    if (System.currentTimeMillis() - last > 250) { r.tick(offset); last = System.currentTimeMillis(); }
+                }
+                r.tick(offset);
             }
             if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); return; }
             Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -914,22 +913,19 @@ public class SftpDialogController {
         File tmp = new File(lf.getParentFile(), lf.getName() + ".temp");
         long fileOffset = 0;
         try {
-            try (OutputStream os = new FileOutputStream(tmp)) {
-                SftpClient.CloseableHandle h = sftp.open(rp, EnumSet.of(SftpClient.OpenMode.Read));
-                try {
-                    long last = 0;
-                    byte[] buf = new byte[BUF];
-                    while (true) {
-                        if (row.cancelled) break;
-                        int rd = sftp.read(h, fileOffset, buf, 0, buf.length);
-                        if (rd < 0) break;
-                        os.write(buf, 0, rd);
-                        fileOffset += rd;
-                        if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileOffset); last = System.currentTimeMillis(); }
-                    }
-                    cumulative.addAndGet(fileOffset);
-                    row.tick(cumulative.get());
-                } finally { sftp.close(h); }
+            try (InputStream in = sftp.read(rp);
+                 OutputStream os = new FileOutputStream(tmp)) {
+                long last = 0;
+                byte[] buf = new byte[BUF];
+                int rd;
+                while ((rd = in.read(buf)) != -1) {
+                    if (row.cancelled) break;
+                    os.write(buf, 0, rd);
+                    fileOffset += rd;
+                    if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileOffset); last = System.currentTimeMillis(); }
+                }
+                cumulative.addAndGet(fileOffset);
+                row.tick(cumulative.get());
             }
             if (row.cancelled) { row.cancel(); deleteLocalQuiet(tmp); return; }
             Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);

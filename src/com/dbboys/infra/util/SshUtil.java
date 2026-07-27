@@ -15,6 +15,7 @@ import org.apache.sshd.common.util.security.SecurityUtils;
 import org.apache.sshd.core.CoreModuleProperties;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
+import org.apache.sshd.sftp.SftpModuleProperties;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -62,6 +63,10 @@ public class SshUtil {
                     // （MAC Error / AEADBadTagException），整条 SSH 会话随即被中止，
                     // 表现为 sz/rz 传 1 个子包后死寂、20 秒后"ZModem read timeout"。
                     CoreModuleProperties.REKEY_BYTES_LIMIT.set(c, 4294967296L); // 4 GB 重加密阈值，减少大传输中的重加密停顿
+                    // SFTP 流水线深度：SftpInputStreamAsync 的预读窗口和 SftpOutputStreamAsync
+                    // 的待发窗口（默认仅约 128KB），高 RTT 链路上是传输速度的主要限制
+                    SftpModuleProperties.READ_BUFFER_SIZE.set(c, 1048576);   // 1 MB 预读窗口
+                    SftpModuleProperties.WRITE_BUFFER_SIZE.set(c, 1048576);  // 1 MB 待发窗口
                     c.start();
                     final SshClient started = c;
                     Runtime.getRuntime().addShutdownHook(new Thread(started::stop));
