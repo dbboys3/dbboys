@@ -1597,6 +1597,8 @@ public final class GbaseDdlRepository implements DdlRepository {
         INNER_FUNC_NAME.put(-48,"upper");
         INNER_FUNC_NAME.put(-49,"lower");
         INNER_FUNC_NAME.put(-50,"initcap");
+        INNER_FUNC_NAME.put(-175,"to_char");        // add 2026-07-27
+        INNER_FUNC_NAME.put(-294,"to_date");        // add 2026-07-27
     }
 
     /**
@@ -1754,7 +1756,7 @@ public final class GbaseDdlRepository implements DdlRepository {
         // idxColsString: <-234>(1, '2') [1], -3 [1]
         // 索引字段（函数索引字段）以，为分隔符
         // 示例中：<-234>(1, '2', '4') [1] 表示 函数号-234（内置函数），对应的字段是1，-(负值，如有)表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
-        String idxcols = "";
+        StringBuffer idxcols = new StringBuffer();
         String funcname = "";
         String funcparam = "";
         String sortby = ",";
@@ -1775,7 +1777,10 @@ public final class GbaseDdlRepository implements DdlRepository {
                         funcname = procName;
                     }
                 }
-                idxcols = idxcols + getName(funcname,sqlmode) + "(";
+                if ("MySQL".equalsIgnoreCase(sqlmode)){
+                    idxcols.append("(");            // mysql模式下，函数索引需多一层括号
+                }
+                idxcols.append(getName(funcname,sqlmode)).append("(");
                 // 获取字段 及 排序方式 及多参函数参数
                 String tmpstr_func = tmpstr.substring(tmpstr.indexOf("(")+1,tmpstr.indexOf(")"));
                 int colno = 0;
@@ -1786,23 +1791,27 @@ public final class GbaseDdlRepository implements DdlRepository {
                     colno = Integer.valueOf(tmpstr_func);
                 }
                 sortby = (colno<0)?" DESC,":",";
-                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode);
+                idxcols.append(getName(colnameList.get(Math.abs(colno) - 1),sqlmode));
                 if ("".equals(funcparam)){
-                    idxcols = idxcols + ")";
+                    idxcols.append(")");
                 } else {
-                    idxcols = idxcols + "," + funcparam + ")";
+                    idxcols.append(",").append(funcparam).append(")");
                 }
-                idxcols = idxcols + sortby;
+                if ("MySQL".equalsIgnoreCase(sqlmode)){
+                    idxcols.append(")");            // mysql模式下，函数索引需多一层括号
+                }
+                idxcols.append(sortby);
             } else {                                // 普通字段 -3 [1]
                 int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
                 sortby = (colno<0)?" DESC,":",";
-                idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode) + sortby;
+                idxcols.append(getName(colnameList.get(Math.abs(colno) - 1),sqlmode)).append(sortby);
             }
         }
         if (idxcols.length() > 0){
-            idxcols = idxcols.substring(0,idxcols.length()-1);
-        }
-        return idxcols;
+            return idxcols.substring(0,idxcols.length()-1);
+        } else {
+            return idxcols.toString();
+        }     
     }
 
     /**
@@ -1812,19 +1821,20 @@ public final class GbaseDdlRepository implements DdlRepository {
      * @return
      */
     private static String getIdxCols(String idxColsString,ArrayList<String> colnameList, String sqlmode) {
-        String idxcols = "";
+        StringBuffer idxcols = new StringBuffer();
         String sortby = ",";
         for (String cols : idxColsString.trim().split(",(?![^()]*+\\))")){
             String tmpstr = cols.trim();
             // 普通字段 -3 [1]
             int colno = Integer.valueOf(tmpstr.substring(0,tmpstr.indexOf(" ")));
             sortby = (colno<0)?" DESC,":",";
-            idxcols = idxcols + getName(colnameList.get(Math.abs(colno) - 1),sqlmode) + sortby;
+            idxcols.append(getName(colnameList.get(Math.abs(colno) - 1),sqlmode)).append(sortby);
         }
         if (idxcols.length() > 0){      // 去除最后的","
-            idxcols = idxcols.substring(0,idxcols.length()-1);
+            return idxcols.substring(0,idxcols.length()-1);
+        } else {
+            return idxcols.toString();
         }
-        return idxcols;
     }
 
     /**
