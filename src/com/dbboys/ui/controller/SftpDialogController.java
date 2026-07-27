@@ -999,11 +999,11 @@ public class SftpDialogController {
         }
         if (remoteSide) {
             AppExecutor.runAsync(() -> {
-                for (FileEntry fe : sel) { try { String p = joinRemote(fe.name); if (fe.isDir) sftp.rmdir(p); else sftp.remove(p); } catch (Exception ex) { log.error("del",ex); } }
+                for (FileEntry fe : sel) { try { String p = joinRemote(fe.name); if (fe.isDir) delRemoteRec(p); else sftp.remove(p); } catch (Exception ex) { log.error("del",ex); } }
                 Platform.runLater(() -> loadRemote(remotePath));
             });
         } else {
-            for (FileEntry fe : sel) { File f = new File(localDir, fe.name); if (fe.isDir) delRec(f); else f.delete(); }
+            for (FileEntry fe : sel) { File f = new File(localDir, fe.name); delRec(f); }
             loadLocal();
         }
     }
@@ -1085,6 +1085,20 @@ public class SftpDialogController {
         return total;
     }
 
+    /** Recursively delete a remote directory tree. */
+    private void delRemoteRec(String rp) throws IOException {
+        SftpClient.CloseableHandle h = sftp.openDir(rp);
+        try {
+            for (SftpClient.DirEntry de : sftp.listDir(h)) {
+                String n = de.getFilename();
+                if (".".equals(n) || "..".equals(n)) continue;
+                if (de.getAttributes().isDirectory()) delRemoteRec(rp + "/" + n);
+                else sftp.remove(rp + "/" + n);
+            }
+        } finally { sftp.close(h); }
+        sftp.rmdir(rp);
+    }
+
     /** Best-effort delete of a remote file (used to clean up .temp files). */
     private void removeRemoteQuiet(String rp) {
         try { sftp.remove(rp); } catch (Exception ignored) {}
@@ -1104,7 +1118,18 @@ public class SftpDialogController {
     private String joinRemote(String n) { return "/".equals(remotePath) ? "/" + n : remotePath + "/" + n; }
     private static String parentOf(String p) { if ("/".equals(p)) return "/"; int i = p.lastIndexOf('/'); return i <= 0 ? "/" : p.substring(0, i); }
     private File parentLocal() { File p = localDir.getParentFile(); return p != null && p.isDirectory() ? p : localDir; }
-    private static void delRec(File f) { if (f.isDirectory()) { File[] ks = f.listFiles(); if (ks != null) for (File c : ks) delRec(c); } f.delete(); }
+    private static void delRec(File f) {
+        if (f.isDirectory()) {
+            File[] ks = f.listFiles();
+            if (ks != null) for (File c : ks) delRec(c);
+        }
+        try { Files.delete(f.toPath()); }
+        catch (IOException e) {
+            // On Windows, read-only files can't be deleted — make writable and retry
+            if (!f.canWrite()) f.setWritable(true);
+            try { Files.delete(f.toPath()); } catch (IOException ignored) {}
+        }
+    }
 
     private static Button iconBtn(String iconPath, double scale, String tip) {
         Button b = new Button();
