@@ -143,24 +143,13 @@ public final class InformixRemoteWorkflow {
         databaseInfoArea.append(ctx.executeCommand("source ~informix/.bash_profile;onstat -d |sed '1,2d'") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.param_config", "参数配置") + "\n", RESULT_TITLE_STYLE);
         databaseInfoArea.append(ctx.executeCommand("source ~informix/.bash_profile;onstat -g cfg |grep -v '^$' |sed '1,5d'") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("df -h") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.kernel_params", "内核参数") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("ipcs -l") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.informix_ulimit", "informix用户限制") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("su - informix -c \"ulimit -a\"") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        // System info goes through the unified renderer (same interface and
+        // title/text styles as the wizard's step-2 system-info panel)
+        RemoteSystemInfoCollector.appendSystemInfo(databaseInfoArea, ctx);
+        RemoteSystemInfoCollector.appendSection(databaseInfoArea,
+                I18n.t("remote.install.result.kernel_params", "内核参数"), ctx.executeCommand("ipcs -l"));
+        RemoteSystemInfoCollector.appendSection(databaseInfoArea,
+                I18n.t("remote.install.result.informix_ulimit", "informix用户限制"), ctx.executeCommand("su - informix -c \"ulimit -a\""));
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
@@ -251,10 +240,10 @@ public final class InformixRemoteWorkflow {
         ctx.executeCommandWithExitStatus("systemctl restart systemd-logind");
         ctx.executeCommandWithExitStatus("sed -i '/^[[:space:]]*\\*[[:space:]]\\+\\(soft\\|hard\\)[[:space:]]/d' /etc/security/limits.conf");
         ctx.executeCommandWithExitStatus("sed -i '/^[[:space:]]*\\*[[:space:]]\\+\\(soft\\|hard\\)[[:space:]]/d' /etc/security/limits.d/20-nproc.conf");
-        ctx.executeCommandWithExitStatus("echo \"* soft nproc 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* hard nproc 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* soft nofile 1048576\">> /etc/security/limits.conf");
-        ctx.executeCommandWithExitStatus("echo \"* hard nofile 1048576\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* soft nproc 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* hard nproc 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* soft nofile 65536\">> /etc/security/limits.conf");
+        ctx.executeCommandWithExitStatus("echo \"* hard nofile 65536\">> /etc/security/limits.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmmni.*/d\" /etc/sysctl.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmmax.*/d\" /etc/sysctl.conf");
         ctx.executeCommandWithExitStatus("sed -i \"/^kernel.shmall.*/d\" /etc/sysctl.conf");
@@ -285,9 +274,18 @@ public final class InformixRemoteWorkflow {
         if (ctx.executeCommandWithExitStatus("tar -xvf " + ctx.shellQuote(ctx.remotePackagePath())) != 0) {
             throw new Exception(I18n.t("remote.install.error.extract_package_failed", "解压安装包【%s】失败！").formatted(ctx.remotePackagePath()));
         }
-        int status = ctx.executeCommandWithExitStatus("source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./ids_install -i silent -DLICENSE_ACCEPTED=TRUE");
+        String installCmd;
+        if (ctx.executeCommandWithExitStatus("test -f installserver") == 0) {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./installserver -silent -acceptlicense=yes -javahome none";
+        }else if (ctx.executeCommandWithExitStatus("test -f SERVER/installserver") == 0) {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && cd SERVER && ./installserver -silent -acceptlicense=yes -javahome none";
+        }
+         else {
+            installCmd = "source ~informix/.bash_profile && mkdir -p $INFORMIXDIR && chown informix:informix $INFORMIXDIR && ./ids_install -i silent -DLICENSE_ACCEPTED=TRUE";
+        }
+        int status = ctx.executeCommandWithExitStatus(installCmd);
         if (status != 0) {
-            throw new Exception(I18n.t("remote.install.error.install_to_informixdir_failed", "安装数据库到$INFORMIXDIR失败！"));
+            throw new Exception(I18n.t("remote.install.error.install_to_informixdir_failed", "安装数据库到$INFORMIXDIR失败！请检查/etc/security/limits.conf相关参数是否超过65536。"));
         }
     }
 
@@ -338,14 +336,13 @@ public final class InformixRemoteWorkflow {
                         "sed -i \"s#^USERMAPPING.*#USERMAPPING ADMIN#g\" $INFORMIXDIR/etc/$ONCONFIG && " +
                         "sed -i \"s#^BUFFERPOOL size=2k.*#BUFFERPOOL " + ctx.fieldValue(InformixRemoteFields.BUFFERPOOL_2K) + "#g\" $INFORMIXDIR/etc/$ONCONFIG &&" +
                         "echo \"BUFFERPOOL " + ctx.fieldValue(InformixRemoteFields.BUFFERPOOL_16K) + "\">>$INFORMIXDIR/etc/$ONCONFIG &&" +
-                        "echo \"ENABLE_NULL_STRING 0\">>$INFORMIXDIR/etc/$ONCONFIG &&" +
                         "touch $INFORMIXDIR/etc/sysadmin/stop &&" +
                         "chown informix:informix $INFORMIXDIR/etc/sysadmin/stop &&" +
                         "mkdir -p /etc/informix &&" +
                         "echo \"USER:daemon\" > /etc/informix/allowed.surrogates &&" +
                         "onmode -ky &&" +
                         "su - informix -c \"oninit\" &&" +
-                        "echo \"CREATE DEFAULT USER WITH PROPERTIES USER 'daemon'\" |dbaccess sysuser -";
+                        "(echo \"CREATE DEFAULT USER WITH PROPERTIES USER 'daemon'\" |dbaccess sysuser - || true)";
         if (ctx.executeCommandWithExitStatus(paramsCmd) != 0) {
             throw new Exception(I18n.t("remote.install.error.tune_params_failed", "优化配置参数失败！"));
         }
@@ -400,7 +397,7 @@ public final class InformixRemoteWorkflow {
             }
         }
         String tempdbsCmd = "source ~informix/.bash_profile && DATADIR="
-                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "onmode -wf DBSPACETEMP=" + dbspaceTemp;
+                + ctx.fieldValue(InformixRemoteFields.DATA_FILE_PATH) + "&&" + onspaceCmd + "(onmode -wf DBSPACETEMP=" + dbspaceTemp+"||true)";
         if (ctx.executeCommandWithExitStatus(tempdbsCmd) != 0) {
             throw new Exception(I18n.t("remote.install.error.tune_temp_space_failed", "优化临时空间失败！"));
         }

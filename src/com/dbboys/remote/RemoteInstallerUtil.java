@@ -8,6 +8,7 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
+import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.infra.util.DownloadManagerUtil;
 import com.dbboys.infra.util.MenuItemUtil;
 import com.dbboys.model.Connect;
@@ -17,6 +18,7 @@ import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -29,9 +31,10 @@ import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.SVGPath;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import com.jcraft.jsch.*;
+import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -40,9 +43,12 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -125,6 +131,16 @@ public class RemoteInstallerUtil {
         private InstallConfigItem(InstallConfigItem other) {
             this(other.id, other.name, other.value, other.description);
         }
+    }
+
+    /** Lightweight SFTP entry used by the remote browse popup. */
+    private static final class FileEntry {
+        final String name;
+        final long bytes;
+        final boolean isDir;
+        final boolean isLink;
+        final String modified;
+        FileEntry(String n, long b, boolean d, boolean l, String m) { name = n; bytes = b; isDir = d; isLink = l; modified = m; }
     }
 
 
@@ -272,7 +288,7 @@ public class RemoteInstallerUtil {
                                 try {
                                     remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
-                                } catch (JSchException e) {
+                                } catch (Exception e) {
                                     throw new Exception(I18n.t("remote.install.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
                                 }
                             }
@@ -304,34 +320,7 @@ public class RemoteInstallerUtil {
                                         // 显示信息
                                         Platform.runLater(() -> {
                                             systemInfoArea.replaceText("");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(machineInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            // 省略其他信息的显示代码（与原逻辑相同）
-                                            systemInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(osInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(kernelInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(cpuInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(memInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(diskInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-                                            systemInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            systemInfoArea.append(fileSystemInfo + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
-
-
-                                            //systemInfoArea.append("内核参数\n","-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;");
-                                            //systemInfoArea.append(kernelParams + "\n\n","-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-
+                                            RemoteSystemInfoCollector.appendSystemInfo(systemInfoArea, snapshot);
                                             systemInfoArea.showParagraphAtTop(0);
                                         });
                                     } catch (Exception e) {
@@ -421,9 +410,9 @@ public class RemoteInstallerUtil {
                             Task<Void> runningTask = new Task<>() {
                                 @Override
                                 protected Void call() throws Exception {
-                                    ChannelSftp channelSftp = null;
+                                    SftpClient sftpClient = null;
                                     try {
-                                        channelSftp = remoteClient.openSftpChannel();
+                                        sftpClient = remoteClient.openSftpClient();
 
                                         Platform.runLater(() -> {
                                             runningLabel.setText(" " + I18n.t("remote.install.status.uploading_package", "正在上传安装包..."));
@@ -433,14 +422,14 @@ public class RemoteInstallerUtil {
                                         try (FileInputStream fis = new FileInputStream(selectedFile)) {
                                             ProgressMonitorInputStream monitor = new ProgressMonitorInputStream(
                                                     fis, selectedFile.length(), progress);
-                                            channelSftp.put(monitor, remoteFilePath+".upload");
+                                            sftpClient.put(monitor, remoteFilePath+".upload");
                                         }
 
                                     } catch (Exception e) {
                                         throw new Exception(I18n.t("remote.install.error.upload_failed", "上传安装包失败: %s").formatted(e.getMessage()));
                                     } finally {
-                                        if (channelSftp != null && channelSftp.isConnected()) {
-                                            channelSftp.disconnect();
+                                        if (sftpClient != null && sftpClient.isOpen()) {
+                                            sftpClient.close();
                                         }
                                     }
                                     return null;
@@ -737,7 +726,7 @@ public class RemoteInstallerUtil {
         content.setPadding(new Insets(10,20,10,20));
 
         Button browseButton = new Button("");
-        browseButton.setGraphic(IconFactory.group(BROWSE_ICON_PATH, 0.6, 0.6));
+        browseButton.setGraphic(IconFactory.group(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.6, 0.6));
         browseButton.getStyleClass().add("small");
         browseButton.setFocusTraversable(false);
         Tooltip browseTooltip = new Tooltip();
@@ -760,7 +749,6 @@ public class RemoteInstallerUtil {
         installFilePathField= new CustomUserTextField();
         installFilePathField.setMinWidth(450);
         installFilePathField.setMaxWidth(450);
-        remotePathField.setMaxWidth(450);
         Label localPackageHintLabel = new Label();
         localPackageHintLabel.textProperty().bind(Bindings.createStringBinding(
                 activeProvider::localPackageHintText,
@@ -778,11 +766,16 @@ public class RemoteInstallerUtil {
         ));
         HBox downloadHBox = new HBox(downloadPrefixLabel, downloadButton, downloadSuffixLabel);
         HBox hBox = new HBox(10);
+        hBox.setAlignment(Pos.CENTER_LEFT);
         hBox.getChildren().addAll(installFilePathField,browseButton);
         // 浏览文件事件
         browseButton.setOnAction(e -> {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle(I18n.t("remote.install.step3.select_package", "选择安装包"));
+            File desktopDir = FileSystemView.getFileSystemView().getHomeDirectory();
+            if (desktopDir != null && desktopDir.isDirectory()) {
+                fileChooser.setInitialDirectory(desktopDir);
+            }
             selectedFile = fileChooser.showOpenDialog(parent);
             if (selectedFile != null) {
                 String localPath = selectedFile.getAbsolutePath();
@@ -855,6 +848,32 @@ public class RemoteInstallerUtil {
         uploadedRadioButton.textProperty().bind(I18n.bind("remote.install.step3.uploaded", "我已经上传了数据库安装包"));
         remotePathField.disableProperty().bind(uploadedRadioButton.selectedProperty().not());
         VBox.setMargin(uploadedRadioButton, new Insets(12, 0, 0, 0));
+
+        // Remote browse button
+        Button remoteBrowseButton = new Button("");
+        remoteBrowseButton.setGraphic(IconFactory.group(IconPaths.TREECELL_CONNECT_FOLDER_OPEN, 0.6, 0.6));
+        remoteBrowseButton.getStyleClass().add("small");
+        remoteBrowseButton.setFocusTraversable(false);
+        Tooltip remoteBrowseTooltip = new Tooltip();
+        remoteBrowseTooltip.textProperty().bind(I18n.bind("remote.install.tooltip.browse_remote", "浏览远程目录"));
+        remoteBrowseButton.setTooltip(remoteBrowseTooltip);
+        remoteBrowseButton.disableProperty().bind(uploadedRadioButton.selectedProperty().not());
+        remoteBrowseButton.setOnAction(e -> {
+            String defaultPath = "/";
+            try {
+                String home = remoteClient.executeCommand("echo $HOME").trim();
+                if (!home.isEmpty()) {
+                    defaultPath = home;
+                }
+            } catch (Exception ignored) {}
+            showRemoteBrowseDialog(parent, defaultPath);
+        });
+
+        HBox remotePathBox = new HBox(10);
+        remotePathBox.setAlignment(Pos.CENTER_LEFT);
+        remotePathBox.getChildren().addAll(remotePathField, remoteBrowseButton);
+        HBox.setHgrow(remotePathField, Priority.ALWAYS);
+
         Label uploadTitleLabel = new Label();
         uploadTitleLabel.textProperty().bind(I18n.bind("remote.install.step3.upload_title", "上传安装包到远程服务器："));
         Label uploadPathLabel = new Label();
@@ -872,7 +891,7 @@ public class RemoteInstallerUtil {
         content.getChildren().addAll(
                 uploadedRadioButton,
                 uploadPathLabel,
-                remotePathField,
+                remotePathBox,
                 remotePathHint
         );
 
@@ -982,7 +1001,7 @@ public class RemoteInstallerUtil {
     }
 
     // 以下为原有工具方法（保持不变）
-    private static String executeCommand(String command) throws JSchException, IOException {
+    private static String executeCommand(String command) throws IOException {
         return remoteClient.executeCommand(command);
     }
 
@@ -1037,11 +1056,11 @@ public class RemoteInstallerUtil {
         });
     }
 
-    private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
+    private static int executeCommandWithExitStatus(String command) throws IOException {
         return remoteClient.executeCommandWithExitStatus(command);
     }
 
-    private static boolean isCommandExists(String command) throws JSchException, InterruptedException {
+    private static boolean isCommandExists(String command) throws IOException {
         int exitStatus = executeCommandWithExitStatus("command -v " + command);
         return exitStatus == 0;
     }
@@ -1105,7 +1124,7 @@ public class RemoteInstallerUtil {
         }
     }
 
-    private static boolean remoteFileExists(String filePath) throws JSchException, InterruptedException {
+    private static boolean remoteFileExists(String filePath) throws IOException {
         // Handle space-separated paths (e.g. Oracle 11g two-zip packages).
         // Every file in the list must exist.
         if (filePath == null || filePath.isBlank()) return false;
@@ -1367,11 +1386,191 @@ public class RemoteInstallerUtil {
         Platform.runLater(() -> {
             String msg = I18n.t("remote.install.result.saved_to_desktop",
                     "Install info saved to desktop: %s").formatted(savedFileRef.getName());
-            AlertUtil.showAlert(I18n.t("remote.install.title.product.format",
-                    "%s Install Wizard").formatted(activeProviderName()), msg);
+            NotificationUtil.showMainNotification(msg);
         });
     }
 
+    /** Show a remote-directory browse popup, mirroring the SFTP transfer browse dialog. */
+    private static void showRemoteBrowseDialog(Stage parent, String defaultPath) {
+        TableView<FileEntry> browseTbl = new TableView<>();
+        browseTbl.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        browseTbl.getStyleClass().add("sftp-table");
 
+        // Name column
+        TableColumn<FileEntry, FileEntry> nameCol = new TableColumn<>(I18n.t("sftp.col.name", "Name"));
+        nameCol.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue()));
+        nameCol.setPrefWidth(280);
+        nameCol.setReorderable(false);
+        nameCol.setStyle("-fx-font-size:11px;");
+        nameCol.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(FileEntry item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setGraphic(null); setText(null); return; }
+                String iconPath = item.isDir ? IconPaths.CREATE_CONNECT_FOLDER : IconPaths.INSTANCE_SPACE_FILE_PATH_LABEL;
+                SVGPath svg = new SVGPath();
+                svg.setContent(iconPath);
+                svg.setScaleX(0.5); svg.setScaleY(0.5);
+                svg.getStyleClass().add("icon-button-default");
+                StackPane iconWrap = new StackPane(svg);
+                iconWrap.setPrefWidth(20); iconWrap.setMinWidth(20); iconWrap.setMaxWidth(20);
+                HBox box = new HBox(5, iconWrap, new Label(item.name));
+                box.setAlignment(Pos.CENTER_LEFT);
+                setGraphic(box);
+                setText(null);
+            }
+        });
+        // Size column
+        TableColumn<FileEntry, String> sizeCol = new TableColumn<>(I18n.t("sftp.col.size", "Size"));
+        sizeCol.setCellValueFactory(c -> new SimpleStringProperty(
+                c.getValue().isDir ? "" : formatFileSize(c.getValue().bytes)));
+        sizeCol.setPrefWidth(80);
+        sizeCol.setReorderable(false);
+        sizeCol.setStyle("-fx-font-size:11px;");
+        // Modified column
+        TableColumn<FileEntry, String> modCol = new TableColumn<>(I18n.t("sftp.col.modified", "Modified"));
+        modCol.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().modified));
+        modCol.setPrefWidth(140);
+        modCol.setReorderable(false);
+        modCol.setStyle("-fx-font-size:11px;");
+        //noinspection unchecked
+        browseTbl.getColumns().addAll(nameCol, sizeCol, modCol);
+        browseTbl.setPrefHeight(280);
+        ObservableList<FileEntry> browseItems = FXCollections.observableArrayList();
+        browseTbl.setItems(browseItems);
+
+        TextField browsePath = new TextField(defaultPath);
+        browsePath.setStyle("-fx-font-family:monospace;-fx-font-size:13px;");
+        browsePath.setPrefWidth(350);
+
+        Button upBtn = new Button("");
+        upBtn.setGraphic(IconFactory.group(IconPaths.SEARCH_REPLACE_PREVIOUS, 0.6, 0.6));
+        upBtn.getStyleClass().add("small");
+        upBtn.setFocusTraversable(false);
+        upBtn.setTooltip(new Tooltip(I18n.t("sftp.btn.up", "Up")));
+
+        Button goBtn = new Button("");
+        goBtn.setGraphic(IconFactory.group(IconPaths.METADATA_REFRESH_ITEM, 0.6, 0.6));
+        goBtn.getStyleClass().add("small");
+        goBtn.setFocusTraversable(false);
+        goBtn.setTooltip(new Tooltip(I18n.t("sftp.btn.refresh", "Refresh")));
+
+        Runnable loadBrowsePath = () -> {
+            String p = browsePath.getText().trim();
+            if (p.isEmpty()) return;
+            AppExecutor.runAsync(() -> {
+                List<FileEntry> entries = new ArrayList<>();
+                SftpClient sftpClient = null;
+                try {
+                    sftpClient = remoteClient.openSftpClient();
+                    SftpClient.CloseableHandle h = sftpClient.openDir(p);
+                    try {
+                        for (SftpClient.DirEntry de : sftpClient.listDir(h)) {
+                            String n = de.getFilename();
+                            if (".".equals(n) || "..".equals(n)) continue;
+                            String modTime = "";
+                            try {
+                                FileTime ft = de.getAttributes().getModifyTime();
+                                if (ft != null) {
+                                    modTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(ft.toMillis()));
+                                }
+                            } catch (Exception ignored) {}
+                            entries.add(new FileEntry(n, de.getAttributes().getSize(),
+                                    de.getAttributes().isDirectory(), de.getAttributes().isSymbolicLink(), modTime));
+                        }
+                    } finally { sftpClient.close(h); }
+                    entries.sort((a, b) -> a.isDir != b.isDir ? (a.isDir ? -1 : 1) : a.name.compareToIgnoreCase(b.name));
+                    List<FileEntry> finalEntries = entries;
+                    Platform.runLater(() -> { browseItems.setAll(finalEntries); setBrowsePathText(browsePath, p); });
+                } catch (Exception ex) {
+                    Platform.runLater(() -> AlertUtil.showAlert(I18n.t("sftp.error.title", "Error"),
+                            I18n.t("sftp.error.dir_not_exist", "Directory does not exist") + ": " + p));
+                } finally {
+                    if (sftpClient != null && sftpClient.isOpen()) {
+                        try { sftpClient.close(); } catch (Exception ignored) {}
+                    }
+                }
+            });
+        };
+        upBtn.setOnAction(ev -> {
+            String cur = browsePath.getText().trim();
+            int i = cur.lastIndexOf('/');
+            browsePath.setText(i <= 0 ? "/" : cur.substring(0, i));
+            loadBrowsePath.run();
+        });
+        goBtn.setOnAction(ev -> loadBrowsePath.run());
+
+        HBox browseTop = new HBox(5, upBtn, browsePath, goBtn);
+        browseTop.setPadding(new Insets(4, 6, 2, 6));
+        HBox.setHgrow(browsePath, Priority.ALWAYS);
+        browsePath.setOnAction(ev -> goBtn.fire());
+
+        VBox browseBox = new VBox(browseTop, browseTbl);
+        VBox.setVgrow(browseTbl, Priority.ALWAYS);
+
+        ButtonType okBtnType = ButtonType.OK;
+        ButtonType cancelBtnType = ButtonType.CANCEL;
+        final AlertUtil.ContentDialog[] browseDialogHolder = new AlertUtil.ContentDialog[1];
+        AlertUtil.ContentDialog browseDialog = AlertUtil.createContentDialog(
+                I18n.t("remote.install.browse_remote.title", "浏览远程目录"), browseBox, 560, 450, okBtnType, cancelBtnType);
+        browseDialogHolder[0] = browseDialog;
+
+        browseTbl.setOnMouseClicked(ev -> {
+            if (ev.getClickCount() == 2) {
+                FileEntry sel = browseTbl.getSelectionModel().getSelectedItem();
+                if (sel != null) {
+                    if (sel.isDir) {
+                        browsePath.setText(
+                                ("/".equals(browsePath.getText().trim()) ? "" : browsePath.getText().trim()) + "/" + sel.name);
+                        loadBrowsePath.run();
+                    } else {
+                        // Double-click file: fill absolute path and close
+                        String absPath = ("/".equals(browsePath.getText().trim()) ? "" : browsePath.getText().trim()) + "/" + sel.name;
+                        remotePathField.setText(absPath);
+                        browseDialogHolder[0].getStage().close();
+                    }
+                }
+            }
+        });
+
+        Button okBrowseBtn = browseDialog.getButton(okBtnType);
+        okBrowseBtn.textProperty().bind(I18n.bind("common.confirm", "确认"));
+        okBrowseBtn.setOnAction(ev -> {
+            FileEntry sel = browseTbl.getSelectionModel().getSelectedItem();
+            if (sel != null && !sel.isDir) {
+                // File selected: fill absolute file path
+                String absPath = ("/".equals(browsePath.getText().trim()) ? "" : browsePath.getText().trim()) + "/" + sel.name;
+                remotePathField.setText(absPath);
+            } else {
+                String np = browsePath.getText().trim();
+                if (!np.isEmpty()) {
+                    remotePathField.setText(np);
+                }
+            }
+            browseDialog.getStage().close();
+        });
+        browseDialog.getButton(cancelBtnType).textProperty().bind(I18n.bind("common.cancel", "取消"));
+        browseDialog.getButton(cancelBtnType).setOnAction(ev -> browseDialog.getStage().close());
+        browsePath.requestFocus();
+        Platform.runLater(() -> { browsePath.selectEnd(); browsePath.deselect(); });
+        Platform.runLater(loadBrowsePath::run);
+        browseDialog.showAndWait();
+    }
+
+    private static void setBrowsePathText(TextField f, String text) {
+        Platform.runLater(() -> {
+            f.setText(text);
+            f.positionCaret(text.length());
+        });
+    }
+
+    private static String formatFileSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        double kb = bytes / 1024.0;
+        if (kb < 1024) return String.format("%.1f KB", kb);
+        double mb = kb / 1024.0;
+        if (mb < 1024) return String.format("%.1f MB", mb);
+        return String.format("%.1f GB", mb / 1024.0);
+    }
 
 }

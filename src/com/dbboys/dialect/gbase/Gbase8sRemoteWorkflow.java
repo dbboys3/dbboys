@@ -143,24 +143,13 @@ public final class Gbase8sRemoteWorkflow {
         databaseInfoArea.append(ctx.executeCommand("source ~gbasedbt/.bash_profile;onstat -d |sed '1,2d'") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
         databaseInfoArea.append(I18n.t("remote.install.result.param_config", "参数配置") + "\n", RESULT_TITLE_STYLE);
         databaseInfoArea.append(ctx.executeCommand("source ~gbasedbt/.bash_profile;onstat -g cfg |grep -v '^$' |sed '1,5d'") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.machine", "服务器型号") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.machineInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.os", "操作系统版本") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.osInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.kernel", "内核版本") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.kernelInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.cpu", "CPU信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.cpuInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.memory", "内存信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.memoryInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.disk", "磁盘信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.diskInfo() + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.info.filesystem", "文件系统信息") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("df -h") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.kernel_params", "内核参数") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("ipcs -l") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
-        databaseInfoArea.append(I18n.t("remote.install.result.gbasedbt_ulimit", "gbasedt用户限制") + "\n", RESULT_TITLE_STYLE);
-        databaseInfoArea.append(ctx.executeCommand("su - gbasedbt -c \"ulimit -a\"") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+        // System info goes through the unified renderer (same interface and
+        // title/text styles as the wizard's step-2 system-info panel)
+        RemoteSystemInfoCollector.appendSystemInfo(databaseInfoArea, ctx);
+        RemoteSystemInfoCollector.appendSection(databaseInfoArea,
+                I18n.t("remote.install.result.kernel_params", "内核参数"), ctx.executeCommand("ipcs -l"));
+        RemoteSystemInfoCollector.appendSection(databaseInfoArea,
+                I18n.t("remote.install.result.gbasedbt_ulimit", "gbasedt用户限制"), ctx.executeCommand("su - gbasedbt -c \"ulimit -a\""));
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {

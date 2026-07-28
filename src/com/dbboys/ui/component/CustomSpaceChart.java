@@ -38,12 +38,13 @@ public class CustomSpaceChart extends BarChart<Number, String> {
 
     private static final String INTERACTION_INSTALLED_KEY = "custom.spacechart.interaction.installed";
 
-    /** Oracle 用专用右键策略，其余（含 GBase / Informix）用库空间/数据文件维护菜单。 */
+    /** Oracle / 达梦用专用右键策略（表空间/数据文件 DDL 菜单），其余（含 GBase / Informix）用库空间/数据文件维护菜单。 */
     public static SpaceContextMenuPolicy menuPolicyFor(Connect connect) {
         if (connect == null || connect.getDbtype() == null) {
             return SpaceContextMenuPolicy.INFORMIX_LIKE;
         }
-        if ("ORACLE".equalsIgnoreCase(connect.getDbtype().trim())) {
+        String dbtype = connect.getDbtype().trim();
+        if ("ORACLE".equalsIgnoreCase(dbtype) || "DAMENG".equalsIgnoreCase(dbtype)) {
             return SpaceContextMenuPolicy.ORACLE_READONLY;
         }
         return SpaceContextMenuPolicy.INFORMIX_LIKE;
@@ -335,7 +336,8 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                         "instance.space.oracle.menu.drop_tablespace",
                         IconFactory.group(IconPaths.METADATA_TRUNCATE_ITEM, 0.55, IconFactory.dangerColor()));
                 dropTs.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
-                if (com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(spaceUsage.getName())) {
+                if (com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(spaceUsage.getName())
+                        || com.dbboys.infra.util.InstanceMutationUtil.isDamengProtectedTablespace(spaceUsage.getName())) {
                     dropTs.setDisable(true);
                 }
                 dropTs.setOnAction(e -> {
@@ -380,7 +382,8 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                 String tsFromLabel = com.dbboys.infra.util.InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(
                         spaceUsage.getLabel());
                 if (tsFromLabel != null
-                        && com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(tsFromLabel)) {
+                        && (com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(tsFromLabel)
+                        || com.dbboys.infra.util.InstanceMutationUtil.isDamengProtectedTablespace(tsFromLabel))) {
                     dropDf.setDisable(true);
                 }
                 dropDf.setOnAction(e -> {

@@ -1,10 +1,14 @@
 package com.dbboys.infra.util;
 
 import com.dbboys.core.ConnectionService;
+import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.app.AppContext;
+import com.dbboys.dialect.dameng.DamengInstanceAdminRepository;
+import com.dbboys.dialect.oracle.OracleInstanceAdminRepository;
 import com.dbboys.model.Connect;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
@@ -32,9 +36,9 @@ public final class InstanceMutationUtil {
                     + " " + newValue.replace("$", "\\$") + "#g\" " + installDirEnv + "/etc/$ONCONFIG";
         }
 
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd, true);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd, true);
             if (result.contains("has been changed to")) {
                 return new InstanceTabCapability.ConfigUpdateResult(
                         InstanceTabCapability.ConfigUpdateStatus.APPLIED,
@@ -52,31 +56,31 @@ public final class InstanceMutationUtil {
                     "参数已修改，请重启数据库生效！"
             );
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void startInformixStyleInstance(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, JschUtil.extractEnvValue(connect.getInfo()) + "oninit");
+            int result = SshUtil.executeCommandWithExitStatus(session, SshUtil.extractEnvValue(connect.getInfo()) + "oninit");
             if (result != 0) {
                 throw new Exception("启动数据库失败，请检查日志错误！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void stopInformixStyleInstance(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, JschUtil.extractEnvValue(connect.getInfo()) + "onmode -ky&&onclean -ky");
+            int result = SshUtil.executeCommandWithExitStatus(session, SshUtil.extractEnvValue(connect.getInfo()) + "onmode -ky&&onclean -ky");
             if (result != 0) {
                 throw new Exception("关闭数据库失败，请检查日志错误！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -99,26 +103,26 @@ public final class InstanceMutationUtil {
                 + "&&chown " + request.adminOsUser() + ":" + request.adminOsUser() + " " + request.filePath()
                 + "&&chmod 660 " + request.filePath()
                 + "&&" + cmd;
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!(result.contains("Space successfully added") || result.contains("Chunk successfully added"))) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static void abortCreateOrAddInformixStyleSpace(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            int result = JschUtil.executeCommandWithExitStatus(session, "ps -ef |grep onspaces|grep -v grep |awk '{print \"kill -9 \"$2}' |sh ");
+            int result = SshUtil.executeCommandWithExitStatus(session, "ps -ef |grep onspaces|grep -v grep |awk '{print \"kill -9 \"$2}' |sh ");
             if (result != 0) {
                 throw new Exception("停止创建空间失败！");
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -131,14 +135,14 @@ public final class InstanceMutationUtil {
                 cmd.append("&& rm -rf ").append(path);
             }
         }
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!result.contains("Space successfully dropped")) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -146,14 +150,14 @@ public final class InstanceMutationUtil {
                                                  String spaceName,
                                                  String datafilePath) throws Exception {
         String cmd = "onspaces -d " + spaceName + " -p " + datafilePath + " -o 0 -y&& rm -rf " + datafilePath;
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String result = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + cmd);
+            String result = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + cmd);
             if (!result.contains("Chunk successfully dropped")) {
                 throw new Exception(result);
             }
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
@@ -250,17 +254,30 @@ public final class InstanceMutationUtil {
      * 不允许 DROP 的 Oracle 表空间（系统/撤销/常见临时名）。
      */
     public static boolean isOracleProtectedTablespace(String name) {
-        if (name == null || name.isBlank()) {
-            return true;
-        }
-        String u = name.trim().toUpperCase(Locale.ROOT);
-        if ("SYSTEM".equals(u) || "SYSAUX".equals(u)) {
-            return true;
-        }
-        if (u.startsWith("UNDO")) {
-            return true;
-        }
-        return "TEMP".equals(u);
+        return ORACLE_ADMIN.isProtectedTablespace(name);
+    }
+
+    /** 达梦系统关键表空间，禁止删除或删除其数据文件。 */
+    public static boolean isDamengProtectedTablespace(String name) {
+        return DAMENG_ADMIN.isProtectedTablespace(name);
+    }
+
+    /** 按数据库类型判断系统关键表空间（名单由各 dialect 的仓储持有）。 */
+    public static boolean isProtectedTablespace(String dbtype, String name) {
+        return (isDamengDbtype(dbtype) ? DAMENG_ADMIN : ORACLE_ADMIN).isProtectedTablespace(name);
+    }
+
+    /** Stateless dialect repositories, kept for name-list lookups. */
+    private static final InstanceAdminRepository ORACLE_ADMIN = new OracleInstanceAdminRepository();
+    private static final InstanceAdminRepository DAMENG_ADMIN = new DamengInstanceAdminRepository();
+
+    private static boolean isDamengDbtype(String dbtype) {
+        return dbtype != null && "DAMENG".equalsIgnoreCase(dbtype.trim());
+    }
+
+    /** Resolve the dialect-owned admin repository (space DDL syntax lives there). */
+    private static InstanceAdminRepository admin(Connect connect) {
+        return DatabasePlatformResolver.getInstance().admin(connect);
     }
 
     private static void assertOracleTablespaceIdentifier(String rawName) {
@@ -353,15 +370,8 @@ public final class InstanceMutationUtil {
             throw new IllegalArgumentException("Initial size (MB) must be between 1 and 8388608");
         }
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        StringBuilder sql = new StringBuilder();
-        sql.append("CREATE TABLESPACE ").append(ts);
-        sql.append(" DATAFILE ").append(quotedPath);
-        sql.append(" SIZE ").append(initialSizeMb).append("M");
-        if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).createTablespaceSql(ts, datafilePath.trim(), initialSizeMb, autoextendUnlimited);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /**
@@ -371,16 +381,13 @@ public final class InstanceMutationUtil {
                                           String tablespaceName,
                                           boolean includingContentsAndDatafiles,
                                           AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isOracleProtectedTablespace(tablespaceName)) {
+        if (admin(connect).isProtectedTablespace(tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        StringBuilder sql = new StringBuilder("DROP TABLESPACE ").append(ts).append(" INCLUDING CONTENTS");
-        if (includingContentsAndDatafiles) {
-            sql.append(" AND DATAFILES");
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).dropTablespaceSql(ts, includingContentsAndDatafiles);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /**
@@ -398,15 +405,8 @@ public final class InstanceMutationUtil {
             throw new IllegalArgumentException("Size (MB) must be between 1 and 8388608");
         }
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        StringBuilder sql = new StringBuilder();
-        sql.append("ALTER TABLESPACE ").append(ts);
-        sql.append(" ADD DATAFILE ").append(quotedPath);
-        sql.append(" SIZE ").append(sizeMb).append("M");
-        if (autoextendUnlimited) {
-            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
-        }
-        executeOracleSpaceDdl(connect, sql.toString(), cancellableStatement);
+        String sql = admin(connect).addDatafileSql(ts, datafilePath.trim(), sizeMb, autoextendUnlimited);
+        executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
     /** 从 Oracle 数据文件图标签解析表空间名，格式为：{@code 文件全路径 [ TABLESPACE_NAME ]}。 */
@@ -433,10 +433,8 @@ public final class InstanceMutationUtil {
                                                    AtomicReference<Statement> cancellableStatement) throws Exception {
         assertOracleTablespaceIdentifier(tablespaceName);
         assertOracleDatafilePath(datafilePath);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        String sql = enable
-                ? "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
-                : "ALTER DATABASE DATAFILE " + quotedPath + " AUTOEXTEND OFF";
+        String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
+        String sql = admin(connect).setDatafileAutoextendSql(ts, datafilePath.trim(), enable);
         executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 
@@ -447,14 +445,13 @@ public final class InstanceMutationUtil {
                                         String tablespaceName,
                                         String datafilePath,
                                         AtomicReference<Statement> cancellableStatement) throws Exception {
-        if (isOracleProtectedTablespace(tablespaceName)) {
+        if (admin(connect).isProtectedTablespace(tablespaceName)) {
             throw new IllegalArgumentException("Refusing to drop a datafile from a protected tablespace");
         }
         assertOracleTablespaceIdentifier(tablespaceName);
         assertOracleDatafilePath(datafilePath);
         String ts = tablespaceName.trim().toUpperCase(Locale.ROOT);
-        String quotedPath = "'" + datafilePath.trim().replace("'", "''") + "'";
-        String sql = "ALTER TABLESPACE " + ts + " DROP DATAFILE " + quotedPath;
+        String sql = admin(connect).dropDatafileSql(ts, datafilePath.trim());
         executeOracleSpaceDdl(connect, sql, cancellableStatement);
     }
 }

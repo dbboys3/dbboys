@@ -4,11 +4,16 @@ import com.dbboys.core.ConnectionSupport;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DdlRepository;
 import com.dbboys.core.InstanceAdminRepository;
+import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Catalog;
 import com.dbboys.model.Connect;
+import com.dbboys.model.HealthCheck;
+import com.dbboys.app.AppContext;
+import com.dbboys.core.ConnectionService;
+import com.dbboys.core.ConnectionServiceImpl;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -17,18 +22,72 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
-public final class DamengDialect implements DatabasePlatform, ConnectionSupport {
+public final class DamengDialect implements DatabasePlatform, ConnectionSupport, InstanceTabCapability {
     private static final String DB_TYPE = "DAMENG";
     private static final String DRIVER_CLASS = "dm.jdbc.driver.DmDriver";
     private static final String DEFAULT_DRIVER = "DmJdbcDriver11.jar";
     private static final String DEFAULT_CONNECTION_PROPS = buildDefaultConnectionProps(
+            // ── 基础属性 ──
             "schema", "",
+            "loginMode", "",
             "connectTimeout", "",
-            "socketTimeout", ""
+            "socketTimeout", "",
+            "appName", "",
+            "osName", "",
+            "localHost", "",
+            // ── 加密与安全 ──
+            "loginEncrypt", "",
+            "encrypt", "",
+            "encryptType", "",
+            "certPath", "",
+            "sslFiles", "",
+            // ── 读写分离与集群 ──
+            "doSwitch", "",
+            "autoReconnect", "",
+            "reconnectCount", "",
+            "reconnectInterval", "",
+            "rwSeparate", "",
+            "rwPercent", "",
+            "epSelector", "",
+            // ── 压缩 ──
+            "compress", "",
+            "compressID", "",
+            // ── 结果集与字段 ──
+            "clobAsString", "",
+            "columnNameCase", "",
+            "columnNameUpperCase", "",
+            "ignoreCase", "",
+            "bufferFetchSize", "",
+            "scrollResultSet", "",
+            "lobPrefetchSize", "",
+            // ── 性能与批处理 ──
+            "batchType", "",
+            "prepareOptimize", "",
+            // ── 会话参数 ──
+            "keyWords", "",
+            "dbmdChkPrv", "",
+            "exceedMaxRows", "",
+            "sendBlobAsStream", "",
+            // ── 兼容模式 ──
+            "compatibleMode", "",
+            "compatibleOjdbc", "",
+            "checkExecCount", "",
+            // ── 其他 ──
+            "quoteReplace", "",
+            "schemaAlias", "",
+            "bindParamWithQuestionMark", "",
+            "maxColumnNameLength", "",
+            // ── 连接池相关 ──
+            "connPoolInitSize", "",
+            "connPoolMaxSize", "",
+            "connPoolIdleTime", ""
     );
 
     private final MetadataRepository metadataRepository = new DamengMetadataRepository();
@@ -111,15 +170,66 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport 
         if (connection == null || connect == null) {
             return "";
         }
-        DatabaseMetaData metaData = connection.getMetaData();
         StringBuilder info = new StringBuilder();
-        appendInfoLine(info, "product_name", metaData.getDatabaseProductName());
-        appendInfoLine(info, "product_version", metaData.getDatabaseProductVersion());
-        appendInfoLine(info, "driver_name", metaData.getDriverName());
-        appendInfoLine(info, "driver_version", metaData.getDriverVersion());
-        appendInfoLine(info, "current_schema", currentSchema(connection));
-        // 达梦兼容 Oracle 模式下 getDatabaseProductName() 返回 Oracle，强制显示 DM 前缀
-        connect.setDbversion("DM " + trimToEmpty(metaData.getDatabaseProductVersion()));
+        String dbVersion = trimToEmpty(connection.getMetaData().getDatabaseProductVersion());
+        connect.setDbversion("DM " + dbVersion);
+
+        // ── 实例信息 ──
+        appendSectionQuery(info, "Instance Information",
+                connection,
+                "select instance_name, host_name, status$, mode$, " +
+                "to_char(start_time,'yyyy-mm-dd hh24:mi:ss') as start_time, " +
+                "datediff(dd, start_time, sysdate) || ' 天' as uptime_days " +
+                "from v$instance");
+
+        // ── 数据库信息 ──
+        appendSectionQuery(info, "Database Information",
+                connection,
+                "select name, global_name, arch_mode, " +
+                "to_char(create_time,'yyyy-mm-dd hh24:mi:ss') as create_time " +
+                "from v$database");
+
+        // ── 内存与性能概况 ──
+        appendSectionQuery(info, "Memory & Buffer Pool",
+                connection,
+                "select " +
+                "nvl(sum(nvl(total_size,0))/1024/1024,0) || ' MB' as memory_pool_total_mb, " +
+                "nvl(sum(nvl(n_logic_reads,0)),0) as buffer_logical_reads, " +
+                "nvl(sum(nvl(n_phy_reads,0)),0) as buffer_physical_reads, " +
+                "case when nvl(sum(nvl(n_logic_reads,0))+sum(nvl(n_phy_reads,0)),0) > 0 " +
+                "then round(nvl(sum(nvl(n_logic_reads,0)),0)*100.0/" +
+                "nvl(sum(nvl(n_logic_reads,0))+sum(nvl(n_phy_reads,0)),1),2) || '%' " +
+                "else 'N/A' end as buffer_hit_ratio " +
+                "from v$bufferpool");
+
+        // ── 会话与连接 ──
+        appendSectionQuery(info, "Sessions & Connections",
+                connection,
+                "select " +
+                "(select count(*) from v$sessions) as total_sessions, " +
+                "(select count(*) from v$sessions where state='ACTIVE') as active_sessions, " +
+                "(select count(*) from v$lock where blocked=1) as blocked_locks, " +
+                "(select max_sessions from v$dm_ini where para_name='MAX_SESSIONS') as max_sessions_limit");
+
+        // ── 当前模式信息 ──
+        String schema = currentSchema(connection);
+        appendSectionQuery(info, "Current Schema",
+                connection,
+                "select user() as current_user, " +
+                "sys_context('USERENV','CURRENT_SCHEMA') as current_schema, " +
+                "sys_context('USERENV','LANGUAGE') as language, " +
+                "sys_context('USERENV','IP_ADDRESS') as client_ip");
+
+        // ── 数据库模式/兼容性参数 ──
+        appendSectionQuery(info, "Database Configuration",
+                connection,
+                "select para_name, para_value from v$dm_ini " +
+                "where para_name in (" +
+                "'COMPATIBLE_MODE','BLANK_PAD_MODE'," +
+                "'LENGTH_IN_CHAR','CASE_SENSITIVE','CHARSET','PAGE_SIZE'," +
+                "'EXTENT_SIZE','PK_WITH_CLUSTER'" +
+                ") order by para_name");
+
         connect.setInfo(info.toString());
         return "";
     }
@@ -507,5 +617,410 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport 
             array.put(object);
         }
         return array.toString();
+    }
+
+    // ==================== InstanceTabCapability ====================
+
+    private static final Map<String, String> DAMENG_CHECK_ENTRY_I18N_KEYS = Map.of(
+            "数据库版本", "instance.check.dameng.item.db_version",
+            "实例状态", "instance.check.dameng.item.instance_status",
+            "启动时间", "instance.check.dameng.item.startup_time",
+            "数据库模式", "instance.check.dameng.item.database_mode",
+            "活动会话数", "instance.check.dameng.item.active_sessions",
+            "阻塞锁数量", "instance.check.dameng.item.blocked_locks",
+            "缓冲区命中率", "instance.check.dameng.item.buffer_hit_ratio",
+            "内存池总大小(MB)", "instance.check.dameng.item.memory_pool_size"
+    );
+
+    private static final Map<String, String> DAMENG_CHECK_EXPECTED_I18N_KEYS = Map.of(
+            "应可获取", "instance.check.dameng.expected.available",
+            "应为 OPEN", "instance.check.dameng.expected.should_be_open",
+            "应为 NORMAL", "instance.check.dameng.expected.should_be_normal",
+            "应可用", "instance.check.dameng.expected.should_be_available",
+            "建议持续关注", "instance.check.dameng.expected.monitor",
+            "应为 0", "instance.check.dameng.expected.should_be_zero",
+            ">=95%", "instance.check.dameng.expected.buffer_hit_ge_95",
+            "应可统计", "instance.check.dameng.expected.should_be_measurable",
+            "获取失败", "instance.check.dameng.expected.fetch_failed"
+    );
+
+    @Override
+    public boolean supportsInfoTab(Connect connect) {
+        return true;
+    }
+
+    @Override
+    public boolean supportsHealthCheckTab(Connect connect) {
+        return true;
+    }
+
+    @Override
+    public boolean supportsLogTab(Connect connect) {
+        return true;
+    }
+
+    @Override
+    public boolean supportsConfigTab(Connect connect) {
+        return true;
+    }
+
+    @Override
+    public boolean canEditConfig(Connect connect) {
+        return connect != null && !Boolean.TRUE.equals(connect.getReadonly());
+    }
+
+    @Override
+    public boolean supportsStartStopTab(Connect connect) {
+        return false;
+    }
+
+    @Override
+    public String instanceName(Connect connect) {
+        if (connect == null) {
+            return "";
+        }
+        // 从建连时写入的 info 中提取真实实例名 (v$instance.instance_name)
+        String infoName = InstanceTabCapability.extractInfoValue(
+                connect.getInfo(), "instance_name");
+        return infoName == null ? "" : infoName.trim();
+    }
+
+    @Override
+    public SpaceLabels spaceLabels(Connect connect) {
+        return new SpaceLabels(
+                "",
+                "",
+                "instance.space.dameng.chart.tablespace",
+                "表空间使用情况图(GB)",
+                "instance.space.dameng.chart.datafile",
+                "数据文件使用情况图(GB)",
+                "instance.space.dameng.chart.schema",
+                "模式使用空间情况(GB)",
+                "instance.space.dameng.chart.table",
+                "表/索引空间使用情况图TOP20(GB)",
+                "",
+                ""
+        );
+    }
+
+    @Override
+    public CheckTableModel buildCheckTable(Connect connect) throws Exception {
+        List<CheckColumn> columns = List.of(
+                new CheckColumn("entry", "instance.check.column.item", "巡检项", CheckColumnKind.TEXT, 220),
+                new CheckColumn("currentValue", "instance.check.column.current", "当前值", CheckColumnKind.TEXT, 360),
+                new CheckColumn("healthValue", "instance.check.column.expected", "正常值", CheckColumnKind.TEXT, 260),
+                new CheckColumn("status", "instance.check.column.result", "巡检结论", CheckColumnKind.STATUS, 100)
+        );
+        List<CheckRow> rows = new ArrayList<>();
+        for (HealthCheck check : loadHealthChecks(connect)) {
+            Map<String, String> values = new LinkedHashMap<>();
+            Map<String, String> valueI18nKeys = new LinkedHashMap<>();
+            values.put("entry", check.getEntry());
+            values.put("currentValue", check.getCurrentValue());
+            values.put("healthValue", check.getHealthValue());
+            values.put("status", check.getStatus());
+            valueI18nKeys.put("entry", i18nEntryKey(check.getEntry()));
+            valueI18nKeys.put("healthValue", i18nExpectedKey(check.getHealthValue()));
+            rows.add(new CheckRow(values, valueI18nKeys, check.getCmd(), check.getCmdOutput(), false));
+        }
+        return new CheckTableModel(columns, rows);
+    }
+
+    private static String i18nEntryKey(String entry) {
+        if (entry == null || entry.isBlank()) {
+            return "";
+        }
+        String exact = DAMENG_CHECK_ENTRY_I18N_KEYS.get(entry);
+        if (exact != null) {
+            return exact;
+        }
+        // Handle "表空间 X" pattern — use the base entry text for lookup
+        if (entry.startsWith("表空间 ")) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String i18nExpectedKey(String expected) {
+        if (expected == null || expected.isBlank()) {
+            return "";
+        }
+        String exact = DAMENG_CHECK_EXPECTED_I18N_KEYS.get(expected);
+        if (exact != null) {
+            return exact;
+        }
+        // Handle "获取失败: ..." pattern
+        if (expected.startsWith("获取失败")) {
+            return DAMENG_CHECK_EXPECTED_I18N_KEYS.get("获取失败");
+        }
+        return "";
+    }
+
+    @Override
+    public List<HealthCheck> loadHealthChecks(Connect connect) throws Exception {
+        try (Connection conn = connectionService().getConnectionWithSessionInit(new Connect(connect))) {
+            List<HealthCheck> checks = new ArrayList<>();
+
+            // DM version
+            runCheck(checks, "数据库版本", "select id_code()", "应可获取", () -> {
+                String version = queryScalar(conn, "select id_code()");
+                addCheck(checks, "数据库版本", "select id_code()", "应可获取", version, present(version));
+            });
+
+            // Instance status
+            runCheck(checks, "实例状态", "select status$ from v$instance", "应为 OPEN", () -> {
+                String instStatus = queryScalar(conn, "select status$ from v$instance");
+                addCheck(checks, "实例状态", "select status$ from v$instance", "应为 OPEN",
+                        instStatus, "OPEN".equalsIgnoreCase(instStatus));
+            });
+
+            // Uptime
+            runCheck(checks, "启动时间", "select start_time from v$instance", "应可获取", () -> {
+                String startTime = queryScalar(conn, "select to_char(start_time,'yyyy-mm-dd hh24:mi:ss') from v$instance");
+                addCheck(checks, "启动时间", "select start_time from v$instance", "应可获取",
+                        startTime, present(startTime));
+            });
+
+            // Database mode
+            runCheck(checks, "数据库模式", "select mode$ from v$instance", "应为 NORMAL", () -> {
+                String mode = queryScalar(conn, "select mode$ from v$instance");
+                addCheck(checks, "数据库模式", "select mode$ from v$instance", "应为 NORMAL",
+                        mode, "NORMAL".equalsIgnoreCase(mode));
+            });
+
+            // Tablespace usage (V$TABLESPACE sizes are in pages; PAGE() = page bytes)
+            runCheck(checks, "表空间", "v$tablespace", "应可用", () -> {
+                Map<String, String> usage = queryNameValue(conn,
+                        "select name, round((total_size-used_size)*page()/1024/1024,2)||'/'||" +
+                        "round(total_size*page()/1024/1024,2)||'MB' " +
+                        "from v$tablespace where name not in ('TEMP','ROLL')");
+                for (Map.Entry<String,String> e : usage.entrySet()) {
+                    addCheck(checks, "表空间 " + e.getKey(), "v$tablespace", "应可用",
+                            e.getValue(), true);
+                }
+            });
+
+            // Active sessions
+            runCheck(checks, "活动会话数", "select count(*) from v$sessions where state='ACTIVE'", "建议持续关注", () -> {
+                long sessions = queryLong(conn, "select count(*) from v$sessions where state='ACTIVE'");
+                addCheck(checks, "活动会话数", "select count(*) from v$sessions where state='ACTIVE'",
+                        "建议持续关注", String.valueOf(sessions), true);
+            });
+
+            // Blocked locks
+            runCheck(checks, "阻塞锁数量", "select count(*) from v$lock where blocked=1", "应为 0", () -> {
+                long locks = queryLong(conn, "select count(*) from v$lock where blocked=1");
+                addCheck(checks, "阻塞锁数量", "select count(*) from v$lock where blocked=1",
+                        "应为 0", String.valueOf(locks), locks == 0);
+            });
+
+            // Buffer hit ratio (N_LOGIC_READS=hits, N_PHY_READS=misses per DM8 docs)
+            runCheck(checks, "缓冲区命中率", "v$bufferpool", ">=95%", () -> {
+                long bufGets = queryLong(conn, "select nvl(sum(nvl(n_logic_reads,0)),0) from v$bufferpool");
+                long bufReads = queryLong(conn, "select nvl(sum(nvl(n_phy_reads,0)),0) from v$bufferpool");
+                double bufHit = (bufGets + bufReads) <= 0 ? 100 : (double)bufGets * 100 / (bufGets + bufReads);
+                addCheck(checks, "缓冲区命中率", "v$bufferpool", ">=95%",
+                        String.format(Locale.ROOT, "%.2f%%", bufHit), bufHit >= 95);
+            });
+
+            // Memory usage
+            runCheck(checks, "内存池总大小(MB)", "select sum(total_size) from v$mem_pool", "应可统计", () -> {
+                long memTotal = queryLong(conn, "select nvl(sum(nvl(total_size,0)),0)/1024/1024 from v$mem_pool");
+                addCheck(checks, "内存池总大小(MB)", "select sum(total_size) from v$mem_pool",
+                        "应可统计", String.valueOf(memTotal), memTotal >= 0);
+            });
+
+            return checks;
+        }
+    }
+
+    @Override
+    public String loadRuntimeLog(Connect connect) throws Exception {
+        try (Connection conn = connectionService().getConnectionWithSessionInit(new Connect(connect))) {
+            // Real instance message log (ELOG): V$INSTANCE_LOG_HISTORY keeps the
+            // latest ~10k events of the current run; show the newest 1000 first.
+            // Older history lives only in $DM_HOME/log/dm_<instance>_<yyyymm>.log.
+            return safeQueryRows(conn,
+                    "select to_char(log_time,'yyyy-mm-dd hh24:mi:ss') log_time, level$, thread_name, txt " +
+                    "from v$instance_log_history order by log_time desc", 1000);
+        }
+    }
+
+    @Override
+    public List<ConfigEntry> loadConfigEntries(Connect connect) throws Exception {
+        try (Connection conn = connectionService().getConnectionWithSessionInit(new Connect(connect))) {
+            List<ConfigEntry> rows = new ArrayList<>();
+            try (var stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(
+                         "select name, value, type, description from v$parameter " +
+                         "where name not in ('SYSDBA','SYSAUDITOR','SYSSSO') order by name")) {
+                while (rs.next()) {
+                    rows.add(new ConfigEntry(rs.getString(1), rs.getString(2)));
+                }
+            }
+            return rows;
+        }
+    }
+
+    @Override
+    public ConfigUpdateResult updateConfig(Connect connect, String paramName, String newValue) throws Exception {
+        String name = paramName == null ? "" : paramName.trim();
+        if (name.isEmpty()) {
+            return new ConfigUpdateResult(ConfigUpdateStatus.FILE_ONLY, "参数名称为空");
+        }
+        String value = (newValue == null ? "" : newValue).replace("'", "''");
+        String escapedName = name.replace("'", "''");
+        try (Connection conn = connectionService().getConnectionWithSessionInit(new Connect(connect));
+             var stmt = conn.createStatement()) {
+            try {
+                // scope=1: dynamic params, applied to both memory and dm.ini
+                stmt.execute("SP_SET_PARA_VALUE(1,'" + escapedName + "','" + value + "')");
+                return new ConfigUpdateResult(ConfigUpdateStatus.APPLIED, "参数 " + name + " 已设置为 " + newValue);
+            } catch (SQLException dynamicFailure) {
+                // scope=1 is rejected for static ('IN FILE') params: fall back to
+                // scope=2 (dm.ini only), which takes effect after a restart
+                stmt.execute("SP_SET_PARA_VALUE(2,'" + escapedName + "','" + value + "')");
+                return new ConfigUpdateResult(ConfigUpdateStatus.RESTART_REQUIRED,
+                        "参数 " + name + " 已写入配置文件，重启后生效");
+            }
+        }
+    }
+
+    @Override
+    public boolean isInstanceOnline(Connect connect) throws Exception {
+        try (Connection conn = connectionService().getConnectionWithSessionInit(new Connect(connect));
+             var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("select 1 from dual")) {
+            return rs.next();
+        }
+    }
+    // ==================== End InstanceTabCapability ====================
+
+    // ==================== Shared helpers ====================
+
+    private static ConnectionService connectionService() {
+        try {
+            return AppContext.get(ConnectionService.class);
+        } catch (IllegalStateException e) {
+            return new ConnectionServiceImpl();
+        }
+    }
+
+    private static void addCheck(List<HealthCheck> checks, String entry, String cmd, String expected, String current, boolean ok) {
+        checks.add(new HealthCheck(entry, cmd, expected, current == null ? "" : current, ok ? "0" : "2", current));
+    }
+
+    @FunctionalInterface
+    private interface CheckAction {
+        void run() throws Exception;
+    }
+
+    /** Run one health check in isolation: a failing query degrades to an error
+     *  row instead of aborting the whole health-check tab. */
+    private static void runCheck(List<HealthCheck> checks, String entry, String cmd, String expected, CheckAction action) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            String message = e.getMessage();
+            addCheck(checks, entry, cmd, expected, "获取失败: " + (message == null ? e.toString() : message), false);
+        }
+    }
+
+    /** Populates the info StringBuilder with a titled section from a SQL query.
+     *  Each result set row is appended as "col_label     col_value". Silently
+     *  skips the section if the query fails (view may be inaccessible). */
+    private static void appendSectionQuery(StringBuilder info, String title, Connection connection, String sql) {
+        try (var stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (!rs.next()) {
+                return;
+            }
+            info.append("\n");
+            info.append("##########################################################################################\n");
+            info.append(title).append("\n");
+            info.append("##########################################################################################\n");
+            java.sql.ResultSetMetaData md = rs.getMetaData();
+            for (int i = 1; i <= md.getColumnCount(); i++) {
+                appendInfoLine(info, md.getColumnLabel(i), rs.getString(i));
+            }
+        } catch (SQLException ignored) {
+            // Optional DM views like v$dm_ini may be inaccessible to low-privilege accounts.
+        }
+    }
+
+    /** queryRows variant that turns a failing section query into readable error
+     *  text, so one unsupported view does not blank the whole runtime log. */
+    private static String safeQueryRows(Connection conn, String sql, int maxRows) {
+        try {
+            return queryRows(conn, sql, maxRows);
+        } catch (SQLException e) {
+            return "查询失败: " + e.getMessage();
+        }
+    }
+
+    private static boolean present(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static Map<String, String> queryNameValue(Connection conn, String sql) throws SQLException {
+        Map<String, String> values = new LinkedHashMap<>();
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                values.put(rs.getString(1), rs.getString(2));
+            }
+        }
+        return values;
+    }
+
+    private static String queryScalar(Connection conn, String sql) throws SQLException {
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : "";
+        }
+    }
+
+    private static long queryLong(Connection conn, String sql) throws SQLException {
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
+    }
+
+    private static String queryRows(Connection conn, String sql, int maxRows) throws SQLException {
+        StringBuilder text = new StringBuilder();
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            int columnCount = rs.getMetaData().getColumnCount();
+            for (int i = 1; i <= columnCount; i++) {
+                if (i > 1) {
+                    text.append('\t');
+                }
+                text.append(rs.getMetaData().getColumnLabel(i));
+            }
+            int rows = 0;
+            while (rs.next() && rows++ < maxRows) {
+                text.append('\n');
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        text.append('\t');
+                    }
+                    String value = rs.getString(i);
+                    text.append(value == null ? "NULL" : value);
+                }
+            }
+        }
+        return text.toString();
     }
 }

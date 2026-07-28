@@ -18,7 +18,7 @@ import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.model.SpaceUsage;
 import com.dbboys.model.Connect;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
@@ -145,11 +145,17 @@ public class CustomInstanceTab extends CustomTab {
                         instanceIpText.get(),
                         instancePortText.get()
                 )
-                        : String.format(
+                        : !instanceNameText.get().isEmpty()
+                        ? String.format(
                         I18n.t("instance.info.current.format", "当前实例信息 ( IP：%s   端口：%s   实例名：%s )"),
                         instanceIpText.get(),
                         instancePortText.get(),
                         instanceNameText.get()
+                )
+                        : String.format(
+                        I18n.t("instance.info.current.no_name.format", "当前实例信息 ( IP：%s   端口：%s )"),
+                        instanceIpText.get(),
+                        instancePortText.get()
                 ),
                 instanceIpText,
                 instancePortText,
@@ -595,12 +601,12 @@ public class CustomInstanceTab extends CustomTab {
                             @Override
                             protected Void call() throws Exception {
                                 try {
-                                    Session session=JschUtil.getConnect(connect);
+                                    ClientSession session=SshUtil.getConnect(connect);
                                     Double currentSize=0.0;
                                     while(currentSize<Double.parseDouble(sizeTextField.getText())){
                                         if(isCancelled())break;
                                         Thread.sleep(100);
-                                        String result = JschUtil.executeCommand(session,"/usr/bin/du -s "+filePathTextField.getText()+" |awk '{print $1}'");
+                                        String result = SshUtil.executeCommand(session,"/usr/bin/du -s "+filePathTextField.getText()+" |awk '{print $1}'");
                                         try{
                                             currentSize=Double.parseDouble(result);
                                         }catch(Exception e){
@@ -613,7 +619,7 @@ public class CustomInstanceTab extends CustomTab {
 
                                     }
 
-                                    JschUtil.disConnect(session);
+                                    SshUtil.disConnect(session);
 
                                 } catch (Exception e) {
                                     throw new RuntimeException(e);
@@ -876,7 +882,7 @@ public class CustomInstanceTab extends CustomTab {
                 Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
                 CustomUserTextField sizeField = new CustomUserTextField();
                 sizeField.setMinWidth(120);
-                sizeField.setText("100");
+                sizeField.setText("128");
                 sizeField.textProperty().addListener((obs, ov, nv) -> {
                     if (nv != null && !nv.matches("\\d*")) {
                         sizeField.setText(nv.replaceAll("\\D", ""));
@@ -1019,7 +1025,7 @@ public class CustomInstanceTab extends CustomTab {
             @Override
             public void onOracleDropTablespace(SpaceUsage spaceUsage) {
                 String tsName = spaceUsage.getName();
-                if (InstanceMutationUtil.isOracleProtectedTablespace(tsName)) {
+                if (InstanceMutationUtil.isProtectedTablespace(connect.getDbtype(), tsName)) {
                     AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("instance.error.oracle_ts_protected",
@@ -1210,7 +1216,7 @@ public class CustomInstanceTab extends CustomTab {
                 Label sizeLbl = new Label(I18n.t("instance.dialog.oracle.size_mb", "初始大小 (MB)"));
                 CustomUserTextField sizeField = new CustomUserTextField();
                 sizeField.setMinWidth(120);
-                sizeField.setText("100");
+                sizeField.setText("128");
                 sizeField.textProperty().addListener((obs, ov, nv) -> {
                     if (nv != null && !nv.matches("\\d*")) {
                         sizeField.setText(nv.replaceAll("\\D", ""));
@@ -1382,7 +1388,7 @@ public class CustomInstanceTab extends CustomTab {
                             I18n.t("instance.error.oracle_datafile_label", "无法解析数据文件所属表空间。"));
                     return;
                 }
-                if (InstanceMutationUtil.isOracleProtectedTablespace(ts)) {
+                if (InstanceMutationUtil.isProtectedTablespace(connect.getDbtype(), ts)) {
                     AlertUtil.CustomAlert(
                             I18n.t("common.error", "错误"),
                             I18n.t("instance.error.oracle_datafile_drop_protected", "不允许在系统关键表空间上删除数据文件。"));

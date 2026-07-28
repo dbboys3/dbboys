@@ -3,7 +3,7 @@ package com.dbboys.dialect.informix;
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.model.SpaceUsage;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.JschUtil;
+import com.dbboys.infra.util.SshUtil;
 import com.dbboys.remote.RemoteSessionClient;
 import com.dbboys.model.Connect;
 
@@ -46,6 +46,15 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
         List<SpaceUsage> databaseList = new ArrayList<>();
         List<SpaceUsage> tabList = new ArrayList<>();
 
+        int dbVersion = InformixDdlRepository.getDataBaseProductVersionNumber(conn);
+        // Informix 11.50 does not have max_size column in sysmaster:syschunks.
+        // Default to supporting max_size when version cannot be determined.
+        boolean isLegacy = dbVersion > 0 && dbVersion <= 1170;
+
+        // --- build dbspace-list SQL ---
+        String maxSizeCase = isLegacy ? "" : "case when max_size>0 then '[L]' else '' end||\n";
+        String maxSizeCol = isLegacy ? "0 as max_size" : "max(max_size)/1024 as max_size";
+        String extendableCol = isLegacy ? "0 as is_extendable" : "sum(is_extendable) as is_extendable";
         String sql = """
                 SELECT
                   A.dbsnum as No,
@@ -54,20 +63,20 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
                   case when is_sbspace==1 then '[S]'
                   when is_blobspace==1 then '[B]'
                   else '' end||
-                  case when max_size>0 then '[L]' else '' end||       
+                  %s
                   trim(B.name)||'['||round(A.pagesize/1024)||'k]' as label,trim(B.name) as name,
-                  sum(is_extendable),
+                  %s,
                   round(sum(case when is_sbchunk==1 then udsize else chksize end)*2/1024/1024,2)  as data_SIZE ,
                   round(sum(case when is_sbchunk==1 then udsize-udfree when is_blobchunk==1 then chksize-nfree*a.pagesize/2048  else chksize-nfree end)*2/1024/1024,2) as dataused_size,
                   sum(e.extents),
                   round(sum(decode(mdsize,-1,0,mdsize))*2/1024/1024,2)  as Meta_SIZE ,
                   round(sum(decode(mdsize,-1,0,mdsize))*2/1024/1024-sum(decode(mdsize,-1,0,nfree))*2/1024/1024,2) as metaused_size,
-                  max(max_size)/1024
+                  %s
                   FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
                   left join (select chunk,count(*) as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                   group by 1,2,3
                   order by 1
-                """;
+                """.formatted(maxSizeCase, extendableCol, maxSizeCol);
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
@@ -93,10 +102,12 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
         }
         result.add(dbspaceList);
 
+        // --- build chunk-list SQL ---
+        String chunkExtendableCol = isLegacy ? "0 as is_extendable" : "is_extendable";
         sql = """
                 SELECT A.dbsnum as No,A.chknum,
                 trim(fname)||' [ '||trim(B.name)||' ] ' as label,trim(fname) as filename,
-                is_extendable,
+                %s,
                 round((case when is_sbchunk==1 then udsize else chksize end)*2/1024/1024,2)  as data_SIZE ,
                 round((case when is_sbchunk==1 then udsize-udfree when is_blobchunk==1 then chksize-nfree*a.pagesize/2048  else chksize-nfree end)*2/1024/1024,2) as dataused_size,
                 e.extents,chksize,
@@ -106,7 +117,7 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
                 FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
                 left join (select chunk,count(*)-1 as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                 order by 1,2
-                """;
+                """.formatted(chunkExtendableCol);
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
@@ -199,10 +210,16 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
 
     @Override
     public double getMaxStorageSpaceUsage(Connection conn) throws SQLException {
+        int dbVersion = InformixDdlRepository.getDataBaseProductVersionNumber(conn);
+        boolean isLegacy = dbVersion > 0 && dbVersion <= 1170;
+        String extendableCol = isLegacy ? "0" : "sum(is_extendable)";
+        String havingClause = isLegacy
+                ? "having 0=0 and sum(e.extents)>0"
+                : "having sum(is_extendable)=0 and sum(e.extents)>0";
         String sql = """
                 SELECT first 1
                   trim(B.name) as name,
-                  sum(is_extendable),
+                  %s,
                   case when
                   round(
                   (sum(case when is_sbchunk==1 then udsize-udfree when is_blobchunk==1 then chksize-nfree*a.pagesize/2048  else chksize-nfree end)*2/1024/1024)
@@ -220,10 +237,9 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
                   FROM sysmaster:syschunks A join sysmaster:sysdbspaces B on A.dbsnum = B.dbsnum
                   left join (select chunk,count(*) as extents from sysmaster:sysextents where tabname!='TBLSpace' group by chunk) e on E.chunk=A.chknum
                   group by 1
-                  having sum(is_extendable) =0
-                  and sum(e.extents)>0
+                  %s
                   order by percent desc;
-                """;
+                """.formatted(extendableCol, havingClause);
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             if (rs.next()) {
@@ -306,7 +322,7 @@ public final class InformixInstanceAdminRepository implements InstanceAdminRepos
     }
 
     private String remoteCommandPrefix(Connect connect) {
-        String env = connect == null || connect.getInfo() == null ? "" : JschUtil.extractEnvValue(connect.getInfo());
+        String env = connect == null || connect.getInfo() == null ? "" : SshUtil.extractEnvValue(connect.getInfo());
         return env == null || env.isBlank() ? "source ~/.bash_profile && " : env;
     }
 }

@@ -1,3 +1,28 @@
+### 20260726
+新增informix11.5支持  
+新增dameng安装、卸载、实例管理  
+新增ssh终端支持sz/rz（ZModem协议）文件传输  
+新增ssh sftp文件传输  
+新增ssh 支持字体缩放  
+新增eddsa-0.3.0.jar  
+新增sshd-common-2.19.0.jar  
+新增sshd-core-2.19.0.jar  
+新增sshd-sftp-2.19.0.jar  
+删除jsch-2.27.6.jar  
+修改ssh 连接组件jsch为sshd  
+修改gbase8s/informix 分片表rowid使用ifx_row_id  
+修复ssh top出现滚动条不显示第一行  
+修复ssh 界面最大化后光标丢失   
+修复ssh arm nmon没对齐  
+修复ssh 最大化光标丢失  
+修复ssh 界面缩放滚动条异常  
+修复ssh less最后多一行空格  
+修复ssh vi/more/less等选区未及时清理  
+修复ssh 光标没有始终保持在最后  
+修复ssh 记录日志部分异常  
+修复md文档无hover  
+
+
 ### 20260719
 新增ssh终端支持，增加ssh相关表     
 新增oracle 11g支持   

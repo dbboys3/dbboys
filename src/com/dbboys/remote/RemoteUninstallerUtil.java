@@ -7,7 +7,6 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
-import com.jcraft.jsch.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.DoubleProperty;
@@ -29,6 +28,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 import javafx.stage.Stage;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Properties;
 
@@ -210,7 +210,7 @@ public class RemoteUninstallerUtil {
                                 try {
                                     remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
-                                } catch (JSchException e) {
+                                } catch (Exception e) {
                                     throw new Exception(I18n.t("remote.uninstall.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
                                 }
                             }
@@ -521,7 +521,7 @@ public class RemoteUninstallerUtil {
         });
     }
 
-    private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
+    private static int executeCommandWithExitStatus(String command) throws IOException {
         return remoteClient.executeCommandWithExitStatus(command);
     }
 

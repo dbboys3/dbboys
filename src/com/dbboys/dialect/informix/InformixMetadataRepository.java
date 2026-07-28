@@ -233,7 +233,7 @@ public class InformixMetadataRepository implements com.dbboys.core.MetadataRepos
             max(o.state)
             from
             systables t join sysindexes i
-            on t.tabid = i.tabid and t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and LEFT(i.idxname,1) != ' '
+            on t.tabid = i.tabid and t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and i.idxname[1,1] != ' '
             join sysobjstate o on  o.tabid=t.tabid and o.name=i.idxname
             left join sysmaster:systabnames st
             on trim(i.idxname)=trim(st.tabname) and st.dbsname=?
@@ -243,14 +243,14 @@ public class InformixMetadataRepository implements com.dbboys.core.MetadataRepos
             """;
 
     private static final String SQL_INDEX_COUNT = """
-            select count(*) from sysindexes i,systables t where i.tabid=t.tabid and t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and LEFT(i.idxname,1) != ' '
+            select count(*) from sysindexes i,systables t where i.tabid=t.tabid and t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and i.idxname[1,1] != ' '
             """;
 
     private static final String SQL_INDEX_SIZE = """
             select replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')
             from sysindexes s left join sysmaster:systabnames n on trim(s.idxname)=trim(n.tabname)
             left join sysmaster:systabinfo i on i.ti_partnum=n.partnum
-            where s.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and LEFT(s.idxname,1) != ' '
+            where s.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and s.idxname[1,1] != ' '
             """;
 
     private static final String SQL_INDEX = """
@@ -280,7 +280,7 @@ public class InformixMetadataRepository implements com.dbboys.core.MetadataRepos
             max(o.state)
             from
             systables t join sysindexes i
-            on t.tabid = i.tabid and i.idxname==? and LEFT(i.idxname,1) != ' '
+            on t.tabid = i.tabid and i.idxname==? and i.idxname[1,1] != ' '
             join sysobjstate o on  o.tabid=t.tabid and o.name=i.idxname
             left join sysmaster:systabnames st
             on trim(i.idxname)=trim(st.tabname)

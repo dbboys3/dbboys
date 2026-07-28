@@ -430,6 +430,7 @@ Text {
 .button.right-pill:hover, .button.right-pill:focused {
   -fx-background-insets: 0, 1px;
 }
+.alert-body .button.small:hover,
 .dialog-pane .button.small:hover,
 .dialog-pane .button.custom-button:hover,
 .button:hover {
@@ -2773,11 +2774,9 @@ Text {
   -fx-padding: 0.45em 0.6em 0.45em 0.6em;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover {
-  -fx-background-color: -color-bg-subtle;
+  -fx-background-color: -color-button-bg-hover;
 }
-.tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed {
-  -fx-background-color: -color-accent-subtle;
-}
+
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:disabled {
   -fx-opacity: 0.4;
 }
@@ -2785,13 +2784,13 @@ Text {
   -fx-shape: "M7 10l5 5 5-5z";
   -fx-scale-shape: false;
   -fx-padding: 0.22em 0.36em 0.22em 0.36em;
-  -fx-background-color: -color-fg-muted;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:hover > .arrow {
-  -fx-background-color: -color-fg-emphasis;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane > .tab-header-area > .control-buttons-tab > .container > .tab-down-button:pressed > .arrow {
-  -fx-background-color: -color-accent-emphasis;
+  -fx-background-color: -color-fg-default;
 }
 .tab-pane.dense > .tab-header-area > .headers-region > .tab {
   -fx-padding: 0.2em 0.3em 0.2em 0.3em;
@@ -3767,7 +3766,9 @@ Text {
   -fx-background-radius: 3;
   -fx-border-width: 0;
 }
+.alert-body .button.small,
 .dialog-pane .button.small{
+    -fx-padding: 2px 4px 2px 4px;
   -fx-background-color: transparent;
   -fx-border-width: 0;
 }

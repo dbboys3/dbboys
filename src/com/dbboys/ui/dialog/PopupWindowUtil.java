@@ -741,7 +741,7 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection",
                         "main.compatibility.feature.instance_start_stop")),
-                new CompatibilityRow("INFORMIX", "12.1", compatibilityFeaturesByKey(
+                new CompatibilityRow("INFORMIX", "11.5 / 12.1", compatibilityFeaturesByKey(
                         "main.compatibility.feature.install",
                         "main.compatibility.feature.uninstall",
                         "main.compatibility.feature.metadata_list",
@@ -785,12 +785,19 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.metadata_detail",
                         "main.compatibility.feature.metadata_change",
                         "main.compatibility.feature.execute_sql",
                         "main.compatibility.feature.execution_plan",
-                        "main.compatibility.feature.import_export")),
+                        "main.compatibility.feature.import_export",
+                        "main.compatibility.feature.instance_info",
+                        "main.compatibility.feature.instance_space",
+                        "main.compatibility.feature.instance_log",
+                        "main.compatibility.feature.instance_params",
+                        "main.compatibility.feature.instance_inspection")),
                 new CompatibilityRow("SQLITE", "3.46.0.0", compatibilityFeaturesByKey(
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.metadata_detail",
@@ -822,7 +829,7 @@ public class PopupWindowUtil {
                 new CompatibilityRow("GBASE 8S", "8.7 / 8.8", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检", "实例启停")),
-                new CompatibilityRow("INFORMIX", "12.1", compatibilityFeatures(
+                new CompatibilityRow("INFORMIX", "11.5 / 12.1", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检", "实例启停")),
                 new CompatibilityRow("ORACLE", "11g / 19C", compatibilityFeatures(
@@ -834,7 +841,9 @@ public class PopupWindowUtil {
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeatures(
-                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
+                        "安装", "卸载",
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
+                        "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
                 new CompatibilityRow("SQLITE", "3.46.0.0", compatibilityFeatures(
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
                 new CompatibilityRow("GENERAL JDBC", "JDBC 4.x", compatibilityFeatures(

@@ -427,4 +427,68 @@ public final class OracleInstanceAdminRepository implements InstanceAdminReposit
         }
         return String.valueOf(value);
     }
+
+    // ==================== Space DDL (Oracle syntax) ====================
+
+    @Override
+    public boolean isProtectedTablespace(String tablespaceName) {
+        if (tablespaceName == null || tablespaceName.isBlank()) {
+            return true;
+        }
+        String u = tablespaceName.trim().toUpperCase(java.util.Locale.ROOT);
+        if ("SYSTEM".equals(u) || "SYSAUX".equals(u)) {
+            return true;
+        }
+        if (u.startsWith("UNDO")) {
+            return true;
+        }
+        return "TEMP".equals(u);
+    }
+
+    private static String quotePath(String datafilePath) {
+        return "'" + datafilePath.trim().replace("'", "''") + "'";
+    }
+
+    @Override
+    public String createTablespaceSql(String tablespaceName, String datafilePath, long sizeMb, boolean autoextendUnlimited) {
+        StringBuilder sql = new StringBuilder("CREATE TABLESPACE ").append(tablespaceName);
+        sql.append(" DATAFILE ").append(quotePath(datafilePath));
+        sql.append(" SIZE ").append(sizeMb).append("M");
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public String addDatafileSql(String tablespaceName, String datafilePath, long sizeMb, boolean autoextendUnlimited) {
+        StringBuilder sql = new StringBuilder("ALTER TABLESPACE ").append(tablespaceName);
+        sql.append(" ADD DATAFILE ").append(quotePath(datafilePath));
+        sql.append(" SIZE ").append(sizeMb).append("M");
+        if (autoextendUnlimited) {
+            sql.append(" AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED");
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public String dropTablespaceSql(String tablespaceName, boolean includingContentsAndDatafiles) {
+        StringBuilder sql = new StringBuilder("DROP TABLESPACE ").append(tablespaceName).append(" INCLUDING CONTENTS");
+        if (includingContentsAndDatafiles) {
+            sql.append(" AND DATAFILES");
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public String setDatafileAutoextendSql(String tablespaceName, String datafilePath, boolean enable) {
+        return enable
+                ? "ALTER DATABASE DATAFILE " + quotePath(datafilePath) + " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
+                : "ALTER DATABASE DATAFILE " + quotePath(datafilePath) + " AUTOEXTEND OFF";
+    }
+
+    @Override
+    public String dropDatafileSql(String tablespaceName, String datafilePath) {
+        return "ALTER TABLESPACE " + tablespaceName + " DROP DATAFILE " + quotePath(datafilePath);
+    }
 }
