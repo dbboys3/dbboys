@@ -30,6 +30,9 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -100,7 +103,7 @@ public class SftpDialogController {
             cancelP.set(cb);
         }
 
-        /** Called periodically (~250ms) from background thread. */
+        /** Re-renders progress/speed/elapsed/ETA. Driven by the dialog's 500ms UI ticker, not by the copy loops. */
         void tick(long done) {
             this.transferred = done;
             long now = System.currentTimeMillis();
@@ -204,6 +207,13 @@ public class SftpDialogController {
     private final ObservableList<XferRow> xferRows = FXCollections.observableArrayList();
     private TableView<XferRow> xferTable;
 
+    /** Refreshes the transfer table at a fixed 500ms cadence, independent of byte flow. */
+    private final ScheduledExecutorService xferTicker = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "sftp-xfer-ticker");
+        t.setDaemon(true);
+        return t;
+    });
+
     private SftpDialogController(SftpClient sftp, SshConnect ssh) {
         this.sftp = sftp; this.ssh = ssh;
     }
@@ -267,6 +277,7 @@ public class SftpDialogController {
         javafx.geometry.Rectangle2D bounds = screen.getVisualBounds();
         stage.setX((bounds.getWidth() - 955) / 2 + bounds.getMinX());
         stage.setY((bounds.getHeight() - 520) / 2 + bounds.getMinY());
+        xferTicker.scheduleAtFixedRate(this::refreshActiveRows, 500, 500, TimeUnit.MILLISECONDS);
         stage.show();
 
         // Move focus away from text fields so they don't appear selected
@@ -286,10 +297,20 @@ public class SftpDialogController {
     private void cleanup() {
         if (cleanedUp) return;
         cleanedUp = true;
+        xferTicker.shutdownNow();
         for (XferRow r : xferRows) {
             if (r.endMs == 0) r.cancelled = true; // still running or queued: stop at next check
         }
         try { sftp.close(); } catch (Exception ignored) {} // also unblocks in-flight read/write
+    }
+
+    /** Ticker callback: re-render every unfinished row from its current byte counter. */
+    private void refreshActiveRows() {
+        List<XferRow> snapshot;
+        synchronized (xferRows) { snapshot = new ArrayList<>(xferRows); }
+        for (XferRow r : snapshot) {
+            if (r.endMs == 0) r.tick(r.transferred);
+        }
     }
 
     private static <S,T> TableColumn<S,T> col(String i18n, double w,
@@ -766,14 +787,13 @@ public class SftpDialogController {
             try (InputStream is = new FileInputStream(src);
                  OutputStream os = sftp.write(tmp, EnumSet.of(SftpClient.OpenMode.Create,
                          SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
-                byte[] buf = new byte[BUF]; int len; long last = 0;
+                byte[] buf = new byte[BUF]; int len;
                 while ((len = is.read(buf)) != -1) {
                     if (r.cancelled) break;
                     os.write(buf, 0, len);
                     total += len;
-                    if (System.currentTimeMillis() - last > 250) { r.tick(total); last = System.currentTimeMillis(); }
+                    r.transferred = total; // UI refresh handled by the 500ms ticker
                 }
-                r.tick(total);
             }
             if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
@@ -797,15 +817,15 @@ public class SftpDialogController {
             try (InputStream is = new FileInputStream(src);
                  OutputStream os = sftp.write(tmp, EnumSet.of(SftpClient.OpenMode.Create,
                          SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
-                byte[] buf = new byte[BUF]; int len; long fileTotal = 0, last = 0;
+                byte[] buf = new byte[BUF]; int len; long fileTotal = 0;
                 while ((len = is.read(buf)) != -1) {
                     if (row.cancelled) break;
                     os.write(buf, 0, len);
                     fileTotal += len;
-                    if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileTotal); last = System.currentTimeMillis(); }
+                    row.transferred = cumulative.get() + fileTotal;
                 }
                 cumulative.addAndGet(fileTotal);
-                row.tick(cumulative.get());
+                row.transferred = cumulative.get();
             }
             if (row.cancelled) { row.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
@@ -875,16 +895,14 @@ public class SftpDialogController {
             // instead of one synchronous round-trip per buffer — much faster on high-RTT links
             try (InputStream in = sftp.read(rp);
                  OutputStream os = new FileOutputStream(tmp)) {
-                long last = 0;
                 byte[] buf = new byte[BUF];
                 int rd;
                 while ((rd = in.read(buf)) != -1) {
                     if (r.cancelled) break;
                     os.write(buf, 0, rd);
                     offset += rd;
-                    if (System.currentTimeMillis() - last > 250) { r.tick(offset); last = System.currentTimeMillis(); }
+                    r.transferred = offset;
                 }
-                r.tick(offset);
             }
             if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); return; }
             Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -915,17 +933,16 @@ public class SftpDialogController {
         try {
             try (InputStream in = sftp.read(rp);
                  OutputStream os = new FileOutputStream(tmp)) {
-                long last = 0;
                 byte[] buf = new byte[BUF];
                 int rd;
                 while ((rd = in.read(buf)) != -1) {
                     if (row.cancelled) break;
                     os.write(buf, 0, rd);
                     fileOffset += rd;
-                    if (System.currentTimeMillis() - last > 250) { row.tick(cumulative.get() + fileOffset); last = System.currentTimeMillis(); }
+                    row.transferred = cumulative.get() + fileOffset;
                 }
                 cumulative.addAndGet(fileOffset);
-                row.tick(cumulative.get());
+                row.transferred = cumulative.get();
             }
             if (row.cancelled) { row.cancel(); deleteLocalQuiet(tmp); return; }
             Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -936,8 +953,10 @@ public class SftpDialogController {
 
     private void addRow(XferRow r) {
         Platform.runLater(() -> {
-            xferRows.add(0, r); // newest at top
-            if (xferRows.size() > 100) xferRows.remove(99, xferRows.size());
+            synchronized (xferRows) {
+                xferRows.add(0, r); // newest at top
+                if (xferRows.size() > 100) xferRows.remove(99, xferRows.size());
+            }
         });
     }
 
