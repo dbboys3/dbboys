@@ -2,21 +2,15 @@
 build/
 bin/
 *.zip
-# Intermediate jar created by build scripts inside lib/ (deleted at end of build)
 lib/lib_nonmodular/dbboys.jar
-
-# ---- Runtime data (created by the app at startup, never committed) ----
 logs/
 data/
 index/
 scripts/
-<<<<<<< HEAD
 demo/
 runtime/
-=======
 bin/
 docs/
 extlib/
 lib/
 etc/config.properties
->>>>>>> df0b74ee72c77a84fb17f4c33ce497b8b924b0c1
