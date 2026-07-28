@@ -10,7 +10,7 @@
 
         <!-- ================= 控制台输出 ================= -->
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout  pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %c{1}:%L - %msg%n"/>
+            <PatternLayout charset="UTF-8" pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %c{1}:%L - %msg%n"/>
         </Console>
 
         <!-- ================= 文件滚动输出 ================= -->

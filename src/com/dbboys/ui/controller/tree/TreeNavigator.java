@@ -328,8 +328,8 @@ public class TreeNavigator {
     //弹出创建连接对话框（使用 CustomWindowFrameUtil 框架）
     public static void showCreateConnectDialog(TreeData treeDataParam, Boolean isCopy) {
         try {
-            ResourceBundle bundle = ResourceBundle.getBundle("com.dbboys.infra.i18n.messages", I18n.getLocale());
-            FXMLLoader loader = new FXMLLoader(CreateConnectController.class.getResource("/com/dbboys/ui/fxml/CreateConnect.fxml"), bundle);
+            ResourceBundle bundle = ResourceBundle.getBundle("i18n.messages", I18n.getLocale());
+            FXMLLoader loader = new FXMLLoader(CreateConnectController.class.getResource("/fxml/CreateConnect.fxml"), bundle);
             DialogPane dialogPane = loader.load();
             CreateConnectController controller = loader.getController();
 

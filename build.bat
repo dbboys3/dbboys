@@ -11,76 +11,54 @@ setlocal enabledelayedexpansion
 :: Define variable; JAVAFX_JMODS is the path to javafx-jmods
 set JAVAFX_JMODS=D:\Programs\javafx-jmods-25.0.3
 
+:: All build artifacts live under build\ (git-ignored); only build\dist\dbboys.zip survives
+set BUILD=build
+set CLASSES=%BUILD%\classes
+set JREMIN=%BUILD%\jre-min
+set DIST=%BUILD%\dist
+if exist "%BUILD%" rd /s /q "%BUILD%"
+mkdir "%CLASSES%" "%DIST%"
+
 :: Compile all source files under subdirectories (space-separate files from different dirs)
-dir /b /s src\*.java > sources.txt
-javac -encoding UTF-8 -d bin -sourcepath src -cp lib\lib_modular\*;lib\lib_nonmodular\* @sources.txt
+dir /b /s src\*.java > "%BUILD%\sources.txt"
+javac -encoding UTF-8 -d "%CLASSES%" -sourcepath src -cp lib\lib_modular\*;lib\lib_nonmodular\* @"%BUILD%\sources.txt"
 echo Source compilation completed.
 
-:: Copy runtime resources to bin
-xcopy /e /h /y /q "src\com\dbboys\ui\fxml\*" "bin\com\dbboys\ui\fxml\"
-xcopy /e /h /y /q "src\com\dbboys\ui\css\*" "bin\com\dbboys\ui\css\"
-xcopy /e /h /y /q "src\com\dbboys\infra\i18n\*.properties" "bin\com\dbboys\infra\i18n\"
-copy /y "src\IKAnalyzer.cfg.xml" "bin\" >nul
-copy /y "src\ik-stopwords.dic" "bin\" >nul
+:: Copy runtime resources to classes (single tree, package paths preserved)
+xcopy /e /h /y /q "resources\*" "%CLASSES%\"
 
 :: Build jar file
-jar --create --file lib/lib_nonmodular/dbboys.jar --main-class com.dbboys.app.Main -C bin .
+jar --create --file lib/lib_nonmodular/dbboys.jar --main-class com.dbboys.app.Main -C "%CLASSES%" .
 echo dbboys.jar created.
 
 :: Create minimized JRE
-jlink  --module-path "%JAVAFX_JMODS%;lib\lib_modular"  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core  --output jre-min --strip-debug --no-man-pages  --no-header-files
+jlink  --module-path "%JAVAFX_JMODS%;lib\lib_modular"  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core  --output "%JREMIN%" --strip-debug --no-man-pages  --no-header-files
 echo Minimized JRE created.
 
 :: Package exe
-jpackage --type app-image --name dbboys --input lib\lib_nonmodular --main-jar dbboys.jar --main-class com.dbboys.app.Main --runtime-image jre-min --icon images\dbboys.ico --java-options "-Xmx1024m" --java-options "-Dlog4j2.configurationFile=etc/log4j2.xml"
+jpackage --type app-image --name dbboys --dest "%DIST%" --input lib\lib_nonmodular --main-jar dbboys.jar --main-class com.dbboys.app.Main --runtime-image "%JREMIN%" --icon images\dbboys.ico --java-options "-Xmx1024m" --java-options "-Dlog4j2.configurationFile=etc/log4j2.xml"
 echo Packaging finished.
 
-:: Delete temp file sources.txt generated during compile
-if exist "sources.txt" (
-    del /f /q "sources.txt"
-    echo Deleted temp file: sources.txt
-)
-
-:: Remove build output dir bin (contains old class files)
-if exist "bin" (
-    rd /s /q "bin"
-    echo Deleted old build dir: bin
-)
-
-:: Delete old JAR (avoid packaging stale jar)
-if exist "lib\lib_nonmodular\dbboys.jar" (
-    del /f /q "lib\lib_nonmodular\dbboys.jar"
-    echo Deleted old JAR: lib\lib_nonmodular\dbboys.jar
-)
-
-:: Delete minimized JRE dir (avoid old JRE interference)
-if exist "jre-min" (
-    rd /s /q "jre-min"
-    echo Deleted old minimized JRE dir: jre-min
-)
-
-:: Copy other directories into dbboys
-xcopy /e /h /y /q "docs\*" "dbboys\docs\"
-xcopy /e /h /y /q "extlib\*" "dbboys\extlib\"
-xcopy /e /h /y /q "images\*" "dbboys\images\"
-xcopy /e /h /y /q "etc\*" "dbboys\etc\"
+:: Copy other directories into the app image
+xcopy /e /h /y /q "docs\*" "%DIST%\dbboys\docs\"
+xcopy /e /h /y /q "extlib\*" "%DIST%\dbboys\extlib\"
+xcopy /e /h /y /q "images\*" "%DIST%\dbboys\images\"
+xcopy /e /h /y /q "etc\*" "%DIST%\dbboys\etc\"
 echo Folders copied.
 
-:: Compress dbboys directory
+:: Compress the app image (archive keeps dbboys\ as its top-level entry)
 set "EXE=%~dp0lib\lib_nonmodular\7za.exe"
-set "ZIP_FILE=%~dp0dbboys.zip"
-if exist "%ZIP_FILE%" (
-    del /f /q "%ZIP_FILE%"
-    echo Deleted old dbboys.zip archive.
-)
+if exist "%DIST%\dbboys.zip" del /f /q "%DIST%\dbboys.zip"
+pushd "%DIST%"
+"%EXE%" a -tzip -mx=5 -r -y dbboys.zip "dbboys\*"
+popd
+echo Packaged %DIST%\dbboys.zip.
 
-"%EXE%" a -tzip -mx=5 -r -y "%ZIP_FILE%" "dbboys\*"
-
-echo Packaged dbboys.zip.
-
-:: Delete dbboys directory
-if exist "dbboys" (
-    rd /s /q "dbboys"
-    echo Deleted dbboys directory.
-)
+:: Clean intermediates; keep only %DIST%\dbboys.zip
+del /f /q "%BUILD%\sources.txt"
+rd /s /q "%CLASSES%"
+rd /s /q "%JREMIN%"
+rd /s /q "%DIST%\dbboys"
+if exist "lib\lib_nonmodular\dbboys.jar" del /f /q "lib\lib_nonmodular\dbboys.jar"
+echo Done. Final artifact: %DIST%\dbboys.zip
 pause

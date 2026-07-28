@@ -109,7 +109,7 @@ public class SqlTabUiHelper {
     public void setupResultSetView() throws IOException {
         ctrl.sqlSqlModeChoiceBox.setVisible(false);
 
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/ResultSetTab.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/ResultSetTab.fxml"));
         loader.setControllerFactory(clazz -> {
             if (clazz == ResultSetTabController.class) {
                 return new ResultSetTabController(ctrl.sqlConnect, ctrl.sqlExecuteProcessStackPane);

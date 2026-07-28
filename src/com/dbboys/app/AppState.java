@@ -38,11 +38,11 @@ public final class AppState {
     public static final String THEME_LIGHT = "light";
     private static final String UI_THEME_KEY = "UI_THEME";
     private static final String DARK_STYLESHEET =
-            AppState.class.getResource("/com/dbboys/ui/css/cupertino-dark.css").toExternalForm();
+            AppState.class.getResource("/css/cupertino-dark.css").toExternalForm();
     private static final String COMMON_STYLESHEET =
-            AppState.class.getResource("/com/dbboys/ui/css/cupertino-common.css").toExternalForm();
+            AppState.class.getResource("/css/cupertino-common.css").toExternalForm();
     private static final String LIGHT_STYLESHEET =
-            AppState.class.getResource("/com/dbboys/ui/css/cupertino-light.css").toExternalForm();
+            AppState.class.getResource("/css/cupertino-light.css").toExternalForm();
 
     private AppState() {}
 

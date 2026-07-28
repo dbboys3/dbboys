@@ -207,7 +207,7 @@ public class PopupWindowUtil {
 
         //初始化sql历史记录表格
         //sql_his_tableview.getStyleClass().clear();
-        //sql_his_tableview.getStylesheets().add(PopupWindowUtil.class.getResource("/com/dbboys/ui/css/test.css").toExternalForm());
+        //sql_his_tableview.getStylesheets().add(PopupWindowUtil.class.getResource("/css/test.css").toExternalForm());
 
         CustomWindowFrameUtil.Frame sqlHistoryFrame = CustomWindowFrameUtil.createModalPopup(
                 sqlHistoryPopupStage,

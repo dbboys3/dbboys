@@ -16,7 +16,7 @@ public class CustomResultsetTab extends Tab {
     public CustomResultsetTab(Connect sqlConnect, StackPane sqlExecuteProcessStackPane) throws IOException {
         //设置标题保证标题溢出下拉正常显示标题
 
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/ResultSetTab.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/ResultSetTab.fxml"));
 
         loader.setControllerFactory(clazz -> {
             if (clazz == ResultSetTabController.class) {

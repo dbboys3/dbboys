@@ -35,7 +35,7 @@ public class CustomSshTab extends CustomTab {
 
         // Load FXML
         VBox contentVBox;
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/SshTab.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SshTab.fxml"));
         try {
             contentVBox = loader.load();
         } catch (IOException e) {

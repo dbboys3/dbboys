@@ -11,7 +11,7 @@ import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
 public final class I18n {
-    private static final String BUNDLE_BASE = "com.dbboys.infra.i18n.messages";
+    private static final String BUNDLE_BASE = "i18n.messages";
     private static final ObjectProperty<Locale> localeProperty = new SimpleObjectProperty<>(Locale.CHINA);
     private static ResourceBundle bundle = ResourceBundle.getBundle(BUNDLE_BASE, localeProperty.get());
 

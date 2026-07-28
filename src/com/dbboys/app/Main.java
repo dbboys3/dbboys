@@ -161,7 +161,7 @@ public class Main extends Application {
                 AppState.setSplit2Pos(Double.parseDouble(ConfigManagerUtil.getProperty("SPLIT_DRIVER_SQL", "0.6")));
 
                 //加载主界面
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/Main.fxml"));
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/Main.fxml"));
                     Pane root = null;
                     try {
                         root = loader.load();
@@ -204,10 +204,10 @@ public class Main extends Application {
                 AppExecutor.runAsync(() -> {
                     try {
                         // 预加载FXML文件
-                        FXMLLoader sqlTabLoader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/SqlTab.fxml"));
+                        FXMLLoader sqlTabLoader = new FXMLLoader(getClass().getResource("/fxml/SqlTab.fxml"));
                         sqlTabLoader.load();
                         
-                        //FXMLLoader resultSetLoader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/ResultSetTab.fxml"));
+                        //FXMLLoader resultSetLoader = new FXMLLoader(getClass().getResource("/fxml/ResultSetTab.fxml"));
                         //resultSetLoader.load();
                         
                         // 预创建CustomSqlEditCodeArea实例

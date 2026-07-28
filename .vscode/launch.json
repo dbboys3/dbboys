@@ -6,7 +6,7 @@
       "name": "dbboys",
       "request": "launch",
       "mainClass": "com.dbboys.app.Main",
-      "vmArgs": "--module-path \"D:\\Programs\\javafx-sdk-25.0.3\\lib\" --add-modules javafx.controls,javafx.fxml"
+      "vmArgs": "--module-path \"D:\\Programs\\javafx-sdk-25.0.3\\lib\" --add-modules javafx.controls,javafx.fxml -Dlog4j2.configurationFile=etc/log4j2.xml"
     }
   ]
 }

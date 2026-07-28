@@ -31,7 +31,7 @@ public class CustomSqlTab extends CustomTab{
 
         //加载图形界面
         VBox contentVBox = new VBox();
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/dbboys/ui/fxml/SqlTab.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SqlTab.fxml"));
         try {
             contentVBox = loader.load();
         } catch (IOException e) {

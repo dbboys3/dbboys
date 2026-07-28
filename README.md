@@ -33,11 +33,11 @@
 
 ## 📸 界面预览
 
-<a href="src/com/dbboys/html/images/img1.png"><img src="src/com/dbboys/html/images/img1.png" width="400" alt="主界面"/></a>
-<a href="src/com/dbboys/html/images/img2.png"><img src="src/com/dbboys/html/images/img2.png" width="400" alt="容量管理"/></a>
-<a href="src/com/dbboys/html/images/img3.png"><img src="src/com/dbboys/html/images/img3.png" width="400" alt="一键巡检"/></a>
-<a href="src/com/dbboys/html/images/img4.png"><img src="src/com/dbboys/html/images/img4.png" width="400" alt="ssh连接"/></a>
-<a href="src/com/dbboys/html/images/img5.png"><img src="src/com/dbboys/html/images/img5.png" width="400" alt="markdown管理"/></a>
+<a href="docs/images/img1.png"><img src="docs/images/img1.png" width="400" alt="主界面"/></a>
+<a href="docs/images/img2.png"><img src="docs/images/img2.png" width="400" alt="容量管理"/></a>
+<a href="docs/images/img3.png"><img src="docs/images/img3.png" width="400" alt="一键巡检"/></a>
+<a href="docs/images/img4.png"><img src="docs/images/img4.png" width="400" alt="ssh连接"/></a>
+<a href="docs/images/img5.png"><img src="docs/images/img5.png" width="400" alt="markdown管理"/></a>
 
 ---
 
@@ -69,7 +69,7 @@
    build.bat
    ```
 
-4. 脚本编译源码、复制资源、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，最终输出 `dbboys.zip`
+4. 脚本编译源码、复制资源、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，最终在 `build/dist/` 下输出 `dbboys.zip`（所有中间产物均位于 `build/` 目录，已 gitignore）
 5. 解压 `dbboys.zip` 后运行 `dbboys/bin/dbboys.exe`
 
 ### Linux x64
@@ -82,7 +82,7 @@
    sh build.sh
    ```
 
-4. 脚本编译源码、复制资源、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，最终输出 `dbboys.zip`
+4. 脚本编译源码、复制资源、通过 `jlink` 生成运行时、通过 `jpackage` 打包 app-image，最终在 `build/dist/` 下输出 `dbboys.zip`
 5. 解压 `dbboys.zip` 后运行 `sh start.sh`
 
 ### Linux aarch64 (ARM64)

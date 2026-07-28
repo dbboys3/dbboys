@@ -7,7 +7,8 @@
                                         }
                                     ],
     "java.project.sourcePaths":  [
-                                     "src"
+                                     "src",
+                                     "resources"
                                  ],
     "java.project.outputPath":  "bin",
     "java.project.referencedLibraries":  [
