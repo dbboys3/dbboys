@@ -5,6 +5,7 @@ public final class RemoteDatabaseProviders {
     private static final RemoteDatabaseProvider INFORMIX = new com.dbboys.dialect.informix.InformixRemoteProvider();
     private static final RemoteDatabaseProvider MYSQL = new com.dbboys.dialect.mysql.MysqlRemoteProvider();
     private static final RemoteDatabaseProvider ORACLE = new com.dbboys.dialect.oracle.OracleRemoteProvider();
+    private static final RemoteDatabaseProvider DAMENG = new com.dbboys.dialect.dameng.DamengRemoteProvider();
 
     private RemoteDatabaseProviders() {
     }
@@ -23,5 +24,9 @@ public final class RemoteDatabaseProviders {
 
     public static RemoteDatabaseProvider oracle() {
         return ORACLE;
+    }
+
+    public static RemoteDatabaseProvider dameng() {
+        return DAMENG;
     }
 }

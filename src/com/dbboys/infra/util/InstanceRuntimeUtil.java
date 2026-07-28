@@ -4,7 +4,7 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.app.AppContext;
 import com.dbboys.model.Connect;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -43,37 +43,37 @@ public final class InstanceRuntimeUtil {
     }
 
     public static String loadInformixStyleRuntimeLog(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            return JschUtil.executeCommand(
+            return SshUtil.executeCommand(
                     session,
-                    JschUtil.extractEnvValue(connect.getInfo()) + "onstat -c |awk '/^MSGPATH/ {print \"tail -1000 \"$2}' |sh"
+                    SshUtil.extractEnvValue(connect.getInfo()) + "onstat -c |awk '/^MSGPATH/ {print \"tail -1000 \"$2}' |sh"
             );
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static List<InstanceTabCapability.ConfigEntry> loadInformixStyleConfigEntries(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String config = JschUtil.executeCommand(
+            String config = SshUtil.executeCommand(
                     session,
-                    JschUtil.extractEnvValue(connect.getInfo()) + "onstat -c |grep -v '^$' |grep -v '^#' |sed '1,2d'"
+                    SshUtil.extractEnvValue(connect.getInfo()) + "onstat -c |grep -v '^$' |grep -v '^#' |sed '1,2d'"
             );
             return parseConfigEntries(config);
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 
     public static boolean isInformixStyleInstanceOnline(Connect connect) throws Exception {
-        Session session = JschUtil.getConnect(connect);
+        ClientSession session = SshUtil.getConnect(connect);
         try {
-            String instanceStatus = JschUtil.executeCommand(session, JschUtil.extractEnvValue(connect.getInfo()) + "onstat -");
+            String instanceStatus = SshUtil.executeCommand(session, SshUtil.extractEnvValue(connect.getInfo()) + "onstat -||true");
             return instanceStatus.contains("On-Line") || instanceStatus.contains("Read-Only");
         } finally {
-            JschUtil.disConnect(session);
+            SshUtil.disConnect(session);
         }
     }
 

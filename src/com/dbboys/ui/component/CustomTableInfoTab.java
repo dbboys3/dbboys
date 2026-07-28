@@ -21,7 +21,6 @@ import com.dbboys.model.HealthCheck;
 import com.dbboys.model.Index;
 import com.dbboys.model.Table;
 import com.dbboys.model.TreeData;
-import com.jcraft.jsch.Session;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.ReadOnlyStringWrapper;

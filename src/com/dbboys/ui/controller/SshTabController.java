@@ -1,15 +1,15 @@
 package com.dbboys.ui.controller;
 import com.dbboys.app.AppExecutor;
+import com.dbboys.infra.config.ConfigManagerUtil;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.JschUtil;
+import com.dbboys.infra.util.SshUtil;
+import com.dbboys.infra.zmodem.ZModemHandler;
+import com.dbboys.infra.zmodem.ZModemSession;
 import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.jcraft.jsch.ChannelShell;
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.ChannelExec;
-import com.jcraft.jsch.SftpProgressMonitor;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.channel.ChannelShell;
+import org.apache.sshd.client.session.ClientSession;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -31,6 +31,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,14 +40,45 @@ import java.util.List;
  */
 public class SshTabController {
     private static final Logger log = LogManager.getLogger(SshTabController.class);
-    private static final Font FONT = Font.font("Consolas", 13);
-    static final double CHAR_W;
-    static final double LINE_H;
-    static {
+    /** Dump raw terminal bytes (escapes shown) to the app log. Enable via
+     *  -Ddbboys.term.rawlog=true or SSH_TERMINAL_RAWLOG=true in etc/config.properties. */
+    private static final boolean RAW_LOG = Boolean.getBoolean("dbboys.term.rawlog")
+            || Boolean.parseBoolean(ConfigManagerUtil.getProperty("SSH_TERMINAL_RAWLOG", "false"));
+    // Terminal font: zoomable with Ctrl + '+' / Ctrl + '-' and Ctrl + mouse wheel,
+   // persisted in etc/config.properties (SSH_TERMINAL_FONT_SIZE)
+   private static final String SSH_FONT_SIZE_KEY = "SSH_TERMINAL_FONT_SIZE";
+   private static final int DEFAULT_FONT_SIZE = 13;
+   private static final int MIN_FONT_SIZE = 4;   // same bounds as the SQL editor
+   private static final int MAX_FONT_SIZE = 40;
+   private static final int FONT_SIZE_STEP = 1;
+    // On Windows prefer Consolas; on other platforms fall back to the system monospace font.
+    private static final String FONT_FAMILY = Font.getFamilies().contains("Consolas") ? "Consolas" : "monospace";
+   private int fontSize = loadConfiguredFontSize();
+   private Font FONT = Font.font(FONT_FAMILY, fontSize);
+   private double CHAR_W = measureCharW(FONT);
+   private double LINE_H = fontSize * 1.4;
+
+   
+
+    private static int loadConfiguredFontSize() {
+        try {
+            return clampFontSize(Integer.parseInt(ConfigManagerUtil.getProperty(
+                    SSH_FONT_SIZE_KEY, String.valueOf(DEFAULT_FONT_SIZE))));
+        } catch (NumberFormatException e) {
+            return DEFAULT_FONT_SIZE;
+        }
+    }
+    private static int clampFontSize(int size) { return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)); }
+    private static double measureCharW(Font f) {
         Text m = new Text("W");
-        m.setFont(FONT);
-        CHAR_W = m.getLayoutBounds().getWidth();
-        LINE_H = 13 * 1.4;
+        m.setFont(f);
+        return m.getLayoutBounds().getWidth();
+    }
+    private static boolean isZoomInKey(KeyEvent e) {
+        return e.getCode() == KeyCode.ADD || e.getCode() == KeyCode.PLUS || e.getCode() == KeyCode.EQUALS;
+    }
+    private static boolean isZoomOutKey(KeyEvent e) {
+        return e.getCode() == KeyCode.SUBTRACT || e.getCode() == KeyCode.MINUS;
     }
     /** Request keyboard focus on the terminal canvas. */
     public void requestFocus() {
@@ -69,18 +101,32 @@ public class SshTabController {
             return c;
         }
     }
+    /** A buffer row. {@link #wrapped} is set when the row ends in an automatic
+     *  (soft) wrap, i.e. it logically continues onto the next row. Hard newlines
+     *  leave the flag false. The flag rides on the row object, so it survives the
+     *  row insertions/removals done by scroll/insert/delete operations, and lets
+     *  {@link #reflowBuffer(int)} re-wrap text when the terminal width changes. */
+    private static class Row extends ArrayList<Cell> {
+        boolean wrapped;
+    }
     @FXML public StackPane terminalPane;
     @FXML public Button connectButton;
     @FXML public Button disconnectButton;
     @FXML public Label connectionLabel;
     @FXML public Label charsetLabel;
     @FXML public ChoiceBox<String> charsetChoiceBox;
+    @FXML public Button sftpButton;
     @FXML public CheckBox logCheckBox;
     @FXML public VBox sshTab;
     private SshConnect sshConnect;
-    private Session session;
+    private ClientSession session;
     private ChannelShell shellChannel;
-    private String charset = "UTF-8"; // terminal encoding, synced from SshConnect.charset
+    private volatile String charset = "UTF-8"; // terminal encoding, synced from SshConnect.charset
+    /** Stateful decoder carried across reads: a multi-byte char (GB18030/UTF-8)
+     *  split by a read boundary is completed by the next chunk instead of
+     *  decaying into replacement chars. Reader-thread only; recreated when the
+     *  charset changes or a new session starts. */
+    private volatile java.nio.charset.CharsetDecoder streamDecoder;
 
     /** Get the current terminal charset, fallback to UTF-8 if invalid. */
     private java.nio.charset.Charset terminalCharset() {
@@ -109,6 +155,7 @@ public class SshTabController {
     private boolean sgrReverse, sgrBold, sgrUnderline;
     private boolean cursorShown = true; // DECTCEM
     private boolean cursorKeysApp; // DECCKM: true=ESC OA, false=ESC [A
+    private boolean decawm = true; // DECAWM (?7h/?7l): auto-wrap at the last column
     private int scrollTop, scrollBottom = -1; // DECSTBM scroll region
     private boolean originMode; // DECOM
     private boolean pendingWrap; // auto-wrap happened, skip next
@@ -121,7 +168,9 @@ public class SshTabController {
     private boolean savedSgrReverse, savedSgrBold, savedSgrUnderline;
     private Thread readThread;
     private volatile boolean connecting;
-    private volatile boolean sftpCancelFlag;
+    private volatile boolean transferCancelFlag; // Ctrl+C/Ctrl+U aborts the active file transfer
+    private volatile boolean transferCancelledByUser; // file-picker dialog was cancelled
+    private volatile boolean zmodemActive; // true while a ZModem session owns the SSH stream
     private final StringBuilder inputBuffer = new StringBuilder(); // guards against concurrent connect attempts
     private int scrollOff, maxScroll = 5000;
     private Runnable onScrollChanged;
@@ -129,7 +178,7 @@ public class SshTabController {
     private boolean scrollLock;
     private int sgrExtFg = -1, sgrExtBg = -1; // 256-color extended colors
     private List<List<Cell>> altSavedBuffer;
-    private int altSavedCurCol, altSavedCurRow, altSavedScrollOff;
+    private int altSavedCurCol, altSavedCurRow, altSavedScrollOff, altSavedCols, altSavedRows;
     private boolean inAltScreen; // whether alternate screen buffer (?1049h) is active
     // Deferred draw: coalesce rapid write() calls into a single draw,
     // preventing the blink timer from rendering partially-updated screens.
@@ -139,6 +188,12 @@ public class SshTabController {
     // Logging
     private java.io.BufferedWriter logWriter;
     private boolean logging;
+    /** Next buffer row to write to the session log (rows before it are logged).
+     *  Logging is screen-faithful: logical lines are taken from the terminal
+     *  buffer once a hard newline finalizes them, so the file shows exactly
+     *  what the screen shows — echo quirks, backspace edits and wide-char
+     *  (CJK) handling are already resolved by the emulator. */
+    private int sessionLogRow;
     public SshTabController() {
         blink = new Timeline(new KeyFrame(Duration.millis(530), e -> {
             cursorVis = !cursorVis;
@@ -173,6 +228,12 @@ public class SshTabController {
                 }
             }
         });
+        // SFTP button
+        sftpButton.setGraphic(IconFactory.group(IconPaths.SFTP, 0.5));
+        sftpButton.setTooltip(new Tooltip(I18n.t("ssh.tab.sftp", "SFTP File Transfer")));
+        sftpButton.setDisable(true);
+        sftpButton.setOnAction(e -> openSftpDialog());
+
         // Log checkbox
         logCheckBox.textProperty().bind(I18n.bind("ssh.label.log"));
         logCheckBox.setOnAction(e -> {
@@ -183,11 +244,18 @@ public class SshTabController {
             }
         });
         // Canvas terminal
-        buffer.add(new ArrayList<>());
+        buffer.add(new Row());
         canvas = new Canvas(cols * CHAR_W, rows * LINE_H);
         canvas.setFocusTraversable(true);
         canvas.focusedProperty().addListener((o, ov, n) -> { focused = n; draw(); });
         setupCanvasInput();
+        // The canvas is sized explicitly from terminalPane's current size, and Canvas
+        // is not resizable, so its size would otherwise become terminalPane's computed
+        // min size. That locks the layout after maximize: on restore the pane can never
+        // shrink below the canvas width, the width listener never fires and right-edge
+        // content (scrollbar, toolbar controls) stays clipped. Overriding the min size
+        // breaks this feedback loop so the pane (and canvas) can shrink again.
+        terminalPane.setMinSize(0, 0);
         terminalPane.getChildren().add(canvas);
         // Click on the tab body focuses the terminal
         sshTab.setOnMouseClicked(e -> canvas.requestFocus());
@@ -210,14 +278,14 @@ public class SshTabController {
                 int maxScroll = Math.max(0, buffer.size() - rows);
                 if (v != scrollOff) {
                     scrollOff = clamp(v, 0, maxScroll);
-                    scrollLock = true;
+                    scrollLock = scrollOff < maxScroll; // dragging back to the bottom re-engages follow mode
                     draw();
                 }
             }
         });
         onScrollChanged = () -> {
             Platform.runLater(() -> {
-                int max = Math.max(0, buffer.size() - rows);
+                int max = inAltScreen ? 0 : Math.max(0, buffer.size() - rows);
                 scrollBar.setVisible(max > 0);
                 updatingScrollBar = true;
                 // Fixed visible amount keeps thumb at a minimum readable size
@@ -233,9 +301,17 @@ public class SshTabController {
             if (n.doubleValue() > 0) {
                 int newCols = Math.max(1, (int) (n.doubleValue() / CHAR_W));
                 if (newCols != cols) {
+                    if (inAltScreen) {
+                        // Alt screen cannot be reflowed: clear it so the full-screen
+                        // app repaints a fresh frame after SIGWINCH (anti-residue)
+                        clearBuffer();
+                    } else {
+                        reflowBuffer(newCols);
+                    }
                     cols = newCols;
                     canvas.setWidth(cols * CHAR_W);
                     draw();
+                    fireScrollChanged();
                 }
                 updatePtySize();
             }
@@ -246,8 +322,20 @@ public class SshTabController {
                 if (newRows != rows) {
                     rows = newRows;
                     canvas.setHeight(rows * LINE_H);
+                    if (inAltScreen) {
+                        // Alt screen cannot be reflowed: clear it so the full-screen
+                        // app repaints a fresh frame after SIGWINCH (anti-residue)
+                        clearBuffer();
+                        // Alt screen is a fixed page: keep the scroll region in sync with the visible size
+                        scrollTop = 0;
+                        scrollBottom = rows - 1;
+                    }
                     // Keep scrollOff valid after resize
                     if (scrollOff > Math.max(0, buffer.size() - rows)) {
+                        scrollOff = Math.max(0, buffer.size() - rows);
+                    }
+                    if (!inAltScreen && !scrollLock) {
+                        // Following output: keep the viewport pinned to the bottom across resizes
                         scrollOff = Math.max(0, buffer.size() - rows);
                     }
                     draw();
@@ -271,7 +359,7 @@ public class SshTabController {
     }
     private void doConnect() {
         if (sshConnect == null) return;
-        if (connecting) return; // already connecting 閳?skip duplicate
+        if (connecting) return; // already connecting ???skip duplicate
         connecting = true;
         connectButton.setDisable(true);
         connectStatus.set(I18n.t("ssh.tab.connecting", "Connecting..."));
@@ -279,11 +367,11 @@ public class SshTabController {
                 + sshConnect.getHost() + ":" + sshConnect.getPort() + "...\r\n");
         AppExecutor.runAsync(() -> {
             try {
-                session = JschUtil.getSshSession(sshConnect);
-                shellChannel = (ChannelShell) session.openChannel("shell");
-                shellChannel.setPty(true);
+                session = SshUtil.getSshSession(sshConnect);
+                shellChannel = session.createShellChannel();
+                shellChannel.setUsePty(true);
                 shellChannel.setPtyType("xterm-256color");
-                shellChannel.connect();
+                shellChannel.open().verify(5000);
                 start();
                 Platform.runLater(() -> {
                     connecting = false;
@@ -291,6 +379,7 @@ public class SshTabController {
                     if (blink != null) blink.play(); // ensure blink is running after reconnect
                     connectButton.setDisable(true);
                     disconnectButton.setDisable(false);
+                    sftpButton.setDisable(false);
                     canvas.requestFocus();
                     if (onConnectionStateChanged != null) onConnectionStateChanged.accept(true);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
@@ -307,6 +396,7 @@ public class SshTabController {
                     draw();
                     connectButton.setDisable(false);
                     disconnectButton.setDisable(true);
+                    sftpButton.setDisable(true);
                     if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
                     connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
                             + ":" + sshConnect.getPort() + " ["
@@ -318,13 +408,18 @@ public class SshTabController {
     }
     private void doDisconnect() {
         stop();
-        JschUtil.disconnectSession(session);
+        SshUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
+        // Leave the alternate screen if a full-screen app (nmon, vi) was running:
+        // the user should land back on the shell buffer with its scrollback and scrollbar
+        exitAltScreen();
         cursorShown = false;
         draw();
+        fireScrollChanged();
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
+        sftpButton.setDisable(true);
         if (onConnectionStateChanged != null) onConnectionStateChanged.accept(false);
         if (sshConnect != null) {
             connectStatus.set(sshConnect.getUsername() + "@" + sshConnect.getHost()
@@ -333,31 +428,104 @@ public class SshTabController {
         }
     }
     private void updatePtySize() {
-        if (shellChannel != null && shellChannel.isConnected()) {
-            shellChannel.setPtySize(cols, rows, (int) canvas.getWidth(), (int) canvas.getHeight());
+        if (shellChannel != null && shellChannel.isOpen()) {
+            try {
+                shellChannel.sendWindowChange(cols, rows, (int) canvas.getWidth(), (int) canvas.getHeight());
+            } catch (Exception ignored) {}
         }
+    }
+    /** Zoom the terminal font by delta steps: recompute metrics, re-tile the grid,
+     *  reflow content to the new column count, and persist the size to config. */
+    private void adjustFontSize(int delta) {
+        int newSize = clampFontSize(fontSize + delta);
+        if (newSize == fontSize || canvas == null) return;
+        fontSize = newSize;
+        FONT = Font.font(FONT_FAMILY, fontSize);
+        CHAR_W = measureCharW(FONT);
+        LINE_H = fontSize * 1.4;
+        int newCols = Math.max(1, (int) (terminalPane.getWidth() / CHAR_W));
+        int newRows = Math.max(1, (int) (terminalPane.getHeight() / LINE_H));
+        boolean gridChanged = newCols != cols || newRows != rows;
+        if (inAltScreen && gridChanged) {
+            // The alt screen cannot be reflowed: clear it and let the full-screen
+            // app repaint after SIGWINCH, otherwise stale cells (e.g. nmon's
+            // frame) linger as residue around the new grid.
+            clearBuffer();
+        } else if (newCols != cols) {
+            reflowBuffer(newCols);
+        }
+        cols = newCols;
+        rows = newRows;
+        canvas.setWidth(cols * CHAR_W);
+        canvas.setHeight(rows * LINE_H);
+        if (inAltScreen) {
+            // Alt screen is a fixed page: keep the scroll region in sync with the visible size
+            scrollTop = 0;
+            scrollBottom = rows - 1;
+        }
+        // Keep scrollOff valid after the grid change
+        if (scrollOff > Math.max(0, buffer.size() - rows)) {
+            scrollOff = Math.max(0, buffer.size() - rows);
+        }
+        if (!inAltScreen && !scrollLock) {
+            // Following output: keep the viewport pinned to the bottom
+            scrollOff = Math.max(0, buffer.size() - rows);
+        }
+        draw();
+        fireScrollChanged();
+        updatePtySize();
+        ConfigManagerUtil.setProperty(SSH_FONT_SIZE_KEY, String.valueOf(fontSize));
     }
     public void closeSession() { doDisconnect(); }
     // ==================== Terminal engine ====================
     private void start() {
-        if (shellChannel == null || !shellChannel.isConnected()) return;
+        if (shellChannel == null || !shellChannel.isOpen()) return;
+        streamDecoder = null; // drop any partial char left over from a previous session
         readThread = new Thread(() -> {
             try {
-                InputStream in = shellChannel.getInputStream();
+                InputStream in = shellChannel.getInvertedOut();
                 byte[] buf = new byte[8192];
+                byte[] carry = new byte[0]; // unscanned tail: the beacon signature may span two reads
                 int len;
-                while (shellChannel.isConnected() && (len = in.read(buf, 0, buf.length)) != -1) {
-                    // Log raw bytes to file if enabled (do this BEFORE converting to String for display)
-                    if (logging && logWriter != null) {
-                        try { logWriter.write(stripAnsi(new String(buf, 0, len, terminalCharset()))); logWriter.flush(); } catch (Exception ignored) {}
+                while (shellChannel.isOpen() && (len = in.read(buf, 0, buf.length)) != -1) {
+                    // Scan for a ZModem ZRQINIT/ZRINIT hex header; on a hit the raw stream is
+                    // handed to the ZModem engine until the file transfer session ends.
+                    byte[] data = buf;
+                    int dlen = len;
+                    if (carry.length > 0) {
+                        data = new byte[carry.length + len];
+                        System.arraycopy(carry, 0, data, 0, carry.length);
+                        System.arraycopy(buf, 0, data, carry.length, len);
+                        dlen = data.length;
+                        carry = new byte[0];
                     }
-                    String out = new String(buf, 0, len, terminalCharset());
-                    Platform.runLater(() -> write(out));
+                    int sig = indexOfZmodemBeacon(data, dlen);
+                    if (sig < 0) {
+                        // hold back only a trailing fragment that actually starts the
+                        // signature (e.g. "**\x18B0"); everything else renders at once,
+                        // otherwise an idle prompt would lose its last bytes
+                        int keep = zmodemBeaconTail(data, dlen);
+                        feedTerminal(data, 0, dlen - keep);
+                        carry = new byte[keep];
+                        System.arraycopy(data, dlen - keep, carry, 0, keep);
+                        continue;
+                    }
+                    feedTerminal(data, 0, sig);
+                    byte[] prefix = new byte[dlen - sig];
+                    System.arraycopy(data, sig, prefix, 0, prefix.length);
+                    carry = new byte[0];
+                    // the beacon's type digit decides the role: '0'=ZRQINIT from sz
+                    // (we download), '1'=ZRINIT from rz (we upload)
+                    int dir = data[sig + ZMODEM_BEACON_SIG.length] == '0' ? 2 : 1;
+                    runZmodemSession(in, prefix, dir);
                 }
-                // read returned -1 or channel disconnected 閳?connection lost
+                // read returned -1 (clean EOF: server closed the channel) or channel died
+                log.info("SSH read loop ended: clean EOF, channelOpen={}",
+                        shellChannel != null && shellChannel.isOpen());
                 Platform.runLater(this::onConnectionLost);
             } catch (Exception e) {
-                // read thread interrupted or IO error 閳?connection likely lost
+                // read thread interrupted or IO error ???connection likely lost
+                log.info("SSH read loop ended with error: {}", e.toString());
                 Platform.runLater(this::onConnectionLost);
             }
         }, "term-reader");
@@ -371,10 +539,10 @@ public class SshTabController {
             readThread = null;
         }
         if (shellChannel != null) {
-            try { shellChannel.getOutputStream().close(); } catch (Exception ignored) {}
-            try { shellChannel.getInputStream().close(); } catch (Exception ignored) {}
-            if (shellChannel.isConnected()) {
-                shellChannel.disconnect();
+            try { shellChannel.getInvertedIn().close(); } catch (Exception ignored) {}
+            try { shellChannel.getInvertedOut().close(); } catch (Exception ignored) {}
+            if (shellChannel.isOpen()) {
+                shellChannel.close(false);
             }
         }
     }
@@ -383,9 +551,12 @@ public class SshTabController {
         // Clean up stale session/channel regardless of isConnected() state
         stop();
         closeLogWriter();
-        JschUtil.disconnectSession(session);
+        SshUtil.disconnectSession(session);
         session = null;
         shellChannel = null;
+        // Leave the alternate screen first so the disconnect notice lands in the
+        // restored main buffer (with scrollback/scrollbar), not the dead alt frame
+        exitAltScreen();
         statusRed("\r\nDisconnected\r\n");
         cursorShown = false;
         draw();
@@ -395,6 +566,7 @@ public class SshTabController {
                 : "") + " [" + I18n.t("ssh.tab.disconnected", "Disconnected") + "]");
         connectButton.setDisable(false);
         disconnectButton.setDisable(true);
+        sftpButton.setDisable(true);
     }
 
     /** Request a deferred draw. Coalesces rapid write() calls to prevent
@@ -412,10 +584,8 @@ public class SshTabController {
     }
     private void status(String s) {
         for (char c : s.toCharArray()) {
-            if (c == '\n') {
-                if (pendingWrap) pendingWrap = false; else nl();
-            }
-            else if (c == '\r') curCol = 0;
+            if (c == '\n') { pendingWrap = false; nl(); }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; }
             else put(c);
         }
         if (!s.endsWith("\n") && !s.endsWith("\r\n")) nl();
@@ -448,6 +618,7 @@ public class SshTabController {
             raw = pendingEsc + raw;
             pendingEsc = null;
         }
+        if (RAW_LOG && !raw.isEmpty()) log.info("TERM <<< {}", escapeForLog(raw));
         // Log large chunks (top/nmon output) for debugging
         boolean isTopData = raw.length() > 200;
         if (isTopData) {
@@ -462,16 +633,16 @@ public class SshTabController {
                 if (ni < 0) { pendingEsc = raw.substring(i); return; }
                 i = ni;
             }
-            else if (c == '\b') { if (curCol > 0) curCol--; }
-            else if (c == '\r') curCol = 0;
+            else if (c == '\b') { wrapPendingEraseSuppress = false; if (pendingWrap) { pendingWrap = false; curCol = cols - 1; } else if (curCol > 0) curCol--; }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; wrapPendingEraseSuppress = false; }
             else if (c == '\n') {
-                if (pendingWrap) {
-                    pendingWrap = false; // log.info("WRAP consumed r{} c{}", curRow, curCol); // auto-wrap
-                } else {
-                    nl();
-                }
+                // Deferred wrap: LF always moves down exactly one line, whether or
+                // not the previous line filled the last column (xterm semantics)
+                pendingWrap = false;
+                wrapPendingEraseSuppress = false;
+                nl();
             }
-            else if (c == 0x09) { curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; curRow++; pendingWrap = true; } }
+            else if (c == 0x09) { pendingWrap = false; wrapPendingEraseSuppress = false; curCol = ((curCol / 8) + 1) * 8; if (curCol >= cols) { curCol = 0; pendingWrap = true; wrapPendingEraseSuppress = true; } }
             else if (c == 0x0E) { useG1 = true; } // SO - shift out, use G1 charset
             else if (c == 0x0F) { useG1 = false; } // SI - shift in, use G0 charset
             else if (c == 0x7F) { if (curCol > 0) curCol--; } // DEL = backspace
@@ -485,29 +656,65 @@ public class SshTabController {
         if (onActivity != null && !raw.isEmpty()) onActivity.run();
     }
     // ---- Buffer ----
+    /** Top buffer row of the visible page (the page sits below any scrollback history). */
+    private int pageTop() { return Math.max(0, buffer.size() - rows); }
     private void nl() {
+        // Bottom margin must be computed before ensureBuf() may grow the buffer
+        int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
+        if (!scrollLock && curRow == effectiveBottom && scrollBottom >= 0 && scrollTop < effectiveBottom) {
+            // DECSTBM scroll region: scroll within region, discarding top line.
+            // No buffer growth — a row past the screen bottom would become
+            // reachable by jumpToBottom() and show up as a stray blank line.
+            scrollRegionUp(scrollTop, effectiveBottom);
+            return;
+        }
+        sessionLogFinalize(curRow); // hard newline: the logical line ending here is final
         curRow++;
         ensureBuf(curRow);
-        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); }
-        int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-        if (!scrollLock && curRow > effectiveBottom) {
-            if (scrollBottom >= 0 && scrollTop < effectiveBottom) {
-                // DECSTBM scroll region: scroll within region, discarding top line
-                buffer.remove(scrollTop);
-                ensureBuf(effectiveBottom);
-                buffer.get(effectiveBottom).clear();
-                curRow = effectiveBottom;
-            } else {
-                // Normal mode: advance viewport, preserve history in buffer
-                scrollOff = curRow - rows + 1;
-            }
+        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; scrollOff = Math.max(0, scrollOff - 1); if (sessionLogRow > 0) sessionLogRow--; }
+        if (inAltScreen) {
+            // Alt screen is a fixed page: never grow the cursor or buffer past the bottom row
+            if (curRow > rows - 1) curRow = rows - 1;
+            while (buffer.size() > rows) buffer.remove(buffer.size() - 1);
         } else if (!scrollLock && curRow - scrollOff >= rows) {
+            // Normal mode: advance viewport, preserve history in buffer
             scrollOff = curRow - rows + 1;
         }
     }
     private void fireScrollChanged() { if (onScrollChanged != null) onScrollChanged.run(); }
     private void put(char c) {
-        pendingWrap = false; wrapPendingEraseSuppress = false;
+        if (pendingWrap) {
+            // Deferred wrap (xterm semantics): the previous character filled the
+            // last column, but the line wrap only happens now that the next
+            // printable character arrives. This is what keeps full-screen apps
+            // (top, nmon) from scrolling the first line away / growing phantom
+            // rows when a frame ends on a full-width line.
+            pendingWrap = false; wrapPendingEraseSuppress = false;
+            curCol = 0;
+            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
+            if (!scrollLock && curRow == effectiveBottom && scrollBottom >= 0 && scrollTop < effectiveBottom) {
+                // Wrap at the region's bottom margin: scroll within the region,
+                // discarding the top line; the buffer does not grow
+                markWrapped(curRow); // the wrapped row continues onto the fresh bottom line
+                scrollRegionUp(scrollTop, effectiveBottom);
+            } else {
+                boolean atMargin = curRow == effectiveBottom;
+                curRow++;
+                markWrapped(curRow - 1); // soft wrap: the row just left continues onto the next one
+                if (inAltScreen) {
+                    // Alt screen is a fixed page: never grow the cursor or buffer past the bottom row
+                    if (curRow > rows - 1) curRow = rows - 1;
+                    while (buffer.size() > rows) buffer.remove(buffer.size() - 1);
+                } else if (!scrollLock && atMargin && curRow > effectiveBottom) {
+                    // Normal mode: advance viewport, preserve history in buffer
+                    scrollOff = curRow - rows + 1;
+                } else if (!scrollLock && curRow - scrollOff >= rows) {
+                    scrollOff = curRow - rows + 1;
+                }
+            }
+        } else {
+            wrapPendingEraseSuppress = false;
+        }
         List<Cell> ln = ensureBuf(curRow);
         // Extend row to accommodate curCol
         if ((g0Charset == '0' && !useG1) || (g1Charset == '0' && useG1)) { c = mapDecSpecial(c); }
@@ -526,32 +733,20 @@ public class SshTabController {
         }
         curCol += w;
         if (curCol >= cols) {
-            curCol = 0;
-            curRow++;
-            pendingWrap = true; wrapPendingEraseSuppress = true;
-            int effectiveBottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-            if (!scrollLock && !inAltScreen && curRow > effectiveBottom) {
-                if (scrollBottom >= 0) {
-                    // DECSTBM scroll region: scroll within region, discarding top line
-                    int top = scrollTop;
-                    int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-                    bottom = Math.max(scrollTop, bottom);
-                    deleteLine(top, bottom);
-                    ensureBuf(bottom);
-                    // blank the bottom line
-                    List<Cell> bottomLn = buffer.get(bottom);
-                    for (Cell cl : bottomLn) cl.reset();
-                    curRow = bottom;
-                } else {
-                    // Normal mode: advance viewport, preserve history in buffer
-                    scrollOff = curRow - rows + 1;
-                }
+            if (decawm) {
+                // Last column filled: only mark the wrap as pending. curRow does not
+                // advance (and nothing scrolls) until the next printable character.
+                curCol = 0;
+                pendingWrap = true; wrapPendingEraseSuppress = true;
+            } else {
+                // DECAWM off (?7l): stay on the last column; the next character
+                // overwrites it (nmon uses this to draw the bottom-right corner)
+                curCol = cols - 1;
             }
-            ensureBuf(curRow);
         }
     }
     private List<Cell> ensureBuf(int r) {
-        while (buffer.size() <= r) buffer.add(new ArrayList<>());
+        while (buffer.size() <= r) buffer.add(new Row());
         return buffer.get(r);
     }
     private String line(int r) {
@@ -563,14 +758,118 @@ public class SshTabController {
         }
         return sb.toString();
     }
+    /** Drop the current selection (e.g. because input or a screen switch made it stale). */
+    private void clearSelection() {
+        if (selStartRow < 0 && selEndRow < 0) return;
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        draw();
+    }
     private void jumpToBottom() {
-        int maxOff = Math.max(0, buffer.size() - rows);
+        int maxOff = inAltScreen ? 0 : Math.max(0, buffer.size() - rows); // alt screen has no scrollback
+        scrollLock = false; // typing means the user wants to follow output again
         if (scrollOff != maxOff) {
             scrollOff = maxOff;
-            scrollLock = false;
             draw();
             fireScrollChanged();
         }
+    }
+    /** True if buffer row r ends in a soft (auto) wrap and continues onto row r+1. */
+    private boolean isWrapped(int r) {
+        List<Cell> row = buffer.get(r);
+        return row instanceof Row && ((Row) row).wrapped;
+    }
+    /** Mark buffer row r as soft-wrapped (it continues onto the next row). */
+    private void markWrapped(int r) {
+        if (r >= 0 && r < buffer.size() && buffer.get(r) instanceof Row) {
+            ((Row) buffer.get(r)).wrapped = true;
+        }
+    }
+    /** Re-wrap all buffer content to a new column count. Rows linked by soft wraps
+     *  are rejoined into their logical line and wrapped at the new width; hard
+     *  newlines are preserved. Cursor, scroll offset and the vertical scrollbar
+     *  then adapt to the resulting row count. Skipped on the alternate screen
+     *  (full-screen apps redraw themselves after SIGWINCH). */
+    private void reflowBuffer(int newCols) {
+        if (inAltScreen || buffer.isEmpty() || newCols < 2) return;
+        // Cursor position as a linear cell offset within its logical line
+        int cur = Math.min(curRow, buffer.size() - 1);
+        int curLogStart = cur;
+        while (curLogStart > 0 && isWrapped(curLogStart - 1)) curLogStart--;
+        // Rows above the cursor's logical line are final: log them before the
+        // rebuild, then re-anchor the mark to that line's new index below
+        sessionLogFinalize(curLogStart - 1);
+        int curOffset = 0;
+        for (int r = curLogStart; r < cur; r++) curOffset += buffer.get(r).size();
+        curOffset += pendingWrap ? buffer.get(cur).size() : Math.min(curCol, buffer.get(cur).size());
+        // First visible logical line, to keep the viewport stable when scrolled up
+        int visLogStart = Math.min(scrollOff, buffer.size() - 1);
+        while (visLogStart > 0 && isWrapped(visLogStart - 1)) visLogStart--;
+
+        List<Row> newBuf = new ArrayList<>(buffer.size());
+        int newCurLogStart = -1, newVisLogStart = 0;
+        int r = 0;
+        while (r < buffer.size()) {
+            int end = r;
+            while (end < buffer.size() - 1 && isWrapped(end)) end++;
+            if (r == curLogStart) newCurLogStart = newBuf.size();
+            if (r == visLogStart) newVisLogStart = newBuf.size();
+            Row out = new Row();
+            newBuf.add(out);
+            for (int i = r; i <= end; i++) {
+                List<Cell> src = buffer.get(i);
+                for (int k = 0; k < src.size(); k++) {
+                    Cell cell = src.get(k);
+                    if (cell.ch == '\0') continue; // continuation cells travel with their character
+                    boolean fw = isFullwidth(cell.ch);
+                    int w = fw ? 2 : 1;
+                    if (out.size() + w > newCols) {
+                        while (out.size() < newCols) out.add(new Cell()); // never split a fullwidth pair
+                        out.wrapped = true;
+                        out = new Row();
+                        newBuf.add(out);
+                    }
+                    out.add(cell);
+                    if (fw) {
+                        Cell cont;
+                        if (k + 1 < src.size() && src.get(k + 1).ch == '\0') { cont = src.get(k + 1); k++; }
+                        else { cont = new Cell(); cont.ch = '\0'; }
+                        out.add(cont);
+                    }
+                }
+            }
+            r = end + 1;
+        }
+        if (newCurLogStart < 0) newCurLogStart = Math.max(0, newBuf.size() - 1);
+        // Map the linear cursor offset back to row/column at the new width
+        int newCurRow, newCurCol;
+        boolean newPendingWrap = false;
+        if (curOffset > 0 && curOffset % newCols == 0) {
+            // Cursor sits just past a full row: keep deferred-wrap semantics
+            newCurRow = newCurLogStart + curOffset / newCols - 1;
+            newCurCol = 0;
+            newPendingWrap = true;
+        } else {
+            newCurRow = newCurLogStart + curOffset / newCols;
+            newCurCol = curOffset % newCols;
+        }
+        buffer.clear();
+        buffer.addAll(newBuf);
+        curRow = newCurRow;
+        curCol = newCurCol;
+        pendingWrap = newPendingWrap;
+        wrapPendingEraseSuppress = newPendingWrap; // pairs with pendingWrap (see put())
+        while (buffer.size() > maxScroll) { buffer.remove(0); curRow--; }
+        curRow = Math.max(0, curRow);
+        scrollOff = scrollLock
+                ? clamp(newVisLogStart, 0, Math.max(0, buffer.size() - rows)) // scrolled up: keep the same content in view
+                : Math.max(0, buffer.size() - rows);                        // following output: stay pinned to the bottom
+        // Selection and DECSTBM region no longer map to rows after reflow
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        scrollTop = 0;
+        scrollBottom = -1;
+        // Re-anchor the session-log mark to the cursor's logical line (rows above
+        // it were logged before the rebuild)
+        sessionLogRow = Math.max(0, logicalLineStart(curRow));
     }
     // ---- ANSI ----
     private int esc(String s, int p, int e) {
@@ -579,20 +878,20 @@ public class SshTabController {
         if (c == '[') { int r = csi(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == ']') { int r = osc(s, p + 1, e); return r < 0 ? -1 : r; }
         if (c == '(' || c == ')') { int r = consumeCharset(s, p + 1, e, c == '('); return r < 0 ? -1 : r; }
-        // ESC 7 / ESC 8 闂?save/restore cursor (DECSC/DECRC)
+        // ESC 7 / ESC 8 ???save/restore cursor (DECSC/DECRC)
         if (c == '7') { saveCursor(); return p; }
         if (c == '8') { restoreCursor(); return p; }
-        // ESC M 闂?reverse index (RI)
+        // ESC M ???reverse index (RI)
         if (c == 'M') { reverseIndex(); return p; }
-        // ESC D 闂?index (IND, move down one line)
+        // ESC D ???index (IND, move down one line)
         if (c == 'D') { indexDown(); return p; }
-        // ESC E 闂?next line (NEL)
+        // ESC E ???next line (NEL)
         if (c == 'E') { curCol = 0; indexDown(); return p; }
-        // ESC H 闂?horizontal tab set
+        // ESC H ???horizontal tab set
         if (c == 'H') return p;
-        // ESC > 闂?alternate keypad numeric; ESC = 闂?alternate keypad application
+        // ESC > ???alternate keypad numeric; ESC = ???alternate keypad application
         if (c == '>' || c == '=') return p;
-        // ESC c 闂?RIS (reset to initial state)
+        // ESC c ???RIS (reset to initial state)
         // ESC O A/B/C/D -- SS3 cursor keys (when DECCKM is enabled)
         if (c == 'O' && p + 1 < e) {
             char oc = s.charAt(p + 1);
@@ -613,11 +912,14 @@ public class SshTabController {
         return -1;
     }
     private void resetTerminal() {
-        buffer.clear(); buffer.add(new ArrayList<>());
+        buffer.clear(); buffer.add(new Row());
         curCol = curRow = scrollOff = 0;
         scrollTop = 0; scrollBottom = -1; originMode = false;
         sgrFg = 37; sgrBg = 40; sgrReverse = sgrBold = sgrUnderline = false;
         g0Charset = 'B'; g1Charset = 'B'; useG1 = false;
+        pendingWrap = false;
+        decawm = true; // RIS restores auto-wrap
+        selStartCol = selEndCol = selStartRow = selEndRow = -1; // selection no longer maps to rows
         draw();
     }
 
@@ -632,6 +934,8 @@ public class SshTabController {
             logWriter = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
                     new java.io.FileOutputStream(logFile), terminalCharset()));
             logging = true;
+            // Log from the current line on; screen history above stays out of the file
+            sessionLogRow = Math.max(0, logicalLineStart(curRow));
             try { logWriter.flush(); } catch (Exception ignored) {}
             com.dbboys.ui.notification.NotificationUtil.showMainNotification(
                     I18n.t("ssh.notice.log_started", "Logging started") + ": " + new File(logFile).getName());
@@ -649,10 +953,68 @@ public class SshTabController {
 
     private void closeLogWriter() {
         if (logWriter != null) {
+            sessionLogDumpRest();
             try { logWriter.close(); } catch (Exception ignored) {}
             logWriter = null;
         }
         logging = false;
+    }
+
+    /** First buffer row of the logical line containing row r (follows soft wraps up). */
+    private int logicalLineStart(int r) {
+        r = Math.min(r, buffer.size() - 1);
+        while (r > 0 && isWrapped(r - 1)) r--;
+        return r;
+    }
+
+    /** Write every complete logical line in [sessionLogRow, endRow] to the session
+     *  log. Text comes from the screen buffer, so it matches the display exactly.
+     *  Skipped on the alternate screen, where full-screen apps (vi, top, less)
+     *  constantly redraw in place and would flood the log with frames. */
+    private void sessionLogFinalize(int endRow) {
+        if (!logging || logWriter == null || inAltScreen) return;
+        if (endRow < sessionLogRow) return; // already logged (cursor moved up and re-newlined)
+        try {
+            int r = sessionLogRow;
+            int last = Math.min(endRow, buffer.size() - 1);
+            while (r <= last) {
+                int ge = r;
+                while (ge < last && isWrapped(ge)) ge++; // join soft-wrapped rows into one logical line
+                StringBuilder sb = new StringBuilder();
+                for (int k = r; k <= ge; k++) sb.append(line(k));
+                int len = sb.length();
+                while (len > 0 && sb.charAt(len - 1) == ' ') len--; // trailing blanks are not content
+                logWriter.write(sb.substring(0, len));
+                logWriter.write("\r\n");
+                r = ge + 1;
+            }
+            sessionLogRow = r;
+            logWriter.flush();
+        } catch (Exception ignored) {}
+    }
+
+    /** Log the remaining, possibly incomplete current logical line when logging stops. */
+    private void sessionLogDumpRest() {
+        if (!logging || logWriter == null || inAltScreen) return;
+        int end = Math.min(curRow, buffer.size() - 1);
+        while (end < buffer.size() - 1 && isWrapped(end)) end++; // include the whole current logical line
+        sessionLogFinalize(end);
+    }
+
+    /** Open the SFTP file transfer dialog. */
+    private void openSftpDialog() {
+        if (session == null || !session.isOpen()) {
+            return;
+        }
+        try {
+            org.apache.sshd.sftp.client.SftpClient sftpClient = SshUtil.createSftpClient(session);
+            com.dbboys.ui.controller.SftpDialogController.showDialog(
+                    canvas.getScene().getWindow(), sftpClient, sshConnect);
+        } catch (Exception ex) {
+            log.error("Failed to open SFTP dialog", ex);
+            com.dbboys.ui.notification.NotificationUtil.showMainNotification(
+                    "SFTP: " + ex.getMessage());
+        }
     }
 
     private void saveCursor() {
@@ -662,10 +1024,14 @@ public class SshTabController {
         savedSgrUnderline = sgrUnderline;
     }
     private void restoreCursor() {
-        curCol = savedCurCol; curRow = savedCurRow;
+        // Clamp to current bounds: the saved position may come from a different
+        // grid (e.g. saved in the alt screen before a font/window resize)
+        curCol = clamp(savedCurCol, 0, Math.max(0, cols - 1));
+        curRow = clamp(savedCurRow, 0, Math.max(0, buffer.size() - 1));
         sgrFg = savedSgrFg; sgrBg = savedSgrBg;
         sgrReverse = savedSgrReverse; sgrBold = savedSgrBold;
         sgrUnderline = savedSgrUnderline;
+        pendingWrap = false;
         ensureBuf(curRow);
     }
     private void reverseIndex() {
@@ -676,30 +1042,80 @@ public class SshTabController {
         }
     }
     private void indexDown() {
-        int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
+        int bottom = scrollBottom >= 0 ? scrollBottom : pageTop() + rows - 1;
         if (curRow == bottom) {
-            deleteLine(scrollTop, bottom);
-            // fill new blank line at bottom
-            ensureBuf(bottom).clear();
+            scrollRegionUp(scrollTop, bottom);
         } else {
             curRow = Math.min(bottom, curRow + 1);
         }
     }
     private void insertLine(int at) {
         int bottom = scrollBottom >= 0 ? scrollBottom : scrollTop + rows - 1;
-        ensureBuf(bottom + 1);
-        buffer.add(at, new ArrayList<>());
-        if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
+        ensureBuf(bottom);
+        buffer.add(at, new Row());
+        if (logging && !inAltScreen && at <= sessionLogRow) sessionLogRow++;
+        if (buffer.size() > bottom + 1) { buffer.remove(bottom + 1); if (logging && !inAltScreen && bottom + 1 < sessionLogRow) sessionLogRow--; } // drop the line pushed past the margin
     }
-    private void deleteLine(int from, int to) {
-        if (from >= buffer.size()) return;
-        buffer.remove(from);
-        ensureBuf(to);
+    /** Scroll [top, bottom] up by one line: discard the top line and insert a blank
+     *  line at the bottom. Lines below the region are preserved (remove+clear would
+     *  clobber the first line below the region, e.g. vim's status line). */
+    private void scrollRegionUp(int top, int bottom) {
+        if (top < 0 || bottom < top || top >= buffer.size()) return;
+        buffer.remove(top);
+        if (logging && !inAltScreen && top < sessionLogRow) sessionLogRow--;
+        int addAt = Math.min(bottom, buffer.size());
+        buffer.add(addAt, new Row());
+        if (logging && !inAltScreen && addAt <= sessionLogRow) sessionLogRow++;
     }
     private void deleteLines(int from, int count) {
         for (int i = 0; i < count && from < buffer.size(); i++) {
             buffer.remove(from);
+            if (logging && !inAltScreen && from < sessionLogRow) sessionLogRow--;
         }
+    }
+    /** Exit the alternate screen (?1049l): restore the saved main buffer, cursor
+     *  and viewport. Also invoked on disconnect, so a full-screen app (nmon, vi)
+     *  still running when the connection drops does not hide the shell scrollback
+     *  — and its scrollbar — behind a stale alt-screen frame. */
+    private void exitAltScreen() {
+        if (!inAltScreen) return;
+        inAltScreen = false;
+        // Selection rows refer to the alt screen just discarded
+        selStartCol = selEndCol = selStartRow = selEndRow = -1;
+        if (altSavedBuffer != null) {
+            buffer.clear();
+            buffer.addAll(altSavedBuffer);
+            // Clamp the restored cursor: it may have been saved while
+            // pointing beyond the buffer end (stale-geometry CUP)
+            curCol = clamp(altSavedCurCol, 0, Math.max(0, cols - 1));
+            curRow = clamp(altSavedCurRow, 0, Math.max(0, buffer.size() - 1));
+            scrollOff = altSavedScrollOff;
+            altSavedBuffer = null;
+            pendingWrap = false; // alt-screen wrap state must not leak into the main buffer
+            wrapPendingEraseSuppress = false;
+            // Re-lay the restored content if the width changed in alt
+            if (cols != altSavedCols) reflowBuffer(cols);
+            // Always anchor the cursor to the end of the output and pin
+            // the viewport to the bottom. The position saved before the
+            // switch may have been moved by the app's stale-geometry
+            // cleanup sequences (nmon emits a pre-resize CUP between
+            // ?1049l and ?1049h on SIGWINCH), which would otherwise
+            // strand the shell prompt mid-buffer with stale rows below.
+            curRow = Math.max(0, buffer.size() - 1);
+            curCol = 0;
+            scrollLock = false;
+            scrollOff = Math.max(0, buffer.size() - rows);
+            // Re-anchor the DECSC/DECRC slots to the restored cursor:
+            // a position saved before the screen switch is meaningless
+            // after the buffer has been replaced (and possibly reflowed),
+            // and would otherwise yank the cursor back to a stale row
+            savedCurCol = curCol;
+            savedCurRow = curRow;
+        }
+        scrollTop = 0; scrollBottom = -1;
+        // The main buffer was replaced wholesale while away: re-anchor the
+        // session-log mark to the restored cursor line instead of a stale index
+        if (logging) sessionLogRow = Math.max(0, logicalLineStart(curRow));
     }
     private int csi(String s, int p, int e) {
         int st = p;
@@ -716,39 +1132,42 @@ public class SshTabController {
                         case 'h': case 'l':
                             if (ps.equals("25")) { cursorShown = (c == 'h'); break; }
                             if (ps.equals("1")) { cursorKeysApp = (c == 'h'); break; }
+                            if (ps.equals("7")) { decawm = (c == 'h'); break; } // DECAWM auto-wrap
                             // DECSET ?1049h/?1049l -- alternate screen buffer
                             if (ps.equals("1049")) {
                                 if (c == 'h') {
                                     // Save current buffer and SGR state
                                     altSavedBuffer = new ArrayList<>(buffer.size());
                                     for (List<Cell> row : buffer) {
-                                        List<Cell> savedRow = new ArrayList<>(row.size());
+                                        Row savedRow = new Row();
+                                        savedRow.wrapped = row instanceof Row && ((Row) row).wrapped;
                                         for (Cell cl : row) savedRow.add(cl.copy());
                                         altSavedBuffer.add(savedRow);
                                     }
                                     altSavedCurCol = curCol; altSavedCurRow = curRow;
                                     altSavedScrollOff = scrollOff;
+                                    altSavedCols = cols; altSavedRows = rows;
                                     inAltScreen = true;
-                                    buffer.clear(); buffer.add(new ArrayList<>());
+                                    buffer.clear(); buffer.add(new Row());
                                     curCol = curRow = scrollOff = 0;
+                                    pendingWrap = false; // main-buffer wrap state must not leak into the alt screen
+                                    wrapPendingEraseSuppress = false;
+                                    // DECRC/SCORC inside the alt screen without a prior DECSC
+                                    // goes to home, not to stale main-screen coordinates
+                                    savedCurCol = 0; savedCurRow = 0;
+                                    scrollLock = false; // alt screen has no user scrollback
                                     // Lock scroll region to the visible area in alt screen
                                     scrollTop = 0; scrollBottom = rows - 1;
+                                    // Selection rows refer to the main screen, not the new alt page
+                                    selStartCol = selEndCol = selStartRow = selEndRow = -1;
                                 } else {
                                     // Restore saved buffer
-                                    if (altSavedBuffer != null) {
-                                        buffer.clear();
-                                        buffer.addAll(altSavedBuffer);
-                                        curCol = altSavedCurCol; curRow = altSavedCurRow;
-                                        scrollOff = altSavedScrollOff;
-                                        altSavedBuffer = null;
-                                    }
-                                    inAltScreen = false;
-                                    scrollTop = 0; scrollBottom = -1;
+                                    exitAltScreen();
                                 }
                                 break;
                             }
                             break;
-                        case 'r': // DECSTBM 闂?handled below in standard CSI
+                        case 'r': // DECSTBM ???handled below in standard CSI
                             if (inAltScreen && ps.isEmpty()) {
                                 // ?r without params: restore default scroll region
                                 scrollTop = 0; scrollBottom = rows - 1;
@@ -772,51 +1191,68 @@ public class SshTabController {
                         if (ps.isEmpty() || ps.equals("0")) eraseEOD();
                         else if (ps.equals("1")) eraseDOS();
                         else if (ps.equals("2")) {
-                            clearBuffer();
-                            scrollOff = 0;
+                            if (inAltScreen) {
+                                clearBuffer();
+                                scrollOff = 0;
+                            } else {
+                                // xterm semantics: ED 2 erases the visible page only,
+                                // scrollback history above the page is preserved
+                                eraseVisiblePage();
+                            }
                             if (!inAltScreen) {
                                 scrollTop = 0; scrollBottom = -1; originMode = false;
                             }
                         }
                         break;
                     case 'm': sgr(ps); break;
-                    case 'A': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
-                    case 'B': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
-                    case 'C': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.min(cols - 1, curCol + n); } break;
-                    case 'D': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.max(0, curCol - n); } break;
-                    case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
-                    case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
-                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curCol = Math.max(0, n - 1); } break;
-                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); curRow = Math.max(0, n - 1); break; }
+                    case 'A': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
+                    case 'B': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
+                    case 'C': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.min(cols - 1, curCol + n); } break;
+                    case 'D': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.max(0, curCol - n); } break;
+                    case 'E': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; int maxR = buffer.isEmpty() ? 0 : buffer.size() - 1; curRow = Math.min(maxR, curRow + n); } break;
+                    case 'F': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = 0; curRow = Math.max(originMode ? scrollTop : 0, curRow - n); } break;
+                    case 'G': case '`': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curCol = Math.min(cols - 1, Math.max(0, n - 1)); } break;
+                    case 'd': { int n = ps.isEmpty() ? 1 : Integer.parseInt(ps); pendingWrap = false; curRow = clamp((inAltScreen ? 0 : pageTop()) + n - 1, 0, (inAltScreen ? 0 : pageTop()) + rows - 1); break; }
                     case 'H': case 'f': {
                         String[] xy = ps.split(";");
                         int row = xy.length > 0 && !xy[0].isEmpty() ? Integer.parseInt(xy[0]) - 1 : 0;
                         int col = xy.length > 1 && !xy[1].isEmpty() ? Integer.parseInt(xy[1]) - 1 : 0;
+                        boolean home = (row == 0 && col == 0);
                         if (originMode && row >= 0) row += scrollTop;
-                        curRow = Math.max(0, row);
-                        curCol = Math.max(0, col);
-                        // Only reset viewport on home in normal screen (not alt screen)
-                        if (row == 0 && col == 0) { pendingWrap = false; }
-                        if (row == 0 && col == 0 && !inAltScreen) { scrollOff = 0; scrollLock = false; }
+                        else if (!inAltScreen) row += pageTop(); // CUP addresses the visible page, not the scrollback (xterm semantics)
+                        // Clamp into the visible screen: after SIGWINCH an app may still
+                        // address rows of the previous geometry (e.g. nmon's exit CUP),
+                        // which would otherwise land the cursor beyond the buffer
+                        curRow = clamp(row, 0, (inAltScreen ? 0 : pageTop()) + rows - 1);
+                        curCol = clamp(col, 0, cols - 1);
+                        pendingWrap = false;
+                        // On home in normal screen, snap the viewport back to the page bottom
+                        if (home && !inAltScreen) { scrollOff = Math.max(0, buffer.size() - rows); scrollLock = false; }
                     } break;
                     case 'L': { // insert lines at current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         int insAt = Math.max(scrollTop, curRow);
                         for (int i = 0; i < n; i++) {
-                            ensureBuf(bottom + 1);
-                            buffer.add(insAt, new ArrayList<>());
-                            if (buffer.size() > bottom + 2) buffer.remove(bottom + 1);
+                            ensureBuf(bottom);
+                            buffer.add(insAt, new Row());
+                            if (buffer.size() > bottom + 1) buffer.remove(bottom + 1); // drop the line pushed past the margin
                         }
                     } break;
                     case 'M': { // delete lines from current cursor row within scroll region
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
                         int delFrom = Math.max(scrollTop, curRow);
+                        int removed = 0;
                         for (int i = 0; i < n && delFrom < buffer.size() && delFrom <= bottom; i++) {
                             buffer.remove(delFrom);
+                            removed++;
                         }
-                        for (int i = buffer.size(); i <= bottom; i++) buffer.add(new ArrayList<>());
+                        // Blanks go at the region bottom: re-insert them just ahead of
+                        // the first line below the region, so those lines end up back
+                        // at their original rows instead of being pulled into the region
+                        int insAt = Math.min(bottom + 1 - removed, buffer.size());
+                        for (int i = 0; i < removed; i++) buffer.add(insAt + i, new Row());
                     } break;
                     case 'P': { // delete characters
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
@@ -841,31 +1277,42 @@ public class SshTabController {
                     } break;
                     case 'Z': { // cursor backward tab (CBT)
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
+                        pendingWrap = false;
                         for (int i = 0; i < n; i++) curCol = Math.max(0, ((curCol - 1) / 8) * 8);
                     } break;
-                    case 'S': { // scroll up
+                    case 'b': { // REP: repeat the preceding graphic character n times
+                        int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
+                        int prevCol = pendingWrap ? cols - 1 : curCol - 1;
+                        char pc = (prevCol >= 0 && curRow < buffer.size() && prevCol < buffer.get(curRow).size())
+                                ? buffer.get(curRow).get(prevCol).ch : ' ';
+                        for (int i = 0; i < n; i++) put(pc);
+                    } break;
+                    case 'S': { // scroll up (SU): region content moves up, blank lines appear at the bottom
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n; i3++) { buffer.add(top, new ArrayList<>()); if (buffer.size() > bottom + 2) buffer.remove(bottom + 1); }
+                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && top < buffer.size()) { buffer.remove(top); buffer.add(Math.min(bottom, buffer.size()), new Row()); } }
                     } break;
-                    case 'T': { // scroll down (SD)
+                    case 'T': { // scroll down (SD): region content moves down, blank lines appear at the top
                         int n = ps.isEmpty() ? 1 : Integer.parseInt(ps);
                         int top = scrollTop, bottom = scrollBottom < 0 ? Math.max(0, buffer.size() - 1) : scrollBottom;
-                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top) { buffer.remove(bottom); buffer.add(top, new ArrayList<>()); } }
+                        for (int i3 = 0; i3 < n; i3++) { if (bottom >= top && bottom < buffer.size()) { buffer.remove(bottom); buffer.add(top, new Row()); } }
                     } break;
-                    case 'r': { // DECSTBM 闂?set scroll region
+                    case 'r': { // DECSTBM ???set scroll region (page-relative, like xterm)
                         String[] sr_ = ps.split(";");
-                        scrollTop = sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0;
-                        scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? Integer.parseInt(sr_[1]) - 1 : -1;
+                        int base = inAltScreen ? 0 : pageTop();
+                        int regionMax = base + rows - 1; // clamp the region to the current screen
+                        scrollTop = Math.min(base + (sr_.length > 0 && !sr_[0].isEmpty() ? Math.max(0, Integer.parseInt(sr_[0]) - 1) : 0), regionMax);
+                        scrollBottom = sr_.length > 1 && !sr_[1].isEmpty() ? Math.min(base + Integer.parseInt(sr_[1]) - 1, regionMax) : -1;
                         curRow = scrollTop; curCol = 0;
+                        pendingWrap = false;
                     } break;
                     case 'h': case 'l':
                         if (ps.equals("6")) originMode = (c == 'h'); // DECOM
                         break;
                     case 's': saveCursor(); break;
                     case 'u': restoreCursor(); break;
-                    case 'n': break; // DSR 闂?ignore
-                    case 'q': break; // DECSCUSR 闂?ignore cursor style
+                    case 'n': break; // DSR ???ignore
+                    case 'q': break; // DECSCUSR ???ignore cursor style
                 }
                 return p;
             } else {
@@ -886,18 +1333,28 @@ public class SshTabController {
         return -1;
     }
     private void clearBuffer() {
-        buffer.clear(); buffer.add(new ArrayList<>());
+        buffer.clear(); buffer.add(new Row());
         curCol = curRow = 0;
+        pendingWrap = false;
+        selStartCol = selEndCol = selStartRow = selEndRow = -1; // selection no longer maps to rows
+    }
+    /** Erase the visible page (the last {@code rows} lines), preserving scrollback history. */
+    private void eraseVisiblePage() {
+        for (int r = pageTop(); r < buffer.size(); r++) buffer.get(r).clear();
+        pendingWrap = false;
     }
     private void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
-        List<Cell> ln = ensureBuf(curRow);
+        if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        List<Cell> ln = buffer.get(curRow);
         for (int i = curCol; i < ln.size(); i++) ln.get(i).reset();
     }
     private void eraseBOL() {
-        List<Cell> ln = ensureBuf(curRow);
+        if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        List<Cell> ln = buffer.get(curRow);
+        // Blank the cells in place: removing them would shift the rest of the line left
         int end = Math.min(curCol, ln.size() - 1);
-        for (int i = 0; i <= end && !ln.isEmpty(); i++) ln.remove(0);
+        for (int i = 0; i <= end; i++) ln.get(i).reset();
     }
     private void eraseLine() {
         if (curRow < buffer.size()) buffer.get(curRow).clear();
@@ -1173,15 +1630,16 @@ public class SshTabController {
         });
         canvas.setOnContextMenuRequested(e -> {
             // Right-click: paste from clipboard (\n -> \r for terminal)
-            if (shellChannel == null || !shellChannel.isConnected()) { e.consume(); return; }
+            if (shellChannel == null || !shellChannel.isOpen()) { e.consume(); return; }
             Clipboard cb = Clipboard.getSystemClipboard();
             if (cb.hasString()) {
                 String text = cb.getString();
                 if (text != null && !text.isEmpty()) {
                     // Replace \n with \r as terminals expect \r for Enter
                     text = text.replace("\n", "\r");
+                    clearSelection(); // pasting invalidates the stale selection
                     try {
-                        OutputStream os = shellChannel.getOutputStream();
+                        OutputStream os = shellChannel.getInvertedIn();
                         os.write(text.getBytes(terminalCharset()));
                         os.flush();
                     } catch (Exception ignored) {}
@@ -1190,11 +1648,23 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnKeyPressed(e -> {
-            // Disconnected 閳?Enter triggers reconnect
-            if (shellChannel == null || !shellChannel.isConnected()) {
+            // Font zoom: Ctrl + '+' / Ctrl + '-' (works whether connected or not)
+            if (e.isControlDown() && !e.isAltDown()) {
+                if (isZoomInKey(e)) { adjustFontSize(FONT_SIZE_STEP); e.consume(); return; }
+                if (isZoomOutKey(e)) { adjustFontSize(-FONT_SIZE_STEP); e.consume(); return; }
+            }
+            // Disconnected ???Enter triggers reconnect
+            if (shellChannel == null || !shellChannel.isOpen()) {
                 if (e.getCode() == KeyCode.ENTER) {
                     doConnect();
                 }
+                e.consume();
+                return;
+            }
+            // During a ZModem session the stream belongs to the transfer engine;
+            // swallow all keys except Ctrl+C (cancel transfer)
+            if (zmodemActive) {
+                if (e.isControlDown() && e.getCode() == KeyCode.C) transferCancelFlag = true;
                 e.consume();
                 return;
             }
@@ -1202,8 +1672,9 @@ public class SshTabController {
             jumpToBottom();
             byte[] b = key(e);
             if (b != null) {
+                clearSelection(); // any terminal input invalidates the stale selection
                 try {
-                    OutputStream os = shellChannel.getOutputStream();
+                    OutputStream os = shellChannel.getInvertedIn();
                     os.write(b);
                     os.flush();
                 } catch (Exception ignored) {}
@@ -1211,25 +1682,19 @@ public class SshTabController {
             }
         });
         canvas.setOnKeyTyped(e -> {
-            if (shellChannel == null || !shellChannel.isConnected()) return;
+            if (shellChannel == null || !shellChannel.isOpen()) return;
+            if (zmodemActive) { e.consume(); return; } // transfer in progress: no terminal input
+            if (e.isControlDown() || e.isAltDown()) return; // zoom/modified keys are not text input
             String ch = e.getCharacter();
             if (ch == null || ch.isEmpty()) return;
             char c = ch.charAt(0);
             jumpToBottom();
+            clearSelection(); // typed input invalidates the stale selection
             try {
-                OutputStream os = shellChannel.getOutputStream();
+                OutputStream os = shellChannel.getInvertedIn();
                 if (c == '\r' || c == '\n') {
-                    String cmd = inputBuffer.toString().trim();
-                    if (cmd.startsWith("sz ")) {
-                        os.write(0x03); os.write(10); os.flush();
-                        handleSzDownload(cmd.substring(3).trim());
-                    } else if (cmd.equals("rz")) {
-                        os.write(0x03); os.write(10); os.flush();
-                        handleRzUpload();
-                    } else {
-                        os.write(c);
-                        os.flush();
-                    }
+                    os.write(c);
+                    os.flush();
                     inputBuffer.setLength(0);
                 } else if (c >= 0x20 && c != 0x7F) {
                     inputBuffer.append(c);
@@ -1240,11 +1705,18 @@ public class SshTabController {
             e.consume();
         });
         canvas.setOnScroll(e -> {
+            if (e.isControlDown()) { // Ctrl + wheel: zoom font
+                double dy = e.getDeltaY();
+                if (dy != 0) adjustFontSize(dy > 0 ? FONT_SIZE_STEP : -FONT_SIZE_STEP);
+                e.consume();
+                return;
+            }
+            if (inAltScreen) { e.consume(); return; } // alt screen has no scrollback to scroll
             int dir = -(int)Math.signum(e.getDeltaY());
             if (dir != 0) {
                 int maxOff = Math.max(0, buffer.size() - rows);
                 scrollOff = clamp(scrollOff + dir, 0, maxOff);
-                scrollLock = true;
+                scrollLock = scrollOff < maxOff; // scrolling back to the bottom releases the lock
                 draw();
                 fireScrollChanged();
             }
@@ -1305,7 +1777,7 @@ public class SshTabController {
                 return null;
             }
             switch (k) {
-                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x03};
+                case A:return new byte[]{0x01}; case B:return new byte[]{0x02}; case C:inputBuffer.setLength(0);transferCancelFlag=true;return new byte[]{0x03};
                 case D:return new byte[]{0x04}; case E:return new byte[]{0x05};
                 case F:return new byte[]{0x06}; case G:return new byte[]{0x07};
                 case H:return new byte[]{0x08}; case J:return new byte[]{0x0A};
@@ -1313,7 +1785,7 @@ public class SshTabController {
                 case N:return new byte[]{0x0E}; case O:return new byte[]{0x0F};
                 case P:return new byte[]{0x10}; case Q:return new byte[]{0x11};
                 case R:return new byte[]{0x12}; case S:return new byte[]{0x13};
-                case T:return new byte[]{0x14}; case U:inputBuffer.setLength(0);sftpCancelFlag=true;return new byte[]{0x15};
+                case T:return new byte[]{0x14}; case U:inputBuffer.setLength(0);transferCancelFlag=true;return new byte[]{0x15};
                 case W:return new byte[]{0x17}; case X:return new byte[]{0x18};
                 case Y:return new byte[]{0x19}; case Z:return new byte[]{0x1A};
                 default:return null;
@@ -1373,160 +1845,260 @@ public class SshTabController {
     /** Write to terminal without trailing newline (for in-place progress). */
     private void progressStatus(String s) {
         for (char c : s.toCharArray()) {
-            if (c == '\n') { if (pendingWrap) pendingWrap = false; else nl(); }
-            else if (c == '\r') curCol = 0;
+            if (c == '\n') { pendingWrap = false; nl(); }
+            else if (c == '\r') { curCol = 0; pendingWrap = false; }
             else put(c);
         }
         requestDraw();
     }
 
-    /** Handle sz: download file via SFTP. */
-    private void handleSzDownload(String remotePath) {
-        AppExecutor.runAsync(() -> {
+    // ==================== ZModem (sz/rz) file transfer ====================
+    // Beacon hex header: '*','*',0x18,'B','0', then the type digit 鈥?
+    // '0' = ZRQINIT sent by sz (download), '1' = ZRINIT sent by rz (upload).
+    private static final byte[] ZMODEM_BEACON_SIG = {0x2A, 0x2A, 0x18, 0x42, 0x30};
+
+    private static int indexOfZmodemBeacon(byte[] d, int len) {
+        outer:
+        for (int i = 0; i + ZMODEM_BEACON_SIG.length + 1 <= len; i++) {
+            if (d[i] != ZMODEM_BEACON_SIG[0]) continue;
+            for (int j = 1; j < ZMODEM_BEACON_SIG.length; j++) {
+                if (d[i + j] != ZMODEM_BEACON_SIG[j]) continue outer;
+            }
+            int typeDigit = d[i + ZMODEM_BEACON_SIG.length];
+            if (typeDigit == '0' || typeDigit == '1') return i;
+        }
+        return -1;
+    }
+
+    /** Length of the trailing bytes that form a proper prefix of the beacon signature (0..5). */
+    private static int zmodemBeaconTail(byte[] d, int len) {
+        int max = Math.min(ZMODEM_BEACON_SIG.length, len);
+        for (int k = max; k > 0; k--) {
+            boolean match = true;
+            for (int j = 0; j < k; j++) {
+                if (d[len - k + j] != ZMODEM_BEACON_SIG[j]) { match = false; break; }
+            }
+            if (match) return k;
+        }
+        return 0;
+    }
+
+    /** Log + decode + render terminal output (called on the reader thread). */
+    private void feedTerminal(byte[] data, int off, int len) {
+        if (len <= 0) return;
+        // Session logging happens on the FX thread, from the rendered screen
+        // buffer (see sessionLogFinalize), not from this raw byte stream.
+        String out = decodeStream(data, off, len);
+        if (out.isEmpty()) return; // chunk ended inside a split multi-byte char
+        Platform.runLater(() -> write(out));
+    }
+
+    /** Incrementally decode the byte stream. Bytes of an incomplete trailing
+     *  multi-byte sequence stay buffered inside the decoder and are completed
+     *  by the next chunk — this is what keeps GB18030/UTF-8 CJK text intact
+     *  across read boundaries. */
+    private String decodeStream(byte[] data, int off, int len) {
+        java.nio.charset.Charset cs = terminalCharset();
+        java.nio.charset.CharsetDecoder dec = streamDecoder;
+        if (dec == null || !dec.charset().equals(cs)) {
+            dec = cs.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPLACE)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPLACE);
+            streamDecoder = dec;
+        }
+        StringBuilder sb = new StringBuilder(len + 8);
+        char[] tmp = new char[4096];
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(data, off, len);
+        java.nio.CharBuffer cb = java.nio.CharBuffer.wrap(tmp);
+        for (;;) {
+            java.nio.charset.CoderResult cr = dec.decode(bb, cb, false);
+            sb.append(tmp, 0, cb.position());
+            cb.clear();
+            if (cr.isUnderflow()) break; // done; a trailing partial char stays in the decoder
+            if (!cr.isOverflow() && !cr.isMalformed() && !cr.isUnmappable()) break; // defensive
+        }
+        return sb.toString();
+    }
+
+    /** Run a full ZModem session on the reader thread; binary bytes bypass the terminal renderer.
+     * @param dir 1=upload (remote rz), 2=download (remote sz) */
+    private void runZmodemSession(InputStream in, byte[] prefix, int dir) {
+        final String dirLabel = (dir == 2) ? "download" : "upload";
+        zmodemActive = true;
+        transferCancelFlag = false;
+        transferCancelledByUser = false;
+        progressStartMs = 0;
+        lastProgressMs = 0;
+        ZModemSession zs = new ZModemSession(in, shellChannel.getInvertedIn(), prefix, zmodemHandler);
+        try {
+            if (dir == 2) zs.receive(); else zs.send();
+            // user cancelled the session via Ctrl+C/Ctrl+U or file-picker dialog
+            if (transferCancelFlag || transferCancelledByUser) {
+                cleanTempDownloads();
+                Platform.runLater(() -> statusRed("\r\nZModem " + dirLabel + " cancelled\r\n"));
+            } else {
+                commitTempDownloads();
+                Platform.runLater(() -> statusGreen("\r\nZModem " + dirLabel + " finished\r\n"));
+            }
+        } catch (Exception ex) {
+            cleanTempDownloads();
+            log.warn("ZModem session ended: {}", ex.toString());
+            String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            Platform.runLater(() -> statusRed("\r\nZModem: " + m + "\r\n"));
+        } finally {
+            // Drain residual bytes (echoed ZRINIT/ZRQINIT headers, stray protocol bytes)
+            // that would otherwise be rendered as garbage or trigger a spurious
+            // ZModem beacon detection on the next read.
+            // drainQuiet reads and discards in-flight data until ~800 ms of silence,
+            // then returns.  The shell prompt is eaten in the process, so we nudge the
+            // remote shell with a newline so it reprints a clean prompt.
+            zs.drainQuiet();
             try {
-                Thread.sleep(200);
-                Platform.runLater(() -> {
+                OutputStream nos = shellChannel.getInvertedIn();
+                if (nos != null) {
+                    nos.write('\n');
+                    nos.flush();
+                }
+            } catch (Exception ignored) {
+                // channel may already be gone
+            }
+            zmodemActive = false;
+        }
+    }
+
+    /** Rename all .temp download files to their final names (success path). */
+    private void commitTempDownloads() {
+        synchronized (pendingTempDownloads) {
+            for (java.util.Map.Entry<File, File> e : pendingTempDownloads.entrySet()) {
+                File temp = e.getKey();
+                File real = e.getValue();
+                if (temp.exists()) {
+                    if (real.exists()) real.delete();
+                    if (temp.renameTo(real)) {
+                        log.info("renamed temp {} to {}", temp.getName(), real.getName());
+                    } else {
+                        log.warn("failed to rename temp {} to {}", temp, real);
+                    }
+                }
+            }
+            pendingTempDownloads.clear();
+        }
+    }
+
+    /** Delete all temp files (cancel/error path). */
+    private void cleanTempDownloads() {
+        synchronized (pendingTempDownloads) {
+            for (File temp : pendingTempDownloads.keySet()) {
+                if (temp.exists()) {
+                    if (temp.delete()) {
+                        log.info("deleted temp file {}", temp);
+                    } else {
+                        log.warn("failed to delete temp file {}", temp);
+                    }
+                }
+            }
+            pendingTempDownloads.clear();
+        }
+    }
+
+    private File lastTransferDir = new File(System.getProperty("user.home"), "Desktop");
+    /** Maps .temp download files to their final names; renamed on success, deleted on cancel/error. */
+    private final java.util.Map<File, File> pendingTempDownloads = new java.util.LinkedHashMap<>();
+    private volatile long progressStartMs;
+    private volatile long lastProgressMs;
+
+    private final ZModemHandler zmodemHandler = new ZModemHandler() {
+        @Override
+        public File chooseSaveFile(String remoteName, long size) {
+            java.util.concurrent.atomic.AtomicReference<File> ref = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            Platform.runLater(() -> {
+                try {
+                    log.info("ZModem: showing save dialog for {}", remoteName);
                     javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
                     fc.setTitle("Save file");
-                    String name = remotePath.replace('\\', '/');
-                    int idx = name.lastIndexOf('/');
-                    if (idx >= 0) name = name.substring(idx + 1);
-                    fc.setInitialFileName(name);
-                    File file = fc.showSaveDialog(canvas.getScene().getWindow());
-                    if (file != null) {
+                    fc.setInitialFileName(remoteName);
+                    if (lastTransferDir != null && lastTransferDir.isDirectory()) fc.setInitialDirectory(lastTransferDir);
+                    File f = fc.showSaveDialog(canvas.getScene().getWindow());
+                    log.info("ZModem: save dialog closed, result={}", f);
+                    if (f != null) {
+                        lastTransferDir = f.getParentFile();
+                        // write to .temp first; rename on success, delete on cancel/error
+                        File tempFile = new File(f.getParentFile(), f.getName() + ".temp");
+                        synchronized (pendingTempDownloads) { pendingTempDownloads.put(tempFile, f); }
+                        ref.set(tempFile);
                         canvas.requestFocus();
-                        doSftpDownload(remotePath, file);
+                    } else {
+                        transferCancelledByUser = true;
+                        ref.set(null);
                     }
-                });
-            } catch (Exception ex) {
-                log.error("SFTP download failed", ex);
-                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
-            }
-        });
-    }
-    private void handleRzUpload() {
-        Platform.runLater(() -> {
-            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
-            fc.setTitle("Select file to upload");
-            File file = fc.showOpenDialog(canvas.getScene().getWindow());
-            if (file != null) {
+                } finally {
+                    latch.countDown();
+                }
+            });
+            try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return ref.get();
+        }
+
+        @Override
+        public List<File> chooseUploadFiles() {
+            java.util.concurrent.atomic.AtomicReference<List<File>> ref = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            Platform.runLater(() -> {
+                try {
+                    log.info("ZModem: showing upload file dialog");
+                    javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+                    fc.setTitle("Select files to upload");
+                    if (lastTransferDir != null && lastTransferDir.isDirectory()) fc.setInitialDirectory(lastTransferDir);
+                    List<File> files = fc.showOpenMultipleDialog(canvas.getScene().getWindow());
+                    log.info("ZModem: upload dialog closed, files={}", files == null ? 0 : files.size());
+                    if (files != null && !files.isEmpty()) {
+                        lastTransferDir = files.get(0).getParentFile();
                         canvas.requestFocus();
-                AppExecutor.runAsync(() -> {
-                    try {
-                        Thread.sleep(200);
-                        ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
-                        sftp.connect();
-                        String targetDir = sftp.pwd();
-                        sftp.disconnect();
-                        doSftpUpload(file, targetDir + "/" + file.getName());
-                    } catch (Exception ex) {
-                        log.error("SFTP upload failed", ex);
-                        Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
+                    } else {
+                        transferCancelledByUser = true;
                     }
-                });
-            }
-        });
-    }
-    private void doSftpDownload(String remotePath, File localFile) {
-        sftpCancelFlag = false;
-        try {
-            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
-            sftp.connect();
-            try {
-                String target = remotePath;
-                if (!target.startsWith("/")) target = sftp.pwd() + "/" + target;
-                final String tgt = target;
-                final OutputStream shellOut = shellChannel.getOutputStream();
-                sftp.get(tgt, localFile.getAbsolutePath(), new SftpProgressMonitor() {
-                    private long max;
-                    private long cnt;
-                    private int lastPct;
-                    private long startMs;
-                    public void init(int op, String src, String d, long m) { max = m; cnt = 0; lastPct = 0; startMs = System.currentTimeMillis(); sftpCancelFlag = false; progressStatus("\r" + localFile.getName() + "\r"); }
-                    public boolean count(long c) {
-                        if (sftpCancelFlag) return false;
-                        cnt += c;
-                        if (max <= 0) return true;
-                        int pct = (int)(cnt * 100 / max);
-                        if (pct < lastPct + 10 && cnt < max) return true;
-                        lastPct = pct;
-                        long elapsed = System.currentTimeMillis() - startMs;
-                        if (elapsed < 100 && cnt < max) return true;
-                        long bps = elapsed > 0 ? cnt * 1000 / elapsed : 0;
-                        String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
-                        long rem = max - cnt;
-                        String eta = bps > 0 ? " ETA:" + (rem / bps) + "s" : "";
-                        String msg = "\r" + localFile.getName() + ": " + pct + "% " + speed + eta;
-                        while (msg.length() < 80) msg += " ";
-                        progressStatus(msg);
-                        return true;
-                    }
-                    public void end() {
-                        progressStatus("\r\n");
-                        try { if (shellOut != null) { shellOut.write(13); shellOut.flush(); } } catch (Exception e2) { log.warn("shellOut write failed", e2); }
-                    }
-                });
-            } finally {
-                sftp.disconnect();
-            }
-        } catch (Exception ex) {
-            if (!sftpCancelFlag) {
-                log.error("SFTP download failed", ex);
-                Platform.runLater(() -> statusRed("Download failed: " + ex.getMessage() + "\r\n"));
-            }
-            try { if (shellChannel != null && shellChannel.isConnected()) { shellChannel.getOutputStream().write(10); shellChannel.getOutputStream().flush(); } } catch (Exception e2) {}
+                    ref.set(files);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return ref.get();
         }
-    }
-    private void doSftpUpload(File localFile, String remotePath) {
-        sftpCancelFlag = false;
-        try {
-            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
-            sftp.connect();
-            try {
-                String target = remotePath;
-                if (!target.startsWith("/")) target = sftp.pwd() + "/" + target;
-                final String tgt = target;
-                final OutputStream shellOut = shellChannel.getOutputStream();
-                sftp.put(localFile.getAbsolutePath(), tgt, new SftpProgressMonitor() {
-                    private long max;
-                    private long cnt;
-                    private int lastPct;
-                    private long startMs;
-                    public void init(int op, String src, String d, long m) { max = m; cnt = 0; lastPct = 0; startMs = System.currentTimeMillis(); sftpCancelFlag = false; progressStatus("\r" + localFile.getName() + "\r"); }
-                    public boolean count(long c) {
-                        if (sftpCancelFlag) return false;
-                        cnt += c;
-                        if (max <= 0) return true;
-                        int pct = (int)(cnt * 100 / max);
-                        if (pct < lastPct + 10 && cnt < max) return true;
-                        lastPct = pct;
-                        long elapsed = System.currentTimeMillis() - startMs;
-                        if (elapsed < 100 && cnt < max) return true;
-                        long bps = elapsed > 0 ? cnt * 1000 / elapsed : 0;
-                        String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
-                        long rem = max - cnt;
-                        String eta = bps > 0 ? " ETA:" + (rem / bps) + "s" : "";
-                        String msg = "\r" + localFile.getName() + ": " + pct + "% " + speed + eta;
-                        while (msg.length() < 80) msg += " ";
-                        progressStatus(msg);
-                        return true;
-                    }
-                    public void end() {
-                        progressStatus("\r\n");
-                        try { if (shellOut != null) { shellOut.write(13); shellOut.flush(); } } catch (Exception e2) { log.warn("shellOut write failed", e2); }
-                    }
-                });
-            } finally {
-                sftp.disconnect();
+
+        @Override
+        public void onProgress(String name, long done, long total) {
+            long now = System.currentTimeMillis();
+            if (done == 0 || progressStartMs == 0) progressStartMs = now;
+            if (done < total && now - lastProgressMs < 100) return; // throttle UI updates
+            lastProgressMs = now;
+            String msg;
+            if (total > 0) {
+                int pct = (int) Math.min(100, done * 100 / total);
+                long elapsed = now - progressStartMs;
+                long bps = elapsed > 0 ? done * 1000 / elapsed : 0;
+                String speed = bps > 1048576 ? String.format("%.1fMB/s", bps / 1048576.0) : (bps > 1024 ? bps / 1024 + "KB/s" : bps + "B/s");
+                long rem = total - done;
+                String eta = bps > 0 && rem > 0 ? " ETA:" + (rem / bps) + "s" : "";
+                msg = "\r" + name + ": " + pct + "% " + speed + eta;
+            } else {
+                msg = "\r" + name + ": " + (done / 1024) + "KB";
             }
-        } catch (Exception ex) {
-            if (!sftpCancelFlag) {
-                log.error("SFTP upload failed", ex);
-                Platform.runLater(() -> statusRed("Upload failed: " + ex.getMessage() + "\r\n"));
-            }
-            try { if (shellChannel != null && shellChannel.isConnected()) { shellChannel.getOutputStream().write(10); shellChannel.getOutputStream().flush(); } } catch (Exception e2) {}
+            while (msg.length() < 80) msg += " ";
+            progressStatus(msg);
         }
-    }
+
+        @Override
+        public void onMessage(String message) {
+            Platform.runLater(() -> status(message));
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return transferCancelFlag;
+        }
+    };
 private static String stripContinuationChars(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
@@ -1561,48 +2133,6 @@ private static String stripContinuationChars(String s) {
         return sb.toString();
     }
 
-    /** Strip ANSI escape sequences from a string, returning clean visible text. */
-    private static String stripAnsi(String s) {
-        if (s == null || s.isEmpty()) return s;
-        StringBuilder sb = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == 0x1B) {
-                // ESC - skip the escape sequence
-                i++;
-                if (i >= s.length()) break;
-                c = s.charAt(i);
-                if (c == '[') {
-                    // CSI sequence: ESC [ params... finalChar
-                    i++;
-                    while (i < s.length()) {
-                        c = s.charAt(i);
-                        if (c >= '@' && c <= '~') break; // final char
-                        i++;
-                    }
-                } else if (c == ']') {
-                    // OSC sequence: ESC ] ... terminated by BEL or ST
-                    i++;
-                    while (i < s.length()) {
-                        c = s.charAt(i);
-                        if (c == 0x07) break; // BEL
-                        if (c == 0x1B && i + 1 < s.length() && s.charAt(i + 1) == '\\') break; // ST
-                        i++;
-                    }
-                } else if (c == '(' || c == ')') {
-                    // Charset selection: ESC ( <char>
-                    if (i + 1 < s.length()) i++; // skip the charset char
-                } else if (c == 'O') {
-                    // SS3: ESC O <char>
-                    if (i + 1 < s.length()) i++; // skip the key code
-                }
-                // else: single-char ESC command (7 8 M D E H c) - already consumed by i++
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
     /** Dump the current buffer content to log. */
     private void dumpBuffer() {
         StringBuilder sb = new StringBuilder();
@@ -1621,3 +2151,4 @@ private static String stripContinuationChars(String s) {
         //log.info(sb.toString());
     }
 }
+

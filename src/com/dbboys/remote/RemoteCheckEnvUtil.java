@@ -7,7 +7,6 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
-import com.jcraft.jsch.*;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.IntegerProperty;
@@ -174,7 +173,7 @@ public class RemoteCheckEnvUtil {
                                 try {
                                     remoteClient.connect(username, hostname, port, password, 5000);
                                     return null;
-                                } catch (JSchException e) {
+                                } catch (Exception e) {
                                     throw new Exception(I18n.t("remote.check.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
                                 }
                             }
@@ -417,7 +416,7 @@ public class RemoteCheckEnvUtil {
         AppExecutor.runTask(task);
     }
 
-    private static String executeCommand(String command) throws JSchException, IOException {
+    private static String executeCommand(String command) throws IOException {
         return remoteClient.executeCommand(command);
     }
 
@@ -472,11 +471,11 @@ public class RemoteCheckEnvUtil {
         });
     }
 
-    private static int executeCommandWithExitStatus(String command) throws JSchException, InterruptedException {
+    private static int executeCommandWithExitStatus(String command) throws IOException {
         return remoteClient.executeCommandWithExitStatus(command);
     }
 
-    private static boolean isCommandExists(String command) throws JSchException, InterruptedException {
+    private static boolean isCommandExists(String command) throws IOException {
         int exitStatus = executeCommandWithExitStatus("command -v " + command);
         return exitStatus == 0;
     }

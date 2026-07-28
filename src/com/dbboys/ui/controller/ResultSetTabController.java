@@ -360,11 +360,28 @@ public class ResultSetTabController {
         });
 
 
+        // JavaFX VirtualFlow 缺陷：内容总高度不足一屏（无需垂直滚动条）时，滚轮事件仍会推动
+        // 内部滚动位置，导致行被裁掉、滚动条消失。是否拦截不能按行数硬编码（面板高度变化时
+        // 行数阈值也会变），应判断垂直滚动条当前是否真的可滚动。
         resultSetTableView.addEventFilter(ScrollEvent.SCROLL, e -> {
-            if (resultSetTableView.getItems().size() <= 5 && e.getDeltaY() != 0) e.consume();
+            if (e.getDeltaY() == 0) return;
+            ScrollBar vbar = findVerticalScrollBar();
+            if (vbar == null || !vbar.isVisible() || vbar.getVisibleAmount() >= vbar.getMax()) {
+                e.consume();
+            }
         });
 
         setupResultSetContextMenu();
+    }
+
+    private ScrollBar findVerticalScrollBar() {
+        for (javafx.scene.Node node : resultSetTableView.lookupAll(".scroll-bar")) {
+            if (node instanceof ScrollBar bar
+                    && bar.getOrientation() == javafx.geometry.Orientation.VERTICAL) {
+                return bar;
+            }
+        }
+        return null;
     }
 
     private void setupResultSetContextMenu() {

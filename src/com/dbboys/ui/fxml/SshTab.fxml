@@ -19,6 +19,12 @@
         </Button>
         <Label fx:id="connectionLabel" />
         <Region HBox.hgrow="ALWAYS" />
+        <Button fx:id="sftpButton" styleClass="custom-button" focusTraversable="false">
+            <tooltip>
+                <Tooltip />
+            </tooltip>
+        </Button>
+        <Region prefWidth="10" />
         <CheckBox fx:id="logCheckBox" focusTraversable="false" />
         <Region prefWidth="10" />
         <Label fx:id="charsetLabel" />

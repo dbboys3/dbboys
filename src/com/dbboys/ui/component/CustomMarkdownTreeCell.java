@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
     private static final Logger log = LogManager.getLogger(CustomMarkdownTreeCell.class);
     private static final String TREE_CELL_DRAG_OVER_STYLE = "tree-cell-drag-over";
+    private static final String HOVER_STYLE_CLASS = "hover";
+    private boolean hovered;
     private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#fff");
     private static final String EXT_MD = "md";
     private static final String EXT_PDF = "pdf";
@@ -58,6 +60,21 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
         setOnDragOver(this::handleDragOver);
         setOnDragDropped(this::handleDragDropped);
         setOnDragExited(this::handleDragExited);
+
+        // 用程序化样式类代替 CSS :hover 伪类，避免 TreeView 展开/折叠时回收的 cell
+        // 因鼠标恰好位于其位置而闪现背景色
+        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_ENTERED, e -> {
+            if (!hovered && !isEmpty()) {
+                hovered = true;
+                getStyleClass().add(HOVER_STYLE_CLASS);
+            }
+        });
+        setOnMouseExited(e -> {
+            if (hovered) {
+                hovered = false;
+                getStyleClass().remove(HOVER_STYLE_CLASS);
+            }
+        });
     }
 
     @Override
@@ -65,6 +82,11 @@ public class CustomMarkdownTreeCell extends TreeCell<Markdown> {
         super.updateItem(markdown, empty);
 
         // --- 必要的清理（以防 cell 被重用） ---
+        // 清除 hover 状态，防止回收时背景色闪现
+        if (hovered) {
+            hovered = false;
+            getStyleClass().remove(HOVER_STYLE_CLASS);
+        }
         // 解除 text 绑定，清除图标、文本、拖拽样式
         try {
             textProperty().unbind();

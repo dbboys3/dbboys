@@ -127,8 +127,8 @@ public final class InformixRemoteProvider implements RemoteDatabaseProvider {
         fields.add(new RemoteInstallField(InformixRemoteFields.INFORMIX_PASSWORD, I18n.t("remote.install.cfg.informix_password.name", "informix用户密码"), RemotePasswordUtil.generateComplexPassword(), I18n.t("remote.install.cfg.informix_password.desc", "保持密码强度，部分系统如强度不够可能导致设置密码失败")));
         fields.add(new RemoteInstallField(InformixRemoteFields.INFORMIXDIR, "INFORMIXDIR", "/opt/informix", I18n.t("remote.install.cfg.informixdir.desc", "数据库软件安装路径，无特殊要求不修改")));
         fields.add(new RemoteInstallField(InformixRemoteFields.INFORMIXSERVER, "INFORMIXSERVER", "ifx01", I18n.t("remote.install.cfg.informixserver.desc", "数据库实例名，无特殊要求不修改")));
-        fields.add(new RemoteInstallField(InformixRemoteFields.DB_LOCALE, "DB_LOCALE", "zh_CN.utf8", I18n.t("remote.install.cfg.db_locale.desc", "默认字符集推荐utf8，如要兼容GBK使用zh_CN.gb18030-2000")));
-        fields.add(new RemoteInstallField(InformixRemoteFields.GL_USEGLU, "GL_USEGLU", "1", I18n.t("remote.install.cfg.gl_useglu.desc", "是否开启GLU，建议开启，0关闭")));
+        fields.add(new RemoteInstallField(InformixRemoteFields.DB_LOCALE, "DB_LOCALE", "en_US.819", I18n.t("remote.install.cfg.db_locale.desc", "默认字符集推荐utf8，如要兼容GBK使用zh_CN.gb18030-2000")));
+        fields.add(new RemoteInstallField(InformixRemoteFields.GL_USEGLU, "GL_USEGLU", "0", I18n.t("remote.install.cfg.gl_useglu.desc", "是否开启GLU，建议开启，0关闭")));
         fields.add(new RemoteInstallField(InformixRemoteFields.DATA_FILE_PATH, I18n.t("remote.install.cfg.data_file_path.name", "数据文件路径"), "$INFORMIXDIR/dbs", I18n.t("remote.install.cfg.data_file_path.desc", "如/data，路径必须存在，修改后相关空间大小根据空间可用量自动重新计算")));
         fields.add(new RemoteInstallField(InformixRemoteFields.ROOTSIZE, "ROOTSIZE", "1024000", I18n.t("remote.install.cfg.rootsize.desc", "根空间大小，建议不小于1G，固定值。")));
         fields.add(new RemoteInstallField(InformixRemoteFields.LISTEN_IP, I18n.t("remote.install.cfg.listen_ip.name", "监听IP"), "0.0.0.0", I18n.t("remote.install.cfg.listen_ip.desc", "默认监听所有IP，如无特殊要求不修改")));
