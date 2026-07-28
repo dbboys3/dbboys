@@ -42,7 +42,7 @@ public class SftpDialogController {
 
     private static final Logger log = LogManager.getLogger(SftpDialogController.class);
     private static final String TIME_FMT = "yyyy-MM-dd HH:mm:ss";
-    private static final int BUF = 4194304; // 4 MB
+    private static final int BUF = 262144; // 256 KB — only the counter-update granularity; throughput comes from sshd's own 1MB buffers + pipelined window
 
     // =========================== Models ===========================
 
@@ -60,7 +60,7 @@ public class SftpDialogController {
         enum Dir { UP, DOWN }
         final Dir dir;
         final String fileName;
-        final long totalBytes;
+        volatile long totalBytes; // 0 = unknown; filled in by a background scan for folder transfers
 
         volatile long transferred;
         volatile boolean cancelled;
@@ -99,7 +99,12 @@ public class SftpDialogController {
             Button cb = new Button("✖");
             cb.setFocusTraversable(false);
             cb.setStyle("-fx-font-size:10px;-fx-padding:0 3 0 3;-fx-text-fill:#e74c3c;");
-            cb.setOnAction(e -> cancelled = true);
+            cb.setOnAction(e -> {
+                cancelled = true;
+                // Instant feedback — the transfer thread only finalizes state after the in-flight chunk/close
+                cb.setDisable(true);
+                progressP.set(I18n.t("sftp.status.cancelling", "Cancelling..."));
+            });
             cancelP.set(cb);
         }
 
@@ -118,7 +123,9 @@ public class SftpDialogController {
             else                      sStr = bps + " B/s";
             lastSpeed = sStr;
             final double pct = totalBytes > 0 ? (int)(done * 100 / totalBytes) : 0;
-            String pStr = fmt(done) + " / " + (totalBytes > 0 ? fmt(totalBytes) : fmt(done)) + "  (" + (int)pct + "%)";
+            String pStr = totalBytes > 0
+                ? fmt(done) + " / " + fmt(totalBytes) + "  (" + (int)pct + "%)"
+                : fmt(done) + " / ..."; // total size still being scanned
 
             // ETA
             String etaStr;
@@ -134,7 +141,7 @@ public class SftpDialogController {
 
             Platform.runLater(() -> {
                 progressP.set(pStr);
-                sizeP.set(totalBytes > 0 ? fmt(totalBytes) : fmt(done));
+                sizeP.set(totalBytes > 0 ? fmt(totalBytes) : "...");
                 speedP.set(sStr);
                 elapsedP.set(eStr);
                 etaP.set(etaStr);
@@ -156,6 +163,7 @@ public class SftpDialogController {
 
         void cancel() {
             cancelled = true;
+            if (endMs != 0) return; // already finalized — cancel fires at loop break, then again after stream close
             endMs = System.currentTimeMillis();
             Platform.runLater(() -> {
                 endP.set(fmtTime(endMs));
@@ -722,7 +730,6 @@ public class SftpDialogController {
             if (f.isDirectory()) {
                 final String rp = joinRemote(f.getName());
                 final File srcDir = f;
-                final long totalBytes = dirSize(f);
                 AppExecutor.runAsync(() -> {
                     boolean exists = false;
                     try {
@@ -738,12 +745,15 @@ public class SftpDialogController {
                                 return;
                             }
                         }
-                        XferRow r = new XferRow(srcDir.getName(), totalBytes, XferRow.Dir.UP);
+                        // Row goes up immediately with unknown size; the local dir scan runs off the FX thread
+                        XferRow r = new XferRow(srcDir.getName(), 0, XferRow.Dir.UP);
                         addRow(r);
                         AppExecutor.runAsync(() -> {
+                            r.totalBytes = dirSize(srcDir, r);
                             AtomicLong cumulative = new AtomicLong(0);
                             upDir(srcDir, rp, r, cumulative);
-                            if (!r.failed && !r.cancelled) r.done(totalBytes);
+                            if (r.cancelled) r.cancel();
+                            else if (!r.failed) r.done(r.transferred);
                             Platform.runLater(() -> loadRemote(remotePath));
                         });
                     });
@@ -789,7 +799,7 @@ public class SftpDialogController {
                          SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
                 byte[] buf = new byte[BUF]; int len;
                 while ((len = is.read(buf)) != -1) {
-                    if (r.cancelled) break;
+                    if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); break; } // delete now; close-drain runs in background
                     os.write(buf, 0, len);
                     total += len;
                     r.transferred = total; // UI refresh handled by the 500ms ticker
@@ -798,7 +808,10 @@ public class SftpDialogController {
             if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
             r.done(total);
-        } catch (Exception ex) { log.error("Upload: {}", src.getName(), ex); removeRemoteQuiet(tmp); r.fail(ex.getMessage()); }
+        } catch (Exception ex) {
+            if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); }
+            else { log.error("Upload: {}", src.getName(), ex); removeRemoteQuiet(tmp); r.fail(ex.getMessage()); }
+        }
     }
 
     private void upDir(File d, String rp, XferRow row, AtomicLong cumulative) {
@@ -819,7 +832,7 @@ public class SftpDialogController {
                          SftpClient.OpenMode.Write, SftpClient.OpenMode.Truncate))) {
                 byte[] buf = new byte[BUF]; int len; long fileTotal = 0;
                 while ((len = is.read(buf)) != -1) {
-                    if (row.cancelled) break;
+                    if (row.cancelled) { row.cancel(); removeRemoteQuiet(tmp); break; }
                     os.write(buf, 0, len);
                     fileTotal += len;
                     row.transferred = cumulative.get() + fileTotal;
@@ -829,7 +842,10 @@ public class SftpDialogController {
             }
             if (row.cancelled) { row.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
-        } catch (Exception ex) { log.error("Upload: {}", src.getName(), ex); removeRemoteQuiet(tmp); row.fail(ex.getMessage()); }
+        } catch (Exception ex) {
+            if (row.cancelled) { row.cancel(); removeRemoteQuiet(tmp); }
+            else { log.error("Upload: {}", src.getName(), ex); removeRemoteQuiet(tmp); row.fail(ex.getMessage()); }
+        }
     }
 
     // =========================== Download ===========================
@@ -862,21 +878,16 @@ public class SftpDialogController {
             if (fe.isDir) {
                 final String rp = joinRemote(fe.name);
                 final File lp = new File(dest, fe.name);
-                final String dirName = fe.name;
+                // Row goes up immediately with unknown size; the remote tree scan runs concurrently with the transfer
+                XferRow r = new XferRow(fe.name, 0, XferRow.Dir.DOWN);
+                addRow(r);
                 AppExecutor.runAsync(() -> {
-                    long totalBytes = 0;
-                    try { totalBytes = remoteDirSize(rp); } catch (Exception e) { log.error("Remote dir size: {}", rp, e); }
-                    final long tb = totalBytes;
-                    Platform.runLater(() -> {
-                        XferRow r = new XferRow(dirName, tb, XferRow.Dir.DOWN);
-                        addRow(r);
-                        AppExecutor.runAsync(() -> {
-                            AtomicLong cumulative = new AtomicLong(0);
-                            dnDir(rp, lp, r, cumulative);
-                            if (!r.failed && !r.cancelled) r.done(tb);
-                            Platform.runLater(SftpDialogController.this::loadLocal);
-                        });
-                    });
+                    try { r.totalBytes = remoteDirSize(rp, r); } catch (Exception e) { log.error("Remote dir size: {}", rp, e); }
+                    AtomicLong cumulative = new AtomicLong(0);
+                    dnDir(rp, lp, r, cumulative);
+                    if (r.cancelled) r.cancel();
+                    else if (!r.failed) r.done(r.transferred);
+                    Platform.runLater(SftpDialogController.this::loadLocal);
                 });
             } else {
                 XferRow r = new XferRow(fe.name, fe.bytes, XferRow.Dir.DOWN);
@@ -893,21 +904,27 @@ public class SftpDialogController {
         try {
             // SftpInputStreamAsync issues read-ahead SSH_FXP_READ requests (pipelined)
             // instead of one synchronous round-trip per buffer — much faster on high-RTT links
-            try (InputStream in = sftp.read(rp);
-                 OutputStream os = new FileOutputStream(tmp)) {
-                byte[] buf = new byte[BUF];
-                int rd;
-                while ((rd = in.read(buf)) != -1) {
-                    if (r.cancelled) break;
-                    os.write(buf, 0, rd);
-                    offset += rd;
-                    r.transferred = offset;
+            try (InputStream in = sftp.read(rp)) {
+                // Inner try closes the local file first (fast, and required for delete on Windows);
+                // the SFTP stream's close-drain (waiting for in-flight read-aheads) runs after, in background
+                try (OutputStream os = new FileOutputStream(tmp)) {
+                    byte[] buf = new byte[BUF];
+                    int rd;
+                    while ((rd = in.read(buf)) != -1) {
+                        if (r.cancelled) { r.cancel(); break; }
+                        os.write(buf, 0, rd);
+                        offset += rd;
+                        r.transferred = offset;
+                    }
                 }
+                if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); return; }
+                Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                r.done(offset);
             }
-            if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); return; }
-            Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            r.done(offset);
-        } catch (Exception ex) { log.error("Download: {}", rp, ex); deleteLocalQuiet(tmp); r.fail(ex.getMessage()); }
+        } catch (Exception ex) {
+            if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); }
+            else { log.error("Download: {}", rp, ex); deleteLocalQuiet(tmp); r.fail(ex.getMessage()); }
+        }
     }
 
     private void dnDir(String rp, File lp, XferRow row, AtomicLong cumulative) {
@@ -931,22 +948,26 @@ public class SftpDialogController {
         File tmp = new File(lf.getParentFile(), lf.getName() + ".temp");
         long fileOffset = 0;
         try {
-            try (InputStream in = sftp.read(rp);
-                 OutputStream os = new FileOutputStream(tmp)) {
-                byte[] buf = new byte[BUF];
-                int rd;
-                while ((rd = in.read(buf)) != -1) {
-                    if (row.cancelled) break;
-                    os.write(buf, 0, rd);
-                    fileOffset += rd;
-                    row.transferred = cumulative.get() + fileOffset;
+            try (InputStream in = sftp.read(rp)) {
+                try (OutputStream os = new FileOutputStream(tmp)) {
+                    byte[] buf = new byte[BUF];
+                    int rd;
+                    while ((rd = in.read(buf)) != -1) {
+                        if (row.cancelled) { row.cancel(); break; }
+                        os.write(buf, 0, rd);
+                        fileOffset += rd;
+                        row.transferred = cumulative.get() + fileOffset;
+                    }
+                    cumulative.addAndGet(fileOffset);
+                    row.transferred = cumulative.get();
                 }
-                cumulative.addAndGet(fileOffset);
-                row.transferred = cumulative.get();
+                if (row.cancelled) { row.cancel(); deleteLocalQuiet(tmp); return; }
+                Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
-            if (row.cancelled) { row.cancel(); deleteLocalQuiet(tmp); return; }
-            Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception ex) { log.error("Download: {}", rp, ex); deleteLocalQuiet(tmp); row.fail(ex.getMessage()); }
+        } catch (Exception ex) {
+            if (row.cancelled) { row.cancel(); deleteLocalQuiet(tmp); }
+            else { log.error("Download: {}", rp, ex); deleteLocalQuiet(tmp); row.fail(ex.getMessage()); }
+        }
     }
 
     // =========================== Transfer table ===========================
@@ -1072,28 +1093,30 @@ public class SftpDialogController {
 
     // =========================== Helpers ===========================
 
-    /** Recursively compute total byte size of a local directory. */
-    private static long dirSize(File d) {
+    /** Recursively compute total byte size of a local directory. Bails out early when the row is cancelled. */
+    private static long dirSize(File d, XferRow row) {
         long total = 0;
         File[] kids = d.listFiles();
         if (kids != null) {
             for (File f : kids) {
+                if (row.cancelled) return 0;
                 if (f.isFile()) total += f.length();
-                else if (f.isDirectory()) total += dirSize(f);
+                else if (f.isDirectory()) total += dirSize(f, row);
             }
         }
         return total;
     }
 
-    /** Recursively compute total byte size of a remote directory via SFTP. */
-    private long remoteDirSize(String rp) throws IOException {
+    /** Recursively compute total byte size of a remote directory via SFTP. Bails out early when the row is cancelled. */
+    private long remoteDirSize(String rp, XferRow row) throws IOException {
         long total = 0;
         SftpClient.CloseableHandle h = sftp.openDir(rp);
         try {
             for (SftpClient.DirEntry de : sftp.listDir(h)) {
+                if (row.cancelled) return 0;
                 String n = de.getFilename();
                 if (".".equals(n) || "..".equals(n)) continue;
-                if (de.getAttributes().isDirectory()) total += remoteDirSize(rp + "/" + n);
+                if (de.getAttributes().isDirectory()) total += remoteDirSize(rp + "/" + n, row);
                 else total += de.getAttributes().getSize();
             }
         } finally { sftp.close(h); }
