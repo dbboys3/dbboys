@@ -12,3 +12,4 @@ bin/
 docs/
 extlib/
 lib/
+etc/config.properties
