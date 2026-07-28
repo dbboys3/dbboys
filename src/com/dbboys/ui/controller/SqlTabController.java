@@ -1,4 +1,7 @@
 package com.dbboys.ui.controller;
+import com.dbboys.model.TreeData;
+import com.dbboys.infra.ai.AiAuthClient;
+import com.dbboys.infra.ai.AiApiClient;
 
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppExecutor;
@@ -8,7 +11,7 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.infra.util.*;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.AlertUtil;
@@ -713,7 +716,7 @@ public class SqlTabController {
     }
 
     private static int readSqlPanelKeepAliveIntervalSecondsFromConfig() {
-        String configured = ConfigManagerUtil.getProperty(
+        String configured = ConfigManager.getProperty(
                 SQL_PANEL_KEEPALIVE_INTERVAL_CONFIG_KEY,
                 String.valueOf(DEFAULT_SQL_PANEL_KEEPALIVE_INTERVAL_SECONDS)
         );
@@ -795,7 +798,7 @@ public class SqlTabController {
     }
 
     private void executeAiAction(String actionKey, String actionLabel) {
-        if (!AiAuthUtil.hasConfiguredApi()) {
+        if (!AiAuthClient.hasConfiguredApi()) {
             NotificationUtil.showMainNotification(I18n.t("sql.ai.noApiKey"));
             return;
         }
@@ -846,7 +849,7 @@ public class SqlTabController {
 
         aiSqlFuture = AppExecutor.submit(() -> {
             try {
-                String result = AiApiUtil.chat(prompt);
+                String result = AiApiClient.chat(prompt);
                 Platform.runLater(() -> {
                     timer.stop();
                     if (aiSqlCancelled) return;

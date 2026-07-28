@@ -6,10 +6,10 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.infra.util.DownloadManagerUtil;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.dialog.SqlExportManager;
+import com.dbboys.ui.util.MenuItemUtil;
 import com.dbboys.ui.notification.NotificationUtil;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.TabpaneUtil;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
@@ -201,7 +201,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                     if(file.exists()){
                                         file.delete();
                                     }
-                                    DownloadManagerUtil.addDownload(url, file, true,null);
+                                    SqlExportManager.addDownload(url, file, true,null);
                                 }
                             });
 
@@ -236,7 +236,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
                                         AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("genericstyled.error.file_downloading"));
                                     } else {
                                         NotificationUtil.showMainNotification(I18n.t("genericstyled.notice.download_to_desktop"));
-                                        DownloadManagerUtil.addDownload(url, saveFile, true, null);
+                                        SqlExportManager.addDownload(url, saveFile, true, null);
                                     }
 
 
@@ -538,7 +538,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
             if (file.exists()) {
                 file.delete();
             }
-            DownloadManagerUtil.addDownload(source, file, true, null);
+            SqlExportManager.addDownload(source, file, true, null);
         }
     }
 
@@ -1178,7 +1178,7 @@ public class CustomGenericStyledArea extends GenericStyledArea {
 
     private static String resolveDownloadFileName(String url, boolean isHttpLink) throws Exception {
         if (isHttpLink) {
-            String name = DownloadManagerUtil.getRealFileNameFromRedirect(url);
+            String name = SqlExportManager.getRealFileNameFromRedirect(url);
             if (name != null && !name.isEmpty()) {
                 return name;
             }

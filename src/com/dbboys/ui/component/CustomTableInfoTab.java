@@ -1,10 +1,10 @@
 package com.dbboys.ui.component;
+import com.dbboys.ui.util.KeywordsHighlightUtil;
 
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.service.TableService;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
@@ -13,6 +13,7 @@ import com.dbboys.infra.util.*;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
+import com.dbboys.ui.controller.tree.TreeObjectCrudHandler;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Connect;
@@ -487,7 +488,7 @@ public class CustomTableInfoTab extends CustomTab {
             String alterSQL = String.join("\n", alterSQLList);
             log.info("\n" + alterSQL);
             tableChangeSubmitting = true;
-            Connect connect=TreeViewUtil.buildObjectConnect(treeItem,false);
+            Connect connect=TreeObjectCrudHandler.buildObjectConnect(treeItem,false);
             TreeViewUtil.tableService.modifyTableFromUi(
                     connect,
                     alterSQLList,
@@ -589,7 +590,7 @@ public class CustomTableInfoTab extends CustomTab {
                 "执行",
                 "tableinfo.save_changes.dialog.cancel",
                 "取消",
-                SqlParserUtil.formatSql(sqlContent.toString())
+                SqlFormatter.formatSql(sqlContent.toString())
         );
     }
 
@@ -685,7 +686,7 @@ public class CustomTableInfoTab extends CustomTab {
             Platform.runLater(() -> {
                 CustomInfoStackPane ddlCodeareaStackPane = new CustomInfoStackPane(new CustomInfoCodeArea());
                 String previewDdl = String.join(System.lineSeparator(), generateCreateTableSQL());
-                ddlCodeareaStackPane.codeArea.replaceText((SqlParserUtil.formatSql(previewDdl)));
+                ddlCodeareaStackPane.codeArea.replaceText((SqlFormatter.formatSql(previewDdl)));
                 Platform.runLater(() -> {
                     ddlCodeareaStackPane.codeArea.setStyleSpans(0,KeywordsHighlightUtil.applyHighlighting(ddlCodeareaStackPane.codeArea.getText()));
                 });
@@ -696,7 +697,7 @@ public class CustomTableInfoTab extends CustomTab {
         }
 
             try {
-                ddl = SqlParserUtil.formatSql(TreeViewUtil.tableService.getDDL(connect,database, tableName));
+                ddl = SqlFormatter.formatSql(TreeViewUtil.tableService.getDDL(connect,database, tableName));
                 ;
             } catch (Exception e) {
                 // TODO Auto-generated catch block
@@ -1635,11 +1636,7 @@ private ObservableList<String> buildCreateTableColumnTypes() {
 }
 
 private static DatabasePlatformResolver resolvePlatformResolver() {
-    try {
-        return AppContext.get(DatabasePlatformResolver.class);
-    } catch (Exception e) {
-        return DatabasePlatforms.createDefault();
-    }
+    return DatabasePlatformResolver.getInstance();
 }
 
 private String buildTableUserData(String tableName) {

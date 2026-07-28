@@ -7,7 +7,6 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.app.AppErrorHandler;
@@ -501,7 +500,7 @@ public class SqlConnectionHandler {
         if (dbType == null) return null;
         try {
             DatabasePlatformResolver resolver = AppContext.get(DatabasePlatformResolver.class);
-            if (resolver == null) resolver = DatabasePlatforms.createDefault();
+            if (resolver == null) resolver = DatabasePlatformResolver.getInstance();
             DatabasePlatform platform = resolver.getPlatform(dbType);
             return platform != null ? platform.iconInfo() : null;
         } catch (Exception e) {

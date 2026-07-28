@@ -5,6 +5,8 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import javafx.stage.Stage;
 import com.dbboys.remote.*;
+import com.dbboys.remote.wizard.RemoteInstallWizard;
+import com.dbboys.remote.wizard.RemoteUninstallWizard;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -290,11 +292,11 @@ public final class OracleRemoteProvider implements RemoteDatabaseProvider {
 
     @Override
     public void startInstallWizard(Stage parent) {
-        RemoteInstallerUtil.startWizard(parent, this);
+        RemoteInstallWizard.startWizard(parent, this);
     }
 
     @Override
     public void startUninstallWizard(Stage parent) {
-        RemoteUninstallerUtil.startWizard(parent, this);
+        RemoteUninstallWizard.startWizard(parent, this);
     }
 }

@@ -1,4 +1,5 @@
 package com.dbboys.ui.controller.tree;
+import com.dbboys.ui.treemodel.*;
 
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
@@ -9,7 +10,6 @@ import com.dbboys.ui.controller.CreateConnectController;
 import com.dbboys.ui.component.*;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.core.MetaObjectService;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.infra.util.*;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
@@ -668,10 +668,6 @@ public class TreeNavigator {
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 }

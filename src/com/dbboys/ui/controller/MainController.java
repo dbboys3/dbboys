@@ -1,4 +1,11 @@
 package com.dbboys.ui.controller;
+import com.dbboys.service.BackgroundSqlService;
+import com.dbboys.model.TreeData;
+import com.dbboys.ui.treemodel.SshFolder;
+import com.dbboys.ui.util.TabpaneUtil;
+import com.dbboys.infra.ssh.SshTunnelUtil;
+import com.dbboys.ui.util.SnapshotUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 
 import com.dbboys.app.*;
 import com.dbboys.infra.db.LocalDbRepository;
@@ -9,12 +16,12 @@ import com.dbboys.infra.util.*;
 import com.dbboys.search.MarkdownUtil;
 import com.dbboys.search.MarkdownSearchUtil;
 import com.dbboys.infra.config.UpgradeUtil;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.remote.RemoteCheckEnvUtil;
-import com.dbboys.remote.RemoteDatabaseProviders;
+import com.dbboys.remote.wizard.RemoteEnvCheckWizard;
+import com.dbboys.app.RemoteDatabaseProviders;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.*;
 import javafx.application.Platform;
@@ -426,7 +433,7 @@ public class MainController {
         //左侧tabpane默认选中上次关闭前tab，没有配置则默认第一个tab
         int defaultIndex = 0;
         int preferredIndex = defaultIndex;
-        String preferredIndexStr = ConfigManagerUtil.getProperty("DEFAULT_LISTVIEW_TAB", String.valueOf(defaultIndex));
+        String preferredIndexStr = ConfigManager.getProperty("DEFAULT_LISTVIEW_TAB", String.valueOf(defaultIndex));
         if (preferredIndexStr != null) {
             try {
                 preferredIndex = Integer.parseInt(preferredIndexStr);
@@ -890,8 +897,8 @@ public class MainController {
         persistOpenTabs();
         String split1Content = String.valueOf(AppState.getSplit1Pos());
         String split2Content = String.valueOf(AppState.getSplit2Pos());
-        ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", split1Content);
-        ConfigManagerUtil.setProperty("SPLIT_DRIVER_SQL", split2Content);
+        ConfigManager.setProperty("SPLIT_DRIVER_MAIN", split1Content);
+        ConfigManager.setProperty("SPLIT_DRIVER_SQL", split2Content);
         Stage stage = (Stage) root.getScene().getWindow();
         stage.close();
         System.exit(0); //避免executorService线程未关闭
@@ -918,10 +925,10 @@ public class MainController {
             sshTreeView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
             // Load folders and connections (same pattern as database tree)
-            java.util.List<com.dbboys.model.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
+            java.util.List<com.dbboys.ui.treemodel.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
             java.util.List<com.dbboys.model.SshConnect> connections = com.dbboys.infra.db.LocalDbRepository.getAllSsh();
 
-            for (com.dbboys.model.SshFolder folder : folders) {
+            for (com.dbboys.ui.treemodel.SshFolder folder : folders) {
                 TreeItem<TreeData> folderItem = new TreeItem<>(folder) {
                     @Override
                     public boolean isLeaf() {
@@ -1052,7 +1059,7 @@ public class MainController {
             createSshConnectItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
                 com.dbboys.model.SshConnect newConn = new com.dbboys.model.SshConnect();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.SshFolder folder) {
                     newConn.setParentId(folder.getId());
                 }
                 showSshConnectDialog(newConn, true);
@@ -1063,7 +1070,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_EXPAND_FOLDER_ITEM, 0.5, 0.5));
             expandSshFolderItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.SshFolder folder) {
                     folder.setExpand(1);
                     com.dbboys.infra.db.LocalDbRepository.updateSshFolder(folder);
                     selected.setExpanded(true);
@@ -1075,7 +1082,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_FOLD_FOLDER_ITEM, 0.75, 0.75));
             collapseSshFolderItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.SshFolder folder) {
                     folder.setExpand(0);
                     com.dbboys.infra.db.LocalDbRepository.updateSshFolder(folder);
                     selected.setExpanded(false);
@@ -1092,7 +1099,7 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteSshFolderItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshFolder folder) {
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.SshFolder folder) {
                     if (selected.getChildren().size() > 0) {
                         if (AlertUtil.CustomAlertConfirm(
                                 I18n.t("metadata.alert.delete_folder.title", "删除连接分类"),
@@ -1150,7 +1157,7 @@ public class MainController {
                 sshCtxMenu.getItems().clear();
                 TreeItem<TreeData> sel = sshTreeView.getSelectionModel().getSelectedItem();
                 boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.model.SshConnect;
-                boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.model.SshFolder;
+                boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.ui.treemodel.SshFolder;
 
                 if (isConnection) {
                     sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem,
@@ -1159,7 +1166,7 @@ public class MainController {
                             deleteSshItem);
                     moveSshItem.setDisable(sshTreeView.getRoot().getChildren().size() <= 1);
                 } else if (isFolder) {
-                    com.dbboys.model.SshFolder folder = (com.dbboys.model.SshFolder) sel.getValue();
+                    com.dbboys.ui.treemodel.SshFolder folder = (com.dbboys.ui.treemodel.SshFolder) sel.getValue();
                     sshCtxMenu.getItems().addAll(createSshConnectItem, renameSshFolderItem);
                     expandSshFolderItem.setDisable(folder.getExpand() == 1);
                     collapseSshFolderItem.setDisable(folder.getExpand() != 1);
@@ -1186,7 +1193,7 @@ public class MainController {
     public void createSshLeaf() {
         // Default to first folder, like database connections do
         SshConnect newConn = new SshConnect();
-        java.util.List<com.dbboys.model.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
+        java.util.List<com.dbboys.ui.treemodel.SshFolder> folders = com.dbboys.infra.db.LocalDbRepository.getSshFolders();
 
         if (!folders.isEmpty()) {
             newConn.setParentId(folders.get(0).getId());
@@ -1218,7 +1225,7 @@ public class MainController {
                 // Check for duplicate folder name
                 boolean exists = false;
                 for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
-                    if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+                    if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.SshFolder existing
                             && existing.getName().equals(n)) {
                         exists = true;
                         break;
@@ -1230,7 +1237,7 @@ public class MainController {
 
 
         if (dlg.showAndWait() == btnOk) {
-            com.dbboys.model.SshFolder folder = new com.dbboys.model.SshFolder();
+            com.dbboys.ui.treemodel.SshFolder folder = new com.dbboys.ui.treemodel.SshFolder();
             folder.setName(textField.getText());
             folder.setExpand(1);
             com.dbboys.infra.db.LocalDbRepository.createSshFolder(folder);
@@ -1271,7 +1278,7 @@ public class MainController {
             // Re-parent the tree item if the folder changed (edit case)
             if (!isNew && sshConnect.getParentId() != oldParentId) {
                 for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
-                    if (child.getValue() instanceof com.dbboys.model.SshFolder f
+                    if (child.getValue() instanceof com.dbboys.ui.treemodel.SshFolder f
                             && f.getId() == oldParentId) {
                         // Find and remove the item from old folder
                         TreeItem<TreeData> toRemove = null;
@@ -1286,7 +1293,7 @@ public class MainController {
                             child.getChildren().remove(toRemove);
                             // Add to new folder
                             for (TreeItem<TreeData> target : sshTreeView.getRoot().getChildren()) {
-                                if (target.getValue() instanceof com.dbboys.model.SshFolder tf
+                                if (target.getValue() instanceof com.dbboys.ui.treemodel.SshFolder tf
                                         && tf.getId() == sshConnect.getParentId()) {
                                     target.getChildren().add(toRemove);
                                     if (!target.isExpanded()) {
@@ -1311,7 +1318,7 @@ public class MainController {
         TreeItem<TreeData> newItem = new TreeItem<>(sc);
         // Find parent folder and add
         for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
-            if (child.getValue() instanceof com.dbboys.model.SshFolder f
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.SshFolder f
                     && f.getId() == sc.getParentId()) {
                 child.getChildren().add(newItem);
                 if (!child.isExpanded()) {
@@ -1345,10 +1352,10 @@ public class MainController {
         HBox hbox = new HBox();
         hbox.getChildren().add(new Label(I18n.t("metadata.dialog.move_connection.target", "请选择移动到  ")));
         hbox.setAlignment(Pos.CENTER_LEFT);
-        ChoiceBox<com.dbboys.model.SshFolder> choiceBox = new ChoiceBox<>();
-        ObservableList<com.dbboys.model.SshFolder> folderList = FXCollections.observableArrayList();
+        ChoiceBox<com.dbboys.ui.treemodel.SshFolder> choiceBox = new ChoiceBox<>();
+        ObservableList<com.dbboys.ui.treemodel.SshFolder> folderList = FXCollections.observableArrayList();
         for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
-            if (treeItem.getValue() instanceof com.dbboys.model.SshFolder f
+            if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.SshFolder f
                     && f.getId() != sc.getParentId()) {
                 folderList.add(f);
             }
@@ -1382,7 +1389,7 @@ public class MainController {
             selected.getParent().getChildren().remove(selected);
             // Add to target folder
             for (TreeItem<TreeData> child : sshTreeView.getRoot().getChildren()) {
-                if (child.getValue() instanceof com.dbboys.model.SshFolder f
+                if (child.getValue() instanceof com.dbboys.ui.treemodel.SshFolder f
                         && f.getId() == sc.getParentId()) {
                     child.getChildren().add(selected);
                     if (!child.isExpanded()) {
@@ -1445,7 +1452,7 @@ public class MainController {
                 com.dbboys.infra.db.LocalDbRepository.updateSsh(sc);
                 sshTreeView.refresh();
             }
-        } else if (data instanceof com.dbboys.model.SshFolder folder) {
+        } else if (data instanceof com.dbboys.ui.treemodel.SshFolder folder) {
             HBox hbox = new HBox();
             hbox.getChildren().add(new Label(I18n.t("metadata.dialog.rename.title", "Enter new name") + "  "));
             hbox.setAlignment(Pos.CENTER_LEFT);
@@ -1468,7 +1475,7 @@ public class MainController {
                     // Check for duplicate folder name
                     boolean exists = false;
                     for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
-                        if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+                        if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.SshFolder existing
                                 && existing.getName().equals(n)) {
                             exists = true;
                             break;
@@ -1501,9 +1508,9 @@ public class MainController {
     }
 
     /** Check if an SSH folder name already exists (excluding the one being edited). */
-    private boolean sshFolderNameExists(com.dbboys.model.SshFolder folder) {
+    private boolean sshFolderNameExists(com.dbboys.ui.treemodel.SshFolder folder) {
         for (TreeItem<TreeData> treeItem : sshTreeView.getRoot().getChildren()) {
-            if (treeItem.getValue() instanceof com.dbboys.model.SshFolder existing
+            if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.SshFolder existing
                     && existing.getName().equals(folder.getName())
                     && existing.getId() != folder.getId()) {
                 return true;
@@ -1520,7 +1527,7 @@ public class MainController {
         });
 
         statusBackSqlStopButton.setOnAction(event->{
-            Iterator<BackgroundSqlTask> iterator = BackgroundSqlUtil.backSqlTaskList.iterator();
+            Iterator<BackgroundSqlTask> iterator = BackgroundSqlService.backSqlTaskList.iterator();
             while (iterator.hasNext()) {
                 BackgroundSqlTask bgsql = iterator.next();
                 bgsql.cancel();
@@ -1642,7 +1649,7 @@ public class MainController {
 
 
     public void checkInstallEnv(){
-        RemoteCheckEnvUtil.startWizard((Stage) AppState.getWindow());
+        RemoteEnvCheckWizard.startWizard((Stage) AppState.getWindow());
     }
     public void installGBase8S(){
         RemoteDatabaseProviders.gbase8s().startInstallWizard((Stage) AppState.getWindow());
@@ -1698,7 +1705,7 @@ public class MainController {
 
     private void applyLanguage(Locale locale, String noticeKey) {
         I18n.setLocale(locale);
-        ConfigManagerUtil.setProperty("UI_LANG", locale.toLanguageTag());
+        ConfigManager.setProperty("UI_LANG", locale.toLanguageTag());
         NotificationUtil.showMainNotification(I18n.t(noticeKey));
     }
 

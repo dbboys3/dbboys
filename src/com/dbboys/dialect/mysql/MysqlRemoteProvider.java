@@ -4,6 +4,8 @@ import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.remote.*;
+import com.dbboys.remote.wizard.RemoteInstallWizard;
+import com.dbboys.remote.wizard.RemoteUninstallWizard;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
@@ -154,11 +156,11 @@ public final class MysqlRemoteProvider implements RemoteDatabaseProvider {
 
     @Override
     public void startInstallWizard(Stage parent) {
-        RemoteInstallerUtil.startWizard(parent, this);
+        RemoteInstallWizard.startWizard(parent, this);
     }
 
     @Override
     public void startUninstallWizard(Stage parent) {
-        RemoteUninstallerUtil.startWizard(parent, this);
+        RemoteUninstallWizard.startWizard(parent, this);
     }
 }

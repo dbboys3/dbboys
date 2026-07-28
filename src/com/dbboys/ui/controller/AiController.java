@@ -2,8 +2,8 @@ package com.dbboys.ui.controller;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.AiApiUtil;
-import com.dbboys.infra.util.AiAuthUtil;
+import com.dbboys.infra.ai.AiApiClient;
+import com.dbboys.infra.ai.AiAuthClient;
 import com.dbboys.search.MarkdownSearchUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.component.CustomAiStyledArea;
@@ -204,7 +204,7 @@ public class AiController {
 
         if (aiModelChoiceBox != null) {
             var modelOptions = new ArrayList<>(AI_AVAILABLE_MODELS);
-            String currentModel = AiAuthUtil.getModel();
+            String currentModel = AiAuthClient.getModel();
             if (currentModel != null && !currentModel.isBlank() && !modelOptions.contains(currentModel)) {
                 modelOptions.add(0, currentModel);
             }
@@ -216,7 +216,7 @@ public class AiController {
             }
             aiModelChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.isBlank()) {
-                    AiAuthUtil.setModel(newVal);
+                    AiAuthClient.setModel(newVal);
                 }
             });
         }
@@ -246,9 +246,9 @@ public class AiController {
         Label promptLabel = new Label(I18n.t("ai.dialog.api_key.prompt"));
         com.dbboys.ui.component.CustomPasswordField keyField = new com.dbboys.ui.component.CustomPasswordField();
         keyField.setPromptText(I18n.t("ai.dialog.api_key.prompt"));
-        keyField.setText(AiAuthUtil.getApiToken());
+        keyField.setText(AiAuthClient.getApiToken());
 
-        Label hintLabel = new Label(I18n.t("ai.dialog.api_key.hint") + "\n" + AiAuthUtil.getApiTokenStoragePath());
+        Label hintLabel = new Label(I18n.t("ai.dialog.api_key.hint") + "\n" + AiAuthClient.getApiTokenStoragePath());
         hintLabel.setWrapText(true);
         hintLabel.getStyleClass().add("ai-api-key-hint");
 
@@ -279,7 +279,7 @@ public class AiController {
 
         try {
             String token = keyField.getText() == null ? "" : keyField.getText().trim();
-            AiAuthUtil.setApiToken(token);
+            AiAuthClient.setApiToken(token);
             NotificationUtil.showMainNotification(
                     token.isEmpty() ? I18n.t("ai.notice.api_key_cleared") : I18n.t("ai.notice.api_key_saved")
             );
@@ -303,7 +303,7 @@ public class AiController {
         aiInputField.clear();
         scrollAiChatToBottom();
 
-        if (!AiAuthUtil.hasConfiguredApi()) {
+        if (!AiAuthClient.hasConfiguredApi()) {
             addAiMarkdownMessage(buildApiKeyGuideMessage());
             return;
         }
@@ -320,7 +320,7 @@ public class AiController {
                     ? snapshotAiConversationHistory()
                     : List.of();
             String prompt = buildAiPrompt(text, references, historySnapshot);
-            String reply = AiApiUtil.chatStream(prompt, delta -> {
+            String reply = AiApiClient.chatStream(prompt, delta -> {
                 if (aiCancelled || delta == null || delta.isEmpty()) {
                     return;
                 }
@@ -491,11 +491,11 @@ public class AiController {
         if (content == null || content.isEmpty()) {
             return "";
         }
-        return AiApiUtil.stripThinkingFromAssistantReply(content);
+        return AiApiClient.stripThinkingFromAssistantReply(content);
     }
 
     private String buildApiKeyGuideMessage() {
-        String provider = AiAuthUtil.getCurrentProviderKey();
+        String provider = AiAuthClient.getCurrentProviderKey();
         return String.join("\n",
                 I18n.t("ai.reply.api_key_guide.title"),
                 "",

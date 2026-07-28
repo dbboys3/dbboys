@@ -1,6 +1,6 @@
 package com.dbboys.remote;
 
-import com.dbboys.infra.util.SshUtil;
+import com.dbboys.infra.ssh.SshUtil;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.sftp.client.SftpClient;
 

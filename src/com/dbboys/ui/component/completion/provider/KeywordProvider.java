@@ -1,6 +1,6 @@
 package com.dbboys.ui.component.completion.provider;
 
-import com.dbboys.infra.util.KeywordsHighlightUtil;
+import com.dbboys.ui.util.KeywordsHighlightUtil;
 import com.dbboys.ui.component.completion.CandidateProvider;
 import com.dbboys.ui.component.completion.CompletionContext;
 import com.dbboys.ui.component.completion.CompletionItem;

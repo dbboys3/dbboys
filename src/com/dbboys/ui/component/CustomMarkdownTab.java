@@ -5,7 +5,7 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.TabpaneUtil;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;

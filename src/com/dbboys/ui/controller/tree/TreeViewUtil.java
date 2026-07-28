@@ -1,4 +1,6 @@
 package com.dbboys.ui.controller.tree;
+import com.dbboys.model.TreeData;
+import com.dbboys.ui.treemodel.ConnectFolder;
 
 import com.dbboys.app.AppContext;
 import com.dbboys.infra.db.LocalDbRepository;
@@ -24,7 +26,6 @@ import com.dbboys.model.*;
 import javafx.scene.control.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.BiConsumer;
 
 
 
@@ -109,7 +110,7 @@ public class TreeViewUtil {
 
         }
 
-        TreeContextMenuHandler.setupContextMenu(treeView);
+        TreeContextMenuBuilder.setupContextMenu(treeView);
     }
 
     // --- Facade: TreeViewBuilder ---
@@ -138,24 +139,6 @@ public class TreeViewUtil {
 
     public static void treeItemAddChildrens(TreeItem<TreeData> treeItem) {
         TreeDataLoader.treeItemAddChildrens(treeItem);
-    }
-
-    // --- Facade: TreeCrudHandler ---
-
-    public static void renameTreeItem(TreeView<TreeData> treeView) {
-        TreeCrudHandler.renameTreeItem(treeView);
-    }
-
-    public static void deleteTreeItem(TreeView<TreeData> treeView) {
-        TreeCrudHandler.deleteTreeItem(treeView);
-    }
-
-    public static Connect buildObjectConnect(TreeItem<TreeData> selectedItem, boolean useSysmaster) {
-        return TreeCrudHandler.buildObjectConnect(selectedItem, useSysmaster);
-    }
-
-    public static void handleDdlAction(TreeView<TreeData> treeView, BiConsumer<TreeData, String> onSuccess) {
-        TreeCrudHandler.handleDdlAction(treeView, onSuccess);
     }
 
     // --- Facade: TreeNavigator ---

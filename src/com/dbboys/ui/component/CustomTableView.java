@@ -2,7 +2,7 @@ package com.dbboys.ui.component;
 
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 import javafx.collections.ObservableList;
 import javafx.scene.control.*;
 import javafx.scene.input.*;

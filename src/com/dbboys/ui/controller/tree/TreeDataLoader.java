@@ -1,4 +1,5 @@
 package com.dbboys.ui.controller.tree;
+import com.dbboys.ui.treemodel.*;
 
 import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatform;
@@ -8,7 +9,6 @@ import com.dbboys.core.MetaObjectService;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppErrorHandler;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.infra.util.SqlErrorUtil;
@@ -622,10 +622,6 @@ public class TreeDataLoader {
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (Exception e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 }

@@ -3,7 +3,7 @@ package com.dbboys.ui.component;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 
 import javafx.scene.control.ContextMenu;

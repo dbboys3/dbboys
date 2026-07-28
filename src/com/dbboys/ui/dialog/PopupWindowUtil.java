@@ -4,7 +4,7 @@ import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.ui.component.*;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.KeywordsHighlightUtil;
+import com.dbboys.ui.util.KeywordsHighlightUtil;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;

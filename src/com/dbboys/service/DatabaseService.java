@@ -5,7 +5,7 @@ import com.dbboys.core.MetaObjectService;
 import com.dbboys.core.DdlRepository;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.BackgroundSqlUtil;
+import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.infra.util.ConnectionPropertyUtil;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.Connect;
@@ -16,7 +16,6 @@ import com.dbboys.model.Sql;
 import com.dbboys.model.Table;
 import com.dbboys.model.UpdateResult;
 import javafx.concurrent.Task;
-import javafx.scene.control.Alert;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.CharacterCodingException;
@@ -37,10 +36,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.LongConsumer;
-import javafx.application.Platform;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.dbboys.ui.dialog.AlertUtil;
 
 public class DatabaseService implements MetaObjectService {
     private static final Logger log = LogManager.getLogger(DatabaseService.class);
@@ -268,8 +265,8 @@ public class DatabaseService implements MetaObjectService {
                 backSqlTask.setDatabaseName(connect.getCatalog());
                 backSqlTask.setSql(importSummary);
                 backSqlTask.setProgress(formatImportSqlExecuted(0));
-                BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
-                BackgroundSqlUtil.updateBackSqlUIOnStart();
+                BackgroundSqlService.backSqlTaskList.add(backSqlTask);
+                BackgroundSqlService.updateBackSqlUIOnStart();
 
                 try {
                     String scriptText = readSqlScript(file);
@@ -307,7 +304,7 @@ public class DatabaseService implements MetaObjectService {
                     throw e;
                 } catch (SQLException e) {
                     logImportSqlError(connect, file, e);
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw e;
                 } catch (Exception e) {
                     logImportSqlError(connect, file, e);
@@ -324,8 +321,8 @@ public class DatabaseService implements MetaObjectService {
                     }
                     backSqlTask.setStmt(null);
                     backSqlTask.setConnection(null);
-                    BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
-                    BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                    BackgroundSqlService.backSqlTaskList.remove(backSqlTask);
+                    BackgroundSqlService.updateBackSqlUIOnFinish();
                 }
             }
         };
@@ -342,7 +339,7 @@ public class DatabaseService implements MetaObjectService {
                 countFuture.cancel(true);
             }
         });
-        backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+        backSqlTask.setFuture(BackgroundSqlService.backSqlExecutor.submit(bgTask));
     }
 
     public int importSqlScriptSync(Connect connect, File file, BackgroundSqlTask backSqlTask) throws Exception {
@@ -369,7 +366,7 @@ public class DatabaseService implements MetaObjectService {
                                                                AtomicInteger totalStatements) {
         CompletableFuture<Integer> countFuture = CompletableFuture.supplyAsync(
                 () -> SqlParserUtil.countExecutableStatements(scriptText),
-                BackgroundSqlUtil.backSqlExecutor
+                BackgroundSqlService.backSqlExecutor
         );
         countFuture.whenComplete((count, throwable) -> {
             if (throwable != null) {
@@ -381,7 +378,7 @@ public class DatabaseService implements MetaObjectService {
             int safeTotal = Math.max(0, count == null ? 0 : count);
             totalStatements.set(safeTotal);
             if (safeTotal > 0) {
-                BackgroundSqlUtil.updateTaskProgress(
+                BackgroundSqlService.updateTaskProgress(
                         backSqlTask,
                         formatImportSqlProgress(executedCount.get(), safeTotal)
                 );
@@ -534,10 +531,10 @@ public class DatabaseService implements MetaObjectService {
 
     private void updateImportSqlProgress(BackgroundSqlTask backSqlTask, int executedCount, int totalStatements) {
         if (totalStatements > 0) {
-            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportSqlProgress(executedCount, totalStatements));
+            BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportSqlProgress(executedCount, totalStatements));
             return;
         }
-        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportSqlExecuted(executedCount));
+        BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportSqlExecuted(executedCount));
     }
 
     private String formatImportSqlProgress(int executedCount, int totalStatements) {
@@ -565,9 +562,9 @@ public class DatabaseService implements MetaObjectService {
     }
 
     private void showImportError(String message) {
-        Platform.runLater(() -> AlertUtil.CustomAlert(
+        UserNotifiers.error(
                 I18n.t("metadata.import_sql.error.title", "导入SQL脚本失败"),
                 message
-        ));
+        );
     }
 }

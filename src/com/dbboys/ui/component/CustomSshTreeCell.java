@@ -1,6 +1,6 @@
 package com.dbboys.ui.component;
 
-import com.dbboys.model.SshFolder;
+import com.dbboys.ui.treemodel.SshFolder;
 import com.dbboys.model.TreeData;
 import com.dbboys.model.SshConnect;
 import com.dbboys.ui.icon.IconPaths;
@@ -172,7 +172,7 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
             if (mode != TransferMode.MOVE && mode != TransferMode.COPY) return;
             // Use the SSH tab helper directly (same as double-click)
             javafx.application.Platform.runLater(() ->
-                com.dbboys.infra.util.TabpaneUtil.addCustomSshTab((SshConnect) getItem()));
+                com.dbboys.ui.util.TabpaneUtil.addCustomSshTab((SshConnect) getItem()));
         });
     }
 }

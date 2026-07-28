@@ -1,11 +1,11 @@
 package com.dbboys.ui.controller;
+import com.dbboys.ui.util.ReadOnlyGuard;
 
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.SqlModeCapability;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.ui.component.CustomResultsetTab;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.util.*;
@@ -578,11 +578,7 @@ public class SqlExecutionHelper {
     }
 
     private DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 
     private String detectSqlMode(String sql) {

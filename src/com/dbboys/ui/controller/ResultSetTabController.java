@@ -1,4 +1,5 @@
 package com.dbboys.ui.controller;
+import com.dbboys.ui.dialog.SqlExportManager;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
@@ -10,7 +11,7 @@ import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.infra.util.SqlErrorUtil;
 import com.dbboys.infra.util.*;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.model.Connect;
@@ -413,7 +414,7 @@ public class ResultSetTabController {
     }
 
     private void setupPerTimeField() {
-        resultSetPerTimeTextField.setText(ConfigManagerUtil.getProperty("RESULT_FETCH_PER_TIME", "200"));
+        resultSetPerTimeTextField.setText(ConfigManager.getProperty("RESULT_FETCH_PER_TIME", "200"));
         resultSetPerTimeTextField.textProperty().addListener((observable, oldValue, newValue) -> {
             if (!newValue.matches("\\d*")) {
                 resultSetPerTimeTextField.setText(newValue.replaceAll("[^\\d]", ""));
@@ -460,8 +461,8 @@ public class ResultSetTabController {
 
             final String finalExportSql = exportSql;
 
-            // 复用 DownloadManagerUtil 统一的 SQL 导出入口，在内部获取连接并流式写出
-            DownloadManagerUtil.addSqlExportTask(sqlConnect, finalExportSql, file, "csv", true);
+            // 复用 SqlExportManager 统一的 SQL 导出入口，在内部获取连接并流式写出
+            SqlExportManager.addSqlExportTask(sqlConnect, finalExportSql, file, "csv", true);
         });
     }
 

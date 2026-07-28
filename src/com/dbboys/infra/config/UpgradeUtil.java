@@ -6,7 +6,7 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.app.Main;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.DownloadManagerUtil;
+import com.dbboys.ui.dialog.SqlExportManager;
 import com.dbboys.model.Version;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -175,9 +175,9 @@ public class UpgradeUtil {
                     I18n.t("upgrade.confirm.new_version_found", "检测到新版本\"%s\"，是否需要升级软件？").formatted(lastVersion.getVersion())
             )) {
                 try {
-                    String defaultName = DownloadManagerUtil.getRealFileNameFromRedirect(result.versionDownloadUrl());
+                    String defaultName = SqlExportManager.getRealFileNameFromRedirect(result.versionDownloadUrl());
                     File saveFile = new File(result.softDir().toString(), defaultName);
-                    DownloadManagerUtil.addDownload(result.versionDownloadUrl(), saveFile, true, null);
+                    SqlExportManager.addDownload(result.versionDownloadUrl(), saveFile, true, null);
                 } catch (Exception e) {
                     log.error("Prepare upgrade download failed.", e);
                     AlertUtil.CustomAlert(I18n.t("common.error", "错误"), e.getMessage());
@@ -267,7 +267,7 @@ public class UpgradeUtil {
 
     public static void initDefaultConfig() {
         LocalDbRepository.initDB();
-        // 引用 ConfigManagerUtil 中的出厂默认常量
-        ConfigManagerUtil.getDefaults().forEach(ConfigManagerUtil::setProperty);
+        // 引用 ConfigManager 中的出厂默认常量
+        ConfigManager.getDefaults().forEach(ConfigManager::setProperty);
     }
 }

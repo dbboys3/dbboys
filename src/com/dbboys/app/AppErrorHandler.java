@@ -45,6 +45,11 @@ public final class AppErrorHandler {
         }
     }
 
+    /** Show a generic error alert. Caller is responsible for running on the FX thread. */
+    public static void showErrorAlert(String title, String content) {
+        AlertUtil.CustomAlert(title, content);
+    }
+
     public static void bindTask(Task<?> task, Runnable onFinally) {
         if (task == null) {
             return;

@@ -7,10 +7,8 @@ import com.dbboys.core.MetaObjectService.DdlFetcher;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.infra.util.BackgroundSqlUtil;
+import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.model.*;
-import javafx.application.Platform;
 import javafx.concurrent.Task;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -258,8 +256,8 @@ public class TableService implements MetaObjectService {
                 backSqlTask.setConnectName(connect.getName());
                 backSqlTask.setDatabaseName(connect.getCatalog());
                 backSqlTask.setSql(importSummary);
-                BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
-                BackgroundSqlUtil.updateBackSqlUIOnStart();
+                BackgroundSqlService.backSqlTaskList.add(backSqlTask);
+                BackgroundSqlService.updateBackSqlUIOnStart();
 
                 try {
                     int affectedRows = executeStreamImport(connect, database, tableName, file, backSqlTask);
@@ -273,7 +271,7 @@ public class TableService implements MetaObjectService {
                 } catch (CancellationException e) {
                     throw e;
                 } catch (SQLException e) {
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw e;
                 } catch (TableImportException e) {
                     showImportError(backSqlTask, e.getMessage());
@@ -287,8 +285,8 @@ public class TableService implements MetaObjectService {
                     throw e;
                 } finally {
                     backSqlTask.setStmt(null);
-                    BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
-                    BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                    BackgroundSqlService.backSqlTaskList.remove(backSqlTask);
+                    BackgroundSqlService.updateBackSqlUIOnFinish();
                 }
             }
         };
@@ -298,7 +296,7 @@ public class TableService implements MetaObjectService {
             }
         });
         backSqlTask.setCancelAction(() -> bgTask.cancel(true));
-        backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+        backSqlTask.setFuture(BackgroundSqlService.backSqlExecutor.submit(bgTask));
     }
 
     public int importTableDataSync(Connect connect,
@@ -332,7 +330,7 @@ public class TableService implements MetaObjectService {
             );
         }
         ImportFileFormat importFormat = resolveImportFormat(file);
-        BackgroundSqlUtil.updateTaskProgress(
+        BackgroundSqlService.updateTaskProgress(
                 backSqlTask,
                 I18n.t("metadata.import.progress.counting", "统计行数")
         );
@@ -342,12 +340,12 @@ public class TableService implements MetaObjectService {
                     I18n.t("metadata.import.error.no_rows", "文件中没有可导入的数据：%s").formatted(file.getName())
             );
         }
-        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(0, totalRows));
+        BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportProgress(0, totalRows));
         int affectedRows = switch (importFormat) {
             case CSV -> executeCsvStreamImport(connect, database, tableName, file, tableColumns, totalRows, backSqlTask);
             case JSON -> executeJsonStreamImport(connect, database, tableName, file, tableColumns, totalRows, backSqlTask);
         };
-        BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(affectedRows, totalRows));
+        BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportProgress(affectedRows, totalRows));
         return affectedRows;
     }
 
@@ -389,7 +387,7 @@ public class TableService implements MetaObjectService {
                         importedRowCount++;
                         batchCount++;
                         if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
-                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                            BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
                         }
                         if (batchCount >= IMPORT_BATCH_SIZE) {
                             executeImportBatch(preparedStatement, tableName, batchStartRowNumber, backSqlTask);
@@ -481,7 +479,7 @@ public class TableService implements MetaObjectService {
                         importedRowCount++;
                         batchCount++;
                         if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
-                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                            BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
                         }
                         if (batchCount >= IMPORT_BATCH_SIZE) {
                             executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
@@ -517,7 +515,7 @@ public class TableService implements MetaObjectService {
                         importedRowCount++;
                         batchCount++;
                         if (importedRowCount == totalRows || importedRowCount % 50 == 0) {
-                            BackgroundSqlUtil.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
+                            BackgroundSqlService.updateTaskProgress(backSqlTask, formatImportProgress(importedRowCount, totalRows));
                         }
                         if (batchCount >= IMPORT_BATCH_SIZE) {
                             executeImportBatch(activeStatement, tableName, batchStartRowNumber, backSqlTask);
@@ -1165,12 +1163,12 @@ public class TableService implements MetaObjectService {
         if (backSqlTask != null && backSqlTask.isCancelled()) {
             return;
         }
-        Platform.runLater(() -> AlertUtil.CustomAlert(
+        UserNotifiers.error(
                 I18n.t("metadata.import.error.title", "导入数据失败"),
                 message == null || message.isBlank()
                         ? I18n.t("metadata.import.error.unknown", "导入失败，请检查文件内容或数据库连接")
                         : message
-        ));
+        );
     }
 
     private ImportFileFormat resolveImportFormat(File file) throws TableImportException {

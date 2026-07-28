@@ -1,8 +1,8 @@
 package com.dbboys.infra.db;
 
-import com.dbboys.model.ConnectFolder;
+import com.dbboys.ui.treemodel.ConnectFolder;
 import com.dbboys.model.Connect;
-import com.dbboys.model.SshFolder;
+import com.dbboys.ui.treemodel.SshFolder;
 import com.dbboys.model.UpdateResult;
 import com.dbboys.model.SshConnect;
 import com.dbboys.core.ConnectionService;

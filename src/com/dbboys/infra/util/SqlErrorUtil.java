@@ -2,8 +2,7 @@ package com.dbboys.infra.util;
 
 import com.dbboys.core.ChangeDatabaseFailureKind;
 import com.dbboys.core.DatabasePlatform;
-import com.dbboys.app.AppContext;
-import com.dbboys.core.DatabasePlatforms;
+import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.model.Connect;
 
 import java.sql.SQLException;
@@ -60,11 +59,7 @@ public final class SqlErrorUtil {
         return false;
     }
 
-    private static DatabasePlatforms resolvePlatforms() {
-        try {
-            return AppContext.get(DatabasePlatforms.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+    private static DatabasePlatformResolver resolvePlatforms() {
+        return DatabasePlatformResolver.getInstance();
     }
 }

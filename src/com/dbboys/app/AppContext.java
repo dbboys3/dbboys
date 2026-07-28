@@ -14,7 +14,8 @@ public final class AppContext {
         synchronized (AppContext.class) {
             if (initialized) return;
 
-            var platforms = com.dbboys.core.DatabasePlatforms.createDefault();
+            var platforms = PlatformBootstrap.createDefault();
+            com.dbboys.core.PlatformResolvers.init(platforms);
 
             register(com.dbboys.core.DatabasePlatformResolver.class, platforms);
             register(com.dbboys.core.DatabasePlatforms.class, platforms);
@@ -42,7 +43,26 @@ public final class AppContext {
             register(com.dbboys.service.SqlexeService.class, new com.dbboys.service.SqlexeService(connService, dbService, platforms));
             register(com.dbboys.service.AdminService.class, new com.dbboys.service.AdminService(connService, platforms));
 
+            // 组合根向底层注入回调：model 的连接保活配置与异常处理、service 的用户错误通知
+            com.dbboys.model.Connect.initKeepAliveIntervalSeconds(
+                    parseLongConfig(com.dbboys.infra.config.ConfigManager.getProperty("CONNECT_KEEPALIVE_SECONDS", "180"), 180));
+            com.dbboys.model.Connect.initSqlTaskErrorHandler(AppErrorHandler::handle);
+            com.dbboys.service.UserNotifiers.register((title, message) ->
+                    javafx.application.Platform.runLater(() ->
+                            com.dbboys.ui.dialog.AlertUtil.CustomAlert(title, message)));
+
             initialized = true;
+        }
+    }
+
+    private static long parseLongConfig(String value, long fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
         }
     }
 

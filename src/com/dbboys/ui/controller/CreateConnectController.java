@@ -1,4 +1,5 @@
 package com.dbboys.ui.controller;
+import com.dbboys.ui.util.TabpaneUtil;
 
 
 import com.dbboys.app.AppContext;
@@ -11,7 +12,6 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.NamedServerConnectionCapability;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
@@ -21,7 +21,7 @@ import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
-import com.dbboys.model.ConnectFolder;
+import com.dbboys.ui.treemodel.ConnectFolder;
 import com.dbboys.model.Connect;
 import com.dbboys.model.SshConnect;
 import com.dbboys.model.TreeData;
@@ -719,11 +719,7 @@ public class CreateConnectController {
     }
 
     private DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 
     private List<String> loadAvailableDbTypes() {

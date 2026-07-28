@@ -43,14 +43,11 @@ public interface DatabasePlatformResolver {
     }
 
     /**
-     * 静态工厂：从 {@link com.dbboys.app.AppContext} 获取已注册的平台解析器；
-     * 若 DI 容器尚未初始化则回退到 {@link com.dbboys.core.DatabasePlatforms#createDefault()}。
+     * 进程级访问入口：返回组合根（app 层）启动时通过
+     * {@link com.dbboys.core.PlatformResolvers#init} 注入的平台解析器。
+     * 未初始化时抛出 {@link IllegalStateException}。
      */
     static DatabasePlatformResolver getInstance() {
-        try {
-            return com.dbboys.app.AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return com.dbboys.core.DatabasePlatforms.createDefault();
-        }
+        return PlatformResolvers.get();
     }
 }

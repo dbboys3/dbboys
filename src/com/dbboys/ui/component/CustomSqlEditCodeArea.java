@@ -7,10 +7,11 @@ import com.dbboys.ui.component.completion.CompletionItem;
 import com.dbboys.ui.component.completion.CompletionPopup;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.KeywordsHighlightUtil;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.KeywordsHighlightUtil;
+import com.dbboys.ui.util.MenuItemUtil;
+import com.dbboys.infra.util.SqlFormatter;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.Catalog;
 import com.dbboys.model.Connect;
@@ -294,7 +295,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
         });
 
         setContextMenu(codeAreaMenu);
-        codeAreaFormatItem.setOnAction(event-> applyTransform(SqlParserUtil::formatSql));
+        codeAreaFormatItem.setOnAction(event-> applyTransform(SqlFormatter::formatSql));
         codeAreaUpperItem.setOnAction(event-> applyTransform(SqlParserUtil::upperSql));
         codeAreaLowerItem.setOnAction(event-> applyTransform(SqlParserUtil::lowerSql));
 
@@ -385,7 +386,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private static int loadConfiguredFontSize() {
         try {
             int configured = Integer.parseInt(
-                    ConfigManagerUtil.getProperty(SQL_EDITOR_FONT_SIZE_KEY, String.valueOf(DEFAULT_FONT_SIZE))
+                    ConfigManager.getProperty(SQL_EDITOR_FONT_SIZE_KEY, String.valueOf(DEFAULT_FONT_SIZE))
             );
             return clampFontSize(configured);
         } catch (NumberFormatException ignored) {
@@ -416,7 +417,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
         fontSize = newFontSize;
         sharedFontSize = newFontSize;
         applyEditorFontSize(newFontSize);
-        ConfigManagerUtil.setProperty(SQL_EDITOR_FONT_SIZE_KEY, String.valueOf(newFontSize));
+        ConfigManager.setProperty(SQL_EDITOR_FONT_SIZE_KEY, String.valueOf(newFontSize));
     }
 
     private void applyEditorFontSize(int size) {
@@ -785,12 +786,12 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     private static boolean isAutocompleteEnabled() {
-        String val = ConfigManagerUtil.getProperty(AUTOCOMPLETE_ENABLED_KEY, "true");
+        String val = ConfigManager.getProperty(AUTOCOMPLETE_ENABLED_KEY, "true");
         return !"false".equalsIgnoreCase(val);
     }
 
     private static int getAutocompleteTriggerDelayMs() {
-        String val = ConfigManagerUtil.getProperty(AUTOCOMPLETE_TRIGGER_DELAY_MS_KEY,
+        String val = ConfigManager.getProperty(AUTOCOMPLETE_TRIGGER_DELAY_MS_KEY,
                 String.valueOf(DEFAULT_TRIGGER_DELAY_MS));
         try {
             int ms = Integer.parseInt(val.trim());

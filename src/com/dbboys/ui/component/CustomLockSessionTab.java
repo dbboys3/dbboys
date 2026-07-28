@@ -7,7 +7,7 @@ import com.dbboys.service.AdminService;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.model.Connect;

@@ -3,7 +3,7 @@ package com.dbboys.ui.component;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 import javafx.application.Platform;
 import javafx.animation.PauseTransition;
 import javafx.scene.Cursor;

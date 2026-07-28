@@ -1,11 +1,11 @@
 package com.dbboys.app;
 
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
 import com.dbboys.ui.controller.MainController;
 import com.dbboys.ui.component.CustomSqlEditCodeArea;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.TabpaneUtil;
 import com.dbboys.infra.config.UpgradeUtil;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.Connect;
@@ -77,7 +77,7 @@ public class Main extends Application {
             Thread.currentThread().setUncaughtExceptionHandler((t, e) -> AppErrorHandler.handle(e));
 
             //语言设置
-            String uiLang = ConfigManagerUtil.getProperty("UI_LANG");
+            String uiLang = ConfigManager.getProperty("UI_LANG");
             if (uiLang != null && !uiLang.isBlank()) {
                 I18n.setLocale(Locale.forLanguageTag(uiLang));
             }
@@ -157,8 +157,8 @@ public class Main extends Application {
     
 
                 //从配置文件读取分隔符位置，配置文件保存的是最后一次拖动的位置
-                AppState.setSplit1Pos(Double.parseDouble(ConfigManagerUtil.getProperty("SPLIT_DRIVER_MAIN", "0.2")));
-                AppState.setSplit2Pos(Double.parseDouble(ConfigManagerUtil.getProperty("SPLIT_DRIVER_SQL", "0.6")));
+                AppState.setSplit1Pos(Double.parseDouble(ConfigManager.getProperty("SPLIT_DRIVER_MAIN", "0.2")));
+                AppState.setSplit2Pos(Double.parseDouble(ConfigManager.getProperty("SPLIT_DRIVER_SQL", "0.6")));
 
                 //加载主界面
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/Main.fxml"));
@@ -244,7 +244,7 @@ public class Main extends Application {
                         mainController.mainSplitPane.lookupAll(".split-pane-divider").forEach(divider -> {
                             // 鼠标拖动事件
                             divider.addEventFilter(MouseEvent.MOUSE_DRAGGED, event -> {
-                                //ConfigManagerUtil.setProperty("SPLIT_DRIVER_MAIN", String.valueOf(split1Pos));
+                                //ConfigManager.setProperty("SPLIT_DRIVER_MAIN", String.valueOf(split1Pos));
                                 AppState.setSplit1Pos(mainController.mainSplitPane.getDividers().get(0).getPosition());
                             });
                         });

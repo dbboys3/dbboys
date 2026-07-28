@@ -4,7 +4,6 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.app.AppContext;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.util.*;
 import com.dbboys.ui.notification.NotificationUtil;
@@ -464,11 +463,7 @@ public class ResultSetEditHelper {
     }
 
     private static DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 
     private static ConnectionService resolveConnectionService() {

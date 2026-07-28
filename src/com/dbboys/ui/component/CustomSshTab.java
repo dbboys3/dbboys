@@ -78,7 +78,7 @@ public class CustomSshTab extends CustomTab {
             if (AppState.getSqlTabPane().getTabs().size() == 1) {
                 AppState.getSqlTabPane().setOnMouseClicked(e -> {
                     if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
-                        com.dbboys.infra.util.TabpaneUtil.addCustomSqlTab(null);
+                        com.dbboys.ui.util.TabpaneUtil.addCustomSqlTab(null);
                     }
                 });
             }

@@ -9,10 +9,10 @@ import com.dbboys.core.NamedServerConnectionCapability;
 import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.MD5Util;
-import com.dbboys.infra.util.SshTunnel;
-import com.dbboys.infra.util.SshTunnelUtil;
-import com.dbboys.infra.util.SshUtil;
-import com.dbboys.infra.util.SshConnectionWrapper;
+import com.dbboys.infra.ssh.SshTunnel;
+import com.dbboys.infra.ssh.SshTunnelUtil;
+import com.dbboys.infra.ssh.SshUtil;
+import com.dbboys.infra.ssh.SshConnectionWrapper;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.*;
 
@@ -50,11 +50,11 @@ public class ConnectionServiceImpl implements ConnectionService {
     private final DatabasePlatformResolver platformResolver;
 
     public ConnectionServiceImpl() {
-        this(DatabasePlatforms.createDefault());
+        this(PlatformResolvers.get());
     }
 
     public ConnectionServiceImpl(DatabasePlatformResolver platformResolver) {
-        this.platformResolver = platformResolver != null ? platformResolver : DatabasePlatforms.createDefault();
+        this.platformResolver = platformResolver != null ? platformResolver : PlatformResolvers.get();
     }
 
     private ClientSession getOrCreateSshSession(Connect connect) throws Exception {
@@ -139,6 +139,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             if (tunnel != null) {
                 conn = new SshConnectionWrapper(conn, tunnel, false);
             }
+            connect.setConnectionTester(dialect.connection()::testConnection);
             return conn;
         } catch (Exception e) {
             if (tunnel != null) {
@@ -238,6 +239,7 @@ public class ConnectionServiceImpl implements ConnectionService {
                 conn = new SshConnectionWrapper(conn, tunnel, false);
             }
             initializeSessionIfSupported(connect, conn);
+            connect.setConnectionTester(dialect.connection()::testConnection);
             return conn;
         } catch (Exception e) {
             if (tunnel != null) {

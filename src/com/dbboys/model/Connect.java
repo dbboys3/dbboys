@@ -1,7 +1,5 @@
 package com.dbboys.model;
 
-import com.dbboys.core.DatabasePlatformResolver;
-import com.dbboys.infra.config.ConfigManagerUtil;
 import javafx.beans.property.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -16,10 +14,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 public class Connect extends TreeData{
     private static final Logger log = LogManager.getLogger(Connect.class);
-    private static final String KEEPALIVE_INTERVAL_CONFIG_KEY = "CONNECT_KEEPALIVE_SECONDS";
     private static final long DEFAULT_KEEPALIVE_INTERVAL_SECONDS = 180L;
     private static final ScheduledExecutorService KEEPALIVE_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -30,7 +28,11 @@ public class Connect extends TreeData{
                     return thread;
                 }
             });
-    private static volatile DatabasePlatformResolver platformResolver;
+    /** keepalive 间隔（秒），由 app 启动时读取配置后通过 {@link #initKeepAliveIntervalSeconds} 注入；0 表示禁用。 */
+    private static volatile long keepAliveIntervalSeconds = DEFAULT_KEEPALIVE_INTERVAL_SECONDS;
+    /** SQL 任务未捕获异常处理器，由 app 启动时通过 {@link #initSqlTaskErrorHandler} 注入；默认仅记日志。 */
+    private static volatile Consumer<Throwable> sqlTaskErrorHandler =
+            e -> log.error("Uncaught exception in connect SQL task", e);
 
     private IntegerProperty  id=new SimpleIntegerProperty();
     private IntegerProperty  parentId=new SimpleIntegerProperty();
@@ -58,10 +60,16 @@ public class Connect extends TreeData{
     private BooleanProperty sshEnabled=new SimpleBooleanProperty();
     private volatile boolean keepAliveEnabled;
     private volatile ScheduledFuture<?> keepAliveFuture;
-    /** 进程内首次读取 CONNECT_KEEPALIVE_SECONDS 后的快照；Long.MIN_VALUE 表示尚未读取。 */
-    private static volatile long keepAliveIntervalSecondsSnap = Long.MIN_VALUE;
+    /** 连接存活检测器，由连接建立方（ConnectionServiceImpl）注入；为 null 时跳过 keepalive 检测。 */
+    private volatile ConnectionTester connectionTester;
     //每个连接一个顺序执行线程，对于目录树耗时的加载，顺序执行，避免同一个连接多个任务导致问题
     public ExecutorService executorService= Executors.newSingleThreadExecutor();
+
+    /** 连接存活检测，由了解具体方言的连接建立方注入，避免 model 反向依赖 core。 */
+    @FunctionalInterface
+    public interface ConnectionTester {
+        boolean test(Connection connection) throws Exception;
+    }
 
     public Connect(){
     }
@@ -96,6 +104,7 @@ public class Connect extends TreeData{
         setSshKeyPassphrase(connect.getSshKeyPassphrase());
         setSshEnabled(connect.getSshEnabled());
         keepAliveEnabled = connect.keepAliveEnabled;
+        connectionTester = connect.connectionTester;
     }
 
     @Override
@@ -118,6 +127,24 @@ public class Connect extends TreeData{
     }
     public void setConnPreserveKeepAlive(Connection conn) {
         setConnInternal(conn, keepAliveEnabled, false);
+    }
+
+    public ConnectionTester getConnectionTester() {
+        return connectionTester;
+    }
+
+    public void setConnectionTester(ConnectionTester connectionTester) {
+        this.connectionTester = connectionTester;
+    }
+
+    public static void initKeepAliveIntervalSeconds(long seconds) {
+        keepAliveIntervalSeconds = Math.max(0, seconds);
+    }
+
+    public static void initSqlTaskErrorHandler(Consumer<Throwable> handler) {
+        if (handler != null) {
+            sqlTaskErrorHandler = handler;
+        }
     }
 
     public int getId() {
@@ -404,13 +431,13 @@ public class Connect extends TreeData{
             try {
                 task.run();
             } catch (Exception e) {
-                com.dbboys.app.AppErrorHandler.handle(e);
+                sqlTaskErrorHandler.accept(e);
             }
         });
     }
 
     private void scheduleKeepAlive() {
-        long intervalSeconds = resolveKeepAliveIntervalSeconds();
+        long intervalSeconds = keepAliveIntervalSeconds;
         if (intervalSeconds <= 0 || conn == null) {
             return;
         }
@@ -426,13 +453,13 @@ public class Connect extends TreeData{
                 if (conn == null || conn.isClosed()) {
                     return;
                 }
-                log.info("Connection keepalive test running: {}", getName());
-                DatabasePlatformResolver resolver = resolvePlatformResolver();
-                var platform = resolver.getPlatform(getDbtype());
-                if (platform == null) {
+                ConnectionTester tester = connectionTester;
+                if (tester == null) {
+                    log.debug("Connection keepalive test skipped (no tester injected): {}", getName());
                     return;
                 }
-                boolean alive = platform.connection().testConnection(conn);
+                log.info("Connection keepalive test running: {}", getName());
+                boolean alive = tester.test(conn);
                 if (!alive) {
                     log.warn("Connection keepalive test failed: {}", getName());
                 } else {
@@ -465,53 +492,6 @@ public class Connect extends TreeData{
         }
         if (this.conn != null && keepAliveEnabled) {
             scheduleKeepAlive();
-        }
-    }
-
-    private long resolveKeepAliveIntervalSeconds() {
-        long snap = keepAliveIntervalSecondsSnap;
-        if (snap != Long.MIN_VALUE) {
-            return snap;
-        }
-        synchronized (Connect.class) {
-            if (keepAliveIntervalSecondsSnap != Long.MIN_VALUE) {
-                return keepAliveIntervalSecondsSnap;
-            }
-            keepAliveIntervalSecondsSnap = readConnectKeepAliveIntervalSecondsFromConfig();
-            return keepAliveIntervalSecondsSnap;
-        }
-    }
-
-    private static long readConnectKeepAliveIntervalSecondsFromConfig() {
-        String configured = ConfigManagerUtil.getProperty(
-                KEEPALIVE_INTERVAL_CONFIG_KEY,
-                String.valueOf(DEFAULT_KEEPALIVE_INTERVAL_SECONDS)
-        );
-        if (configured == null || configured.isBlank()) {
-            return DEFAULT_KEEPALIVE_INTERVAL_SECONDS;
-        }
-        try {
-            long v = Long.parseLong(configured.trim());
-            return v <= 0 ? 0L : v;
-        } catch (NumberFormatException e) {
-            log.warn("Invalid {} value: {}", KEEPALIVE_INTERVAL_CONFIG_KEY, configured);
-            return DEFAULT_KEEPALIVE_INTERVAL_SECONDS;
-        }
-    }
-
-    private static DatabasePlatformResolver resolvePlatformResolver() {
-        DatabasePlatformResolver cached = platformResolver;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (Connect.class) {
-            cached = platformResolver;
-            if (cached != null) {
-                return cached;
-            }
-            cached = DatabasePlatformResolver.getInstance();
-            platformResolver = cached;
-            return cached;
         }
     }
 }

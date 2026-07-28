@@ -5,7 +5,7 @@ import com.dbboys.ui.controller.SqlTabController;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.TabpaneUtil;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;

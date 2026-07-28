@@ -1,4 +1,5 @@
 package com.dbboys.core;
+import com.dbboys.model.Queue;
 
 import com.dbboys.model.*;
 

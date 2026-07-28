@@ -17,9 +17,12 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 import com.dbboys.ui.component.CustomShortcutMenuItem;
+import com.dbboys.ui.component.CustomTableView;
 import com.dbboys.ui.component.CustomTreeviewTab;
 import com.dbboys.ui.component.CustomUserTextField;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.ui.dialog.PopupWindowUtil;
+import com.dbboys.infra.config.ConfigManager;
+import com.dbboys.model.BackgroundSqlTask;
 import com.dbboys.model.TreeData;
 
 import java.util.List;
@@ -56,12 +59,12 @@ public final class AppState {
     }
 
     public static String getCurrentTheme() {
-        String theme = ConfigManagerUtil.getProperty(UI_THEME_KEY, THEME_DARK);
+        String theme = ConfigManager.getProperty(UI_THEME_KEY, THEME_DARK);
         return THEME_LIGHT.equalsIgnoreCase(theme) ? THEME_LIGHT : THEME_DARK;
     }
 
     public static void setCurrentTheme(String theme) {
-        ConfigManagerUtil.setProperty(UI_THEME_KEY, THEME_LIGHT.equalsIgnoreCase(theme) ? THEME_LIGHT : THEME_DARK);
+        ConfigManager.setProperty(UI_THEME_KEY, THEME_LIGHT.equalsIgnoreCase(theme) ? THEME_LIGHT : THEME_DARK);
         applyOpenWindowStylesheets();
     }
 
@@ -152,6 +155,10 @@ public final class AppState {
 
     public static Label getStatusBackSqlCountLabel() {
         return getMainController() == null ? null : getMainController().statusBackSqlCountLabel;
+    }
+
+    public static CustomTableView<BackgroundSqlTask> getSqlTaskTableView() {
+        return PopupWindowUtil.sqlTaskTableView;
     }
 
     public static StackPane getDownloadStackPane() {

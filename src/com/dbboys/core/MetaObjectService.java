@@ -1,8 +1,8 @@
 package com.dbboys.core;
 
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.util.BackgroundSqlUtil;
-import com.dbboys.infra.util.ReadOnlyGuard;
+import com.dbboys.service.BackgroundSqlService;
+import com.dbboys.ui.util.ReadOnlyGuard;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.BackgroundSqlTask;
 import com.dbboys.model.Connect;
@@ -86,8 +86,8 @@ public interface MetaObjectService {
                     backSqlTask.setConnectName(connect.getName());
                     backSqlTask.setDatabaseName(effectiveDb);
                     backSqlTask.setSql(sql);
-                    BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
-                    BackgroundSqlUtil.updateBackSqlUIOnStart();
+                    BackgroundSqlService.backSqlTaskList.add(backSqlTask);
+                    BackgroundSqlService.updateBackSqlUIOnStart();
 
                     String execSql = stripTrailingSemicolon(sql);
                     try (Statement stmt = conn.createStatement()) {
@@ -101,14 +101,14 @@ public interface MetaObjectService {
                     updateResult.setMark(I18n.t("backsql.history.mark.ui_task", "界面操作任务,独立事务"));
                     LocalDbRepository.saveSqlHistory(updateResult);
                 } catch (SQLException e) {
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw new Exception("error");
                 } catch (Exception e) {
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw new Exception("error");
                 } finally {
-                    BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
-                    BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                    BackgroundSqlService.backSqlTaskList.remove(backSqlTask);
+                    BackgroundSqlService.updateBackSqlUIOnFinish();
                 }
                 return null;
             }
@@ -118,7 +118,7 @@ public interface MetaObjectService {
                 onSucceededUi.run();
             }
         });
-        backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+        backSqlTask.setFuture(BackgroundSqlService.backSqlExecutor.submit(bgTask));
     }
 
     default void executeObjectSqls(Connect connect, List<String> sqlList, Runnable onSucceededUi) {
@@ -176,8 +176,8 @@ public interface MetaObjectService {
                         backSqlTask.setConnectName(connect.getName());
                         backSqlTask.setDatabaseName(effectiveDb2);
                         backSqlTask.setSql(execSql);
-                        BackgroundSqlUtil.backSqlTaskList.add(backSqlTask);
-                        BackgroundSqlUtil.updateBackSqlUIOnStart();
+                        BackgroundSqlService.backSqlTaskList.add(backSqlTask);
+                        BackgroundSqlService.updateBackSqlUIOnStart();
 
                         try (Statement stmt = conn.createStatement()) {
                             backSqlTask.setStmt(stmt);
@@ -185,8 +185,8 @@ public interface MetaObjectService {
                             updateResult.setAffectedRows(affectRows);
                         } finally {
                             backSqlTask.setStmt(null);
-                            BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
-                            BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                            BackgroundSqlService.backSqlTaskList.remove(backSqlTask);
+                            BackgroundSqlService.updateBackSqlUIOnFinish();
                         }
 
                         long endtime = System.currentTimeMillis();
@@ -196,14 +196,14 @@ public interface MetaObjectService {
                         LocalDbRepository.saveSqlHistory(updateResult);
                     }
                 } catch (SQLException e) {
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw new Exception("error");
                 } catch (Exception e) {
-                    BackgroundSqlUtil.handleBackgroundSqlError(backSqlTask, e);
+                    BackgroundSqlService.handleBackgroundSqlError(backSqlTask, e);
                     throw new Exception("error");
                 } finally {
-                    BackgroundSqlUtil.backSqlTaskList.remove(backSqlTask);
-                    BackgroundSqlUtil.updateBackSqlUIOnFinish();
+                    BackgroundSqlService.backSqlTaskList.remove(backSqlTask);
+                    BackgroundSqlService.updateBackSqlUIOnFinish();
                 }
                 return null;
             }
@@ -223,7 +223,7 @@ public interface MetaObjectService {
                 onNotSucceededUi.run();
             }
         });
-        backSqlTask.setFuture(BackgroundSqlUtil.backSqlExecutor.submit(bgTask));
+        backSqlTask.setFuture(BackgroundSqlService.backSqlExecutor.submit(bgTask));
     }
 
     private static int executeMaintenanceSql(Statement stmt, String execSql) throws SQLException {

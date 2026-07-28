@@ -1,16 +1,17 @@
 package com.dbboys.ui.component;
+import com.dbboys.ui.treemodel.*;
 
 import com.dbboys.app.AppContext;
 import com.dbboys.app.AppState;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.PopupWindowUtil;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.TabpaneUtil;
+import com.dbboys.ui.controller.tree.TreeDdlViewHandler;
 import com.dbboys.ui.controller.tree.TreeNavigator;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.*;
@@ -715,7 +716,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
 
         setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
-                TreeViewUtil.handleDdlAction(getTreeView(), (treeData, ddlText) -> {
+                TreeDdlViewHandler.handleDdlAction(getTreeView(), (treeData, ddlText) -> {
                     PopupWindowUtil.openDDLWindow(ddlText);
                  });
             }
@@ -949,7 +950,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         if (dbType == null) return null;
         try {
             DatabasePlatformResolver resolver = AppContext.get(DatabasePlatformResolver.class);
-            if (resolver == null) resolver = DatabasePlatforms.createDefault();
+            if (resolver == null) resolver = DatabasePlatformResolver.getInstance();
             DatabasePlatform platform = resolver.getPlatform(dbType);
             return platform != null ? platform.iconInfo() : null;
         } catch (Exception e) {
@@ -1067,11 +1068,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
 
 
     private static com.dbboys.core.DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return com.dbboys.app.AppContext.get(com.dbboys.core.DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return com.dbboys.core.DatabasePlatforms.createDefault();
-        }
+        return com.dbboys.core.DatabasePlatformResolver.getInstance();
     }
 
     private DatabasePlatform safeResolvePlatform(TreeItem<TreeData> treeItem) {

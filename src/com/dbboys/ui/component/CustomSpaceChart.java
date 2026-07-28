@@ -5,7 +5,7 @@ import com.dbboys.model.Connect;
 import com.dbboys.model.SpaceUsage;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.MenuItemUtil;
+import com.dbboys.ui.util.MenuItemUtil;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.scene.Node;
@@ -336,8 +336,8 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                         "instance.space.oracle.menu.drop_tablespace",
                         IconFactory.group(IconPaths.METADATA_TRUNCATE_ITEM, 0.55, IconFactory.dangerColor()));
                 dropTs.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
-                if (com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(spaceUsage.getName())
-                        || com.dbboys.infra.util.InstanceMutationUtil.isDamengProtectedTablespace(spaceUsage.getName())) {
+                if (com.dbboys.dialect.common.InstanceMutationUtil.isOracleProtectedTablespace(spaceUsage.getName())
+                        || com.dbboys.dialect.common.InstanceMutationUtil.isDamengProtectedTablespace(spaceUsage.getName())) {
                     dropTs.setDisable(true);
                 }
                 dropTs.setOnAction(e -> {
@@ -379,11 +379,11 @@ public class CustomSpaceChart extends BarChart<Number, String> {
                         "space.menu.drop_data_file",
                         IconFactory.group(IconPaths.METADATA_TRUNCATE_ITEM, 0.55, IconFactory.dangerColor()));
                 dropDf.getProperties().put(ORACLE_MENU_KIND, ORACLE_MENU_MUTATION);
-                String tsFromLabel = com.dbboys.infra.util.InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(
+                String tsFromLabel = com.dbboys.dialect.common.InstanceMutationUtil.parseOracleTablespaceFromDatafileLabel(
                         spaceUsage.getLabel());
                 if (tsFromLabel != null
-                        && (com.dbboys.infra.util.InstanceMutationUtil.isOracleProtectedTablespace(tsFromLabel)
-                        || com.dbboys.infra.util.InstanceMutationUtil.isDamengProtectedTablespace(tsFromLabel))) {
+                        && (com.dbboys.dialect.common.InstanceMutationUtil.isOracleProtectedTablespace(tsFromLabel)
+                        || com.dbboys.dialect.common.InstanceMutationUtil.isDamengProtectedTablespace(tsFromLabel))) {
                     dropDf.setDisable(true);
                 }
                 dropDf.setOnAction(e -> {

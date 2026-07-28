@@ -2,13 +2,12 @@ package com.dbboys.ui.component;
 
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.app.AppContext;
-import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.MenuItemUtil;
-import com.dbboys.infra.util.TabpaneUtil;
+import com.dbboys.ui.util.MenuItemUtil;
+import com.dbboys.ui.util.TabpaneUtil;
 import com.dbboys.model.Connect;
 import com.dbboys.model.SpaceUsage;
 import javafx.scene.control.ContextMenu;
@@ -274,10 +273,6 @@ public class CustomInstanceInfoTableView extends CustomTableView {
     }
 
     private DatabasePlatformResolver resolvePlatformResolver() {
-        try {
-            return AppContext.get(DatabasePlatformResolver.class);
-        } catch (IllegalStateException e) {
-            return DatabasePlatforms.createDefault();
-        }
+        return DatabasePlatformResolver.getInstance();
     }
 }

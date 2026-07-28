@@ -631,32 +631,32 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public List<ConfigEntry> loadConfigEntries(Connect connect) throws Exception {
-        return com.dbboys.infra.util.InstanceRuntimeUtil.loadOracleConfigEntries(connect);
+        return com.dbboys.dialect.common.InstanceRuntimeUtil.loadOracleConfigEntries(connect);
     }
 
     @Override
     public String loadRuntimeLog(Connect connect) throws Exception {
-        return com.dbboys.infra.util.InstanceRuntimeUtil.loadOracleRuntimeLog(connect);
+        return com.dbboys.dialect.common.InstanceRuntimeUtil.loadOracleRuntimeLog(connect);
     }
 
     @Override
     public boolean isInstanceOnline(Connect connect) throws Exception {
-        return com.dbboys.infra.util.InstanceRuntimeUtil.isOracleInstanceOnline(connect);
+        return com.dbboys.dialect.common.InstanceRuntimeUtil.isOracleInstanceOnline(connect);
     }
 
     @Override
     public ConfigUpdateResult updateConfig(Connect connect, String paramName, String newValue) throws Exception {
-        return com.dbboys.infra.util.InstanceMutationUtil.updateOracleConfig(connect, paramName, newValue);
+        return com.dbboys.dialect.common.InstanceMutationUtil.updateOracleConfig(connect, paramName, newValue);
     }
 
     @Override
     public void startInstance(Connect connect) throws Exception {
-        com.dbboys.infra.util.InstanceMutationUtil.startOracleInstance(connect);
+        com.dbboys.dialect.common.InstanceMutationUtil.startOracleInstance(connect);
     }
 
     @Override
     public void stopInstance(Connect connect) throws Exception {
-        com.dbboys.infra.util.InstanceMutationUtil.stopOracleInstance(connect);
+        com.dbboys.dialect.common.InstanceMutationUtil.stopOracleInstance(connect);
     }
 
     @Override

@@ -14,9 +14,9 @@ import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.InstanceHealthCheckUtil;
-import com.dbboys.infra.util.InstanceMutationUtil;
-import com.dbboys.infra.util.InstanceRuntimeUtil;
+import com.dbboys.dialect.common.InstanceHealthCheckUtil;
+import com.dbboys.dialect.common.InstanceMutationUtil;
+import com.dbboys.dialect.common.InstanceRuntimeUtil;
 import com.dbboys.model.Connect;
 import com.dbboys.model.HealthCheck;
 

@@ -5,7 +5,7 @@ import com.dbboys.app.AppState;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.infra.util.SnapshotUtil;
+import com.dbboys.ui.util.SnapshotUtil;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.concurrent.Task;

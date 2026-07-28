@@ -5,9 +5,9 @@ import org.apache.logging.log4j.Logger;
 
 import com.dbboys.app.AppState;
 import com.dbboys.app.Main;
-import com.dbboys.infra.config.ConfigManagerUtil;
+import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.search.MarkdownUtil;
-import com.dbboys.model.Markdown;
+import com.dbboys.ui.treemodel.Markdown;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -53,7 +53,7 @@ public class CustomTreeviewTab extends Tab {
                 if (getTabPane() != null) {
                     int idx = getTabPane().getTabs().indexOf(this);
                     if (idx >= 0) {
-                        ConfigManagerUtil.setProperty("DEFAULT_LISTVIEW_TAB", String.valueOf(idx));
+                        ConfigManager.setProperty("DEFAULT_LISTVIEW_TAB", String.valueOf(idx));
                     }
                 }
                 for (Tab tab : getTabPane().getTabs()) {

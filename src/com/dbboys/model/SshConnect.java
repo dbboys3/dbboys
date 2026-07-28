@@ -1,6 +1,5 @@
 package com.dbboys.model;
 
-import com.dbboys.model.TreeData;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
