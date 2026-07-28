@@ -10,5 +10,13 @@ logs/
 data/
 index/
 scripts/
+<<<<<<< HEAD
 demo/
 runtime/
+=======
+bin/
+docs/
+extlib/
+lib/
+etc/config.properties
+>>>>>>> df0b74ee72c77a84fb17f4c33ce497b8b924b0c1
