@@ -103,7 +103,6 @@ public class SftpDialogController {
                 cancelled = true;
                 // Instant feedback — the transfer thread only finalizes state after the in-flight chunk/close
                 cb.setDisable(true);
-                progressP.set(I18n.t("sftp.status.cancelling", "Cancelling..."));
             });
             cancelP.set(cb);
         }
