@@ -84,47 +84,13 @@ public class TreeNavigator {
     }
 
     public static TreeItem<TreeData> getMetaConnTreeItem(TreeItem<TreeData> treeItem){
-        TreeItem<TreeData> retrunTreeItem=treeItem;
-        if(retrunTreeItem.getValue() instanceof Connect){
-            return  retrunTreeItem;
-        }else if(retrunTreeItem.getValue() instanceof DatabaseFolder){
-            return  retrunTreeItem.getParent();
-        }else if(retrunTreeItem.getValue() instanceof UserFolder){
-            return  retrunTreeItem.getParent();
-        }else if(retrunTreeItem.getValue() instanceof User){
-            return  retrunTreeItem.getParent().getParent();
-        }else if(retrunTreeItem.getValue() instanceof Catalog){
-            return  retrunTreeItem.getParent().getParent();
-        }else if(retrunTreeItem.getValue() instanceof ObjectFolder){
-            return  retrunTreeItem.getParent().getParent().getParent();
-        }else if(
-                retrunTreeItem.getValue() instanceof SysTable||
-                        retrunTreeItem.getValue() instanceof Table||
-                        retrunTreeItem.getValue() instanceof View||
-                        retrunTreeItem.getValue() instanceof Index||
-                        retrunTreeItem.getValue() instanceof Sequence||
-                        retrunTreeItem.getValue() instanceof Synonym||
-                        retrunTreeItem.getValue() instanceof Trigger||
-                        retrunTreeItem.getValue() instanceof Function||
-                        retrunTreeItem.getValue() instanceof Procedure||
-                        retrunTreeItem.getValue() instanceof DBPackage||
-                        retrunTreeItem.getValue() instanceof Type||
-                        retrunTreeItem.getValue() instanceof Queue||
-                        retrunTreeItem.getValue() instanceof SchedulerJob||
-                        retrunTreeItem.getValue() instanceof RecycleBinObject
-        ){
-            return  retrunTreeItem.getParent().getParent().getParent().getParent();
+        // 沿父链向上找连接节点：兼容两层（库-表）与三层（库-模式-表）及更深的包节点树形，
+        // 不再按固定层数取父级（三层模型下会错位到 DatabaseFolder 导致 ClassCastException）
+        TreeItem<TreeData> current = treeItem;
+        while (current != null && !(current.getValue() instanceof Connect)) {
+            current = current.getParent();
         }
-        else if(
-                retrunTreeItem.getValue() instanceof PackageFunction||
-                        retrunTreeItem.getValue() instanceof PackageProcedure
-
-        ){
-            return  retrunTreeItem.getParent().getParent().getParent().getParent().getParent();
-        }
-        else{
-            return  retrunTreeItem;
-        }
+        return current;
     }
 
     public static Connect getMetaConnect(TreeItem<TreeData> treeItem){

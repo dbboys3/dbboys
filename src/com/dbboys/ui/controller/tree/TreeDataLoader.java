@@ -235,7 +235,10 @@ public class TreeDataLoader {
                             }else {
                                 //查询到结果后删除loading节点
                                 Platform.runLater(() -> {
-                                    treeItem.setValue((Catalog) objectList.getInfo());
+                                    Catalog refreshedCatalog = (Catalog) objectList.getInfo();
+                                    // 三层模型：保留模式节点的所属库标记，避免刷新/展开后被误判为库节点
+                                    refreshedCatalog.setParentDb(((Catalog) treeItem.getValue()).getParentDb());
+                                    treeItem.setValue(refreshedCatalog);
                                     treeItem.getChildren().clear();
                                     DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
                                     List<String> items = objectList.getItems();

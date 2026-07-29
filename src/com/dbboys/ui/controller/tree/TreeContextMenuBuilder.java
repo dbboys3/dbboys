@@ -1498,7 +1498,12 @@ public class TreeContextMenuBuilder {
                 else if(selectedItem.getValue() instanceof Catalog catalogNode) {
                     DatabasePlatform dbNodePlatform = TreeNavigator.resolvePlatform(selectedItem);
                     treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
-                    if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
+                    // 三层模型：模式节点不提供"设为默认库"（默认库语义只到库级）
+                    boolean showSetDefault = (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase())
+                            && !(dbNodePlatform != null
+                                && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
+                                && dbNodePlatform.isSchemaCatalog(catalogNode));
+                    if (showSetDefault) {
                         treeview_menu.getItems().add(setDefaultDatabaseItem);
                     }
                     // 三层模型（库-模式-表）：库节点下可新建模式
