@@ -144,7 +144,7 @@ class TreeMenuCapabilities {
         Class<?> anchorType = firstSelected == null || firstSelected.getValue() == null
                 ? null
                 : firstSelected.getValue().getClass();
-        if (anchorType == Catalog.class || anchorType == ObjectFolder.class) {
+        if (anchorType == Database.class || anchorType == ObjectFolder.class) {
             return false;
         }
         for (TreeItem<TreeData> item : selectedItems) {

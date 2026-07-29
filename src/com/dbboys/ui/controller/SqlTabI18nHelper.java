@@ -180,7 +180,7 @@ public class SqlTabI18nHelper {
             return;
         }
         ctrl.suppressDbChange = true;
-        Catalog selected = ctrl.sqlDbChoiceBox.getValue();
+        Database selected = ctrl.sqlDbChoiceBox.getValue();
         ctrl.sqlDbChoiceBox.getSelectionModel().clearSelection();
         ctrl.sqlDbChoiceBox.setValue(selected);
         ctrl.suppressDbChange = false;

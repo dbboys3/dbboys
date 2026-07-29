@@ -11,7 +11,7 @@ import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.HealthCheck;
 
 import java.sql.Connection;

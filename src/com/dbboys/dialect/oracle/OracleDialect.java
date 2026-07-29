@@ -12,7 +12,7 @@ import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -814,7 +814,7 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public String buildBootstrapSql(Catalog database) {
+    public String buildBootstrapSql(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

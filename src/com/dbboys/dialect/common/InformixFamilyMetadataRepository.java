@@ -442,7 +442,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
         return connect != null && systemOwnerName().equalsIgnoreCase(connect.getUsername());
     }
 
-    public List<Catalog> getDatabases(Connection conn) throws SQLException {
+    public List<Database> getDatabases(Connection conn) throws SQLException {
         try {
             return queryDatabases(conn, SQL_DATABASES_DEFAULT.formatted(systemOwnerName()));
         } catch (SQLException e) {
@@ -453,10 +453,10 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
         }
     }
 
-    private List<Catalog> queryDatabases(Connection conn, String sql) throws SQLException {
+    private List<Database> queryDatabases(Connection conn, String sql) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(sql, null, rs -> {
-            Catalog database = new Catalog(rs.getString(1));
+            Database database = new Database(rs.getString(1));
             database.setDbOwner(rs.getString(2));
             database.setDbCreated(rs.getString(3));
             database.setDbSpace(rs.getString(4));
@@ -468,10 +468,10 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
         });
     }
 
-    public Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.queryOne(SQL_DATABASE_INFO, List.of(databaseName, databaseName), rs -> {
-            Catalog database = new Catalog(rs.getString(1));
+            Database database = new Database(rs.getString(1));
             database.setDbOwner(rs.getString(2));
             database.setDbCreated(rs.getString(3));
             database.setDbSpace(rs.getString(4));
@@ -652,7 +652,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
         });
     }
 
-    public List<Sequence> getSequences(Connection conn, Catalog database) throws SQLException {
+    public List<Sequence> getSequences(Connection conn, Database database) throws SQLException {
         return getSequences(conn, database.getName());
     }
 

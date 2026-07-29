@@ -14,13 +14,13 @@ public final class SqliteMetadataRepository implements MetadataRepository {
 
     @Override public List<User> getUsers(Connection conn) { return List.of(); }
 
-    @Override public List<Catalog> getDatabases(Connection conn) {
-        Catalog main = new Catalog(); main.setName("main"); main.setDbSize("");
+    @Override public List<Database> getDatabases(Connection conn) {
+        Database main = new Database(); main.setName("main"); main.setDbSize("");
         return List.of(main);
     }
 
-    @Override public Catalog getDatabaseInfo(Connection conn, String databaseName) {
-        Catalog info = new Catalog(); info.setName("main"); info.setDbSize("");
+    @Override public Database getDatabaseInfo(Connection conn, String databaseName) {
+        Database info = new Database(); info.setName("main"); info.setDbSize("");
         return info;
     }
 

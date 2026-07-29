@@ -319,16 +319,16 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    public ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Catalog database, boolean sessionInitOnReconnect) {
+    public ChangeDefaultDatabaseResult changeDefaultDatabase(Connect connect, Database database, boolean sessionInitOnReconnect) {
         return changeDatabase(connect, database, sessionInitOnReconnect, true);
     }
 
-    public ChangeDefaultDatabaseResult changeSessionDatabase(Connect connect, Catalog database, boolean sessionInitOnReconnect) {
+    public ChangeDefaultDatabaseResult changeSessionDatabase(Connect connect, Database database, boolean sessionInitOnReconnect) {
         return changeDatabase(connect, database, sessionInitOnReconnect, false);
     }
 
     private ChangeDefaultDatabaseResult changeDatabase(Connect connect,
-                                                       Catalog database,
+                                                       Database database,
                                                        boolean sessionInitOnReconnect,
                                                        boolean persistDefaultDatabase) {
         ChangeDefaultDatabaseResult result = new ChangeDefaultDatabaseResult();
@@ -406,7 +406,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     private void adjustDefaultDatabaseIsolationLevel(Connect connect,
-                                                     Catalog database,
+                                                     Database database,
                                                      boolean persistDefaultDatabase) {
         if (!persistDefaultDatabase || !supportsConnectionProperty(connect, PROP_IFX_ISOLATION_LEVEL)) {
             return;
@@ -539,13 +539,13 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    private ConnectionLease acquireConnection(Connect connect, Catalog database) throws Exception {
+    private ConnectionLease acquireConnection(Connect connect, Database database) throws Exception {
         Connection conn = connect.getConn();
         var repo = platformResolver.metadata(connect);
         // 三层目录模型（库-模式-表）：模式节点先落到所属库的连接（必要时重连），再切模式
-        String parentDb = database == null ? null : database.getParentDb();
+        String parentDb = (database instanceof com.dbboys.model.Schema s) ? s.getParentDb() : null;
         if (parentDb != null && !parentDb.isBlank()) {
-            ConnectionLease dbLease = acquireConnection(connect, new Catalog(parentDb));
+            ConnectionLease dbLease = acquireConnection(connect, new Database(parentDb));
             try {
                 repo.setDatabase(dbLease.conn, database.getName());
                 return new ConnectionLease(dbLease.conn, dbLease.shouldClose);
@@ -582,13 +582,13 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     private void applyTargetDatabase(DatabasePlatform dialect,
                                      Connect connect,
-                                     Catalog database,
+                                     Database database,
                                      boolean persistDefaultDatabase) {
         if (dialect == null || connect == null || database == null) {
             return;
         }
         // 三层目录模型：模式节点的目标库 = catalog 记所属库、sessionCatalog 记模式
-        String parentDb = database.getParentDb();
+        String parentDb = (database instanceof com.dbboys.model.Schema s) ? s.getParentDb() : null;
         if (parentDb != null && !parentDb.isBlank()) {
             connect.setCatalog(parentDb);
             connect.setSessionCatalog(database.getName());
@@ -606,7 +606,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         dialect.connection().setSessionCatalog(connect, database.getName());
     }
 
-    public <T> T withMetaSession(Connect connect, Catalog database, SqlWork<T> action) throws Exception {
+    public <T> T withMetaSession(Connect connect, Database database, SqlWork<T> action) throws Exception {
         if (connect == null) {
             return null;
         }
@@ -634,7 +634,7 @@ public class ConnectionServiceImpl implements ConnectionService {
         }
     }
 
-    private boolean shouldIgnoreIsolationLevel(Catalog database) {
+    private boolean shouldIgnoreIsolationLevel(Database database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

@@ -233,7 +233,7 @@ public class DatabaseImportHandler {
             return 0;
         }
 
-        Catalog database = new Catalog(bundle.databaseName);
+        Database database = new Database(bundle.databaseName);
         database.setDbLocale(bundle.dbLocale);
         database.setDbLog(bundle.dbLog);
         Connect bootstrapConnect = new Connect(baseConnect);
@@ -319,7 +319,7 @@ public class DatabaseImportHandler {
     }
 
     private static int importDatabaseDataFilesParallel(Connect databaseConnect,
-                                                       Catalog database,
+                                                       Database database,
                                                        List<File> dataFiles,
                                                        BackgroundSqlTask backSqlTask,
                                                        DatabaseImportRuntime runtime,
@@ -392,7 +392,7 @@ public class DatabaseImportHandler {
                         );
                         runtime.registerTask(workerTask);
                         try {
-                            Catalog workerDatabase = copyImportDatabase(database);
+                            Database workerDatabase = copyImportDatabase(database);
                             int importedRows = TreeViewUtil.tableService.importTableDataSync(
                                     new Connect(workerConnect),
                                     workerDatabase,
@@ -466,8 +466,8 @@ public class DatabaseImportHandler {
         }
     }
 
-    private static Catalog copyImportDatabase(Catalog database) {
-        Catalog copy = new Catalog(database == null ? "" : database.getName());
+    private static Database copyImportDatabase(Database database) {
+        Database copy = new Database(database == null ? "" : database.getName());
         if (database != null) {
             copy.setDbLocale(database.getDbLocale());
             copy.setDbLog(database.getDbLog());

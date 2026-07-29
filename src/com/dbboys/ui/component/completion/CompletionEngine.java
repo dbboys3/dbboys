@@ -1,6 +1,6 @@
 package com.dbboys.ui.component.completion;
 
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.Connect;
 import com.dbboys.ui.component.completion.provider.FunctionProvider;
 import com.dbboys.ui.component.completion.provider.KeywordProvider;
@@ -49,7 +49,7 @@ public class CompletionEngine {
      * @param database active database (may be default/null — Phase 1 ignores it)
      */
     public CompletionResult complete(String fullSql, int caretPos,
-                                     Connect connect, Catalog database) {
+                                     Connect connect, Database database) {
         // Update the schema object provider's context so it reads the right cache partition
         schemaObjectProvider.setContext(connect, database);
 
@@ -77,7 +77,7 @@ public class CompletionEngine {
      * Safe to call on every database switch — the fetcher runs asynchronously and
      * results will be available for the next completion request.
      */
-    public void refreshSchemaObjects(Connect connect, Catalog database) {
+    public void refreshSchemaObjects(Connect connect, Database database) {
         SchemaObjectsFetcher.fetchAsync(connect, database);
     }
 

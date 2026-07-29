@@ -98,12 +98,12 @@ public class TreeNavigator {
     }
 
 
-    public static Catalog getCurrentDatabase(TreeItem<TreeData> treeItem){
+    public static Database getCurrentDatabase(TreeItem<TreeData> treeItem){
         TreeItem<TreeData> retrunTreeItem=treeItem;
-        if(retrunTreeItem.getValue() instanceof Catalog){
-            return  (Catalog) retrunTreeItem.getValue();
+        if(retrunTreeItem.getValue() instanceof Database){
+            return  (Database) retrunTreeItem.getValue();
         }else if(retrunTreeItem.getValue() instanceof ObjectFolder){
-            return  (Catalog) retrunTreeItem.getParent().getValue();
+            return  (Database) retrunTreeItem.getParent().getValue();
         }else if(retrunTreeItem.getValue() instanceof UserFolder||retrunTreeItem.getValue() instanceof User){
             Connect connect = getMetaConnect(treeItem);
             String databaseName = "sysuser";
@@ -115,7 +115,7 @@ public class TreeNavigator {
                 }
             } catch (Exception ignored) {
             }
-            Catalog db=new Catalog(databaseName);
+            Database db=new Database(databaseName);
             if ("sysuser".equalsIgnoreCase(databaseName)) {
                 db.setDbLocale("en_US.819");
             }
@@ -136,13 +136,13 @@ public class TreeNavigator {
                         retrunTreeItem.getValue() instanceof SchedulerJob||
                         retrunTreeItem.getValue() instanceof RecycleBinObject
         ){
-            return  (Catalog) retrunTreeItem.getParent().getParent().getValue();
+            return  (Database) retrunTreeItem.getParent().getParent().getValue();
         }else if(
                 retrunTreeItem.getValue() instanceof PackageFunction|| retrunTreeItem.getValue() instanceof PackageProcedure
         ){
-            return  (Catalog) retrunTreeItem.getParent().getParent().getParent().getValue();
+            return  (Database) retrunTreeItem.getParent().getParent().getParent().getValue();
         }
-        return  (Catalog) retrunTreeItem.getValue();
+        return  (Database) retrunTreeItem.getValue();
 
     }
 
@@ -343,12 +343,12 @@ public class TreeNavigator {
 
     public static boolean canCopyItem(TreeItem<TreeData> selectedItem) {
         TreeData treeData = selectedItem.getValue();
-        return selectedItem.isLeaf() || treeData instanceof DBPackage || treeData instanceof Catalog;
+        return selectedItem.isLeaf() || treeData instanceof DBPackage || treeData instanceof Database;
     }
 
     public static boolean canRefreshItem(TreeItem<TreeData> selectedItem) {
         TreeData treeData = selectedItem.getValue();
-        if (treeData instanceof DatabaseFolder || treeData instanceof UserFolder || treeData instanceof Catalog || treeData instanceof ObjectFolder || treeData instanceof Table || treeData instanceof Index || treeData instanceof Trigger || treeData instanceof DBPackage) {
+        if (treeData instanceof DatabaseFolder || treeData instanceof UserFolder || treeData instanceof Database || treeData instanceof ObjectFolder || treeData instanceof Table || treeData instanceof Index || treeData instanceof Trigger || treeData instanceof DBPackage) {
             return true;
         }
         if (treeData instanceof SysTable) {
@@ -361,7 +361,7 @@ public class TreeNavigator {
         TreeData treeData = selectedItem.getValue();
         if (!(treeData instanceof ConnectFolder
                 || treeData instanceof Connect
-                || treeData instanceof Catalog
+                || treeData instanceof Database
                 || treeData instanceof Table
                 || treeData instanceof Index
                 || treeData instanceof Sequence)) {
@@ -393,7 +393,7 @@ public class TreeNavigator {
         TreeData treeData = selectedItem.getValue();
         if (!(treeData instanceof ConnectFolder
                 || treeData instanceof Connect
-                || treeData instanceof Catalog
+                || treeData instanceof Database
                 || treeData instanceof Table
                 || treeData instanceof View
                 || treeData instanceof Index
@@ -421,7 +421,7 @@ public class TreeNavigator {
         if (isReadOnlyObject(selectedItem) || isSystemDatabaseObject(selectedItem)) {
             return false;
         }
-        if (treeData instanceof Catalog) {
+        if (treeData instanceof Database) {
             DatabasePlatform platform = resolvePlatform(selectedItem);
             if (platform != null && !platform.canDropDatabase()) {
                 return false;
@@ -444,7 +444,7 @@ public class TreeNavigator {
 
     public static boolean isSystemDatabaseObject(TreeItem<TreeData> selectedItem) {
         TreeData treeData = selectedItem.getValue();
-        if (!(treeData instanceof Catalog
+        if (!(treeData instanceof Database
                 || treeData instanceof ObjectFolder
                 || treeData instanceof SysTable
                 || treeData instanceof Table
@@ -478,7 +478,7 @@ public class TreeNavigator {
         return treeData instanceof DatabaseFolder
                 || treeData instanceof UserFolder
                 || treeData instanceof User
-                || treeData instanceof Catalog
+                || treeData instanceof Database
                 || treeData instanceof ObjectFolder
                 || treeData instanceof SysTable
                 || treeData instanceof Table

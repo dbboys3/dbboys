@@ -12,7 +12,7 @@ import com.dbboys.app.AppContext;
 import com.dbboys.core.ConnectionService;
 import com.dbboys.core.ConnectionServiceImpl;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.Connect;
 import com.dbboys.model.HealthCheck;
 import org.json.JSONArray;
@@ -433,7 +433,7 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
     }
 
     @Override
-    public String buildBootstrapSql(Catalog database) {
+    public String buildBootstrapSql(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

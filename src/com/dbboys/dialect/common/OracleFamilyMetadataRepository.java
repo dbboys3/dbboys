@@ -4,7 +4,7 @@ import com.dbboys.core.MetadataRepository;
 import com.dbboys.infra.db.SqlRunner;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.DBPackage;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.Function;
 import com.dbboys.model.Index;
 import com.dbboys.model.Queue;
@@ -643,18 +643,18 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
     }
 
     @Override
-    public List<Catalog> getDatabases(Connection conn) throws SQLException {
+    public List<Database> getDatabases(Connection conn) throws SQLException {
         return getMetadataDatabases(conn);
     }
 
     @Override
-    public List<Catalog> getMetadataDatabases(Connection conn) throws SQLException {
+    public List<Database> getMetadataDatabases(Connection conn) throws SQLException {
         SqlRunner runner = runner(conn);
         SessionSchemaListContext sessionCtx = loadSessionSchemaListContext(runner);
-        List<Catalog> schemas;
+        List<Database> schemas;
         try {
             schemas = runner.query(sqlUsersWithSize(), null, rs -> {
-                Catalog db = mapSchemaDatabase(rs.getString(1));
+                Database db = mapSchemaDatabase(rs.getString(1));
                 db.setDbSize(formatBytes(rs.getBigDecimal(2)));
                 db.setDbCreated(blankToEmpty(rs.getString("created_time")));
                 applySessionSchemaListContext(db, sessionCtx);
@@ -662,7 +662,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
             });
         } catch (SQLException e) {
             schemas = runner.query(sqlUsersWithCreated(), null, rs -> {
-                Catalog db = mapSchemaDatabase(rs.getString(1));
+                Database db = mapSchemaDatabase(rs.getString(1));
                 db.setDbCreated(blankToEmpty(rs.getString("created_time")));
                 applySessionSchemaListContext(db, sessionCtx);
                 return db;
@@ -672,7 +672,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         boolean exists = schemas.stream().anyMatch(schema -> currentSchema.equalsIgnoreCase(schema.getName()));
         if (!exists) {
             schemas = new ArrayList<>(schemas);
-            Catalog injected = mapSchemaDatabase(currentSchema);
+            Database injected = mapSchemaDatabase(currentSchema);
             String created = querySchemaCreatedTime(runner, currentSchema);
             if (created != null) {
                 injected.setDbCreated(blankToEmpty(created));
@@ -701,7 +701,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         }
     }
 
-    private static void applySessionSchemaListContext(Catalog db, SessionSchemaListContext ctx) {
+    private static void applySessionSchemaListContext(Database db, SessionSchemaListContext ctx) {
         if (ctx == null) {
             return;
         }
@@ -721,15 +721,15 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
     }
 
     @Override
-    public Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         if (databaseName == null || databaseName.isBlank()) {
             return loadCurrentDatabase(conn);
         }
-        Catalog schema = loadSchemaInfo(conn, databaseName);
+        Database schema = loadSchemaInfo(conn, databaseName);
         if (schema != null) {
             return schema;
         }
-        Catalog current = loadCurrentDatabase(conn);
+        Database current = loadCurrentDatabase(conn);
         return databaseName.equalsIgnoreCase(current.getName()) ? current : null;
     }
 
@@ -1178,12 +1178,12 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         return new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
     }
 
-    private Catalog loadCurrentDatabase(Connection conn) throws SQLException {
+    private Database loadCurrentDatabase(Connection conn) throws SQLException {
         String fallbackName = fallbackDatabaseName(conn);
         String fallbackOwner = currentSchema(conn);
         SqlRunner runner = runner(conn);
-        Catalog database = runner.queryOne(sqlCurrentDatabase(), null, rs -> {
-            Catalog row = new Catalog(blankToFallback(rs.getString("dbname"), fallbackName));
+        Database database = runner.queryOne(sqlCurrentDatabase(), null, rs -> {
+            Database row = new Database(blankToFallback(rs.getString("dbname"), fallbackName));
             row.setDbOwner(blankToFallback(rs.getString("owner"), fallbackOwner));
             row.setDbCreated(blankToEmpty(rs.getString("created_time")));
             row.setDbSpace(blankToEmpty(rs.getString("dbspace")));
@@ -1196,7 +1196,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         if (database != null) {
             return database;
         }
-        Catalog fallback = new Catalog(fallbackName);
+        Database fallback = new Database(fallbackName);
         fallback.setDbOwner(fallbackOwner);
         fallback.setDbCreated("");
         fallback.setDbSpace("");
@@ -1211,10 +1211,10 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
             select nvl(sum(bytes), 0) from dba_segments where owner = ?
             """;
 
-    private Catalog loadSchemaInfo(Connection conn, String schemaName) throws SQLException {
+    private Database loadSchemaInfo(Connection conn, String schemaName) throws SQLException {
         SqlRunner runner = runner(conn);
         return runner.queryOne(sqlSchemaInfo(), List.of(schemaName), rs -> {
-            Catalog schema = new Catalog(blankToFallback(rs.getString("schema_name"), schemaName));
+            Database schema = new Database(blankToFallback(rs.getString("schema_name"), schemaName));
             schema.setDbOwner(blankToFallback(rs.getString("schema_name"), schemaName));
             schema.setDbCreated(blankToEmpty(rs.getString("created_time")));
             schema.setDbSpace("");
@@ -1333,8 +1333,8 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         return formatBytes(value);
     }
 
-    private Catalog mapSchemaDatabase(String schemaName) {
-        Catalog database = new Catalog(blankToFallback(schemaName, dialectName()));
+    private Database mapSchemaDatabase(String schemaName) {
+        Database database = new Database(blankToFallback(schemaName, dialectName()));
         database.setDbOwner(database.getName());
         database.setDbCreated("");
         database.setDbSpace("");

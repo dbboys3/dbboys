@@ -1,7 +1,7 @@
 package com.dbboys.dialect.informix;
 
 import com.dbboys.core.ChangeDatabaseFailureKind;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.core.ConnectionSupport;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DdlRepository;
@@ -387,7 +387,7 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
     }
 
     @Override
-    public String buildBootstrapSql(Catalog database) {
+    public String buildBootstrapSql(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

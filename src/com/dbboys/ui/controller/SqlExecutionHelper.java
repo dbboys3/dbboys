@@ -12,7 +12,7 @@ import com.dbboys.infra.util.*;
 import com.dbboys.ui.dialog.PopupWindowUtil;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.Sql;
 import com.dbboys.model.UpdateResult;
 import javafx.application.Platform;
@@ -437,7 +437,7 @@ public class SqlExecutionHelper {
             if (sql.getSqlType().startsWith("DATABASE")) {
                 ctrl.sqlConnect.setCatalog(sql.getSqlType().split(" ")[1]);
                 Platform.runLater(() -> {
-                    Catalog db = new Catalog();
+                    Database db = new Database();
                     db.setName(ctrl.sqlConnect.getCatalog());
                     ctrl.sqlDbChoiceBox.setValue(db);
                 });

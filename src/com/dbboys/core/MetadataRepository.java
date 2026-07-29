@@ -21,9 +21,9 @@ public interface MetadataRepository {
         return false;
     }
 
-    List<Catalog> getDatabases(Connection conn) throws SQLException;
+    List<Database> getDatabases(Connection conn) throws SQLException;
 
-    default List<Catalog> getMetadataDatabases(Connection conn) throws SQLException {
+    default List<Database> getMetadataDatabases(Connection conn) throws SQLException {
         return getDatabases(conn);
     }
 
@@ -31,11 +31,11 @@ public interface MetadataRepository {
      * 三层目录模型下某个库（当前连接所在库）的模式列表。
      * 仅 {@link DatabasePlatform#usesCatalogSchemaLevel()} 为 true 的方言需要实现。
      */
-    default List<Catalog> getSchemas(Connection conn) throws SQLException {
+    default List<Database> getSchemas(Connection conn) throws SQLException {
         return List.of();
     }
 
-    Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
+    Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException;
 
     int getUserTablesCount(Connection conn) throws SQLException;
 

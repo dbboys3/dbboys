@@ -1,7 +1,7 @@
 package com.dbboys.core;
 
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -143,24 +143,11 @@ public interface DatabasePlatform {
 
     /**
      * 三层目录模型：库-模式-表（如 PostgreSQL 实例有多个库，库下再挂模式）。
-     * 为 true 时，树在库节点下先加载一层模式节点（Catalog.parentDb 记录所属库），
+     * 为 true 时，树在库节点下先加载一层模式节点（Database.parentDb 记录所属库），
      * 模式节点下才挂对象文件夹。由 {@link #catalogModel()} 派生。
      */
     default boolean usesCatalogSchemaLevel() {
         return catalogModel() == CatalogModel.DATABASE_SCHEMA;
-    }
-
-    /**
-     * 层级判定单源：给定库/模式节点是否为"模式"层。
-     * SCHEMA 模型一层节点全是模式；DATABASE_SCHEMA 模型下 parentDb 非空的是模式；
-     * DATABASE 模型没有模式层。右键能力、图标、重删、提示 label 统一跟随此判定。
-     */
-    default boolean isSchemaCatalog(Catalog catalog) {
-        return switch (catalogModel()) {
-            case SCHEMA -> true;
-            case DATABASE_SCHEMA -> catalog != null && catalog.getParentDb() != null;
-            default -> false;
-        };
     }
 
     /** 建模式对话框是否需要密码（oracle/dameng 的用户=模式模型需要；PG 的 CREATE SCHEMA 不需要）。 */
@@ -217,7 +204,7 @@ public interface DatabasePlatform {
         return "导出数据库\"%s\"";
     }
 
-    default String buildBootstrapSql(Catalog database) {
+    default String buildBootstrapSql(Database database) {
         return "";
     }
 

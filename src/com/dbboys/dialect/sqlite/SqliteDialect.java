@@ -202,7 +202,7 @@ public final class SqliteDialect implements DatabasePlatform, ConnectionSupport 
       );
    }
 
-    @Override public String buildBootstrapSql(com.dbboys.model.Catalog database) { return ""; }
+    @Override public String buildBootstrapSql(com.dbboys.model.Database database) { return ""; }
     @Override public String createDatabaseSql(String name, String charset, String dbspace) { return null; }
 
     @Override

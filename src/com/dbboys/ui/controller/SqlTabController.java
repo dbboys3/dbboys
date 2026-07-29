@@ -69,7 +69,7 @@ public class SqlTabController {
     @FXML
     public ChoiceBox<Connect> sqlConnectChoiceBox;
     @FXML
-    public ChoiceBox<Catalog> sqlDbChoiceBox;
+    public ChoiceBox<Database> sqlDbChoiceBox;
     @FXML
     public ChoiceBox<String> sqlCommitModeChoiceBox;
     //sql编辑框及结果集
@@ -90,7 +90,7 @@ public class SqlTabController {
             return null;
         }
     };
-    public ObservableList<Catalog> databaseChoiceBoxList = FXCollections.observableArrayList();
+    public ObservableList<Database> databaseChoiceBoxList = FXCollections.observableArrayList();
     public CustomSearchReplaceVbox searchReplaceBox = new CustomSearchReplaceVbox(null);
     public VBox resultSetVBox = new VBox();
     public ResultSetTabController currentResultSetTabController;
@@ -174,7 +174,7 @@ public class SqlTabController {
     private final ConnectionService connectionService = AppContext.get(ConnectionService.class);
     private final SqlexeService sqlexeService = AppContext.get(SqlexeService.class);
     final Connect defaultConnect = new Connect();
-    final Catalog defaultDatabase = new Catalog();
+    final Database defaultDatabase = new Database();
 
     /** 工具栏当前选中项为已保存的 General JDBC 连接时，禁用库选择与用户名展示（URL 已含库信息）。 */
     public boolean isGeneralJdbcToolbarSelection() {

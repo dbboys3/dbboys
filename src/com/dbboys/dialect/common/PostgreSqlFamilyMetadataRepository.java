@@ -411,10 +411,10 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
     }
 
     @Override
-    public List<Catalog> getDatabases(Connection conn) throws SQLException {
+    public List<Database> getDatabases(Connection conn) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(SQL_DATABASES, null, rs -> {
-            Catalog catalog = new Catalog(rs.getString("datname"));
+            Database catalog = new Database(rs.getString("datname"));
             catalog.setDbOwner(blankToEmpty(rs.getString("owner")));
             catalog.setDbLog("");
             catalog.setDbUseGLU("");
@@ -427,29 +427,29 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
     }
 
     @Override
-    public List<Catalog> getSchemas(Connection conn) throws SQLException {
+    public List<Database> getSchemas(Connection conn) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(SQL_SCHEMAS, null, rs -> {
-            Catalog catalog = new Catalog(rs.getString("schema_name"));
-            catalog.setDbOwner(blankToEmpty(rs.getString("owner")));
-            catalog.setDbLog("");
-            catalog.setDbUseGLU("");
-            catalog.setDbLocale(blankToEmpty(rs.getString("comment")));
-            catalog.setDbSpace("");
-            catalog.setDbSize(blankToEmpty(rs.getString("total_size")));
-            catalog.setDbCreated("");
-            return catalog;
+            Schema schema = new Schema(rs.getString("schema_name"));
+            schema.setDbOwner(blankToEmpty(rs.getString("owner")));
+            schema.setDbLog("");
+            schema.setDbUseGLU("");
+            schema.setDbLocale(blankToEmpty(rs.getString("comment")));
+            schema.setDbSpace("");
+            schema.setDbSize(blankToEmpty(rs.getString("total_size")));
+            schema.setDbCreated("");
+            return schema;
         });
     }
 
     @Override
-    public Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         if (databaseName == null || databaseName.isBlank()) {
-            return new Catalog("");
+            return new Database("");
         }
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.queryOne(SQL_SCHEMA_INFO, List.of(databaseName), rs -> {
-            Catalog catalog = new Catalog(rs.getString("schema_name"));
+            Database catalog = new Database(rs.getString("schema_name"));
             catalog.setDbOwner(blankToEmpty(rs.getString("owner")));
             catalog.setDbLog("");
             catalog.setDbUseGLU("");

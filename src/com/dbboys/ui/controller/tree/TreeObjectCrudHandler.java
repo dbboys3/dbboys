@@ -95,9 +95,9 @@ public class TreeObjectCrudHandler {
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
-            }else if(treeData instanceof Catalog catalog){
+            }else if(treeData instanceof Database catalog){
                 DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
-                if (renamePlatform != null && renamePlatform.isSchemaCatalog(catalog)) {
+                if (renamePlatform != null && (renamePlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA || treeData instanceof Schema)) {
                     // oracle/dameng 模式名习惯大写；PG 模式名保持用户输入
                     String effectiveName = renamePlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA
                             ? newName.toUpperCase() : newName;
@@ -147,7 +147,7 @@ public class TreeObjectCrudHandler {
         if (treeData instanceof Connect) {
             return I18n.t("metadata.dialog.rename.connection", "重命名数据库连接：%s").formatted(treeData.getName());
         }
-        if (treeData instanceof Catalog) {
+        if (treeData instanceof Database) {
             return I18n.t("metadata.dialog.rename.database", "重命名数据库：%s").formatted(treeData.getName());
         }
         if (treeData instanceof Table) {
@@ -179,7 +179,7 @@ public class TreeObjectCrudHandler {
         String oldName = selectedItem.getValue().getName();
         String objectDisplayName = getDeleteObjectDisplayName(objectType);
         String sql;
-        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Catalog) {
+        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database) {
             sql = "ALTER USER \"" + oldName + "\" RENAME TO \"" + newName + "\"";
         } else {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
@@ -295,9 +295,9 @@ public class TreeObjectCrudHandler {
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
-        }else if(treeData instanceof Catalog catalog){
+        }else if(treeData instanceof Database catalog){
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
-            if (platform != null && platform.isSchemaCatalog(catalog)) {
+            if (platform != null && (platform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA || treeData instanceof Schema)) {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
             } else {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
@@ -327,7 +327,7 @@ public class TreeObjectCrudHandler {
 
     public static Connect buildObjectConnect(TreeItem<TreeData> selectedItem, boolean useSysmaster) {
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
-        Catalog currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
+        Database currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
         String databaseName = currentDatabase.getName();
         if (useSysmaster) {
             try {
@@ -342,7 +342,7 @@ public class TreeObjectCrudHandler {
         return connect;
     }
 
-    public static void applyDatabaseConnectionProps(Connect connect, Catalog database, String databaseName) {
+    public static void applyDatabaseConnectionProps(Connect connect, Database database, String databaseName) {
         if (connect == null || database == null) {
             return;
         }
@@ -365,7 +365,7 @@ public class TreeObjectCrudHandler {
         }
     }
 
-    private static boolean isNoLogDatabase(Catalog database) {
+    private static boolean isNoLogDatabase(Database database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

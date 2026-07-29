@@ -13,7 +13,8 @@ import com.dbboys.app.AppErrorHandler;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.infra.util.SqlErrorUtil;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
+import com.dbboys.model.Schema;
 import com.dbboys.model.TreeData;
 import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
 import com.dbboys.ui.component.completion.provider.SchemaObjectsFetcher;
@@ -215,8 +216,17 @@ public class SqlConnectionHandler {
 
     private void loadDatabasesForConnect() {
         try {
-            List<Catalog> db_names = sqlexeService.getDatabases(ctrl.sqlConnect);
-            ctrl.databaseChoiceBoxList = FXCollections.observableArrayList(db_names);
+            // Three-level catalog model: fill the combo box with schema nodes
+            // (each carrying parentDb) so switching picks the correct database+schema.
+            DatabasePlatform platform = DatabasePlatformResolver.getInstance()
+                    .getPlatform(ctrl.sqlConnect.getDbtype());
+            List<Database> dbNames;
+            if (platform != null && platform.usesCatalogSchemaLevel()) {
+                dbNames = loadCatalogSchemaComboItems();
+            } else {
+                dbNames = sqlexeService.getDatabases(ctrl.sqlConnect);
+            }
+            ctrl.databaseChoiceBoxList = FXCollections.observableArrayList(dbNames);
             Platform.runLater(() -> {
                 ctrl.sqlDbChoiceBox.setValue(ctrl.defaultDatabase);
                 ctrl.sqlDbChoiceBox.setItems(ctrl.databaseChoiceBoxList);
@@ -239,6 +249,50 @@ public class SqlConnectionHandler {
         }
     }
 
+    /**
+     * PostgreSQL DATABASE_SCHEMA model: iterate every database, list its schemas,
+     * and produce Schema items so the combo box displays {@code schema@database}
+     * and switching picks up the right (database, schema) pair.
+     */
+    private List<Database> loadCatalogSchemaComboItems() throws SQLException {
+        List<Database> result = new ArrayList<>();
+        com.dbboys.core.MetadataRepository metadata =
+                DatabasePlatformResolver.getInstance().metadata(ctrl.sqlConnect);
+        List<Database> databases = metadata.getDatabases(ctrl.sqlConnect.getConn());
+        // Sort user databases first, then template/system databases
+        java.util.Set<String> sysDbNames = new java.util.LinkedHashSet<>();
+        DatabasePlatform platform = DatabasePlatformResolver.getInstance()
+                .getPlatform(ctrl.sqlConnect.getDbtype());
+        if (platform != null) {
+            sysDbNames.addAll(platform.systemDatabaseNames());
+        }
+        databases.sort((a, b) -> {
+            boolean aSys = a != null && sysDbNames.contains(a.getName());
+            boolean bSys = b != null && sysDbNames.contains(b.getName());
+            if (aSys != bSys) return aSys ? 1 : -1;
+            return String.CASE_INSENSITIVE_ORDER.compare(
+                    a == null ? "" : a.getName(), b == null ? "" : b.getName());
+        });
+        for (Database db : databases) {
+            try {
+                ctrl.sqlConnect.getConn().createStatement()
+                        .execute("SET search_path TO \"" + db.getName().replace("\"", "\"\"") + "\"");
+                List<Database> schemas = metadata.getSchemas(ctrl.sqlConnect.getConn());
+                for (Database schema : schemas) {
+                    if (schema instanceof Schema s) {
+                        s.setParentDb(db.getName());
+                    }
+                }
+                schemas.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
+                        a == null ? "" : a.getName(), b == null ? "" : b.getName()));
+                result.addAll(schemas);
+            } catch (SQLException ignored) {
+                // database may not be reachable; skip it
+            }
+        }
+        return result;
+    }
+
     private void selectCurrentDatabase() {
         String sessionDb = ctrl.sqlConnect.getSessionCatalog();
         if (sessionDb == null || sessionDb.isBlank()) {
@@ -258,7 +312,7 @@ public class SqlConnectionHandler {
             return;
         }
         int i = 0;
-        for (Catalog item : ctrl.databaseChoiceBoxList) {
+        for (Database item : ctrl.databaseChoiceBoxList) {
             if (item.getName().equalsIgnoreCase(sessionDb)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
                 return;
@@ -318,7 +372,7 @@ public class SqlConnectionHandler {
         });
     }
 
-    private boolean isCurrentSessionDatabase(Catalog database) {
+    private boolean isCurrentSessionDatabase(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return false;
         }
@@ -326,7 +380,7 @@ public class SqlConnectionHandler {
         return sessionDb != null && !sessionDb.isBlank() && database.getName().equalsIgnoreCase(sessionDb);
     }
 
-    private void applyCommitModeAfterDatabaseSwitch(Catalog database, boolean reconnected) {
+    private void applyCommitModeAfterDatabaseSwitch(Database database, boolean reconnected) {
         if (isNoLogDatabase(database)) {
             tryApplyAutoCommitModeAndSelectAuto();
             return;
@@ -383,7 +437,7 @@ public class SqlConnectionHandler {
         }
     }
 
-    private boolean isNoLogDatabase(Catalog database) {
+    private boolean isNoLogDatabase(Database database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

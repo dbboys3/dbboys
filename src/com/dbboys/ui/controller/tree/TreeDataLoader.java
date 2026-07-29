@@ -112,7 +112,7 @@ public class TreeDataLoader {
             //创建子线程加载数据库
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
-                          final List<Catalog> databases = new ArrayList<>();
+                          final List<Database> databases = new ArrayList<>();
                           try {
                               Connect connect = TreeNavigator.getMetaConnect(treeItem);
                               databases.addAll(resolvePlatformResolver().metadata(connect).getMetadataDatabases(connect.getConn()));
@@ -128,7 +128,7 @@ public class TreeDataLoader {
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 //查询到的结果添加到数据库条目下
-                                for (Catalog database : databases) {
+                                for (Database database : databases) {
                                     TreeItem<TreeData> item = TreeViewBuilder.createTreeItem(database);
                                     treeItem.getChildren().add(item);
                                 }
@@ -172,150 +172,26 @@ public class TreeDataLoader {
                         }
                     });
         }
-        else if(treeItem.getValue() instanceof Catalog){
+        else if(treeItem.getValue() instanceof Database){
             Connect metaConnect = TreeNavigator.getMetaConnect(treeItem);
-            Catalog catalogValue = (Catalog) treeItem.getValue();
-            if (resolvePlatformResolver().requirePlatform(metaConnect).usesCatalogSchemaLevel()
-                    && catalogValue.getParentDb() == null) {
-                // 三层模型（库-模式-表）：库节点展开时先加载该库的模式节点
-                metaConnect.executeSqlTask(
-                        () -> {
-                            final List<Catalog> schemas = new ArrayList<>();
-                            try {
-                                for (Catalog schema : TreeViewUtil.databaseService.getSchemas(metaConnect, catalogValue)) {
-                                    schema.setParentDb(catalogValue.getName());
-                                    schemas.add(schema);
-                                }
-                            } catch (Exception e) {
-                                if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
-                                    TreeNavigator.connectionDisconnected(treeItem);
-                                } else {
-                                    AppErrorHandler.handle(e);
-                                }
-                            }
-                            Platform.runLater(() -> {
-                                treeItem.getChildren().clear();
-                                if (schemas.isEmpty()) {
-                                    treeItem.setExpanded(false);
-                                    return;
-                                }
-                                for (Catalog schema : schemas) {
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(schema));
-                                }
-                            });
-                        });
-            } else {
+            Database catalogValue = (Database) treeItem.getValue();
+            DatabasePlatform platform = resolvePlatformResolver().requirePlatform(metaConnect);
+            boolean isSchemaNode = catalogValue instanceof Schema s && s.getParentDb() != null && !s.getParentDb().isBlank();
+
+            // Fetch object folder descriptions under the current node right away.
+            // Only DATABASE_SCHEMA database nodes (not schema nodes) first load schemas
+            // as a separate layer; all other Database nodes go straight to object folders.
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
-                        ObjectList objectList;
-                        try {
-                            Catalog database = TreeNavigator.getCurrentDatabase(treeItem);
-                            objectList = TreeViewUtil.databaseService.loadObjects(TreeNavigator.getMetaConnect(treeItem), database);
-                        } catch (Exception e) {
-                            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
-                                TreeNavigator.connectionDisconnected(treeItem);
-                            } else {
-                                AppErrorHandler.handle(e);
-                                Platform.runLater(() -> {
-                                    treeItem.getChildren().clear();
-                                    treeItem.setExpanded(false);
-                                });
-                            }
-                            return;
-                        }
-
-                        if(objectList.getSuccess()) {
-
-                            if(objectList.getInfo()==null){
-                                Platform.runLater(() -> {
-                                    com.dbboys.ui.notification.NotificationUtil.showMainNotification(
-                                            I18n.t("metadata.notice.database_not_found", "未找到当前数据库，数据库已被删除！"));
-                                    treeItem.getParent().getChildren().remove(treeItem);
-                                });
-                            }else {
-                                //查询到结果后删除loading节点
-                                Platform.runLater(() -> {
-                                    Catalog refreshedCatalog = (Catalog) objectList.getInfo();
-                                    // 三层模型：保留模式节点的所属库标记，避免刷新/展开后被误判为库节点
-                                    refreshedCatalog.setParentDb(((Catalog) treeItem.getValue()).getParentDb());
-                                    treeItem.setValue(refreshedCatalog);
-                                    treeItem.getChildren().clear();
-                                    DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
-                                    List<String> items = objectList.getItems();
-                                    int i = 0;
-                                    if (p.supportsSystemTablesFolder()) {
-                                        ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, p);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.TABLES);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.VIEWS);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    objectFolder = createObjectFolder(ObjectFolderKind.INDEXES);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    if (p.supportsSequencesFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.SEQUENCES);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsSynonymsFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.SYNONYMS);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    objectFolder = createObjectFolder(ObjectFolderKind.TRIGGERS);
-                                    objectFolder.setDescription(items.get(i++).toString());
-                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    if (p.supportsFunctionsFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.FUNCTIONS);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsProceduresFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.PROCEDURES);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsPackages()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.PACKAGES);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsObjectTypesFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.TYPES);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsObjectQueuesFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.QUEUES);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsSchedulerJobsFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.JOBS);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                    if (p.supportsRecycleBinFolder()) {
-                                        objectFolder = createObjectFolder(ObjectFolderKind.RECYCLE_BIN);
-                                        objectFolder.setDescription(items.get(i++).toString());
-                                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
-                                    }
-                                });
-                            }
-                        }else{
-                            Platform.runLater(() -> {
-                                treeItem.getChildren().clear();
-                                treeItem.setExpanded(false);
-                            });
+                        if (platform.usesCatalogSchemaLevel() && !isSchemaNode) {
+                            // Three-level model, database node: load child schemas.
+                            loadSchemaChildren(metaConnect, treeItem, catalogValue);
+                        } else {
+                            // Schema / flat-model node: load object folders.
+                            loadObjectFolders(metaConnect, treeItem);
                         }
                     });
-            }
-        }else if (isObjectFolder(treeItem, ObjectFolderKind.SYSTEM_TABLE_VIEW)) {
+        } else if (isObjectFolder(treeItem, ObjectFolderKind.SYSTEM_TABLE_VIEW)) {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
                         ObjectList objectList;
@@ -659,5 +535,144 @@ public class TreeDataLoader {
 
     private static DatabasePlatformResolver resolvePlatformResolver() {
         return DatabasePlatformResolver.getInstance();
+    }
+
+    // ---- helpers for the Database branch above ----
+
+    private static void loadSchemaChildren(Connect metaConnect, TreeItem<TreeData> treeItem, Database catalogValue) {
+        final List<Database> schemas = new ArrayList<>();
+        try {
+            for (Database db : TreeViewUtil.databaseService.getSchemas(metaConnect, catalogValue)) {
+                if (db instanceof Schema s) {
+                    s.setParentDb(catalogValue.getName());
+                }
+                schemas.add(db);
+            }
+        } catch (Exception e) {
+            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                TreeNavigator.connectionDisconnected(treeItem);
+            } else {
+                AppErrorHandler.handle(e);
+            }
+        }
+        Platform.runLater(() -> {
+            treeItem.getChildren().clear();
+            if (schemas.isEmpty()) {
+                treeItem.setExpanded(false);
+                return;
+            }
+            for (Database schema : schemas) {
+                treeItem.getChildren().add(TreeViewBuilder.createTreeItem(schema));
+            }
+        });
+    }
+
+    private static void loadObjectFolders(Connect metaConnect, TreeItem<TreeData> treeItem) {
+        ObjectList objectList;
+        try {
+            Database database = TreeNavigator.getCurrentDatabase(treeItem);
+            objectList = TreeViewUtil.databaseService.loadObjects(metaConnect, database);
+        } catch (Exception e) {
+            if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                TreeNavigator.connectionDisconnected(treeItem);
+            } else {
+                AppErrorHandler.handle(e);
+                Platform.runLater(() -> {
+                    treeItem.getChildren().clear();
+                    treeItem.setExpanded(false);
+                });
+            }
+            return;
+        }
+
+        if (objectList.getSuccess()) {
+            if (objectList.getInfo() == null) {
+                Platform.runLater(() -> {
+                    NotificationUtil.showMainNotification(
+                            I18n.t("metadata.notice.database_not_found", "未找到当前数据库，数据库已被删除！"));
+                    treeItem.getParent().getChildren().remove(treeItem);
+                });
+            } else {
+                Platform.runLater(() -> {
+                    Database refreshedCatalog = (Database) objectList.getInfo();
+                    if (refreshedCatalog instanceof Schema rs
+                            && treeItem.getValue() instanceof Schema ts) {
+                        rs.setParentDb(ts.getParentDb());
+                    }
+                    treeItem.setValue(refreshedCatalog);
+                    treeItem.getChildren().clear();
+                    DatabasePlatform p = TreeNavigator.resolvePlatform(treeItem);
+                    List<String> items = objectList.getItems();
+                    int i = 0;
+                    if (p.supportsSystemTablesFolder()) {
+                        ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.SYSTEM_TABLE_VIEW, p);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    ObjectFolder objectFolder = createObjectFolder(ObjectFolderKind.TABLES);
+                    objectFolder.setDescription(items.get(i++).toString());
+                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    objectFolder = createObjectFolder(ObjectFolderKind.VIEWS);
+                    objectFolder.setDescription(items.get(i++).toString());
+                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    objectFolder = createObjectFolder(ObjectFolderKind.INDEXES);
+                    objectFolder.setDescription(items.get(i++).toString());
+                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    if (p.supportsSequencesFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.SEQUENCES);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsSynonymsFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.SYNONYMS);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    objectFolder = createObjectFolder(ObjectFolderKind.TRIGGERS);
+                    objectFolder.setDescription(items.get(i++).toString());
+                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    if (p.supportsFunctionsFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.FUNCTIONS);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsProceduresFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.PROCEDURES);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsPackages()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.PACKAGES);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsObjectTypesFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.TYPES);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsObjectQueuesFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.QUEUES);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsSchedulerJobsFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.JOBS);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                    if (p.supportsRecycleBinFolder()) {
+                        objectFolder = createObjectFolder(ObjectFolderKind.RECYCLE_BIN);
+                        objectFolder.setDescription(items.get(i++).toString());
+                        treeItem.getChildren().add(TreeViewBuilder.createTreeItem(objectFolder));
+                    }
+                });
+            }
+        } else {
+            Platform.runLater(() -> {
+                treeItem.getChildren().clear();
+                treeItem.setExpanded(false);
+            });
+        }
     }
 }

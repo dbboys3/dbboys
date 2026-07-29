@@ -1,7 +1,7 @@
 package com.dbboys.ui.component.completion.provider;
 
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.ui.component.completion.CandidateProvider;
 import com.dbboys.ui.component.completion.CompletionContext;
 import com.dbboys.ui.component.completion.CompletionItem;
@@ -17,7 +17,7 @@ import java.util.Locale;
  * <p>Reads from {@link SchemaObjectsCache}, which is populated asynchronously by
  * {@link SchemaObjectsFetcher} when the user switches database in the SQL editor.
  *
- * <p>The provider is stateful — call {@link #setContext(Connect, Catalog)} before
+ * <p>The provider is stateful — call {@link #setContext(Connect, Database)} before
  * each completion query to ensure the correct cache entry is read.
  */
 public class SchemaObjectProvider implements CandidateProvider {
@@ -39,7 +39,7 @@ public class SchemaObjectProvider implements CandidateProvider {
      * Set the active connection+database so {@link #fetch} reads from the right
      * cache partition.  Call before every completion query.
      */
-    public void setContext(Connect connect, Catalog database) {
+    public void setContext(Connect connect, Database database) {
         this.connectId = (connect != null) ? connect.getId() : 0;
         this.databaseName = (database != null) ? database.getName() : null;
     }

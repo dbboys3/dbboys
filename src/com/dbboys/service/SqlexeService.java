@@ -7,7 +7,7 @@ import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.SqlModeCapability;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -46,7 +46,7 @@ public class SqlexeService {
     }
 
     public ConnectionService.ChangeDefaultDatabaseResult activeDatabase(Connect connect,
-                                                                       Catalog database) {
+                                                                       Database database) {
         ConnectionService.ChangeDefaultDatabaseResult result =
                 connectionService.changeSessionDatabase(connect, database, false);
         if (result.isSuccess()) {
@@ -61,7 +61,7 @@ public class SqlexeService {
         return result;
     }
 
-    public List<Catalog> getDatabases(Connect connect) throws SQLException {
+    public List<Database> getDatabases(Connect connect) throws SQLException {
         return databaseService.getDatabases(connect);
     }
 }

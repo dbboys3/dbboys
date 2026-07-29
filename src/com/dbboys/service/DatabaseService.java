@@ -10,7 +10,7 @@ import com.dbboys.infra.util.ConnectionPropertyUtil;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.Connect;
 import com.dbboys.model.BackgroundSqlTask;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.ObjectList;
 import com.dbboys.model.Sql;
 import com.dbboys.model.Table;
@@ -55,12 +55,12 @@ public class DatabaseService implements MetaObjectService {
         return platformResolver.metadata(connect).getStorageSpacesForCreateDatabase(connect.getConn());
     }
 
-    public List<Catalog> getDatabases(Connect connect) throws SQLException {
+    public List<Database> getDatabases(Connect connect) throws SQLException {
         return platformResolver.metadata(connect).getDatabases(connect.getConn());
     }
 
     /** 三层目录模型：加载某个库节点下的模式列表（跨库时自动走租约重连）。 */
-    public List<Catalog> getSchemas(Connect connect, Catalog database) throws Exception {
+    public List<Database> getSchemas(Connect connect, Database database) throws Exception {
         return withMetaSession(connect, database,
                 conn -> platformResolver.metadata(connect).getSchemas(conn));
     }
@@ -69,13 +69,13 @@ public class DatabaseService implements MetaObjectService {
         return (connect, conn, objectName) -> platformResolver.ddl(connect).printDatabase(conn, objectName);
     }
 
-    public String exportDatabaseDdl(Connect connect, Catalog database) throws Exception {
+    public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database,
                 conn -> platformResolver.ddl(connect).printDatabase(conn, database.getName()));
     }
 
-    public String exportDatabaseDdl(Connect connect, Catalog database, BiConsumer<Long, Long> progressListener) throws Exception {
+    public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
@@ -91,7 +91,7 @@ public class DatabaseService implements MetaObjectService {
         });
     }
 
-    private String buildBootstrapHeader(Connect connect, Catalog database) {
+    private String buildBootstrapHeader(Connect connect, Database database) {
         try {
             var platform = platformResolver.getPlatform(connect.getDbtype());
             if (platform != null && platform.canCreateDatabase()) {
@@ -103,7 +103,7 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connect connect,
-                                                                 Catalog database,
+                                                                 Database database,
                                                                  BiConsumer<Long, Long> progressListener) throws Exception {
         return withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
@@ -118,13 +118,13 @@ public class DatabaseService implements MetaObjectService {
         });
     }
 
-    public List<Table> getUserTables(Connect connect, Catalog database) throws Exception {
+    public List<Table> getUserTables(Connect connect, Database database) throws Exception {
         return withMetaSession(connect, database,
                 conn -> platformResolver.metadata(connect).getUserTables(conn, database.getName()));
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlPartsWithNewConnection(Connect connect,
-                                                                                  Catalog database,
+                                                                                  Database database,
                                                                                   BiConsumer<Long, Long> progressListener) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
@@ -140,14 +140,14 @@ public class DatabaseService implements MetaObjectService {
         }
     }
 
-    public List<Table> getUserTablesWithNewConnection(Connect connect, Catalog database) throws Exception {
+    public List<Table> getUserTablesWithNewConnection(Connect connect, Database database) throws Exception {
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
             return platformResolver.metadata(sessionConnect).getUserTables(conn, database.getName());
         }
     }
 
-    private Connect buildDatabaseSessionConnect(Connect connect, Catalog database) {
+    private Connect buildDatabaseSessionConnect(Connect connect, Database database) {
         Connect sessionConnect = new Connect(connect);
         if (database == null) {
             return sessionConnect;
@@ -179,7 +179,7 @@ public class DatabaseService implements MetaObjectService {
         objectList.setItems(result);
         objectList.setSuccess(false);
 
-        Catalog database = repo.getDatabaseInfo(conn, databaseName);
+        Database database = repo.getDatabaseInfo(conn, databaseName);
         objectList.setInfo(database);
 
         boolean filterType = repo.hasSysProcTypeColumn(conn);

@@ -207,7 +207,7 @@ public class TreeContextMenuBuilder {
         importDataItem.setOnAction(ev -> TableDataTransferHandler.importTableData(treeView.getSelectionModel().getSelectedItem()));
         importSqlScriptItem.setOnAction(event -> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-            if (selectedItem == null || !(selectedItem.getValue() instanceof Catalog database)) {
+            if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
                 return;
             }
             FileChooser fileChooser = new FileChooser();
@@ -298,7 +298,7 @@ public class TreeContextMenuBuilder {
                 return;
             }
             if (event.getCode() == KeyCode.N && event.isControlDown()) {
-                if (selectedItem.getValue() instanceof Catalog) {
+                if (selectedItem.getValue() instanceof Database) {
                     TreeViewUtil.databaseOpenFileItem.fire();
                     event.consume();
                 }
@@ -559,7 +559,7 @@ public class TreeContextMenuBuilder {
         TreeViewUtil.databaseOpenFileItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
             Connect connect=new Connect(TreeNavigator.getMetaConnect(selectedItem));
-            Catalog database=TreeNavigator.getCurrentDatabase(selectedItem);
+            Database database=TreeNavigator.getCurrentDatabase(selectedItem);
             TreeObjectCrudHandler.applyDatabaseConnectionProps(connect, database, database.getName());
             TabpaneUtil.addCustomSqlTab(connect);
         });
@@ -818,7 +818,7 @@ public class TreeContextMenuBuilder {
             if (!confirm) {
                     return;
                 }
-            if (treeData instanceof Catalog) {
+            if (treeData instanceof Database) {
                 String schemaSql = platform != null ? platform.gatherSchemaSql(schemaName) : "update statistics";
                 TreeViewUtil.databaseService.updateStatistics(connect, schemaSql, ()->{
                     NotificationUtil.showMainNotification(I18n.t("backsql.notice.update_statistics_done", "统计更新执行完成！"));
@@ -1116,7 +1116,7 @@ public class TreeContextMenuBuilder {
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
             boolean schemaDialog = platform != null && switch (platform.catalogModel()) {
                 case SCHEMA -> true;
-                case DATABASE_SCHEMA -> selectedItem.getValue() instanceof Catalog;
+                case DATABASE_SCHEMA -> selectedItem.getValue() instanceof Database;
                 default -> false;
             };
             if (schemaDialog) {
@@ -1222,7 +1222,7 @@ public class TreeContextMenuBuilder {
                 Class<?> anchorType = firstSelected == null || firstSelected.getValue() == null
                         ? null
                         : firstSelected.getValue().getClass();
-                if (anchorType == Catalog.class || anchorType == ObjectFolder.class) {
+                if (anchorType == Database.class || anchorType == ObjectFolder.class) {
                     treeview_menu.hide();
                     return;
                 }
@@ -1355,7 +1355,7 @@ public class TreeContextMenuBuilder {
                 }
 
                 //如果是系统库，禁用变更操作
-                if(selectedItem.getValue() instanceof Catalog||
+                if(selectedItem.getValue() instanceof Database||
                         selectedItem.getValue() instanceof ObjectFolder||
                         selectedItem.getValue() instanceof SysTable||
                         selectedItem.getValue() instanceof Table||
@@ -1495,21 +1495,20 @@ public class TreeContextMenuBuilder {
                     treeview_menu.getItems().add(deleteItem);
                 }
                 //数据库
-                else if(selectedItem.getValue() instanceof Catalog catalogNode) {
+                else if(selectedItem.getValue() instanceof Database catalogNode) {
                     DatabasePlatform dbNodePlatform = TreeNavigator.resolvePlatform(selectedItem);
                     treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
                     // 三层模型：模式节点不提供"设为默认库"（默认库语义只到库级）
+                    boolean isSchema = catalogNode instanceof com.dbboys.model.Schema;
                     boolean showSetDefault = (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase())
-                            && !(dbNodePlatform != null
-                                && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
-                                && dbNodePlatform.isSchemaCatalog(catalogNode));
+                            && !isSchema;
                     if (showSetDefault) {
                         treeview_menu.getItems().add(setDefaultDatabaseItem);
                     }
                     // 三层模型（库-模式-表）：库节点下可新建模式
                     if (dbNodePlatform != null
                             && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
-                            && !dbNodePlatform.isSchemaCatalog(catalogNode)) {
+                            && !isSchema) {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
                         treeview_menu.getItems().add(createDatabaseItem);
@@ -1531,7 +1530,7 @@ public class TreeContextMenuBuilder {
                     boolean exportAllowed = (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport())
                             && (dbNodePlatform == null
                                 || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA
-                                || dbNodePlatform.isSchemaCatalog(catalogNode));
+                                || isSchema);
                     if (exportAllowed) {
                     exportDdlAndDataItem.textProperty().unbind();
                     String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";

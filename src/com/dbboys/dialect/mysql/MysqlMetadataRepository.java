@@ -45,8 +45,8 @@ public final class MysqlMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public List<Catalog> getDatabases(Connection conn) throws SQLException {
-        List<Catalog> databases = new ArrayList<>();
+    public List<Database> getDatabases(Connection conn) throws SQLException {
+        List<Database> databases = new ArrayList<>();
         String sql = """
                 select s.schema_name,
                        s.default_character_set_name,
@@ -61,7 +61,7 @@ public final class MysqlMetadataRepository implements MetadataRepository {
         try (PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                Catalog catalog = new Catalog(rs.getString("schema_name"));
+                Database catalog = new Database(rs.getString("schema_name"));
                 catalog.setDbOwner("");
                 catalog.setDbLog("");
                 catalog.setDbUseGLU("");
@@ -77,9 +77,9 @@ public final class MysqlMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public Catalog getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         String db = currentDatabase(conn, databaseName);
-        Catalog catalog = new Catalog(db);
+        Database catalog = new Database(db);
         String sql = """
                 select s.schema_name,
                        s.default_character_set_name,

@@ -259,7 +259,7 @@ class TreeCreateDialogs {
             return new Connect((Connect) parentValue);
         }
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
-        if (selectedItem.getValue() instanceof Catalog catalog) {
+        if (selectedItem.getValue() instanceof Database catalog) {
             connect.setCatalog(catalog.getName());
             connect.setSessionCatalog(catalog.getName());
         }

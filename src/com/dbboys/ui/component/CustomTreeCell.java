@@ -167,7 +167,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
-            else if(item instanceof Catalog database){
+            else if(item instanceof Database database){
                 renderDatabase(database, item, treeItem);
             }
             else if(item instanceof ObjectFolder objectFolder){
@@ -484,10 +484,10 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         }
     }
 
-    private void renderDatabase(Catalog database, TreeData item, TreeItem<TreeData> treeItem) {
+    private void renderDatabase(Database database, TreeData item, TreeItem<TreeData> treeItem) {
         applyConnectIconSlot(false);
         DatabasePlatform platform = TreeNavigator.resolvePlatform(treeItem);
-        if (platform != null && item instanceof Catalog catalog && platform.isSchemaCatalog(catalog)) {
+        if (platform != null && item instanceof Schema) {
             nodeIcon.setContent(IconPaths.METADATA_NAME_LABEL);
             nodeIcon.setScaleX(0.55);
             nodeIcon.setScaleY(0.55);
@@ -546,8 +546,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         java.util.List<DatabasePlatform.TooltipFieldDef> fields = platform != null
                 ? platform.tooltipFields(type)
                 : List.of();
-        if (type == DatabasePlatform.MetadataObjectType.DATABASE && bean instanceof Catalog catalog
-                && platform != null && platform.isSchemaCatalog(catalog) && !fields.isEmpty()) {
+        if (type == DatabasePlatform.MetadataObjectType.DATABASE && bean instanceof Schema && !fields.isEmpty()) {
             java.util.List<DatabasePlatform.TooltipFieldDef> adjusted = new java.util.ArrayList<>(fields);
             DatabasePlatform.TooltipFieldDef first = adjusted.get(0);
             adjusted.set(0, new DatabasePlatform.TooltipFieldDef(platform.metadataTooltipCatalogLabel(), first.propertyName()));
@@ -741,7 +740,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setOnDragDetected(null);
         setOnDragDone(null);
 
-        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof Catalog)) {
+        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof Database)) {
             return;
         }
         if ((item instanceof Table || item instanceof View) && isGeneralJdbcMetadataItem(getTreeItem())) {
@@ -825,7 +824,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             }
             return;
         }
-        if (item instanceof Catalog) {
+        if (item instanceof Database) {
             TreeItem<TreeData> catalogItem = getTreeItem();
             if (catalogItem != null) {
                 Connect meta = TreeNavigator.getMetaConnect(catalogItem);
@@ -1022,7 +1021,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 || "nologging".equalsIgnoreCase(normalized);
     }
 
-    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, Catalog database) {
+    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, Database database) {
         TreeItem<TreeData> parent = treeItem.getParent();
         if (parent == null || parent.getParent() == null) {
             return false;

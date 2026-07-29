@@ -1,7 +1,7 @@
 package com.dbboys.dialect.genericjdbc;
 
 import com.dbboys.core.MetadataRepository;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Function;
 import com.dbboys.model.Index;
@@ -34,8 +34,8 @@ public final class GeneralJdbcMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public List<Catalog> getDatabases(Connection conn) throws SQLException {
-        LinkedHashMap<String, Catalog> catalogs = new LinkedHashMap<>();
+    public List<Database> getDatabases(Connection conn) throws SQLException {
+        LinkedHashMap<String, Database> catalogs = new LinkedHashMap<>();
         if (conn == null) {
             return List.of();
         }
@@ -80,7 +80,7 @@ public final class GeneralJdbcMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public Catalog getDatabaseInfo(Connection conn, String databaseName) {
+    public Database getDatabaseInfo(Connection conn, String databaseName) {
         return createCatalog(blankToFallback(databaseName, "DEFAULT"));
     }
 
@@ -455,8 +455,8 @@ public final class GeneralJdbcMetadataRepository implements MetadataRepository {
         return new Scope(database, null, database);
     }
 
-    private Catalog createCatalog(String name) {
-        Catalog catalog = new Catalog(name);
+    private Database createCatalog(String name) {
+        Database catalog = new Database(name);
         catalog.setDbOwner("");
         catalog.setDbLog("");
         catalog.setDbSpace("");

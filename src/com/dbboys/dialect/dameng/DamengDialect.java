@@ -8,7 +8,7 @@ import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.ui.icon.IconPaths;
-import com.dbboys.model.Catalog;
+import com.dbboys.model.Database;
 import com.dbboys.model.Connect;
 import com.dbboys.model.HealthCheck;
 import com.dbboys.app.AppContext;
@@ -310,7 +310,7 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public String buildBootstrapSql(Catalog database) {
+    public String buildBootstrapSql(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

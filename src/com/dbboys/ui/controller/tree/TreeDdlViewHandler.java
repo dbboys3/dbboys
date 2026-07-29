@@ -68,7 +68,7 @@ public class TreeDdlViewHandler {
                     data.setRunning(true);
                     updateMessage(multi ? loadingProgressPattern.formatted(processed + 1, totalItems) : loadingMessage);
                     Connect connectParam = TreeNavigator.getMetaConnect(item);
-                    Catalog database = TreeNavigator.getCurrentDatabase(item);
+                    Database database = TreeNavigator.getCurrentDatabase(item);
                     String ddlText = "";
                     if (data instanceof Table) {
                         ddlText = TreeViewUtil.tableService.getDDL(connectParam, database, data.getName());
@@ -154,7 +154,7 @@ public class TreeDdlViewHandler {
 
     public static void handleDatabaseDdlAction(TreeView<TreeData> treeView, BiConsumer<TreeData, String> onSuccess) {
         TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-        if (selectedItem == null || !(selectedItem.getValue() instanceof Catalog database)) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
             return;
         }
 
