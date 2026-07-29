@@ -10,7 +10,9 @@ import com.dbboys.ui.component.terminal.TerminalEmulator;
 import com.dbboys.ui.component.terminal.TerminalRenderer;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
+import org.apache.sshd.client.channel.ChannelExec;
 import org.apache.sshd.client.channel.ChannelShell;
+import org.apache.sshd.client.channel.ClientChannelEvent;
 import org.apache.sshd.client.session.ClientSession;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -937,6 +939,7 @@ public class SshTabController {
         progressStartMs = 0;
         lastProgressMs = 0;
         ZModemSession zs = new ZModemSession(in, shellChannel.getInvertedIn(), prefix, zmodemHandler);
+        boolean abnormal = false;
         try {
             if (dir == 2) zs.receive(); else zs.send();
             // user cancelled the session via Ctrl+C/Ctrl+U or file-picker dialog
@@ -948,11 +951,24 @@ public class SshTabController {
                 Platform.runLater(() -> emulator.statusGreen("\r\nZModem " + dirLabel + " finished\r\n"));
             }
         } catch (Exception ex) {
+            abnormal = true;
             cleanTempDownloads();
             log.warn("ZModem session ended: {}", ex.toString());
             String m = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             Platform.runLater(() -> emulator.statusRed("\r\nZModem: " + m + "\r\n"));
         } finally {
+            // A streaming sz never reads its stdin (and lrzsz disables ISIG), so
+            // neither CAN spam nor ETX bytes can stop it: kill it out-of-band
+            // before draining, otherwise sz keeps streaming garbage for the full
+            // drain window and then retransmits ZEOF/ZFIN in garbage spurts.
+            if (transferCancelFlag || abnormal) {
+                killRemoteZmodemProcess();
+                // sz is dead but its last output is still inside the SSH/pty
+                // pipeline buffers; draining it can take seconds on slow boards —
+                // tell the user what the pause is instead of leaving a dead screen.
+                Platform.runLater(() -> emulator.status(
+                        I18n.t("ssh.zmodem.draining", "\r\nZModem: cleaning up residual data...\r\n")));
+            }
             // Drain residual bytes (echoed ZRINIT/ZRQINIT headers, stray protocol bytes)
             // that would otherwise be rendered as garbage or trigger a spurious
             // ZModem beacon detection on the next read.
@@ -970,6 +986,55 @@ public class SshTabController {
                 // channel may already be gone
             }
             zmodemActive = false;
+        }
+    }
+
+    /** Best-effort remote kill of stuck sz/rz processes after a cancelled/failed
+     * transfer. Uses an exec channel on the same SSH connection (no re-auth),
+     * so it works even while sz owns the shell channel's foreground.
+     * Runs on the reader thread; bounded to a few seconds. Note: pkill is not
+     * scoped to this tab's pty, so sz/rz processes from OTHER sessions on the
+     * same server would be killed too (accepted trade-off). */
+    private void killRemoteZmodemProcess() {
+        try {
+            ClientSession s = session;
+            if (s == null || !s.isOpen()) {
+                return;
+            }
+            // pkill on procps systems, killall as busybox fallback; SIGKILL is
+            // unconditional and needs no grace period for a transfer we abort.
+            String cmd = "pkill -KILL sz 2>&1 || killall -KILL sz 2>&1; "
+                    + "pkill -KILL rz 2>&1 || killall -KILL rz 2>&1; echo kill-done";
+            try (ChannelExec exec = s.createExecChannel(cmd)) {
+                exec.open().verify(5000);
+                exec.waitFor(java.util.EnumSet.of(ClientChannelEvent.CLOSED), 3000);
+                String out = readExecOutput(exec);
+                log.info("remote sz/rz kill: exit={} output=[{}]", exec.getExitStatus(), out);
+            }
+        } catch (Exception e) {
+            log.warn("remote sz/rz kill failed: {}", e.toString());
+        }
+    }
+
+    /** Read whatever the exec command printed (bounded), for diagnosing kill failures. */
+    private static String readExecOutput(ChannelExec exec) {
+        try {
+            InputStream is = exec.getInvertedOut();
+            if (is == null) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            byte[] buf = new byte[1024];
+            while (is.available() > 0 && sb.length() < 4096) {
+                int n = is.read(buf);
+                if (n < 0) {
+                    break;
+                }
+                sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "";
         }
     }
 

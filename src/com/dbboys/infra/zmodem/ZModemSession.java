@@ -45,7 +45,7 @@ public final class ZModemSession {
     private static final int ZPAD = 0x2A, ZDLE = 0x18, ZHEX = 0x42, ZBIN = 0x41, ZBIN32 = 0x43;
     // Subpacket end markers
     private static final int ZCRCE = 0x68, ZCRCG = 0x69, ZCRCQ = 0x6A, ZCRCW = 0x6B;
-    private static final int XON = 0x11, XOFF = 0x13, CAN = 0x18;
+    private static final int XON = 0x11, XOFF = 0x13, CAN = 0x18, ETX = 0x03;
     // ZRINIT capability bits (F0)
     private static final int CANOVIO = 0x02, CANFC32 = 0x20, ESCCTL = 0x40, ESC8 = 0x80;
     // ZFILE conversion option (F0)
@@ -129,10 +129,11 @@ public final class ZModemSession {
      * After an abort, read and discard incoming bytes until the stream goes quiet
      * (peer died and in-flight data was drained), so protocol bytes don't end up
      * rendered as terminal garbage. Bounded: returns on EOF, after ~800ms of
-     * silence, or after a 10s cap.
+     * silence, or after a 30s cap. The cap must cover the worst-case SSH/pty
+     * pipeline backlog (channel window ~2MB at the remote board's crypto speed).
      */
     public void drainQuiet() {
-        long deadline = System.currentTimeMillis() + 10000;
+        long deadline = System.currentTimeMillis() + 30000;
         for (;;) {
             int c;
             try {
@@ -971,9 +972,17 @@ public final class ZModemSession {
         }
     }
 
-    /** Best-effort abort so the remote sz/rz exits: CAN spam + ZABORT frame. */
+    /**
+     * Best-effort abort so the remote sz/rz exits.
+     * ETX goes first: the pty line discipline turns it into SIGINT for the
+     * foreground process. This is the only thing that reaches a sz blocked in
+     * write() on a full pty buffer — CAN bytes would sit unread in its stdin
+     * queue while it keeps streaming (rendered as garbage on screen).
+     * CAN spam + ZABORT frame remain as the in-protocol fallback.
+     */
     private void abortPeer() {
         try {
+            txBuf.write(ETX); // -> SIGINT to sz/rz, interrupts a blocked write()
             byte[] cans = new byte[8];
             Arrays.fill(cans, (byte) CAN);
             txBuf.write(cans, 0, cans.length);
