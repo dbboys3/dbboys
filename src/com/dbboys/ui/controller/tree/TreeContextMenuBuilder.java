@@ -1497,47 +1497,66 @@ public class TreeContextMenuBuilder {
                 //数据库
                 else if(selectedItem.getValue() instanceof Database catalogNode) {
                     DatabasePlatform dbNodePlatform = TreeNavigator.resolvePlatform(selectedItem);
-                    treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
-                    // 三层模型：模式节点不提供"设为默认库"（默认库语义只到库级）
                     boolean isSchema = catalogNode instanceof com.dbboys.model.Schema;
-                    boolean showSetDefault = (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase())
-                            && !isSchema;
-                    if (showSetDefault) {
-                        treeview_menu.getItems().add(setDefaultDatabaseItem);
+
+                    treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
+
+                    // ---- 库节点菜单 (DATABASE_SCHEMA / DATABASE) ---- //
+                    if (!isSchema) {
+                        if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
+                            treeview_menu.getItems().add(setDefaultDatabaseItem);
+                        }
+                        // 三层模型：库节点下可新建模式
+                        if (dbNodePlatform != null
+                                && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+                            createDatabaseItem.textProperty().unbind();
+                            createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
+                            treeview_menu.getItems().add(createDatabaseItem);
+                        }
+                        // 非三层模型（DATABASE model + SCHEMA model DatabaseFolder）保留原逻辑
+                        if (dbNodePlatform == null
+                                || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+                            if (dbNodePlatform == null || dbNodePlatform.canCreateDatabase()) {
+                                treeview_menu.getItems().add(createDatabaseItem);
+                            }
+                        }
                     }
-                    // 三层模型（库-模式-表）：库节点下可新建模式
-                    if (dbNodePlatform != null
-                            && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
-                            && !isSchema) {
-                        createDatabaseItem.textProperty().unbind();
-                        createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
-                        treeview_menu.getItems().add(createDatabaseItem);
-                    }
+
+                    // ---- 统计、拷贝、刷新 (all models) ---- //
                     String catalogName = selectedItem.getValue().getName();
                     if (dbNodePlatform == null || dbNodePlatform.gatherSchemaSql(catalogName) != null) {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
+
+                    // ---- 重命名 / 删除 (模式节点参考 Oracle SCHEMA 模型能力) ---- //
                     if (dbNodePlatform == null || dbNodePlatform.supportsRenameDatabaseNode()) {
                         treeview_menu.getItems().add(renameItem);
                     }
                     if (dbNodePlatform == null || dbNodePlatform.canDropDatabase()) {
                         treeview_menu.getItems().add(deleteItem);
                     }
-                    treeview_menu.getItems().add(importMenu);
-                    // 三层模型：导出按模式进行，仅模式节点显示导出项
+
+                    // ---- 导入 (库节点有，模式节点无) ---- //
+                    if (!isSchema) {
+                        if (dbNodePlatform == null || dbNodePlatform.supportsDatabaseImport()) {
+                            treeview_menu.getItems().add(importMenu);
+                        }
+                    }
+
+                    // ---- 导出：DATABASE_SCHEMA 仅模式节点显示，其他模型全部显示 ---- //
                     boolean exportAllowed = (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport())
                             && (dbNodePlatform == null
                                 || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA
                                 || isSchema);
                     if (exportAllowed) {
-                    exportDdlAndDataItem.textProperty().unbind();
-                    String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";
-                    String exportDefault = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuDefaultText() : "导出数据库";
-                    exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
-                    treeview_menu.getItems().add(exportDdlAndDataItem);
-                    treeview_menu.getItems().add(exportDdlMenu);
+                        exportDdlAndDataItem.textProperty().unbind();
+                        String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";
+                        String exportDefault = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuDefaultText() : "导出数据库";
+                        exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
+                        treeview_menu.getItems().add(exportDdlAndDataItem);
+                        treeview_menu.getItems().add(exportDdlMenu);
                     }
                 }
                 //对象文件夹
