@@ -374,22 +374,20 @@ public interface DatabasePlatform {
         PACKAGE
     }
 
-    record TooltipField(String label, String propertyName) {}
-
     record TooltipFieldDef(String label, String propertyName) {}
 
-    List<TooltipField> DEFAULT_DATABASE_TOOLTIP_FIELDS = List.of(
-            new TooltipField("DATABASE", "name"),
-            new TooltipField("OWNER",    "dbOwner"),
-            new TooltipField("LOG TYPE", "dbLog"),
-            new TooltipField("DBSPACE",  "dbSpace"),
-            new TooltipField("DBSIZE",   "dbSize"),
-            new TooltipField("CREATED",  "dbCreated"),
-            new TooltipField("CHARSET",  "dbLocale"),
-            new TooltipField("USEGLU",   "dbUseGLU")
+    List<TooltipFieldDef> DEFAULT_DATABASE_TOOLTIP_FIELDS = List.of(
+            new TooltipFieldDef("DATABASE", "name"),
+            new TooltipFieldDef("OWNER",    "dbOwner"),
+            new TooltipFieldDef("LOG TYPE", "dbLog"),
+            new TooltipFieldDef("DBSPACE",  "dbSpace"),
+            new TooltipFieldDef("DBSIZE",   "dbSize"),
+            new TooltipFieldDef("CREATED",  "dbCreated"),
+            new TooltipFieldDef("CHARSET",  "dbLocale"),
+            new TooltipFieldDef("USEGLU",   "dbUseGLU")
     );
 
-    default List<TooltipField> databaseTooltipFields() {
+    default List<TooltipFieldDef> databaseTooltipFields() {
         return DEFAULT_DATABASE_TOOLTIP_FIELDS;
     }
 
@@ -398,9 +396,7 @@ public interface DatabasePlatform {
             return List.of();
         }
         return switch (type) {
-            case DATABASE -> databaseTooltipFields().stream()
-                    .map(field -> new TooltipFieldDef(field.label(), field.propertyName()))
-                    .toList();
+            case DATABASE -> databaseTooltipFields();
             case SYS_TABLE, TABLE -> List.of(
                     new TooltipFieldDef(metadataTooltipCatalogLabel(), "tableCatalog"),
                     new TooltipFieldDef("TABLENAME", "name"),
@@ -430,7 +426,7 @@ public interface DatabasePlatform {
                     new TooltipFieldDef("COLS", "cols"),
                     new TooltipFieldDef("IDXTYPE", "idxtype"),
                     new TooltipFieldDef("LEVELS", "levels"),
-                    new TooltipFieldDef("UNIQVALES", "uniqvalues"),
+                    new TooltipFieldDef("UNIQVALUES", "uniqvalues"),
                     new TooltipFieldDef("PAGESIZE", "pagesize"),
                     new TooltipFieldDef("TOTALPAGES", "totalpages"),
                     new TooltipFieldDef("TOTALSIZE", "totalsize"),
