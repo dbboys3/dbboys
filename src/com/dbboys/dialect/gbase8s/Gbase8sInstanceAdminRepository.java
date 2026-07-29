@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.dialect.common.InformixFamilyInstanceAdminRepository;
 
@@ -8,7 +8,7 @@ import java.sql.Connection;
  * GBase 8s instance-admin repository. Shared logic lives in {@link InformixFamilyInstanceAdminRepository};
  * only the GBase-fixed SQL text remains here.
  */
-public final class GbaseInstanceAdminRepository extends InformixFamilyInstanceAdminRepository {
+public final class Gbase8sInstanceAdminRepository extends InformixFamilyInstanceAdminRepository {
 
     private static final String SQL_DBSPACE_USAGE = """
                 SELECT

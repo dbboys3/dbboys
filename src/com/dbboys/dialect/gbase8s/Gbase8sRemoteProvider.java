@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.infra.i18n.I18n;

@@ -1,7 +1,7 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.ui.component.CustomInlineCssTextArea;
-import com.dbboys.dialect.gbase.GbaseDialect;
+import com.dbboys.dialect.gbase8s.Gbase8sDialect;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.remote.*;
@@ -153,7 +153,7 @@ public final class Gbase8sRemoteWorkflow {
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
-        GbaseDialect dialect = new GbaseDialect();
+        Gbase8sDialect dialect = new Gbase8sDialect();
         Connect connect = new Connect();
         connect.setDbtype(dialect.getDbType());
         connect.setIp(ctx.host());

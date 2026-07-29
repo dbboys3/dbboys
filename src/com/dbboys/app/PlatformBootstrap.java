@@ -2,7 +2,7 @@ package com.dbboys.app;
 
 import com.dbboys.core.DatabasePlatforms;
 import com.dbboys.dialect.dameng.DamengDialect;
-import com.dbboys.dialect.gbase.GbaseDialect;
+import com.dbboys.dialect.gbase8s.Gbase8sDialect;
 import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
 import com.dbboys.dialect.informix.InformixDialect;
 import com.dbboys.dialect.mysql.MysqlDialect;
@@ -21,7 +21,7 @@ public final class PlatformBootstrap {
     public static DatabasePlatforms createDefault() {
         DatabasePlatforms platforms = new DatabasePlatforms();
         platforms.register(new GeneralJdbcDialect());
-        platforms.register(new GbaseDialect());
+        platforms.register(new Gbase8sDialect());
         platforms.register(new InformixDialect());
         platforms.register(new MysqlDialect());
         platforms.register(new OracleDialect());

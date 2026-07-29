@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.dialect.common.InformixFamilyMetadataRepository;
 import com.dbboys.infra.db.SqlRunner;
@@ -13,7 +13,7 @@ import java.util.List;
  * GBase 8s metadata repository. All shared logic lives in {@link InformixFamilyMetadataRepository};
  * only GBase-specific SQL text and capability overrides remain here.
  */
-public class GbaseMetadataRepository extends InformixFamilyMetadataRepository {
+public class Gbase8sMetadataRepository extends InformixFamilyMetadataRepository {
 
     private static final String SQL_TABLE_COMMENT = """
             select max(c.comments)
@@ -53,7 +53,7 @@ public class GbaseMetadataRepository extends InformixFamilyMetadataRepository {
 
     @Override
     public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
-        return GbaseDdlRepository.getColInfo(conn, tableName);
+        return Gbase8sDdlRepository.getColInfo(conn, tableName);
     }
 
     @Override

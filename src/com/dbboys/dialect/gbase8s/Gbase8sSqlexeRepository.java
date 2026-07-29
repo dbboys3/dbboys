@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.core.SqlModeCapability;
 import com.dbboys.core.SqlexeRepository;
@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class GbaseSqlexeRepository implements SqlexeRepository, SqlModeCapability {
+public class Gbase8sSqlexeRepository implements SqlexeRepository, SqlModeCapability {
     public static final String SQL_SYS_DUAL = "select  * from sysmaster:sysdual";
     public static final String SQLMODE_GBASE = "set environment sqlmode 'gbase'";
     public static final String SQLMODE_MYSQL = "set environment sqlmode 'mysql'";

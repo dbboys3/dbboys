@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 public final class Gbase8sRemoteFields {
     public static final String LOGIN_USERNAME = "gbasedbt";

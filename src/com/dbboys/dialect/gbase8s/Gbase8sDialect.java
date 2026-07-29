@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.core.ChangeDatabaseFailureKind;
 import com.dbboys.model.Catalog;
@@ -32,7 +32,7 @@ import java.util.Map;
 /**
  * GBase 8S 鏂硅█锛氬缓杩?URL/椹卞姩銆佷細璇?sqlmode 鍒濆鍖栥€?
  */
-public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
+public final class Gbase8sDialect implements DatabasePlatform, ConnectionSupport,
         NamedServerConnectionCapability, ReconnectFallbackCapability, InstanceManagerCapability, InstanceTabCapability {
 
     private static final String DB_TYPE = "GBASE 8S";
@@ -93,10 +93,10 @@ public final class GbaseDialect implements DatabasePlatform, ConnectionSupport,
             Map.entry("业务逻辑决定", "instance.check.expected.depends_on_business_logic")
     );
 
-    private final MetadataRepository metadataRepository = new GbaseMetadataRepository();
-    private final SqlexeRepository sqlexeRepository = new GbaseSqlexeRepository();
-    private final DdlRepository ddlRepository = new GbaseDdlRepository();
-    private final InstanceAdminRepository instanceAdminRepository = new GbaseInstanceAdminRepository();
+    private final MetadataRepository metadataRepository = new Gbase8sMetadataRepository();
+    private final SqlexeRepository sqlexeRepository = new Gbase8sSqlexeRepository();
+    private final DdlRepository ddlRepository = new Gbase8sDdlRepository();
+    private final InstanceAdminRepository instanceAdminRepository = new Gbase8sInstanceAdminRepository();
 
     @Override
     public String getDbType() {

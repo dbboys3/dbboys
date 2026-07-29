@@ -1,4 +1,4 @@
-package com.dbboys.dialect.gbase;
+package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.core.DdlRepository;
 import com.dbboys.core.DdlRepository.DatabaseDdlParts;
@@ -43,9 +43,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.poi.ss.formula.functions.T;
 
-public final class GbaseDdlRepository implements DdlRepository {
+public final class Gbase8sDdlRepository implements DdlRepository {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 30;
-    private static final Logger log = LogManager.getLogger(GbaseDdlRepository.class);
+    private static final Logger log = LogManager.getLogger(Gbase8sDdlRepository.class);
 
     /**
      * 获取当前的数据库
@@ -1554,7 +1554,7 @@ public final class GbaseDdlRepository implements DdlRepository {
 
         ddl.append("\n");
         for (String triggerName : triggers) {
-            ddl.append("\n").append(new GbaseDdlRepository().printTrigger(connection, triggerName));
+            ddl.append("\n").append(new Gbase8sDdlRepository().printTrigger(connection, triggerName));
         }
     }
 
@@ -2494,7 +2494,7 @@ public final class GbaseDdlRepository implements DdlRepository {
             if (switchedDatabase) {
                 setActiveDbname(connection, databasename);
             }
-            GbaseMetadataRepository metadataRepository = new GbaseMetadataRepository();
+            Gbase8sMetadataRepository metadataRepository = new Gbase8sMetadataRepository();
             boolean filterType = metadataRepository.hasSysProcTypeColumn(connection);
             SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
             long functionCount = metadataRepository.getFunctionCount(connection, filterType);
