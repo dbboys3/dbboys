@@ -154,7 +154,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             }
             else if(item instanceof DatabaseFolder){
                 DatabasePlatform dbFolderPlatform = TreeNavigator.resolvePlatform(treeItem);
-                if (dbFolderPlatform != null && dbFolderPlatform.usesSchemaModel()) {
+                if (dbFolderPlatform != null && dbFolderPlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA) {
                     nodeIcon.setContent(IconPaths.TREECELL_USER_FOLDER);
                     nodeIcon.setScaleX(0.65);
                     nodeIcon.setScaleY(0.65);
@@ -487,7 +487,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
     private void renderDatabase(Catalog database, TreeData item, TreeItem<TreeData> treeItem) {
         applyConnectIconSlot(false);
         DatabasePlatform platform = TreeNavigator.resolvePlatform(treeItem);
-        if (platform != null && platform.usesSchemaModel()) {
+        if (platform != null && item instanceof Catalog catalog && platform.isSchemaCatalog(catalog)) {
             nodeIcon.setContent(IconPaths.METADATA_NAME_LABEL);
             nodeIcon.setScaleX(0.55);
             nodeIcon.setScaleY(0.55);
@@ -540,6 +540,22 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         return String.format("%-8s: ", resolveMetadataCatalogTooltipLabel());
     }
 
+    /** 计算提示字段清单；模式层库/模式节点的首字段 label 跟随方言目录标签（库 DATABASE、模式 SCHEMA）。 */
+    private java.util.List<DatabasePlatform.TooltipFieldDef> resolveTooltipFields(
+            DatabasePlatform platform, DatabasePlatform.MetadataObjectType type, Object bean) {
+        java.util.List<DatabasePlatform.TooltipFieldDef> fields = platform != null
+                ? platform.tooltipFields(type)
+                : List.of();
+        if (type == DatabasePlatform.MetadataObjectType.DATABASE && bean instanceof Catalog catalog
+                && platform != null && platform.isSchemaCatalog(catalog) && !fields.isEmpty()) {
+            java.util.List<DatabasePlatform.TooltipFieldDef> adjusted = new java.util.ArrayList<>(fields);
+            DatabasePlatform.TooltipFieldDef first = adjusted.get(0);
+            adjusted.set(0, new DatabasePlatform.TooltipFieldDef(platform.metadataTooltipCatalogLabel(), first.propertyName()));
+            return adjusted;
+        }
+        return fields;
+    }
+
     private void bindMetadataTooltip(Object bean, DatabasePlatform.MetadataObjectType type) {
         DatabasePlatform platform = null;
         try {
@@ -553,9 +569,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             setTooltip(null);
             return;
         }
-        java.util.List<DatabasePlatform.TooltipFieldDef> fields = platform != null
-                ? platform.tooltipFields(type)
-                : List.of();
+        java.util.List<DatabasePlatform.TooltipFieldDef> fields = resolveTooltipFields(platform, type, bean);
         if (fields.isEmpty()) {
             setTooltip(null);
             return;

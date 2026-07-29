@@ -542,12 +542,26 @@ public class ConnectionServiceImpl implements ConnectionService {
     private ConnectionLease acquireConnection(Connect connect, Catalog database) throws Exception {
         Connection conn = connect.getConn();
         var repo = platformResolver.metadata(connect);
+        // 三层目录模型（库-模式-表）：模式节点先落到所属库的连接（必要时重连），再切模式
+        String parentDb = database == null ? null : database.getParentDb();
+        if (parentDb != null && !parentDb.isBlank()) {
+            ConnectionLease dbLease = acquireConnection(connect, new Catalog(parentDb));
+            try {
+                repo.setDatabase(dbLease.conn, database.getName());
+                return new ConnectionLease(dbLease.conn, dbLease.shouldClose);
+            } catch (Exception e) {
+                if (dbLease.shouldClose) {
+                    closeConnectionQuietly(dbLease.conn);
+                }
+                throw e;
+            }
+        }
         try {
             repo.setDatabase(conn, database.getName());
             return new ConnectionLease(conn, false);
         } catch (SQLException e) {
             DatabasePlatform dialect = platformResolver.getPlatform(connect.getDbtype());
-            String fallback = resolveReconnectFallbackDatabase(dialect);
+            String fallback = resolveReconnectFallbackDatabase(dialect, connect);
             if (dialect != null
                     && dialect.connection().classifyChangeDatabaseFailure(e) == ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION
                     && fallback != null) {
@@ -571,6 +585,13 @@ public class ConnectionServiceImpl implements ConnectionService {
                                      Catalog database,
                                      boolean persistDefaultDatabase) {
         if (dialect == null || connect == null || database == null) {
+            return;
+        }
+        // 三层目录模型：模式节点的目标库 = catalog 记所属库、sessionCatalog 记模式
+        String parentDb = database.getParentDb();
+        if (parentDb != null && !parentDb.isBlank()) {
+            connect.setCatalog(parentDb);
+            connect.setSessionCatalog(database.getName());
             return;
         }
         if (persistDefaultDatabase) {
@@ -654,12 +675,12 @@ public class ConnectionServiceImpl implements ConnectionService {
         return false;
     }
 
-    private String resolveReconnectFallbackDatabase(DatabasePlatform dialect) {
+    private String resolveReconnectFallbackDatabase(DatabasePlatform dialect, Connect connect) {
         if (dialect == null) {
             return null;
         }
         return dialect.capability(ReconnectFallbackCapability.class)
-                .map(ReconnectFallbackCapability::reconnectFallbackDatabaseName)
+                .map(cap -> cap.reconnectFallbackDatabaseName(connect))
                 .orElse(null);
     }
 
@@ -675,7 +696,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             recoveryDatabase = previousDatabase;
         }
         if (recoveryDatabase == null || recoveryDatabase.isBlank()) {
-            recoveryDatabase = resolveReconnectFallbackDatabase(dialect);
+            recoveryDatabase = resolveReconnectFallbackDatabase(dialect, connect);
         }
         if (recoveryDatabase == null || recoveryDatabase.isBlank()) {
             return;

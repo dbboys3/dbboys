@@ -173,6 +173,38 @@ public class TreeDataLoader {
                     });
         }
         else if(treeItem.getValue() instanceof Catalog){
+            Connect metaConnect = TreeNavigator.getMetaConnect(treeItem);
+            Catalog catalogValue = (Catalog) treeItem.getValue();
+            if (resolvePlatformResolver().requirePlatform(metaConnect).usesCatalogSchemaLevel()
+                    && catalogValue.getParentDb() == null) {
+                // 三层模型（库-模式-表）：库节点展开时先加载该库的模式节点
+                metaConnect.executeSqlTask(
+                        () -> {
+                            final List<Catalog> schemas = new ArrayList<>();
+                            try {
+                                for (Catalog schema : TreeViewUtil.databaseService.getSchemas(metaConnect, catalogValue)) {
+                                    schema.setParentDb(catalogValue.getName());
+                                    schemas.add(schema);
+                                }
+                            } catch (Exception e) {
+                                if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
+                                    TreeNavigator.connectionDisconnected(treeItem);
+                                } else {
+                                    AppErrorHandler.handle(e);
+                                }
+                            }
+                            Platform.runLater(() -> {
+                                treeItem.getChildren().clear();
+                                if (schemas.isEmpty()) {
+                                    treeItem.setExpanded(false);
+                                    return;
+                                }
+                                for (Catalog schema : schemas) {
+                                    treeItem.getChildren().add(TreeViewBuilder.createTreeItem(schema));
+                                }
+                            });
+                        });
+            } else {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
                         ObjectList objectList;
@@ -279,6 +311,7 @@ public class TreeDataLoader {
                             });
                         }
                     });
+            }
         }else if (isObjectFolder(treeItem, ObjectFolderKind.SYSTEM_TABLE_VIEW)) {
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {

@@ -235,8 +235,8 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public boolean usesSchemaModel() {
-        return true;
+    public CatalogModel catalogModel() {
+        return CatalogModel.SCHEMA;
     }
 
     @Override

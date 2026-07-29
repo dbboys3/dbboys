@@ -1,6 +1,7 @@
 package com.dbboys.app;
 
 import com.dbboys.core.DatabasePlatforms;
+import com.dbboys.dialect.postgresql.PostgresqlDialect;
 import com.dbboys.dialect.dameng.DamengDialect;
 import com.dbboys.dialect.gbase8s.Gbase8sDialect;
 import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
@@ -25,6 +26,7 @@ public final class PlatformBootstrap {
         platforms.register(new InformixDialect());
         platforms.register(new MysqlDialect());
         platforms.register(new OracleDialect());
+        platforms.register(new PostgresqlDialect());
         platforms.register(new DamengDialect());
         platforms.register(new SqliteDialect());
         return platforms;

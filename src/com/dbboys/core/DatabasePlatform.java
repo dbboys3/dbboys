@@ -117,8 +117,60 @@ public interface DatabasePlatform {
         return null;
     }
 
+    /**
+     * 目录模型：一层节点的语义。
+     * DATABASE        —— 多库、无模式（gbase8s/informix/mysql）：一层是库，两层树
+     * SCHEMA          —— 单库、多模式（oracle/dameng）：一层是模式，两层树
+     * DATABASE_SCHEMA —— 多库+多模式（postgresql）：一层是库，库下挂模式，三层树
+     */
+    enum CatalogModel {
+        DATABASE,
+        SCHEMA,
+        DATABASE_SCHEMA
+    }
+
+    default CatalogModel catalogModel() {
+        return CatalogModel.DATABASE;
+    }
+
+    /**
+     * 对象需要用"模式.对象"限定（SCHEMA 与 DATABASE_SCHEMA 均为 true）。
+     * 由 {@link #catalogModel()} 派生，方言一般不应直接覆写。
+     */
     default boolean usesSchemaModel() {
-        return false;
+        return catalogModel() != CatalogModel.DATABASE;
+    }
+
+    /**
+     * 三层目录模型：库-模式-表（如 PostgreSQL 实例有多个库，库下再挂模式）。
+     * 为 true 时，树在库节点下先加载一层模式节点（Catalog.parentDb 记录所属库），
+     * 模式节点下才挂对象文件夹。由 {@link #catalogModel()} 派生。
+     */
+    default boolean usesCatalogSchemaLevel() {
+        return catalogModel() == CatalogModel.DATABASE_SCHEMA;
+    }
+
+    /**
+     * 层级判定单源：给定库/模式节点是否为"模式"层。
+     * SCHEMA 模型一层节点全是模式；DATABASE_SCHEMA 模型下 parentDb 非空的是模式；
+     * DATABASE 模型没有模式层。右键能力、图标、重删、提示 label 统一跟随此判定。
+     */
+    default boolean isSchemaCatalog(Catalog catalog) {
+        return switch (catalogModel()) {
+            case SCHEMA -> true;
+            case DATABASE_SCHEMA -> catalog != null && catalog.getParentDb() != null;
+            default -> false;
+        };
+    }
+
+    /** 建模式对话框是否需要密码（oracle/dameng 的用户=模式模型需要；PG 的 CREATE SCHEMA 不需要）。 */
+    default boolean createSchemaWithPassword() {
+        return true;
+    }
+
+    /** 无密码建模式的 SQL（{@link #createSchemaWithPassword()} 为 false 的方言使用）。 */
+    default String createSchemaSql(String schemaName) {
+        return "CREATE SCHEMA " + schemaName;
     }
 
     default boolean canCreateDatabase() {

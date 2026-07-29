@@ -744,8 +744,8 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public boolean usesSchemaModel() {
-        return true;
+    public CatalogModel catalogModel() {
+        return CatalogModel.SCHEMA;
     }
 
     @Override

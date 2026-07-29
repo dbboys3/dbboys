@@ -161,6 +161,10 @@ class TreeCreateDialogs {
     }
 
     static void showCreateSchemaDialog(TreeItem<TreeData> selectedItem) {
+        DatabasePlatform schemaPlatform = TreeNavigator.resolvePlatform(selectedItem);
+        // oracle/dameng 的模式=用户需要密码；PG 的 CREATE SCHEMA 无密码概念
+        boolean withPassword = schemaPlatform == null || schemaPlatform.createSchemaWithPassword();
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(5);
@@ -170,27 +174,31 @@ class TreeCreateDialogs {
         CustomPasswordField passwordField1 = new CustomPasswordField();
         CustomPasswordField passwordField2 = new CustomPasswordField();
         schemaName.setPrefWidth(240);
-        passwordField1.setPrefWidth(240);
-        passwordField2.setPrefWidth(240);
 
         Label nameLabel = new Label(I18n.t("metadata.dialog.create_schema.name", "模式名"));
         SVGPath nameLabelIcon = IconFactory.create(IconPaths.METADATA_NAME_LABEL, 0.55, 0.55, Color.valueOf("#888"));
         nameLabel.setGraphic(nameLabelIcon);
 
-        Label passwordLabel = new Label(I18n.t("metadata.label.password", "密码"));
-        SVGPath passwordLabelIcon = IconFactory.create(IconPaths.METADATA_PASSWORD_LABEL, 0.5, 0.5, Color.valueOf("#888"));
-        passwordLabel.setGraphic(passwordLabelIcon);
-
-        Label confirmPasswordLabel = new Label(I18n.t("metadata.label.confirm_password", "确认密码"));
-        SVGPath confirmPasswordLabelIcon = IconFactory.create(IconPaths.METADATA_CONFIRM_PASSWORD_LABEL, 0.5, 0.5, Color.valueOf("#888"));
-        confirmPasswordLabel.setGraphic(confirmPasswordLabelIcon);
-
         grid.add(nameLabel, 0, 0);
         grid.add(schemaName, 1, 0);
-        grid.add(passwordLabel, 0, 1);
-        grid.add(passwordField1, 1, 1);
-        grid.add(confirmPasswordLabel, 0, 2);
-        grid.add(passwordField2, 1, 2);
+
+        if (withPassword) {
+            passwordField1.setPrefWidth(240);
+            passwordField2.setPrefWidth(240);
+
+            Label passwordLabel = new Label(I18n.t("metadata.label.password", "密码"));
+            SVGPath passwordLabelIcon = IconFactory.create(IconPaths.METADATA_PASSWORD_LABEL, 0.5, 0.5, Color.valueOf("#888"));
+            passwordLabel.setGraphic(passwordLabelIcon);
+
+            Label confirmPasswordLabel = new Label(I18n.t("metadata.label.confirm_password", "确认密码"));
+            SVGPath confirmPasswordLabelIcon = IconFactory.create(IconPaths.METADATA_CONFIRM_PASSWORD_LABEL, 0.5, 0.5, Color.valueOf("#888"));
+            confirmPasswordLabel.setGraphic(confirmPasswordLabelIcon);
+
+            grid.add(passwordLabel, 0, 1);
+            grid.add(passwordField1, 1, 1);
+            grid.add(confirmPasswordLabel, 0, 2);
+            grid.add(passwordField2, 1, 2);
+        }
 
         ButtonType createButtonType = new ButtonType(I18n.t("metadata.button.create", "创建"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
@@ -208,24 +216,26 @@ class TreeCreateDialogs {
             if (schemaName.getText().trim().isEmpty()) {
                 schemaName.requestFocus();
                 event.consume();
-            } else if (passwordField1.getText().trim().isEmpty()) {
+            } else if (withPassword && passwordField1.getText().trim().isEmpty()) {
                 passwordField1.requestFocus();
                 event.consume();
-            } else if (passwordField2.getText().trim().isEmpty()) {
+            } else if (withPassword && passwordField2.getText().trim().isEmpty()) {
                 passwordField2.requestFocus();
                 event.consume();
-            } else if (!passwordField1.getText().trim().equals(passwordField2.getText().trim())) {
+            } else if (withPassword && !passwordField1.getText().trim().equals(passwordField2.getText().trim())) {
                 AlertUtil.CustomAlert(I18n.t("common.error", "错误"), I18n.t("metadata.error.password_not_match", "两次密码输入不一致！"));
                 event.consume();
             } else {
                 event.consume();
-                Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
+                Connect connect = buildSchemaCreateConnect(selectedItem);
                 String name = schemaName.getText().trim();
-                DatabasePlatform schemaPlatform = TreeNavigator.resolvePlatform(selectedItem);
-                if (schemaPlatform == null) {
-                    schemaPlatform = TreeMenuCapabilities.resolvePlatformResolver().requirePlatform(connect);
+                DatabasePlatform platform = schemaPlatform;
+                if (platform == null) {
+                    platform = TreeMenuCapabilities.resolvePlatformResolver().requirePlatform(connect);
                 }
-                String sql = schemaPlatform.createUserSql(name, passwordField1.getText().trim());
+                String sql = withPassword
+                        ? platform.createUserSql(name, passwordField1.getText().trim())
+                        : platform.createSchemaSql(name);
                 TreeViewUtil.databaseService.executeObjectSql(connect, sql, () -> {
                     selectedItem.getChildren().clear();
                     selectedItem.setExpanded(false);
@@ -240,6 +250,20 @@ class TreeCreateDialogs {
 
         schemaName.requestFocus();
         dialog.showAndWait();
+    }
+
+    /** 建模式的执行连接：DatabaseFolder 节点取连接副本；三层模型的库节点落到该库执行 CREATE SCHEMA。 */
+    private static Connect buildSchemaCreateConnect(TreeItem<TreeData> selectedItem) {
+        TreeData parentValue = selectedItem.getParent() == null ? null : selectedItem.getParent().getValue();
+        if (parentValue instanceof Connect) {
+            return new Connect((Connect) parentValue);
+        }
+        Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
+        if (selectedItem.getValue() instanceof Catalog catalog) {
+            connect.setCatalog(catalog.getName());
+            connect.setSessionCatalog(catalog.getName());
+        }
+        return connect;
     }
 
     private static String resolveFallbackDatabase(Connect connect) {

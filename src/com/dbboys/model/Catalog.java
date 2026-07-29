@@ -11,11 +11,21 @@ public class Catalog extends TreeData {
     private StringProperty dbUseGLU = new SimpleStringProperty();
     private StringProperty dbSpace = new SimpleStringProperty();
     private StringProperty dbSize = new SimpleStringProperty();
+    /** 三层目录模型（如 PostgreSQL 库-模式-表）中，模式节点记录所属库名；普通库节点为 null。 */
+    private String parentDb;
 
     public Catalog() {}
 
     public Catalog(String name) {
         super(name);
+    }
+
+    public String getParentDb() {
+        return parentDb;
+    }
+
+    public void setParentDb(String parentDb) {
+        this.parentDb = parentDb;
     }
 
     public String getDbCreated() {

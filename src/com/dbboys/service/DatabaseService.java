@@ -58,6 +58,12 @@ public class DatabaseService implements MetaObjectService {
     public List<Catalog> getDatabases(Connect connect) throws SQLException {
         return platformResolver.metadata(connect).getDatabases(connect.getConn());
     }
+
+    /** 三层目录模型：加载某个库节点下的模式列表（跨库时自动走租约重连）。 */
+    public List<Catalog> getSchemas(Connect connect, Catalog database) throws Exception {
+        return withMetaSession(connect, database,
+                conn -> platformResolver.metadata(connect).getSchemas(conn));
+    }
     @Override
     public DdlFetcher ddlFetcher() {
         return (connect, conn, objectName) -> platformResolver.ddl(connect).printDatabase(conn, objectName);

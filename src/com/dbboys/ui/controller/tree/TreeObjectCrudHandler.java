@@ -95,10 +95,13 @@ public class TreeObjectCrudHandler {
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
-            }else if(treeData instanceof Catalog){
+            }else if(treeData instanceof Catalog catalog){
                 DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
-                if (renamePlatform != null && renamePlatform.usesSchemaModel()) {
-                    renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, newName.toUpperCase(), "user",
+                if (renamePlatform != null && renamePlatform.isSchemaCatalog(catalog)) {
+                    // oracle/dameng 模式名习惯大写；PG 模式名保持用户输入
+                    String effectiveName = renamePlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA
+                            ? newName.toUpperCase() : newName;
+                    renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, effectiveName, "user",
                             false);
                 } else {
                     renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, newName, "database",
@@ -292,9 +295,9 @@ public class TreeObjectCrudHandler {
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
-        }else if(treeData instanceof Catalog){
+        }else if(treeData instanceof Catalog catalog){
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
-            if (platform != null && platform.usesSchemaModel()) {
+            if (platform != null && platform.isSchemaCatalog(catalog)) {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
             } else {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
