@@ -120,7 +120,7 @@ class TreeCreateDialogs {
                 I18n.t("metadata.dialog.create_database.title", "新建数据库"),
                 grid,
                 460,
-                250,
+                200,
                 buttonTypeOk,
                 buttonTypeCancel
         );
