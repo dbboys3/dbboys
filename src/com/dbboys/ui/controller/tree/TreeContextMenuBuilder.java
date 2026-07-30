@@ -173,7 +173,8 @@ public class TreeContextMenuBuilder {
         importMenu.setGraphic(IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
 
         CustomShortcutMenuItem importSqlScriptItem =
-                MenuItemUtil.createMenuItemI18n("metadata.menu.import.sql_script", null);
+                MenuItemUtil.createMenuItemI18n("metadata.menu.import.sql_script",
+                        IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
         importMenu.getItems().add(importSqlScriptItem);
         CustomShortcutMenuItem importDdlAndDataItem =
                 MenuItemUtil.createMenuItemI18n("metadata.menu.import_ddl_data",
@@ -220,8 +221,7 @@ public class TreeContextMenuBuilder {
                 return;
             }
 
-            Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
-            TreeObjectCrudHandler.applyDatabaseConnectionProps(connect, database, database.getName());
+            Connect connect = TreeObjectCrudHandler.buildObjectConnect(selectedItem, false);
             TreeViewUtil.databaseService.importSqlScript(connect, file, () ->
                     NotificationUtil.showMainNotification(
                             I18n.t("metadata.import_sql.notice.completed", "数据库\"%s\"导入脚本完成：%s")
@@ -232,9 +232,10 @@ public class TreeContextMenuBuilder {
                             .formatted(database.getName(), file.getName())
             );
         });
+
         importDdlAndDataItem.setOnAction(event ->
                 DatabaseImportHandler.importDatabaseDdlAndData(treeView.getSelectionModel().getSelectedItem()));
-        
+
         //右键连接信息点击响应
         TreeViewUtil.connectInfoItem.setOnAction(event->{
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
@@ -1479,11 +1480,11 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(createDatabaseItem);
                     }
 
+                    if (dbFolderPlatform == null || dbFolderPlatform.supportsDatabaseImport()) {
                         importDdlAndDataItem.textProperty().unbind();
-                        String importKey = dbFolderPlatform != null ? dbFolderPlatform.getImportDdlDataMenuI18nKey() : "metadata.menu.import_ddl_data";
-                        String importDefault = dbFolderPlatform != null ? dbFolderPlatform.getImportDdlDataMenuDefaultText() : "导入数据库";
-                        importDdlAndDataItem.textProperty().bind(I18n.bind(importKey, importDefault));
+                        importDdlAndDataItem.textProperty().bind(I18n.bind("metadata.menu.import_database", "导入数据库"));
                         treeview_menu.getItems().add(importDdlAndDataItem);
+                    }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                 }
                 else if(selectedItem.getValue() instanceof UserFolder) {
@@ -1538,26 +1539,29 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(deleteItem);
                     }
 
-                    // ---- 导入 (库节点有，模式节点无) ---- //
-                    if (!isSchema) {
+                    // ---- 导入：库节点显示"导入模式"，模式节点显示"导入SQL" ---- //
+                    if (isSchema) {
+                        treeview_menu.getItems().add(importSqlScriptItem);
+                    } else {
                         if (dbNodePlatform == null || dbNodePlatform.supportsDatabaseImport()) {
-                            treeview_menu.getItems().add(importMenu);
+                            importDdlAndDataItem.textProperty().unbind();
+                            String importKey = dbNodePlatform != null ? dbNodePlatform.getImportDdlDataMenuI18nKey() : "metadata.menu.import_ddl_data";
+                            String importDefault = dbNodePlatform != null ? dbNodePlatform.getImportDdlDataMenuDefaultText() : "导入数据库";
+                            importDdlAndDataItem.textProperty().bind(I18n.bind(importKey, importDefault));
+                            treeview_menu.getItems().add(importDdlAndDataItem);
                         }
                     }
 
-                    // ---- 导出：DATABASE_SCHEMA 仅模式节点显示，其他模型全部显示 ---- //
-                    // 系统模式（pg_catalog/information_schema）禁止导出
-                    boolean isSystemSchema = isSchema && dbNodePlatform != null
-                            && dbNodePlatform.isSystemDatabase(selectedItem.getValue().getName());
-                    boolean exportAllowed = !isSystemSchema
-                            && (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport())
-                            && (dbNodePlatform == null
-                                || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA
-                                || isSchema);
+                    // ---- 导出：库节点"导出数据库"，模式节点"导出模式" ---- //
+                    boolean exportAllowed = dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport();
                     if (exportAllowed) {
                         exportDdlAndDataItem.textProperty().unbind();
-                        String exportKey = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuI18nKey() : "metadata.menu.export_ddl_data";
-                        String exportDefault = dbNodePlatform != null ? dbNodePlatform.getExportDdlDataMenuDefaultText() : "导出数据库";
+                        String exportKey = isSchema && dbNodePlatform != null
+                                ? dbNodePlatform.getExportDdlDataMenuI18nKey()
+                                : "metadata.menu.export_ddl_data";
+                        String exportDefault = isSchema && dbNodePlatform != null
+                                ? dbNodePlatform.getExportDdlDataMenuDefaultText()
+                                : "导出数据库";
                         exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
                         treeview_menu.getItems().add(exportDdlAndDataItem);
                         treeview_menu.getItems().add(exportDdlMenu);

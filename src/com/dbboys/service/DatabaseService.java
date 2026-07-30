@@ -71,12 +71,26 @@ public class DatabaseService implements MetaObjectService {
     }
 
     public String exportDatabaseDdl(Connect connect, Database database) throws Exception {
+        if (database instanceof com.dbboys.model.Schema) {
+            return exportSchemaDdl(connect, database);
+        }
+        return exportAllSchemaDdl(connect, database);
+    }
+
+    public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
+        if (database instanceof com.dbboys.model.Schema) {
+            return exportSchemaDdl(connect, database, progressListener);
+        }
+        return exportAllSchemaDdl(connect, database, progressListener);
+    }
+
+    private String exportSchemaDdl(Connect connect, Database database) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database,
                 conn -> platformResolver.ddl(connect).printDatabase(conn, database.getName()));
     }
 
-    public String exportDatabaseDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
+    private String exportSchemaDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
         String bootstrap = buildBootstrapHeader(connect, database);
         return bootstrap + withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
@@ -85,11 +99,41 @@ public class DatabaseService implements MetaObjectService {
                 progressListener.accept(0L, total);
             }
             LongConsumer progressCallback = (progressListener != null && total > 0)
-                    ? completed -> {progressListener.accept(completed, total);
-                        }
+                    ? completed -> { progressListener.accept(completed, total); }
                     : null;
             return ddlRepository.printDatabase(conn, database.getName(), progressCallback);
         });
+    }
+
+    /** 导出数据库下所有非系统模式的 DDL（DATABASE_SCHEMA 模型库节点用）。 */
+    private String exportAllSchemaDdl(Connect connect, Database database) throws Exception {
+        return exportAllSchemaDdl(connect, database, null);
+    }
+
+    private String exportAllSchemaDdl(Connect connect, Database database, BiConsumer<Long, Long> progressListener) throws Exception {
+        String bootstrap = buildBootstrapHeader(connect, database);
+        StringBuilder result = new StringBuilder(bootstrap);
+        List<Database> schemas = getSchemas(connect, database);
+        var platform = platformResolver.getPlatform(connect.getDbtype());
+        List<Database> exportSchemas = new ArrayList<>();
+        for (Database s : schemas) {
+            if (platform == null || !platform.isSystemDatabase(s.getName())) {
+                exportSchemas.add(s);
+            }
+        }
+        if (progressListener != null) {
+            progressListener.accept(0L, (long) exportSchemas.size());
+        }
+        int idx = 0;
+        for (Database s : exportSchemas) {
+            String schemaDdl = exportSchemaDdl(connect, s);
+            result.append(schemaDdl);
+            idx++;
+            if (progressListener != null) {
+                progressListener.accept((long) idx, (long) exportSchemas.size());
+            }
+        }
+        return result.toString();
     }
 
     private String buildBootstrapHeader(Connect connect, Database database) {

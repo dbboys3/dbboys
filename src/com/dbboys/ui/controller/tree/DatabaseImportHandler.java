@@ -114,7 +114,7 @@ public class DatabaseImportHandler {
     }
 
     public static void importDatabaseDdlAndData(TreeItem<TreeData> selectedItem) {
-        if (selectedItem == null || !(selectedItem.getValue() instanceof DatabaseFolder)) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database)) {
             return;
         }
 

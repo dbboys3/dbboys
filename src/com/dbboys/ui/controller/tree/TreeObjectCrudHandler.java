@@ -150,9 +150,6 @@ public class TreeObjectCrudHandler {
         if (treeData instanceof Schema) {
             return I18n.t("metadata.dialog.rename.schema", "重命名模式：%s").formatted(treeData.getName());
         }
-        if (treeData instanceof Schema) {
-            return I18n.t("metadata.dialog.rename.schema", "重命名模式：%s").formatted(treeData.getName());
-        }
         if (treeData instanceof Database) {
             return I18n.t("metadata.dialog.rename.database", "重命名数据库：%s").formatted(treeData.getName());
         }
