@@ -134,14 +134,6 @@ public interface DatabasePlatform {
     }
 
     /**
-     * 对象需要用"模式.对象"限定（SCHEMA 与 DATABASE_SCHEMA 均为 true）。
-     * 由 {@link #catalogModel()} 派生，方言一般不应直接覆写。
-     */
-    default boolean usesSchemaModel() {
-        return catalogModel() != CatalogModel.DATABASE;
-    }
-
-    /**
      * 三层目录模型：库-模式-表（如 PostgreSQL 实例有多个库，库下再挂模式）。
      * 为 true 时，树在库节点下先加载一层模式节点（Schema.parentDb 记录所属库），
      * 模式节点下才挂对象文件夹。由 {@link #catalogModel()} 派生。

@@ -66,7 +66,7 @@ public class TreeDataLoader {
                                 DatabasePlatformResolver resolver = resolvePlatformResolver();
                                 var platform = resolver.requirePlatform(connect);
                                 TreeData folderTreeData;
-                                if (platform.usesSchemaModel()) {
+                                if (platform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA) {
                                     SchemaFolder schemaFolder = new SchemaFolder();
                                     bindFolderName(schemaFolder,
                                             platform.getDatabaseFolderI18nKey(),

@@ -864,7 +864,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                     : DatabasePlatform.defaultMetadataTreeDragTableSelectSql(qual);
         }
         if (item instanceof View v) {
-            String qual = platform != null && platform.usesSchemaModel()
+            String qual = platform != null && platform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE
                     ? qualifiedViewForDragSql(v)
                     : v.getName();
             return platform != null
