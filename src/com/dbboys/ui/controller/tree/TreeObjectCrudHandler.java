@@ -179,7 +179,8 @@ public class TreeObjectCrudHandler {
         String oldName = selectedItem.getValue().getName();
         String objectDisplayName = getDeleteObjectDisplayName(objectType);
         String sql;
-        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database) {
+        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database
+                && !(selectedItem.getValue() instanceof Schema)) {
             sql = "ALTER USER \"" + oldName + "\" RENAME TO \"" + newName + "\"";
         } else {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);

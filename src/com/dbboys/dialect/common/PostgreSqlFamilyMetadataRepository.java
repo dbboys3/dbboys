@@ -44,7 +44,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 pg_catalog.pg_get_userbyid(nspowner) AS owner,
                 COALESCE(pg_catalog.obj_description(n.oid), '') AS comment,
                 pg_catalog.pg_size_pretty(
-                    COALESCE(SUM(pg_catalog.pg_total_relation_size(c.oid)), 0)
+                    COALESCE(SUM(pg_catalog.pg_relation_size(c.oid)), 0)
                 ) AS total_size
             FROM information_schema.schemata s
             JOIN pg_catalog.pg_namespace n ON n.nspname = s.schema_name
@@ -62,7 +62,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 pg_catalog.pg_get_userbyid(nspowner) AS owner,
                 COALESCE(pg_catalog.obj_description(n.oid), '') AS comment,
                 pg_catalog.pg_size_pretty(
-                    COALESCE(SUM(pg_catalog.pg_total_relation_size(c.oid)), 0)
+                    COALESCE(SUM(pg_catalog.pg_relation_size(c.oid)), 0)
                 ) AS total_size
             FROM information_schema.schemata s
             JOIN pg_catalog.pg_namespace n ON n.nspname = s.schema_name
