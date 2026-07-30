@@ -67,7 +67,7 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
 
     @Override
     public IconInfo iconInfo() {
-        return new IconInfo(IconPaths.POSTGRESQL_LOGO, 0.020, 0.020);
+        return new IconInfo(IconPaths.POSTGRESQL_LOGO, 0.55, 0.55);
     }
 
     @Override
