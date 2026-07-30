@@ -75,6 +75,7 @@ class TreeCreateDialogs {
         comboBox1.setId("createDatabaseDbspace");
         comboBox1.setPrefWidth(240);
 
+        boolean showCharset = platform == null || platform.supportsCreateDatabaseCharset();
         boolean showStorageSpace = platform == null || platform.supportsCreateDatabaseStorageSpace();
         ObservableList<String> dbspaceList = FXCollections.observableArrayList();
         if (showStorageSpace) {
@@ -101,11 +102,16 @@ class TreeCreateDialogs {
 
         grid.add(nameLabel, 0, 0);
         grid.add(textField, 1, 0);
-        grid.add(charsetLabel, 0, 1);
-        grid.add(comboBox, 1, 1);
+        int row = 1;
+        if (showCharset) {
+            grid.add(charsetLabel, 0, row);
+            grid.add(comboBox, 1, row);
+            row++;
+        }
         if (showStorageSpace) {
-            grid.add(dbspaceLabel, 0, 2);
-            grid.add(comboBox1, 1, 2);
+            grid.add(dbspaceLabel, 0, row);
+            grid.add(comboBox1, 1, row);
+            row++;
         }
 
         ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
@@ -133,7 +139,7 @@ class TreeCreateDialogs {
         ButtonType result = dialog.showAndWait();
         if (result == buttonTypeOk) {
             Connect connect = new Connect((Connect) selectedItem.getParent().getValue());
-            String dbLocale = ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "");
+            String dbLocale = showCharset ? ((String) comboBox.getValue()).replaceAll("\\([^()]*\\)", "") : "";
             connect.setCatalog(resolveFallbackDatabase(connect));
             connect.setSessionCatalog("");
             ConnectionPropertyUtil.applySupportedConnectionProperty(

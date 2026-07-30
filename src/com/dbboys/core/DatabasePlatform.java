@@ -225,6 +225,10 @@ public interface DatabasePlatform {
         return true;
     }
 
+    default boolean supportsCreateDatabaseCharset() {
+        return true;
+    }
+
     default String createDatabaseSql(String databaseName, String charsetOption, String storageSpace) {
         String name = databaseName == null ? "" : databaseName.trim();
         String dbspace = storageSpace == null ? "" : storageSpace.replaceAll("\\([^()]*\\)", "").trim();

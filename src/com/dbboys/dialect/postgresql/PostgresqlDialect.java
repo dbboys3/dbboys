@@ -253,6 +253,16 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public boolean supportsCreateDatabaseCharset() {
+        return false;
+    }
+
+    @Override
+    public List<String> createDatabaseCharsetOptions() {
+        return List.of();
+    }
+
+    @Override
     public String createDatabaseSql(String databaseName, String charsetOption, String storageSpace) {
         String name = databaseName == null ? "" : databaseName.trim().replace("\"", "\"\"");
         String sql = "CREATE DATABASE \"" + name + "\"";
