@@ -448,16 +448,19 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             return new Database("");
         }
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+        // 三层模型下本方法查询的是模式信息（SQL_SCHEMA_INFO），必须返回 Schema：
+        // 树节点刷新后要靠 instanceof Schema + parentDb 保持“模式节点”身份，
+        // 否则再次展开会被当成库节点而错误地去加载模式列表。
         return runner.queryOne(SQL_SCHEMA_INFO, List.of(databaseName), rs -> {
-            Database catalog = new Database(rs.getString("schema_name"));
-            catalog.setDbOwner(blankToEmpty(rs.getString("owner")));
-            catalog.setDbLog("");
-            catalog.setDbUseGLU("");
-            catalog.setDbLocale(blankToEmpty(rs.getString("comment")));
-            catalog.setDbSpace("");
-            catalog.setDbSize(blankToEmpty(rs.getString("total_size")));
-            catalog.setDbCreated("");
-            return catalog;
+            Schema schema = new Schema(rs.getString("schema_name"));
+            schema.setDbOwner(blankToEmpty(rs.getString("owner")));
+            schema.setDbLog("");
+            schema.setDbUseGLU("");
+            schema.setDbLocale(blankToEmpty(rs.getString("comment")));
+            schema.setDbSpace("");
+            schema.setDbSize(blankToEmpty(rs.getString("total_size")));
+            schema.setDbCreated("");
+            return schema;
         });
     }
 
