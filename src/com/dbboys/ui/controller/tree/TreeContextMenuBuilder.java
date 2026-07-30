@@ -1384,7 +1384,6 @@ public class TreeContextMenuBuilder {
                         tableLoggingItem.setDisable(true);
                         tableNologgingItem.setDisable(true);
                         importDataItem.setDisable(true);
-                        importSqlScriptItem.setDisable(true);
                     }
                 }
 
@@ -1553,7 +1552,7 @@ public class TreeContextMenuBuilder {
 
                     treeview_menu.getItems().add(TreeViewUtil.databaseOpenFileItem);
 
-                    // ---- 库节点专有：设为默认库、新建 ---- //
+                    // ---- 库节点专有：设为默认库 ---- //
                     if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
                         treeview_menu.getItems().add(setDefaultDatabaseItem);
                     }
@@ -1563,17 +1562,6 @@ public class TreeContextMenuBuilder {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
                         treeview_menu.getItems().add(createDatabaseItem);
-                    }
-                    // 非三层模型（DATABASE model）库节点：新建数据库
-                    if (dbNodePlatform == null
-                            || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
-                        if (dbNodePlatform == null || dbNodePlatform.canCreateDatabase()) {
-                            createDatabaseItem.textProperty().unbind();
-                            String createKey = dbNodePlatform != null ? dbNodePlatform.getCreateDatabaseMenuI18nKey() : "metadata.menu.create_database";
-                            String createDefault = dbNodePlatform != null ? dbNodePlatform.getCreateDatabaseMenuDefaultText() : "新建数据库";
-                            createDatabaseItem.textProperty().bind(I18n.bind(createKey, createDefault));
-                            treeview_menu.getItems().add(createDatabaseItem);
-                        }
                     }
 
                     // ---- 统计、拷贝、刷新 ---- //
@@ -1592,13 +1580,10 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(deleteItem);
                     }
 
-                    // ---- 导入数据库 ---- //
-                    if (dbNodePlatform == null || dbNodePlatform.supportsDatabaseImport()) {
-                        importDdlAndDataItem.textProperty().unbind();
-                        String importKey = dbNodePlatform != null ? dbNodePlatform.getImportDdlDataMenuI18nKey() : "metadata.menu.import_ddl_data";
-                        String importDefault = dbNodePlatform != null ? dbNodePlatform.getImportDdlDataMenuDefaultText() : "导入数据库";
-                        importDdlAndDataItem.textProperty().bind(I18n.bind(importKey, importDefault));
-                        treeview_menu.getItems().add(importDdlAndDataItem);
+                    // ---- 两层模型：导入SQL脚本 ---- //
+                    if (dbNodePlatform != null
+                            && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE) {
+                        treeview_menu.getItems().add(importSqlScriptItem);
                     }
 
                     // ---- 导出数据库 ---- //
