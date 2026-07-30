@@ -49,9 +49,6 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             FROM information_schema.schemata s
             JOIN pg_catalog.pg_namespace n ON n.nspname = s.schema_name
             LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid
-            WHERE s.schema_name NOT IN ('pg_catalog', 'information_schema')
-              AND s.schema_name NOT LIKE 'pg_toast%'
-              AND s.schema_name NOT LIKE 'pg_temp%'
             GROUP BY s.schema_name, nspowner, n.oid
             ORDER BY s.schema_name
             """;
