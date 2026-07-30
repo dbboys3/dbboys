@@ -28,7 +28,7 @@ public class DatabaseDdlExportHandler {
 
     public static void exportDatabaseDdlAndData(TreeView<TreeData> treeView) {
         TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
-        if (selectedItem == null || !(selectedItem.getValue() instanceof Database database)) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof CatalogNode database)) {
             return;
         }
 
@@ -204,7 +204,7 @@ public class DatabaseDdlExportHandler {
         return false;
     }
 
-    private static String buildDatabaseBootstrapSql(Connect connect, Database database) {
+    private static String buildDatabaseBootstrapSql(Connect connect, CatalogNode database) {
         if (connect == null || database == null) {
             return "";
         }

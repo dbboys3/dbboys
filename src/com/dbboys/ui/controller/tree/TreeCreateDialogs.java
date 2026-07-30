@@ -258,7 +258,7 @@ class TreeCreateDialogs {
         dialog.showAndWait();
     }
 
-    /** 建模式的执行连接：DatabaseFolder 节点取连接副本；三层模型的库节点落到该库执行 CREATE SCHEMA。 */
+    /** 建模式的执行连接：SchemaFolder 节点取连接副本；三层模型的库节点落到该库执行 CREATE SCHEMA。 */
     private static Connect buildSchemaCreateConnect(TreeItem<TreeData> selectedItem) {
         TreeData parentValue = selectedItem.getParent() == null ? null : selectedItem.getParent().getValue();
         if (parentValue instanceof Connect) {

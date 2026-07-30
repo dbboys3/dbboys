@@ -2,12 +2,14 @@ package com.dbboys.dialect.common;
 
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.infra.db.SqlRunner;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.DBPackage;
 import com.dbboys.model.Database;
 import com.dbboys.model.Function;
 import com.dbboys.model.Index;
 import com.dbboys.model.Queue;
+import com.dbboys.model.Schema;
 import com.dbboys.model.Type;
 import com.dbboys.model.Procedure;
 import com.dbboys.model.Sequence;
@@ -644,17 +646,31 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
 
     @Override
     public List<Database> getDatabases(Connection conn) throws SQLException {
-        return getMetadataDatabases(conn);
+        // 兼容旧的“库列表”消费链路（如 SQL 页签下拉框）：SCHEMA 模型下把模式节点
+        // 适配为 Database 视图返回；规范入口是 getMetadataDatabases（CatalogNode/Schema）。
+        List<Database> databases = new ArrayList<>();
+        for (CatalogNode node : getMetadataDatabases(conn)) {
+            Database database = new Database(node.getName());
+            database.setDbOwner(node.getDbOwner());
+            database.setDbCreated(node.getDbCreated());
+            database.setDbSpace(node.getDbSpace());
+            database.setDbLog(node.getDbLog());
+            database.setDbUseGLU(node.getDbUseGLU());
+            database.setDbLocale(node.getDbLocale());
+            database.setDbSize(node.getDbSize());
+            databases.add(database);
+        }
+        return databases;
     }
 
     @Override
-    public List<Database> getMetadataDatabases(Connection conn) throws SQLException {
+    public List<CatalogNode> getMetadataDatabases(Connection conn) throws SQLException {
         SqlRunner runner = runner(conn);
         SessionSchemaListContext sessionCtx = loadSessionSchemaListContext(runner);
-        List<Database> schemas;
+        List<Schema> schemas;
         try {
             schemas = runner.query(sqlUsersWithSize(), null, rs -> {
-                Database db = mapSchemaDatabase(rs.getString(1));
+                Schema db = mapSchemaDatabase(rs.getString(1));
                 db.setDbSize(formatBytes(rs.getBigDecimal(2)));
                 db.setDbCreated(blankToEmpty(rs.getString("created_time")));
                 applySessionSchemaListContext(db, sessionCtx);
@@ -662,7 +678,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
             });
         } catch (SQLException e) {
             schemas = runner.query(sqlUsersWithCreated(), null, rs -> {
-                Database db = mapSchemaDatabase(rs.getString(1));
+                Schema db = mapSchemaDatabase(rs.getString(1));
                 db.setDbCreated(blankToEmpty(rs.getString("created_time")));
                 applySessionSchemaListContext(db, sessionCtx);
                 return db;
@@ -672,7 +688,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         boolean exists = schemas.stream().anyMatch(schema -> currentSchema.equalsIgnoreCase(schema.getName()));
         if (!exists) {
             schemas = new ArrayList<>(schemas);
-            Database injected = mapSchemaDatabase(currentSchema);
+            Schema injected = mapSchemaDatabase(currentSchema);
             String created = querySchemaCreatedTime(runner, currentSchema);
             if (created != null) {
                 injected.setDbCreated(blankToEmpty(created));
@@ -680,7 +696,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
             applySessionSchemaListContext(injected, sessionCtx);
             schemas.add(0, injected);
         }
-        return schemas;
+        return new ArrayList<>(schemas);
     }
 
     private record SessionSchemaListContext(String serviceName, String dbLocale) {
@@ -701,7 +717,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         }
     }
 
-    private static void applySessionSchemaListContext(Database db, SessionSchemaListContext ctx) {
+    private static void applySessionSchemaListContext(CatalogNode db, SessionSchemaListContext ctx) {
         if (ctx == null) {
             return;
         }
@@ -721,11 +737,11 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
     }
 
     @Override
-    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         if (databaseName == null || databaseName.isBlank()) {
             return loadCurrentDatabase(conn);
         }
-        Database schema = loadSchemaInfo(conn, databaseName);
+        CatalogNode schema = loadSchemaInfo(conn, databaseName);
         if (schema != null) {
             return schema;
         }
@@ -1211,10 +1227,10 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
             select nvl(sum(bytes), 0) from dba_segments where owner = ?
             """;
 
-    private Database loadSchemaInfo(Connection conn, String schemaName) throws SQLException {
+    private Schema loadSchemaInfo(Connection conn, String schemaName) throws SQLException {
         SqlRunner runner = runner(conn);
         return runner.queryOne(sqlSchemaInfo(), List.of(schemaName), rs -> {
-            Database schema = new Database(blankToFallback(rs.getString("schema_name"), schemaName));
+            Schema schema = new Schema(blankToFallback(rs.getString("schema_name"), schemaName));
             schema.setDbOwner(blankToFallback(rs.getString("schema_name"), schemaName));
             schema.setDbCreated(blankToEmpty(rs.getString("created_time")));
             schema.setDbSpace("");
@@ -1333,16 +1349,16 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         return formatBytes(value);
     }
 
-    private Database mapSchemaDatabase(String schemaName) {
-        Database database = new Database(blankToFallback(schemaName, dialectName()));
-        database.setDbOwner(database.getName());
-        database.setDbCreated("");
-        database.setDbSpace("");
-        database.setDbLog("");
-        database.setDbUseGLU("");
-        database.setDbLocale("");
-        database.setDbSize("");
-        return database;
+    private Schema mapSchemaDatabase(String schemaName) {
+        Schema schema = new Schema(blankToFallback(schemaName, dialectName()));
+        schema.setDbOwner(schema.getName());
+        schema.setDbCreated("");
+        schema.setDbSpace("");
+        schema.setDbLog("");
+        schema.setDbUseGLU("");
+        schema.setDbLocale("");
+        schema.setDbSize("");
+        return schema;
     }
 
     private void applyTableLoggingType(Table table, java.sql.ResultSet rs) throws SQLException {

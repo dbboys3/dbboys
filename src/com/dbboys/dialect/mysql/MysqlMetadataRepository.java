@@ -77,7 +77,7 @@ public final class MysqlMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         String db = currentDatabase(conn, databaseName);
         Database catalog = new Database(db);
         String sql = """

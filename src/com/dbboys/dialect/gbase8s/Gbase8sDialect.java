@@ -1,7 +1,7 @@
 package com.dbboys.dialect.gbase8s;
 
 import com.dbboys.core.ChangeDatabaseFailureKind;
-import com.dbboys.model.Database;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.core.ConnectionSupport;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DdlRepository;
@@ -392,7 +392,7 @@ public final class Gbase8sDialect implements DatabasePlatform, ConnectionSupport
     }
 
     @Override
-    public String buildBootstrapSql(Database database) {
+    public String buildBootstrapSql(CatalogNode database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

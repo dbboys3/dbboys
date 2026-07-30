@@ -114,7 +114,12 @@ public class DatabaseImportHandler {
     }
 
     public static void importDatabaseDdlAndData(TreeItem<TreeData> selectedItem) {
-        if (selectedItem == null || !(selectedItem.getValue() instanceof Database)) {
+        if (selectedItem == null) {
+            return;
+        }
+        // 库/模式节点与数据库/模式文件夹节点都允许导入（文件夹右键导入实际建库）
+        TreeData v = selectedItem.getValue();
+        if (!(v instanceof CatalogNode) && !(v instanceof DatabaseFolder) && !(v instanceof SchemaFolder)) {
             return;
         }
 

@@ -4,8 +4,8 @@ import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.MetaObjectService;
 import com.dbboys.core.MetaObjectService.DdlFetcher;
 import com.dbboys.app.AppErrorHandler;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
 import com.dbboys.model.ObjectList;
 import com.dbboys.model.Trigger;
 import javafx.concurrent.Task;
@@ -27,7 +27,7 @@ public class TriggerService implements MetaObjectService {
         this.platformResolver = platformResolver;
     }
 
-    public Trigger getTrigger(Connect connect, Database database,String objectName) throws Exception {
+    public Trigger getTrigger(Connect connect, CatalogNode database,String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTrigger(conn, database.getName(), objectName));
     }
 
@@ -47,7 +47,7 @@ public class TriggerService implements MetaObjectService {
     }
 
     public void refreshTriggerMeta(Connect connect,
-                                   Database database,
+                                   CatalogNode database,
                                    String triggerName,
                                    Consumer<Trigger> onLoadedUi,
                                    Runnable onFinishedUi) {

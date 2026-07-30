@@ -427,7 +427,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
     }
 
     @Override
-    public List<Database> getSchemas(Connection conn) throws SQLException {
+    public List<Schema> getSchemas(Connection conn) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(SQL_SCHEMAS, null, rs -> {
             Schema schema = new Schema(rs.getString("schema_name"));
@@ -443,7 +443,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
     }
 
     @Override
-    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         if (databaseName == null || databaseName.isBlank()) {
             return new Database("");
         }

@@ -1,57 +1,19 @@
 package com.dbboys.model;
 
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-
 /**
  * Represents a database in the metadata tree.
  * <p>
  * The old {@code Catalog} class has been renamed to {@code Database};
  * the three-level tree model (DATABASE_SCHEMA) uses {@link Schema}
- * for the child schema nodes under each database.
+ * for the child schema nodes under each database.  {@code Database} and
+ * {@link Schema} are sibling types sharing the db* property set through
+ * their common supertype {@link CatalogNode}.
  */
-public class Database extends TreeData {
-    private StringProperty dbCreated = new SimpleStringProperty();
-    private StringProperty dbLocale = new SimpleStringProperty();
-    private StringProperty dbOwner = new SimpleStringProperty();
-    private StringProperty dbLog = new SimpleStringProperty();
-    private StringProperty dbUseGLU = new SimpleStringProperty();
-    private StringProperty dbSpace = new SimpleStringProperty();
-    private StringProperty dbSize = new SimpleStringProperty();
+public class Database extends CatalogNode {
 
     public Database() {}
 
     public Database(String name) {
         super(name);
     }
-
-    // ---- accessors (unchanged property names) ----
-
-    public String getDbCreated() { return dbCreated.get(); }
-    public StringProperty dbCreatedProperty() { return dbCreated; }
-    public void setDbCreated(String dbCreated) { this.dbCreated.set(dbCreated); }
-
-    public String getDbLocale() { return dbLocale.get(); }
-    public StringProperty dbLocaleProperty() { return dbLocale; }
-    public void setDbLocale(String dbLocale) { this.dbLocale.set(dbLocale); }
-
-    public String getDbOwner() { return dbOwner.get(); }
-    public StringProperty dbOwnerProperty() { return dbOwner; }
-    public void setDbOwner(String dbOwner) { this.dbOwner.set(dbOwner); }
-
-    public String getDbLog() { return dbLog.get(); }
-    public StringProperty dbLogProperty() { return dbLog; }
-    public void setDbLog(String dbLog) { this.dbLog.set(dbLog); }
-
-    public String getDbUseGLU() { return dbUseGLU.get(); }
-    public StringProperty dbUseGLUProperty() { return dbUseGLU; }
-    public void setDbUseGLU(String dbUseGLU) { this.dbUseGLU.set(dbUseGLU); }
-
-    public String getDbSpace() { return dbSpace.get(); }
-    public StringProperty dbSpaceProperty() { return dbSpace; }
-    public void setDbSpace(String dbSpace) { this.dbSpace.set(dbSpace); }
-
-    public String getDbSize() { return dbSize.get(); }
-    public StringProperty dbSizeProperty() { return dbSize; }
-    public void setDbSize(String dbSize) { this.dbSize.set(dbSize); }
 }

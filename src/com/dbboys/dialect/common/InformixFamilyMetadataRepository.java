@@ -468,7 +468,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
         });
     }
 
-    public Database getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
+    public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.queryOne(SQL_DATABASE_INFO, List.of(databaseName, databaseName), rs -> {
             Database database = new Database(rs.getString(1));

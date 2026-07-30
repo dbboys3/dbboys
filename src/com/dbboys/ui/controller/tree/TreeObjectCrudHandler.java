@@ -95,7 +95,7 @@ public class TreeObjectCrudHandler {
                 TabpaneUtil.isRefreshConnectList();
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_renamed", "连接已重命名为：%s").formatted(selectedItem.getValue().getName()));
-            }else if(treeData instanceof Database catalog){
+            }else if(treeData instanceof CatalogNode catalog){
                 DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
                 if (renamePlatform != null && (renamePlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA || treeData instanceof Schema)) {
                     // oracle/dameng 模式名习惯大写；PG 模式名保持用户输入
@@ -182,7 +182,7 @@ public class TreeObjectCrudHandler {
         String oldName = selectedItem.getValue().getName();
         String objectDisplayName = getDeleteObjectDisplayName(objectType);
         String sql;
-        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof Database
+        if ("user".equalsIgnoreCase(objectType) && selectedItem.getValue() instanceof CatalogNode
                 && !(selectedItem.getValue() instanceof Schema)) {
             sql = "ALTER USER \"" + oldName + "\" RENAME TO \"" + newName + "\"";
         } else {
@@ -299,7 +299,7 @@ public class TreeObjectCrudHandler {
                 NotificationUtil.showMainNotification(
                         I18n.t("metadata.notice.connection_deleted", "数据库连接\"%s\"已删除！").formatted(selectedItem.getValue().getName()));
             }
-        }else if(treeData instanceof Database catalog){
+        }else if(treeData instanceof CatalogNode catalog){
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
             if (platform != null && (platform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA || treeData instanceof Schema)) {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
@@ -331,7 +331,7 @@ public class TreeObjectCrudHandler {
 
     public static Connect buildObjectConnect(TreeItem<TreeData> selectedItem, boolean useSysmaster) {
         Connect connect = new Connect(TreeNavigator.getMetaConnect(selectedItem));
-        Database currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
+        CatalogNode currentDatabase = TreeNavigator.getCurrentDatabase(selectedItem);
         String databaseName = currentDatabase.getName();
         if (useSysmaster) {
             try {
@@ -346,7 +346,7 @@ public class TreeObjectCrudHandler {
         return connect;
     }
 
-    public static void applyDatabaseConnectionProps(Connect connect, Database database, String databaseName) {
+    public static void applyDatabaseConnectionProps(Connect connect, CatalogNode database, String databaseName) {
         if (connect == null || database == null) {
             return;
         }
@@ -377,7 +377,7 @@ public class TreeObjectCrudHandler {
         }
     }
 
-    private static boolean isNoLogDatabase(Database database) {
+    private static boolean isNoLogDatabase(CatalogNode database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

@@ -13,7 +13,7 @@ import com.dbboys.ui.util.KeywordsHighlightUtil;
 import com.dbboys.ui.util.MenuItemUtil;
 import com.dbboys.infra.util.SqlFormatter;
 import com.dbboys.infra.util.SqlParserUtil;
-import com.dbboys.model.Database;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
@@ -74,7 +74,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
     public final CustomShortcutMenuItem aiConvertSqliteItem;
     public final CustomShortcutMenuItem aiFixSqlItem;
     private Connect activeConnect;
-    private Database activeDatabase;
+    private CatalogNode activeDatabase;
     private Runnable onSaveRequest = () -> {};
     private Runnable onContentDirty = () -> {};
     private Runnable onShowFindPanel = () -> {};
@@ -724,7 +724,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
      * Set the active connection/database context for metadata-aware completion.
      * Call from the owning controller when connection or database selection changes.
      */
-    public void setCompletionContext(Connect connect, Database database) {
+    public void setCompletionContext(Connect connect, CatalogNode database) {
         this.activeConnect = connect;
         this.activeDatabase = database;
     }
@@ -734,7 +734,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
      * for the active connection+database.  Results populate the cache and will be
      * available for the next autocomplete query.
      */
-    public void refreshSchemaObjects(Connect connect, Database database) {
+    public void refreshSchemaObjects(Connect connect, CatalogNode database) {
         completionEngine.refreshSchemaObjects(connect, database);
     }
 

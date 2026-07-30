@@ -6,6 +6,7 @@ import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.SqlModeCapability;
 import com.dbboys.app.AppErrorHandler;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Database;
 
@@ -46,7 +47,7 @@ public class SqlexeService {
     }
 
     public ConnectionService.ChangeDefaultDatabaseResult activeDatabase(Connect connect,
-                                                                       Database database) {
+                                                                       CatalogNode database) {
         ConnectionService.ChangeDefaultDatabaseResult result =
                 connectionService.changeSessionDatabase(connect, database, false);
         if (result.isSuccess()) {

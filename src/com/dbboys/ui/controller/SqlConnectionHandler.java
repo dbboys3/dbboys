@@ -12,8 +12,8 @@ import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.app.AppErrorHandler;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.infra.util.SqlErrorUtil;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
 import com.dbboys.model.Schema;
 import com.dbboys.model.TreeData;
 import com.dbboys.dialect.genericjdbc.GeneralJdbcDialect;
@@ -220,13 +220,13 @@ public class SqlConnectionHandler {
             // (each carrying parentDb) so switching picks the correct database+schema.
             DatabasePlatform platform = DatabasePlatformResolver.getInstance()
                     .getPlatform(ctrl.sqlConnect.getDbtype());
-            List<Database> dbNames;
+            List<CatalogNode> dbNames;
             String initialSchemaName = null;
             if (platform != null && platform.usesCatalogSchemaLevel()) {
                 dbNames = loadCatalogSchemaComboItems();
                 initialSchemaName = resolveInitialSchemaName(dbNames);
             } else {
-                dbNames = sqlexeService.getDatabases(ctrl.sqlConnect);
+                dbNames = new ArrayList<>(sqlexeService.getDatabases(ctrl.sqlConnect));
             }
             ctrl.databaseChoiceBoxList = FXCollections.observableArrayList(dbNames);
             String schemaToSelect = initialSchemaName;
@@ -261,19 +261,17 @@ public class SqlConnectionHandler {
      * so list only that database's schemas, each carrying parentDb, and the combo
      * box displays {@code schema@database}.
      */
-    private List<Database> loadCatalogSchemaComboItems() throws SQLException {
+    private List<CatalogNode> loadCatalogSchemaComboItems() throws SQLException {
         com.dbboys.core.MetadataRepository metadata =
                 DatabasePlatformResolver.getInstance().metadata(ctrl.sqlConnect);
-        List<Database> schemas = metadata.getSchemas(ctrl.sqlConnect.getConn());
+        List<Schema> schemas = metadata.getSchemas(ctrl.sqlConnect.getConn());
         String parentDb = ctrl.sqlConnect.getCatalog();
-        for (Database schema : schemas) {
-            if (schema instanceof Schema s) {
-                s.setParentDb(parentDb);
-            }
+        for (Schema s : schemas) {
+            s.setParentDb(parentDb);
         }
         schemas.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
                 a == null ? "" : a.getName(), b == null ? "" : b.getName()));
-        return schemas;
+        return new ArrayList<>(schemas);
     }
 
     /**
@@ -281,10 +279,10 @@ public class SqlConnectionHandler {
      * 拖入库节点时 sessionCatalog 是库名、匹配不到任何模式，回退到连接当前实际模式。
      * 在后台线程调用（可能执行 current_schema() 查询）。
      */
-    private String resolveInitialSchemaName(List<Database> schemas) {
+    private String resolveInitialSchemaName(List<CatalogNode> schemas) {
         String sessionDb = ctrl.sqlConnect.getSessionCatalog();
         if (sessionDb != null && !sessionDb.isBlank()) {
-            for (Database item : schemas) {
+            for (CatalogNode item : schemas) {
                 if (item.getName().equalsIgnoreCase(sessionDb)) {
                     return item.getName();
                 }
@@ -302,7 +300,7 @@ public class SqlConnectionHandler {
 
     private void selectSchemaByName(String schemaName) {
         int i = 0;
-        for (Database item : ctrl.databaseChoiceBoxList) {
+        for (CatalogNode item : ctrl.databaseChoiceBoxList) {
             if (item.getName().equalsIgnoreCase(schemaName)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
                 return;
@@ -330,7 +328,7 @@ public class SqlConnectionHandler {
             return;
         }
         int i = 0;
-        for (Database item : ctrl.databaseChoiceBoxList) {
+        for (CatalogNode item : ctrl.databaseChoiceBoxList) {
             if (item.getName().equalsIgnoreCase(sessionDb)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
                 return;
@@ -390,7 +388,7 @@ public class SqlConnectionHandler {
         });
     }
 
-    private boolean isCurrentSessionDatabase(Database database) {
+    private boolean isCurrentSessionDatabase(CatalogNode database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return false;
         }
@@ -403,7 +401,7 @@ public class SqlConnectionHandler {
         return sessionDb != null && !sessionDb.isBlank() && database.getName().equalsIgnoreCase(sessionDb);
     }
 
-    private void applyCommitModeAfterDatabaseSwitch(Database database, boolean reconnected) {
+    private void applyCommitModeAfterDatabaseSwitch(CatalogNode database, boolean reconnected) {
         if (isNoLogDatabase(database)) {
             tryApplyAutoCommitModeAndSelectAuto();
             return;
@@ -460,7 +458,7 @@ public class SqlConnectionHandler {
         }
     }
 
-    private boolean isNoLogDatabase(Database database) {
+    private boolean isNoLogDatabase(CatalogNode database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

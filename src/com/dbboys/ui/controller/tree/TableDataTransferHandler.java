@@ -467,7 +467,7 @@ public class TableDataTransferHandler {
         if (tableItem == null || !(tableItem.getValue() instanceof Table table)) {
             return false;
         }
-        Database database = TreeNavigator.getCurrentDatabase(tableItem);
+        CatalogNode database = TreeNavigator.getCurrentDatabase(tableItem);
         Connect connect = TreeNavigator.getMetaConnect(tableItem);
         if (database == null || connect == null) {
             return false;
@@ -506,7 +506,7 @@ public class TableDataTransferHandler {
             return;
         }
 
-        Database database = TreeNavigator.getCurrentDatabase(selectedItem);
+        CatalogNode database = TreeNavigator.getCurrentDatabase(selectedItem);
         if (database == null) {
             AlertUtil.CustomAlert(
                     I18n.t("common.error", "错误"),

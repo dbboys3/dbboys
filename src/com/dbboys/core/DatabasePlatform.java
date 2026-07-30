@@ -1,7 +1,7 @@
 package com.dbboys.core;
 
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -143,7 +143,7 @@ public interface DatabasePlatform {
 
     /**
      * 三层目录模型：库-模式-表（如 PostgreSQL 实例有多个库，库下再挂模式）。
-     * 为 true 时，树在库节点下先加载一层模式节点（Database.parentDb 记录所属库），
+     * 为 true 时，树在库节点下先加载一层模式节点（Schema.parentDb 记录所属库），
      * 模式节点下才挂对象文件夹。由 {@link #catalogModel()} 派生。
      */
     default boolean usesCatalogSchemaLevel() {
@@ -204,7 +204,7 @@ public interface DatabasePlatform {
         return "导出数据库\"%s\"";
     }
 
-    default String buildBootstrapSql(Database database) {
+    default String buildBootstrapSql(CatalogNode database) {
         return "";
     }
 

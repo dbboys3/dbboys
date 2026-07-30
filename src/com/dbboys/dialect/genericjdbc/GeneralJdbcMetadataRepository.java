@@ -1,6 +1,7 @@
 package com.dbboys.dialect.genericjdbc;
 
 import com.dbboys.core.MetadataRepository;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Database;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Function;
@@ -80,7 +81,7 @@ public final class GeneralJdbcMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public Database getDatabaseInfo(Connection conn, String databaseName) {
+    public CatalogNode getDatabaseInfo(Connection conn, String databaseName) {
         return createCatalog(blankToFallback(databaseName, "DEFAULT"));
     }
 

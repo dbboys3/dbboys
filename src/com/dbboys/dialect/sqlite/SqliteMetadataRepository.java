@@ -19,7 +19,7 @@ public final class SqliteMetadataRepository implements MetadataRepository {
         return List.of(main);
     }
 
-    @Override public Database getDatabaseInfo(Connection conn, String databaseName) {
+    @Override public CatalogNode getDatabaseInfo(Connection conn, String databaseName) {
         Database info = new Database(); info.setName("main"); info.setDbSize("");
         return info;
     }

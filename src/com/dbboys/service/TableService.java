@@ -89,7 +89,7 @@ public class TableService implements MetaObjectService {
     }
 
 
-    public ObjectList loadSystemTables(Connect connect, Database database) throws Exception {
+    public ObjectList loadSystemTables(Connect connect, CatalogNode database) throws Exception {
         return withMetaSession(connect, database, conn -> buildSystemTables(connect, conn, database.getName()));
     }
 
@@ -104,15 +104,15 @@ public class TableService implements MetaObjectService {
         result.addAll(repo.getSystemTables(conn, databaseName));
         return objectList;
     }
-    public ArrayList<ColumnsInfo> getColumns(Connect connect, Database database,String objectName) throws Exception {
+    public ArrayList<ColumnsInfo> getColumns(Connect connect, CatalogNode database,String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> new ArrayList<>(platformResolver.metadata(connect).getColumns(conn, objectName)));
     }
 
-    public Table getTable(Connect connect, Database database,String objectName) throws Exception {
+    public Table getTable(Connect connect, CatalogNode database,String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTable(conn, database.getName(), objectName));
     }
 
-    public String getTableComment(Connect connect, Database database, String objectName) throws Exception {
+    public String getTableComment(Connect connect, CatalogNode database, String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTableComment(conn, objectName));
     }
 
@@ -193,7 +193,7 @@ public class TableService implements MetaObjectService {
     }
 
     public void refreshTableMeta(Connect connect,
-                                 Database database,
+                                 CatalogNode database,
                                  String tableName,
                                  Consumer<Table> onLoadedUi,
                                  Runnable onFinishedUi) {
@@ -229,7 +229,7 @@ public class TableService implements MetaObjectService {
     }
 
     public void importTableData(Connect connect,
-                                Database database,
+                                CatalogNode database,
                                 String tableName,
                                 File file,
                                 IntConsumer onSucceededUi) {
@@ -300,7 +300,7 @@ public class TableService implements MetaObjectService {
     }
 
     public int importTableDataSync(Connect connect,
-                                   Database database,
+                                   CatalogNode database,
                                    String tableName,
                                    File file,
                                    BackgroundSqlTask backSqlTask) throws Exception {
@@ -313,7 +313,7 @@ public class TableService implements MetaObjectService {
     }
 
     private int executeStreamImport(Connect connect,
-                                    Database database,
+                                    CatalogNode database,
                                     String tableName,
                                     File file,
                                     BackgroundSqlTask backSqlTask) throws Exception {
@@ -350,7 +350,7 @@ public class TableService implements MetaObjectService {
     }
 
     private int executeCsvStreamImport(Connect connect,
-                                       Database database,
+                                       CatalogNode database,
                                        String tableName,
                                        File file,
                                        List<ColumnsInfo> tableColumns,
@@ -419,7 +419,7 @@ public class TableService implements MetaObjectService {
     }
 
     private int executeJsonStreamImport(Connect connect,
-                                        Database database,
+                                        CatalogNode database,
                                         String tableName,
                                         File file,
                                         List<ColumnsInfo> tableColumns,
@@ -549,7 +549,7 @@ public class TableService implements MetaObjectService {
     }
 
     private int executeStreamingImport(Connect connect,
-                                       Database database,
+                                       CatalogNode database,
                                        BackgroundSqlTask backSqlTask,
                                        StreamingImportExecutor executor) throws Exception {
         try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
@@ -1030,7 +1030,7 @@ public class TableService implements MetaObjectService {
         return !isTextImportColumnType(columnType) && !isBinaryImportColumnType(columnType);
     }
 
-    private boolean isNoLogDatabase(Database database) {
+    private boolean isNoLogDatabase(CatalogNode database) {
         return database != null
                 && database.getDbLog() != null
                 && "nolog".equalsIgnoreCase(database.getDbLog().trim());

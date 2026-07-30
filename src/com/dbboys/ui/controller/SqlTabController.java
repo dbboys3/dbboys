@@ -69,7 +69,7 @@ public class SqlTabController {
     @FXML
     public ChoiceBox<Connect> sqlConnectChoiceBox;
     @FXML
-    public ChoiceBox<Database> sqlDbChoiceBox;
+    public ChoiceBox<CatalogNode> sqlDbChoiceBox;
     @FXML
     public ChoiceBox<String> sqlCommitModeChoiceBox;
     //sql编辑框及结果集
@@ -90,7 +90,7 @@ public class SqlTabController {
             return null;
         }
     };
-    public ObservableList<Database> databaseChoiceBoxList = FXCollections.observableArrayList();
+    public ObservableList<CatalogNode> databaseChoiceBoxList = FXCollections.observableArrayList();
     public CustomSearchReplaceVbox searchReplaceBox = new CustomSearchReplaceVbox(null);
     public VBox resultSetVBox = new VBox();
     public ResultSetTabController currentResultSetTabController;

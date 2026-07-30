@@ -12,7 +12,7 @@ import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
+import com.dbboys.model.CatalogNode;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -795,7 +795,7 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public String getExportNoticeDefaultText() {
-        return "妯″紡宸插鍑哄埌锛?s";
+        return "模式已导出到：%s";
     }
 
     @Override
@@ -814,7 +814,7 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
-    public String buildBootstrapSql(Database database) {
+    public String buildBootstrapSql(CatalogNode database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
             return "";
         }

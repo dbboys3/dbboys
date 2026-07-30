@@ -63,15 +63,23 @@ public class TreeDataLoader {
 
                             //查询到结果后删除loading节点
                             Platform.runLater(() -> {
-                                DatabaseFolder databaseTreeData = new DatabaseFolder();
                                 DatabasePlatformResolver resolver = resolvePlatformResolver();
                                 var platform = resolver.requirePlatform(connect);
-                                bindFolderName(
-                                        databaseTreeData,
-                                        platform.getDatabaseFolderI18nKey(),
-                                        platform.getDatabaseFolderDefaultText()
-                                );
-                                TreeItem<TreeData> databaseItem = TreeViewBuilder.createTreeItem(databaseTreeData);
+                                TreeData folderTreeData;
+                                if (platform.usesSchemaModel()) {
+                                    SchemaFolder schemaFolder = new SchemaFolder();
+                                    bindFolderName(schemaFolder,
+                                            platform.getDatabaseFolderI18nKey(),
+                                            platform.getDatabaseFolderDefaultText());
+                                    folderTreeData = schemaFolder;
+                                } else {
+                                    DatabaseFolder databaseTreeData = new DatabaseFolder();
+                                    bindFolderName(databaseTreeData,
+                                            platform.getDatabaseFolderI18nKey(),
+                                            platform.getDatabaseFolderDefaultText());
+                                    folderTreeData = databaseTreeData;
+                                }
+                                TreeItem<TreeData> databaseItem = TreeViewBuilder.createTreeItem(folderTreeData);
                                 UserFolder userTreeData = new UserFolder();
                                 bindFolderName(userTreeData, "metadata.folder.users", "用户");
                                 TreeItem<TreeData> userItem = TreeViewBuilder.createTreeItem(userTreeData);
@@ -108,11 +116,11 @@ public class TreeDataLoader {
                             AppErrorHandler.handle(e);
                         }
                     });
-        }else if(treeItem.getValue() instanceof DatabaseFolder){
-            //创建子线程加载数据库
+        }else if(treeItem.getValue() instanceof DatabaseFolder || treeItem.getValue() instanceof SchemaFolder){
+            //创建子线程加载数据库/模式
             TreeNavigator.getMetaConnect(treeItem).executeSqlTask(
                     () -> {
-                          final List<Database> databases = new ArrayList<>();
+                          final List<CatalogNode> databases = new ArrayList<>();
                           try {
                               Connect connect = TreeNavigator.getMetaConnect(treeItem);
                               databases.addAll(resolvePlatformResolver().metadata(connect).getMetadataDatabases(connect.getConn()));
@@ -128,7 +136,7 @@ public class TreeDataLoader {
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();
                                 //查询到的结果添加到数据库条目下
-                                for (Database database : databases) {
+                                for (CatalogNode database : databases) {
                                     TreeItem<TreeData> item = TreeViewBuilder.createTreeItem(database);
                                     treeItem.getChildren().add(item);
                                 }
@@ -172,9 +180,9 @@ public class TreeDataLoader {
                         }
                     });
         }
-        else if(treeItem.getValue() instanceof Database){
+        else if(treeItem.getValue() instanceof CatalogNode){
             Connect metaConnect = TreeNavigator.getMetaConnect(treeItem);
-            Database catalogValue = (Database) treeItem.getValue();
+            CatalogNode catalogValue = (CatalogNode) treeItem.getValue();
             DatabasePlatform platform = resolvePlatformResolver().requirePlatform(metaConnect);
             boolean isSchemaNode = catalogValue instanceof Schema s && s.getParentDb() != null && !s.getParentDb().isBlank();
 
@@ -539,14 +547,12 @@ public class TreeDataLoader {
 
     // ---- helpers for the Database branch above ----
 
-    private static void loadSchemaChildren(Connect metaConnect, TreeItem<TreeData> treeItem, Database catalogValue) {
-        final List<Database> schemas = new ArrayList<>();
+    private static void loadSchemaChildren(Connect metaConnect, TreeItem<TreeData> treeItem, CatalogNode catalogValue) {
+        final List<Schema> schemas = new ArrayList<>();
         try {
-            for (Database db : TreeViewUtil.databaseService.getSchemas(metaConnect, catalogValue)) {
-                if (db instanceof Schema s) {
-                    s.setParentDb(catalogValue.getName());
-                }
-                schemas.add(db);
+            for (Schema s : TreeViewUtil.databaseService.getSchemas(metaConnect, catalogValue)) {
+                s.setParentDb(catalogValue.getName());
+                schemas.add(s);
             }
         } catch (Exception e) {
             if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
@@ -561,7 +567,7 @@ public class TreeDataLoader {
                 treeItem.setExpanded(false);
                 return;
             }
-            for (Database schema : schemas) {
+            for (Schema schema : schemas) {
                 treeItem.getChildren().add(TreeViewBuilder.createTreeItem(schema));
             }
         });
@@ -570,7 +576,7 @@ public class TreeDataLoader {
     private static void loadObjectFolders(Connect metaConnect, TreeItem<TreeData> treeItem) {
         ObjectList objectList;
         try {
-            Database database = TreeNavigator.getCurrentDatabase(treeItem);
+            CatalogNode database = TreeNavigator.getCurrentDatabase(treeItem);
             objectList = TreeViewUtil.databaseService.loadObjects(metaConnect, database);
         } catch (Exception e) {
             if (e instanceof SQLException se && SqlErrorUtil.isDisconnectError(se)) {
@@ -594,7 +600,7 @@ public class TreeDataLoader {
                 });
             } else {
                 Platform.runLater(() -> {
-                    Database refreshedCatalog = (Database) objectList.getInfo();
+                    CatalogNode refreshedCatalog = (CatalogNode) objectList.getInfo();
                     if (refreshedCatalog instanceof Schema rs
                             && treeItem.getValue() instanceof Schema ts) {
                         rs.setParentDb(ts.getParentDb());

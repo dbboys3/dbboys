@@ -5,8 +5,8 @@ import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.ui.util.ReadOnlyGuard;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.BackgroundSqlTask;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
 import com.dbboys.model.ObjectList;
 import com.dbboys.model.UpdateResult;
 import javafx.concurrent.Task;
@@ -38,16 +38,16 @@ public interface MetaObjectService {
     }
 
     default <T> T withMetaSession(Connect connect,
-                                  Database database,
+                                  CatalogNode database,
                                   ConnectionService.SqlWork<T> work) throws Exception {
         return connectionService().withMetaSession(connect, database, work);
     }
 
-    default String getDDL(Connect connect, Database database, String objectName) throws Exception {
+    default String getDDL(Connect connect, CatalogNode database, String objectName) throws Exception {
         return withMetaSession(connect, database, conn -> ddlFetcher().fetch(connect, conn, objectName));
     }
 
-    default ObjectList loadObjects(Connect connect, Database database) throws Exception {
+    default ObjectList loadObjects(Connect connect, CatalogNode database) throws Exception {
         return withMetaSession(connect, database, conn -> loadObjects(connect, conn, database.getName()));
     }
 

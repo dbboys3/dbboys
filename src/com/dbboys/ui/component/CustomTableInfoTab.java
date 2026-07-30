@@ -17,7 +17,7 @@ import com.dbboys.ui.controller.tree.TreeObjectCrudHandler;
 import com.dbboys.ui.controller.tree.TreeViewUtil;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.HealthCheck;
 import com.dbboys.model.Index;
 import com.dbboys.model.Table;
@@ -126,7 +126,7 @@ public class CustomTableInfoTab extends CustomTab {
     private String originalTableComment = "";
     private boolean createMode = false;
     private String tableName = "";
-    private Database database;
+    private CatalogNode database;
 
 
 

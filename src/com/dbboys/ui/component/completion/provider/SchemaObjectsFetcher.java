@@ -5,8 +5,8 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.MetadataRepository;
+import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Database;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -39,7 +39,7 @@ public final class SchemaObjectsFetcher {
      * Safe to call from any thread.  The actual work runs on {@link AppExecutor}'s
      * thread pool.
      */
-    public static void fetchAsync(Connect connect, Database database) {
+    public static void fetchAsync(Connect connect, CatalogNode database) {
         if (connect == null || isDefaultConnect(connect)) return;
         if (database == null || database.getName() == null || database.getName().isBlank()) return;
 

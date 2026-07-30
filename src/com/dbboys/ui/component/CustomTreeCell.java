@@ -152,22 +152,23 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             else if(item instanceof Connect connect){
                 renderConnect(connect, item);
             }
-            else if(item instanceof DatabaseFolder){
-                DatabasePlatform dbFolderPlatform = TreeNavigator.resolvePlatform(treeItem);
-                if (dbFolderPlatform != null && dbFolderPlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA) {
-                    nodeIcon.setContent(IconPaths.TREECELL_USER_FOLDER);
-                    nodeIcon.setScaleX(0.65);
-                    nodeIcon.setScaleY(0.65);
-                } else {
-                    nodeIcon.setContent(IconPaths.TREECELL_DATABASE_FOLDER);
-                    nodeIcon.setScaleX(0.13);
-                    nodeIcon.setScaleY(0.13);
-                }
+            else if(item instanceof SchemaFolder){
+                nodeIcon.setContent(IconPaths.TREECELL_USER_FOLDER);
+                nodeIcon.setScaleX(0.65);
+                nodeIcon.setScaleY(0.65);
                 applyPrimaryIconStyle(nodeIcon);
                 bindCellText(item);
                 setGraphic(nodeIconStackpane);
             }
-            else if(item instanceof Database database){
+            else if(item instanceof DatabaseFolder){
+                nodeIcon.setContent(IconPaths.TREECELL_DATABASE_FOLDER);
+                nodeIcon.setScaleX(0.13);
+                nodeIcon.setScaleY(0.13);
+                applyPrimaryIconStyle(nodeIcon);
+                bindCellText(item);
+                setGraphic(nodeIconStackpane);
+            }
+            else if(item instanceof CatalogNode database){
                 renderDatabase(database, item, treeItem);
             }
             else if(item instanceof ObjectFolder objectFolder){
@@ -484,7 +485,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         }
     }
 
-    private void renderDatabase(Database database, TreeData item, TreeItem<TreeData> treeItem) {
+    private void renderDatabase(CatalogNode database, TreeData item, TreeItem<TreeData> treeItem) {
         applyConnectIconSlot(false);
         DatabasePlatform platform = TreeNavigator.resolvePlatform(treeItem);
         if (platform != null && item instanceof Schema) {
@@ -740,7 +741,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         setOnDragDetected(null);
         setOnDragDone(null);
 
-        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof Database)) {
+        if (!(item instanceof ConnectFolder || item instanceof Connect || item instanceof Table || item instanceof View || item instanceof CatalogNode)) {
             return;
         }
         if ((item instanceof Table || item instanceof View) && isGeneralJdbcMetadataItem(getTreeItem())) {
@@ -824,7 +825,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             }
             return;
         }
-        if (item instanceof Database) {
+        if (item instanceof CatalogNode) {
             TreeItem<TreeData> catalogItem = getTreeItem();
             if (catalogItem != null) {
                 Connect meta = TreeNavigator.getMetaConnect(catalogItem);
@@ -930,8 +931,8 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         }
         boolean sameConnect = currentSqlTab.sqlTabController.sqlConnectChoiceBox.getValue().getName()
                 .equals(TreeViewUtil.getMetaConnect(treeItem).getName());
-        Database comboDatabase = currentSqlTab.sqlTabController.sqlDbChoiceBox.getValue();
-        Database nodeDatabase = TreeViewUtil.getCurrentDatabase(treeItem);
+        CatalogNode comboDatabase = currentSqlTab.sqlTabController.sqlDbChoiceBox.getValue();
+        CatalogNode nodeDatabase = TreeViewUtil.getCurrentDatabase(treeItem);
         boolean sameDatabase = comboDatabase.getName().equals(nodeDatabase.getName())
                 && parentDbName(comboDatabase).equalsIgnoreCase(parentDbName(nodeDatabase));
         boolean runnable = !currentSqlTab.sqlTabController.sqlRunButton.isDisable();
@@ -954,8 +955,8 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         return true;
     }
 
-    /** 三层模型下返回模式所属库名；非模式节点返回空串，便于比较两个 Database 是否同一库的模式。 */
-    private static String parentDbName(Database database) {
+    /** 三层模型下返回模式所属库名；非模式节点返回空串，便于比较两个库/模式节点是否同属一库。 */
+    private static String parentDbName(CatalogNode database) {
         if (database instanceof Schema schema && schema.getParentDb() != null) {
             return schema.getParentDb();
         }
@@ -1031,7 +1032,7 @@ public class CustomTreeCell extends TreeCell<TreeData> {
                 || "nologging".equalsIgnoreCase(normalized);
     }
 
-    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, Database database) {
+    private boolean isDefaultDatabase(TreeItem<TreeData> treeItem, CatalogNode database) {
         TreeItem<TreeData> parent = treeItem.getParent();
         if (parent == null || parent.getParent() == null) {
             return false;

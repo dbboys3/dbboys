@@ -1,13 +1,17 @@
 package com.dbboys.model;
 
 /**
- * A schema inside a database — used in the DATABASE_SCHEMA three-level tree model.
+ * A schema node in the metadata tree — used both in the DATABASE_SCHEMA three-level
+ * tree model (schema under a database) and in the SCHEMA two-level model
+ * (Oracle/Dameng, schema directly under the schema folder).
  * <p>
- * {@code parentDb} records the owning database name.  Use {@code instanceof Schema}
- * schema nodes from database nodes.  When non-blank, the tree renders the node as a
- * schema and the SQL-editor combo box shows {@code "schema@database"}.
+ * {@code Schema} is independent from {@link Database}; both share the db* property
+ * set through their common supertype {@link CatalogNode}.  Use
+ * {@code instanceof Schema} to tell schema nodes from database nodes.
+ * {@code parentDb} records the owning database name (three-level model only);
+ * when non-blank, the SQL-editor combo box shows {@code "schema@database"}.
  */
-public class Schema extends Database {
+public class Schema extends CatalogNode {
 
     /** Name of the database this schema belongs to ({@code null} / blank for database nodes). */
     private String parentDb;
