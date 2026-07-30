@@ -27,6 +27,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 d.datname,
                 pg_catalog.pg_get_userbyid(d.datdba) AS owner,
                 COALESCE(pg_catalog.obj_description(d.oid), '') AS comment,
+                COALESCE(pg_catalog.pg_encoding_to_char(d.encoding), '') AS encoding,
                 pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(d.datname)) AS total_size
             FROM pg_catalog.pg_database d
             WHERE NOT d.datistemplate
@@ -44,11 +45,12 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 pg_catalog.pg_get_userbyid(nspowner) AS owner,
                 COALESCE(pg_catalog.obj_description(n.oid), '') AS comment,
                 pg_catalog.pg_size_pretty(
-                    COALESCE(SUM(pg_catalog.pg_relation_size(c.oid)), 0)
+                    COALESCE(SUM(pg_catalog.pg_table_size(c.oid)), 0)
                 ) AS total_size
             FROM information_schema.schemata s
             JOIN pg_catalog.pg_namespace n ON n.nspname = s.schema_name
             LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid
+                AND c.relkind <> 't'
             GROUP BY s.schema_name, nspowner, n.oid
             ORDER BY s.schema_name
             """;
@@ -59,11 +61,12 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 pg_catalog.pg_get_userbyid(nspowner) AS owner,
                 COALESCE(pg_catalog.obj_description(n.oid), '') AS comment,
                 pg_catalog.pg_size_pretty(
-                    COALESCE(SUM(pg_catalog.pg_relation_size(c.oid)), 0)
+                    COALESCE(SUM(pg_catalog.pg_table_size(c.oid)), 0)
                 ) AS total_size
             FROM information_schema.schemata s
             JOIN pg_catalog.pg_namespace n ON n.nspname = s.schema_name
             LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid
+                AND c.relkind <> 't'
             WHERE s.schema_name = ?
             GROUP BY s.schema_name, nspowner, n.oid
             """;
@@ -415,7 +418,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             catalog.setDbOwner(blankToEmpty(rs.getString("owner")));
             catalog.setDbLog("");
             catalog.setDbUseGLU("");
-            catalog.setDbLocale(blankToEmpty(rs.getString("comment")));
+            catalog.setDbLocale(blankToEmpty(rs.getString("encoding")));
             catalog.setDbSpace("");
             catalog.setDbSize(blankToEmpty(rs.getString("total_size")));
             catalog.setDbCreated("");
@@ -431,7 +434,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             schema.setDbOwner(blankToEmpty(rs.getString("owner")));
             schema.setDbLog("");
             schema.setDbUseGLU("");
-            schema.setDbLocale(blankToEmpty(rs.getString("comment")));
+            schema.setDbLocale("");
             schema.setDbSpace("");
             schema.setDbSize(blankToEmpty(rs.getString("total_size")));
             schema.setDbCreated("");
@@ -453,7 +456,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             schema.setDbOwner(blankToEmpty(rs.getString("owner")));
             schema.setDbLog("");
             schema.setDbUseGLU("");
-            schema.setDbLocale(blankToEmpty(rs.getString("comment")));
+            schema.setDbLocale("");
             schema.setDbSpace("");
             schema.setDbSize(blankToEmpty(rs.getString("total_size")));
             schema.setDbCreated("");
