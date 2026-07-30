@@ -12,6 +12,7 @@ import com.dbboys.model.Connect;
 import com.dbboys.model.BackgroundSqlTask;
 import com.dbboys.model.Database;
 import com.dbboys.model.ObjectList;
+import com.dbboys.model.Schema;
 import com.dbboys.model.Sql;
 import com.dbboys.model.Table;
 import com.dbboys.model.UpdateResult;
@@ -152,7 +153,14 @@ public class DatabaseService implements MetaObjectService {
         if (database == null) {
             return sessionConnect;
         }
-        platformResolver.requirePlatform(sessionConnect).connection().setSessionCatalog(sessionConnect, database.getName());
+        // 三层目录模型：模式节点的目标库 = catalog 记所属库、sessionCatalog 记模式
+        String parentDb = (database instanceof Schema s) ? s.getParentDb() : null;
+        if (parentDb != null && !parentDb.isBlank()) {
+            sessionConnect.setCatalog(parentDb);
+            sessionConnect.setSessionCatalog(database.getName());
+        } else {
+            platformResolver.requirePlatform(sessionConnect).connection().setSessionCatalog(sessionConnect, database.getName());
+        }
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 connectionService(),
                 platformResolver,

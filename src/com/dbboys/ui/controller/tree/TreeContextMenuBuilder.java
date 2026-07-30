@@ -1546,7 +1546,11 @@ public class TreeContextMenuBuilder {
                     }
 
                     // ---- 导出：DATABASE_SCHEMA 仅模式节点显示，其他模型全部显示 ---- //
-                    boolean exportAllowed = (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport())
+                    // 系统模式（pg_catalog/information_schema）禁止导出
+                    boolean isSystemSchema = isSchema && dbNodePlatform != null
+                            && dbNodePlatform.isSystemDatabase(selectedItem.getValue().getName());
+                    boolean exportAllowed = !isSystemSchema
+                            && (dbNodePlatform == null || dbNodePlatform.supportsDatabaseExport())
                             && (dbNodePlatform == null
                                 || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA
                                 || isSchema);
