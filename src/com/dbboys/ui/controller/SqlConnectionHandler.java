@@ -221,16 +221,23 @@ public class SqlConnectionHandler {
             DatabasePlatform platform = DatabasePlatformResolver.getInstance()
                     .getPlatform(ctrl.sqlConnect.getDbtype());
             List<Database> dbNames;
+            String initialSchemaName = null;
             if (platform != null && platform.usesCatalogSchemaLevel()) {
                 dbNames = loadCatalogSchemaComboItems();
+                initialSchemaName = resolveInitialSchemaName(dbNames);
             } else {
                 dbNames = sqlexeService.getDatabases(ctrl.sqlConnect);
             }
             ctrl.databaseChoiceBoxList = FXCollections.observableArrayList(dbNames);
+            String schemaToSelect = initialSchemaName;
             Platform.runLater(() -> {
                 ctrl.sqlDbChoiceBox.setValue(ctrl.defaultDatabase);
                 ctrl.sqlDbChoiceBox.setItems(ctrl.databaseChoiceBoxList);
-                selectCurrentDatabase();
+                if (schemaToSelect != null) {
+                    selectSchemaByName(schemaToSelect);
+                } else {
+                    selectCurrentDatabase();
+                }
                 ctrl.sqlUserTextField.setText(ctrl.sqlConnect.getUsername());
                 ctrl.sqlConnectChoiceBoxDbIcon.setVisible(true);
                 ctrl.sqlConnectChoiceBoxLoadingIcon.setVisible(false);
@@ -250,47 +257,58 @@ public class SqlConnectionHandler {
     }
 
     /**
-     * PostgreSQL DATABASE_SCHEMA model: iterate every database, list its schemas,
-     * and produce Schema items so the combo box displays {@code schema@database}
-     * and switching picks up the right (database, schema) pair.
+     * PostgreSQL DATABASE_SCHEMA model: the connection is bound to one database,
+     * so list only that database's schemas, each carrying parentDb, and the combo
+     * box displays {@code schema@database}.
      */
     private List<Database> loadCatalogSchemaComboItems() throws SQLException {
-        List<Database> result = new ArrayList<>();
         com.dbboys.core.MetadataRepository metadata =
                 DatabasePlatformResolver.getInstance().metadata(ctrl.sqlConnect);
-        List<Database> databases = metadata.getDatabases(ctrl.sqlConnect.getConn());
-        // Sort user databases first, then template/system databases
-        java.util.Set<String> sysDbNames = new java.util.LinkedHashSet<>();
-        DatabasePlatform platform = DatabasePlatformResolver.getInstance()
-                .getPlatform(ctrl.sqlConnect.getDbtype());
-        if (platform != null) {
-            sysDbNames.addAll(platform.systemDatabaseNames());
-        }
-        databases.sort((a, b) -> {
-            boolean aSys = a != null && sysDbNames.contains(a.getName());
-            boolean bSys = b != null && sysDbNames.contains(b.getName());
-            if (aSys != bSys) return aSys ? 1 : -1;
-            return String.CASE_INSENSITIVE_ORDER.compare(
-                    a == null ? "" : a.getName(), b == null ? "" : b.getName());
-        });
-        for (Database db : databases) {
-            try {
-                ctrl.sqlConnect.getConn().createStatement()
-                        .execute("SET search_path TO \"" + db.getName().replace("\"", "\"\"") + "\"");
-                List<Database> schemas = metadata.getSchemas(ctrl.sqlConnect.getConn());
-                for (Database schema : schemas) {
-                    if (schema instanceof Schema s) {
-                        s.setParentDb(db.getName());
-                    }
-                }
-                schemas.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
-                        a == null ? "" : a.getName(), b == null ? "" : b.getName()));
-                result.addAll(schemas);
-            } catch (SQLException ignored) {
-                // database may not be reachable; skip it
+        List<Database> schemas = metadata.getSchemas(ctrl.sqlConnect.getConn());
+        String parentDb = ctrl.sqlConnect.getCatalog();
+        for (Database schema : schemas) {
+            if (schema instanceof Schema s) {
+                s.setParentDb(parentDb);
             }
         }
-        return result;
+        schemas.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
+                a == null ? "" : a.getName(), b == null ? "" : b.getName()));
+        return schemas;
+    }
+
+    /**
+     * 三层模型初始应选中的模式名：拖入模式节点时 sessionCatalog 即模式名，直接匹配；
+     * 拖入库节点时 sessionCatalog 是库名、匹配不到任何模式，回退到连接当前实际模式。
+     * 在后台线程调用（可能执行 current_schema() 查询）。
+     */
+    private String resolveInitialSchemaName(List<Database> schemas) {
+        String sessionDb = ctrl.sqlConnect.getSessionCatalog();
+        if (sessionDb != null && !sessionDb.isBlank()) {
+            for (Database item : schemas) {
+                if (item.getName().equalsIgnoreCase(sessionDb)) {
+                    return item.getName();
+                }
+            }
+        }
+        try (java.sql.Statement stmt = ctrl.sqlConnect.getConn().createStatement();
+             java.sql.ResultSet rs = stmt.executeQuery("SELECT current_schema()")) {
+            if (rs.next()) {
+                return rs.getString(1);
+            }
+        } catch (SQLException ignored) {
+        }
+        return null;
+    }
+
+    private void selectSchemaByName(String schemaName) {
+        int i = 0;
+        for (Database item : ctrl.databaseChoiceBoxList) {
+            if (item.getName().equalsIgnoreCase(schemaName)) {
+                ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
+                return;
+            }
+            i++;
+        }
     }
 
     private void selectCurrentDatabase() {
@@ -374,6 +392,11 @@ public class SqlConnectionHandler {
 
     private boolean isCurrentSessionDatabase(Database database) {
         if (database == null || database.getName() == null || database.getName().isBlank()) {
+            return false;
+        }
+        // 三层模型的模式项不算“已是当前”：编辑器新建连接只到了库、未 SET search_path，
+        // 必须走一次切换（幂等），否则拖模式节点打开后实际落在默认模式
+        if (database instanceof Schema) {
             return false;
         }
         String sessionDb = ctrl.sqlConnect == null ? null : ctrl.sqlConnect.getSessionCatalog();

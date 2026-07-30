@@ -930,8 +930,10 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         }
         boolean sameConnect = currentSqlTab.sqlTabController.sqlConnectChoiceBox.getValue().getName()
                 .equals(TreeViewUtil.getMetaConnect(treeItem).getName());
-        boolean sameDatabase = currentSqlTab.sqlTabController.sqlDbChoiceBox.getValue().getName()
-                .equals(TreeViewUtil.getCurrentDatabase(treeItem).getName());
+        Database comboDatabase = currentSqlTab.sqlTabController.sqlDbChoiceBox.getValue();
+        Database nodeDatabase = TreeViewUtil.getCurrentDatabase(treeItem);
+        boolean sameDatabase = comboDatabase.getName().equals(nodeDatabase.getName())
+                && parentDbName(comboDatabase).equalsIgnoreCase(parentDbName(nodeDatabase));
         boolean runnable = !currentSqlTab.sqlTabController.sqlRunButton.isDisable();
         if (!(sameConnect && sameDatabase && runnable)) {
             return false;
@@ -950,6 +952,14 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         );
         currentSqlTab.sqlTabController.sqlRunButton.fire();
         return true;
+    }
+
+    /** 三层模型下返回模式所属库名；非模式节点返回空串，便于比较两个 Database 是否同一库的模式。 */
+    private static String parentDbName(Database database) {
+        if (database instanceof Schema schema && schema.getParentDb() != null) {
+            return schema.getParentDb();
+        }
+        return "";
     }
 
     private boolean isSystemDatabase(DatabasePlatform platform, String dbName) {

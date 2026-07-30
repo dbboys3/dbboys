@@ -132,7 +132,8 @@ public class SqlTabI18nHelper {
         choiceBox.setConverter(new javafx.util.StringConverter<>() {
             @Override
             public String toString(T object) {
-                return object == null ? "" : object.getName();
+                // 用 toString 渲染：Schema 显示为 schema@database，其余 TreeData 显示名称
+                return object == null ? "" : object.toString();
             }
 
             @Override

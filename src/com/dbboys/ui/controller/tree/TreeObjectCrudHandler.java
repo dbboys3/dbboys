@@ -346,7 +346,15 @@ public class TreeObjectCrudHandler {
         if (connect == null || database == null) {
             return;
         }
-        resolvePlatformResolver().requirePlatform(connect).connection().setSessionCatalog(connect, databaseName);
+        // 三层目录模型：模式节点 catalog 记所属库（决定 JDBC URL）、sessionCatalog 记模式（连接后 SET search_path），
+        // 否则后台任务会把模式名当库名拼进连接地址。useSysmaster 回退名（databaseName 不是节点名）按库处理。
+        String parentDb = (database instanceof Schema schema) ? schema.getParentDb() : null;
+        if (parentDb != null && !parentDb.isBlank() && database.getName().equals(databaseName)) {
+            connect.setCatalog(parentDb);
+            connect.setSessionCatalog(databaseName);
+        } else {
+            resolvePlatformResolver().requirePlatform(connect).connection().setSessionCatalog(connect, databaseName);
+        }
         ConnectionPropertyUtil.applySupportedConnectionProperty(
                 TreeViewUtil.connectionService,
                 resolvePlatformResolver(),
