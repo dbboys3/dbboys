@@ -452,6 +452,7 @@ public class DatabaseService implements MetaObjectService {
 
             int affectedRows = 0;
             Sql currentSql = new Sql();
+            currentSql.setDialect(connect.getDbtype());
 
             for (SqlParserUtil.Segment segment : SqlParserUtil.split(scriptText)) {
                 String remainingChunk = segment.getText();
@@ -471,6 +472,7 @@ public class DatabaseService implements MetaObjectService {
 
                     remainingChunk = currentSql.getSqlRemainder();
                     currentSql = new Sql();
+                    currentSql.setDialect(connect.getDbtype());
                 }
             }
 

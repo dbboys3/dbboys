@@ -8,6 +8,8 @@ public class Sql {
     private int block_depth=0;
     private String block_name="";
     private boolean plain_block_mode=false;
+    private String dialect="";
+    private String sqlmode="";
     public String getSqlstr() {
         return sqlText;
     }
@@ -62,5 +64,21 @@ public class Sql {
 
     public void setPlainBlockMode(boolean plain_block_mode) {
         this.plain_block_mode = plain_block_mode;
+    }
+
+    public String getDialect() {
+        return dialect;
+    }
+
+    public void setDialect(String dialect) {
+        this.dialect = dialect != null ? dialect : "";
+    }
+
+    public String getSqlmode() {
+        return sqlmode;
+    }
+
+    public void setSqlmode(String sqlmode) {
+        this.sqlmode = sqlmode != null ? sqlmode : "";
     }
 }

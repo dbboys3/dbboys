@@ -113,6 +113,7 @@ public class SqlExecutionHelper {
                 updateMessage(I18n.t("sql.exec.running"));
 
                 final Sql[] currentSql = {new Sql()};
+                currentSql[0].setDialect(ctrl.sqlConnect.getDbtype());
                 ctrl.sqlStatementCount = 0;
                 SqlParserUtil.forEachSegment(ctrl.sqlText, segment -> {
                     String sqlChunk = segment.getText();

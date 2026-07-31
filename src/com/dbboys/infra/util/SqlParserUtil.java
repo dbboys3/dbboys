@@ -15,12 +15,20 @@ public class SqlParserUtil {
     private static final String DOUBLE_STRING_PATTERN_TEXT = "\"[^\"]*\"" + "|" + "\"[\\s\\S]*";
     private static final String FANYINHAO_STRING_PATTERN_TEXT = "`[^`]*`" + "|" + "`[\\s\\S]*";
     private static final String COMMENT_PATTERN_TEXT = "--[^\\n]*" + "|"+"/\\*[\\s\\S]*?\\*/"+"|"+"/\\*[\\s\\S]*" +"|"+"\\{[\\s\\S]*?\\}";
-    private static final String NO_NAME_BLOCK = "(?i)^\\s*\\b(begin)(?!\\s*(;|work))|(?i)^\\s*\\b(DECLARE)(?!\\s*;)";
+    private static final String NO_NAME_BLOCK =
+            "(?i)^\\s*\\b(begin)(?!\\s*(;|work))|(?i)^\\s*\\b(DECLARE)(?!\\s*;)" +
+            "|(?i)^\\s*\\bdo\\s+\\$\\$" +       // PostgreSQL DO $$ blocks
+            "|(?i)^\\s*\\bdo\\s+\\$[a-zA-Z_]\\w*\\$";  // PostgreSQL DO $tag$ blocks
     private static final String MULTI_LINE_END =
             "(?i)\\bend\\s+(procedure|function)\\s*;?" + "|" +
             "(?i)\\bend\\s*;\\s*/" + "|" +
             "(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$.]*)?\\s*/" + "|" +
-            "(?m)^\\s*/\\s*$";
+            "(?m)^\\s*/\\s*$" + "|" +
+            // PostgreSQL: dollar-quote closing + optional language clause + ;
+            "\\$\\$(\\s*language\\s+\\w+)?\\s*;" + "|" +
+            "\\$[a-zA-Z_]\\w*\\$(\\s*language\\s+\\w+)?\\s*;" + "|" +
+            // Legacy PostgreSQL: single-quote closing + language clause + ;
+            "\\'\\s*language\\s+\\w+\\s*;";
     private static final String DROP_DATABASE = "(?i)(?:drop\\s+)+database\\s+(\\w+)";
     private static final String CREATE_DATABASE = "(?i)(?:create\\s+)?database\\s+(?<dbname>(\\w+))";
     /** Optional Oracle clause after {@code CREATE [OR REPLACE]} before object kind (trigger, package, procedure, …). */
@@ -68,6 +76,7 @@ public class SqlParserUtil {
                     + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
                     + "|(?<BEGIN>(?i)\\bbegin\\b(?!\\s*work\\b))"
                     + "|(?<PLAINEND>(?i)\\bend\\s*;)"
+                    + "|(?<NAMEDEND>(?i)\\bend\\b\\s+[a-zA-Z_][a-zA-Z0-9_$#\"]*\\s*;)"
     );
     private static final Pattern PLAIN_BLOCK_END_PATTERN = Pattern.compile(
             "(?<STRING>" + STRING_PATTERN_TEXT + ")"
@@ -363,9 +372,13 @@ public class SqlParserUtil {
         }
         boolean inSingleQuote = false;
         boolean inDoubleQuote = false;
+        boolean inBacktickQuote = false;
+        boolean inDollarQuote = false;
+        String dollarQuoteTag = null;
         boolean inLineComment = false;
         boolean inBlockComment = false;
         boolean inBrackets = false;
+        String currentDelimiter = ";";
 
         StringBuilder buffer = new StringBuilder();
         for (int i = 0; i < sql.length(); i++) {
@@ -373,7 +386,41 @@ public class SqlParserUtil {
             char next = (i + 1 < sql.length()) ? sql.charAt(i + 1) : '\0';
             buffer.append(current);
 
-            if (!inSingleQuote && !inDoubleQuote && !inBlockComment && !inBrackets) {
+            // Only check DELIMITER directive at potential statement start
+            boolean atStatementStart = buffer.toString().trim().isEmpty()
+                    || buffer.toString().trim().equals(";")
+                    || buffer.toString().trim().equals(currentDelimiter);
+            if (atStatementStart && !inSingleQuote && !inDoubleQuote && !inBacktickQuote
+                    && !inDollarQuote && !inLineComment && !inBlockComment && !inBrackets
+                    && startsWithIgnoreCase(sql, i, "delimiter")) {
+                int dEnd = i + "delimiter".length();
+                dEnd = skipWhitespace(sql, dEnd);
+                int tokenStart = dEnd;
+                while (dEnd < sql.length() && !Character.isWhitespace(sql.charAt(dEnd))) {
+                    dEnd++;
+                }
+                currentDelimiter = dEnd > tokenStart ? sql.substring(tokenStart, dEnd) : ";";
+                // Only accept single-char delimiters and "$$" (MySQL standard alternative).
+                // Multi-char delimiters like "//" conflict with Oracle SQL*Plus slash.
+                if (currentDelimiter.length() == 1 || "$$".equals(currentDelimiter)) {
+                    // accepted
+                } else {
+                    currentDelimiter = ";";
+                }
+                while (dEnd < sql.length() && sql.charAt(dEnd) != '\n') {
+                    dEnd++;
+                }
+                if (dEnd < sql.length() && sql.charAt(dEnd) == '\n') {
+                    dEnd++;
+                }
+                buffer.setLength(0);
+                i = dEnd - 1; // -1 because for loop does i++
+                continue;
+            }
+
+            // Line comment detection
+            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inBlockComment && !inBrackets) {
                 if (!inLineComment && current == '-' && next == '-') {
                     inLineComment = true;
                     buffer.append(next);
@@ -384,7 +431,9 @@ public class SqlParserUtil {
                 }
             }
 
-            if (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBrackets) {
+            // Block comment detection
+            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBrackets) {
                 if (!inBlockComment && current == '/' && next == '*') {
                     inBlockComment = true;
                     buffer.append(next);
@@ -398,15 +447,56 @@ public class SqlParserUtil {
                 }
             }
 
-            if (!inDoubleQuote && !inLineComment && !inBlockComment && !inBrackets && current == '\'') {
+            // Single-quote toggle
+            if (!inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment && !inBrackets && current == '\'') {
                 inSingleQuote = !inSingleQuote;
             }
 
-            if (!inSingleQuote && !inLineComment && !inBlockComment && !inBrackets && current == '\"') {
+            // Double-quote toggle
+            if (!inSingleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment && !inBrackets && current == '\"') {
                 inDoubleQuote = !inDoubleQuote;
             }
 
-            if (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment) {
+            // Backtick-quote toggle (MySQL identifiers)
+            if (!inSingleQuote && !inDoubleQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment && !inBrackets && current == '`') {
+                inBacktickQuote = !inBacktickQuote;
+            }
+
+            // Dollar-quote detection (PostgreSQL $$...$$ and $tag$...$tag$)
+            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote
+                    && !inLineComment && !inBlockComment && !inBrackets) {
+                if (!inDollarQuote && current == '$') {
+                    int tagEnd = scanDollarQuoteEnd(sql, i);
+                    if (tagEnd >= 0) {
+                        inDollarQuote = true;
+                        dollarQuoteTag = sql.substring(i, tagEnd + 1);
+                        for (int k = i + 1; k <= tagEnd; k++) {
+                            buffer.append(sql.charAt(k));
+                        }
+                        i = tagEnd;
+                        continue;
+                    }
+                } else if (inDollarQuote && current == '$'
+                        && sql.regionMatches(i, dollarQuoteTag, 0, dollarQuoteTag.length())) {
+                    // Closing tag: consume all chars of the closing tag
+                    for (int k = 1; k < dollarQuoteTag.length(); k++) {
+                        if (i + k < sql.length()) {
+                            buffer.append(sql.charAt(i + k));
+                        }
+                    }
+                    i += dollarQuoteTag.length() - 1;
+                    inDollarQuote = false;
+                    dollarQuoteTag = null;
+                    continue;
+                }
+            }
+
+            // Informix bracket-comment tracking
+            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment) {
                 if (current == '{') {
                     inBrackets = true;
                 } else if (current == '}') {
@@ -414,16 +504,81 @@ public class SqlParserUtil {
                 }
             }
 
+            // Segment boundary: end of input or delimiter match
+            boolean atDelimiter = !inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment && !inBrackets
+                    && matchesCurrentDelimiter(sql, i, currentDelimiter);
+
+            // Don't let the multi-char delimiter become part of the segment text
+            // Only the first char of the delimiter was appended; trim off the rest
+            if (atDelimiter && currentDelimiter.length() > 1) {
+                int segEnd = i - (currentDelimiter.length() - 1);
+                if (segEnd >= 0 && i == sql.length() - 1) {
+                    // End-of-input with multi-char delimiter
+                }
+            }
+
             if (i == sql.length() - 1
-                    || (!inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment && !inBrackets && current == ';'
-                    && !shouldKeepRoutineTerminatorWithPreviousSegment(sql, i + 1))) {
-                if (!handler.handle(new Segment(buffer.toString(), i))) {
+                    || (atDelimiter
+                        && !shouldKeepRoutineTerminatorWithPreviousSegment(sql, i + currentDelimiter.length()))) {
+                String segText = buffer.toString();
+                // Trim trailing delimiter chars from segment for non-';' delimiters
+                // so the segment text doesn't end with (e.g.) '$$'
+                if (atDelimiter && currentDelimiter.length() > 1) {
+                    int trimLen = currentDelimiter.length() - 1;
+                    if (segText.length() >= trimLen) {
+                        segText = segText.substring(0, segText.length() - trimLen);
+                    }
+                }
+                if (!handler.handle(new Segment(segText, i))) {
                     return false;
                 }
                 buffer.setLength(0);
+                // Skip past multi-char delimiter
+                if (atDelimiter && currentDelimiter.length() > 1) {
+                    i += currentDelimiter.length() - 1;
+                }
             }
         }
         return true;
+    }
+
+    /**
+     * From position {@code dollarPos} (pointing at '$'), scan for the closing '$' of a
+     * dollar-quote tag. Returns the index of the closing '$', or -1 if this is not a
+     * dollar-quote opening.
+     * Recognized: {@code $$} → returns dollarPos+1; {@code $tag$} → returns position of second '$'.
+     */
+    private static int scanDollarQuoteEnd(String sql, int dollarPos) {
+        int scan = dollarPos + 1;
+        if (scan >= sql.length()) {
+            return -1;
+        }
+        // Bare $$: next char is also $
+        if (sql.charAt(scan) == '$') {
+            return scan;
+        }
+        // $tag$: scan alphanumeric/underscore tag, then closing $
+        if (Character.isLetter(sql.charAt(scan)) || sql.charAt(scan) == '_') {
+            while (scan < sql.length()
+                    && (Character.isLetterOrDigit(sql.charAt(scan)) || sql.charAt(scan) == '_')) {
+                scan++;
+            }
+            if (scan < sql.length() && sql.charAt(scan) == '$') {
+                return scan;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Checks whether {@code sql} at position {@code pos} matches the given {@code delimiter} string.
+     */
+    private static boolean matchesCurrentDelimiter(String sql, int pos, String delimiter) {
+        if (delimiter == null || delimiter.isEmpty() || pos + delimiter.length() > sql.length()) {
+            return false;
+        }
+        return sql.substring(pos, pos + delimiter.length()).equals(delimiter);
     }
 
     private static boolean shouldKeepRoutineTerminatorWithPreviousSegment(String sql, int nextIndex) {
@@ -438,6 +593,9 @@ public class SqlParserUtil {
         char c = sql.charAt(index);
         if (c == ';') {
             return true;
+        }
+        if (c == '$' && sql.regionMatches(index, "$$", 0, 2)) {
+            return true; // MySQL DELIMITER $$: END$$ is the terminator
         }
         if (startsWithIgnoreCase(sql, index, "procedure")
                 || startsWithIgnoreCase(sql, index, "function")) {
@@ -509,12 +667,23 @@ public class SqlParserUtil {
             sql.setBlockName("");
             sql.setPlainBlockMode(false);
             addSql = stripLeadingSqlDelimiter(addSql);
+            // Strip DELIMITER directive at the start of a statement — it's a meta-command,
+            // not SQL. processSegments already handles delimiter changes; here we just
+            // remove the DELIMITER line so it doesn't confuse statement classification.
+            addSql = stripLeadingDelimiterDirective(addSql);
+            // Detect GBase 8S SET ENVIRONMENT SQLMODE change
+            String detectedMode = detectGbaseSqlmodeChange(addSql);
+            if (detectedMode != null) {
+                sql.setSqlmode(detectedMode);
+            }
             if (addSql.isBlank()) {
                 sql.setSqlEnd(false);
                 return sql;
             }
         }
         sql.setSqlEnd(false);
+
+        String effectiveDialect = resolveEffectiveDialect(sql);
 
         Pattern pattern = Pattern.compile(
                 STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
@@ -548,25 +717,29 @@ public class SqlParserUtil {
                 sql.setSqlEnd(true);
             } else {
                 Matcher matcher;
-                if (isMultiLineSqlStart(addSql)) {
+                boolean isMultiLine = isMultiLineSqlStart(addSql, effectiveDialect);
+                boolean isAnonBlock = isAnonymousBlockStart(addSql, effectiveDialect);
+                if (isMultiLine) {
                     sql.setSqlType("MULTI_LINE_SQL");
                     configureBlockState(sql, addSql);
-                } else if (isAnonymousBlockStart(addSql)) {
+                } else if (isAnonBlock) {
                     sql.setSqlType("CALL_BLOCK");
                     configureBlockState(sql, addSql);
                 }
 
-                pattern = Pattern.compile(
-                        STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                + "|(?<END>" + MULTI_LINE_END + ")"
-                );
-                matcher = pattern.matcher(addSql);
-                while (matcher.find()) {
-                    if (matcher.group("END") != null) {
-                        sql.setSqlRemainder(addSql.substring(matcher.end("END")));
-                        addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
-                        sql.setSqlEnd(true);
-                        break;
+                if (isMultiLine || isAnonBlock) {
+                    pattern = Pattern.compile(
+                            STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
+                                    + "|(?<END>" + MULTI_LINE_END + ")"
+                    );
+                    matcher = pattern.matcher(addSql);
+                    while (matcher.find()) {
+                        if (matcher.group("END") != null) {
+                            sql.setSqlRemainder(addSql.substring(matcher.end("END")));
+                            addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
+                            sql.setSqlEnd(true);
+                            break;
+                        }
                     }
                 }
 
@@ -577,9 +750,15 @@ public class SqlParserUtil {
                         sql.setBlockDepth(0);
                     }
                 }
+                if (!sql.getSqlEnd() && !sql.getPlainBlockMode()) {
+                    // Track block depth for named routines to prevent premature end on nested blocks
+                    updateBlockDepth(sql, addSql);
+                }
                 if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
-                    sql.setSqlEnd(true);
-                    sql.setBlockDepth(0);
+                    if (sql.getPlainBlockMode() || sql.getBlockDepth() <= 0) {
+                        sql.setSqlEnd(true);
+                        sql.setBlockDepth(0);
+                    }
                 }
 
                 if (!sql.getSqlType().equals("MULTI_LINE_SQL") && !sql.getSqlType().equals("CALL_BLOCK")) {
@@ -619,9 +798,15 @@ public class SqlParserUtil {
                         sql.setBlockDepth(0);
                     }
                 }
+                if (!sql.getSqlEnd() && !sql.getPlainBlockMode()) {
+                    // Track block depth for named routines to prevent premature end on nested blocks
+                    updateBlockDepth(sql, addSql);
+                }
                 if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
-                    sql.setSqlEnd(true);
-                    sql.setBlockDepth(0);
+                    if (sql.getPlainBlockMode() || sql.getBlockDepth() <= 0) {
+                        sql.setSqlEnd(true);
+                        sql.setBlockDepth(0);
+                    }
                 }
                 sql.setSqlStr(sql.getSqlstr() + addSql);
             }
@@ -631,12 +816,26 @@ public class SqlParserUtil {
     }
 
     public static boolean sqlContrainCommit(String remainderSql) {
+        if (remainderSql == null || remainderSql.isBlank()) {
+            return false;
+        }
+        // Strip leading delimiters and protected content to avoid false positives
+        // from whitespace-only, comment-only, or slash-only remainders
+        String cleaned = stripLeadingSqlDelimiter(remainderSql);
+        if (cleaned.isBlank()) {
+            return false;
+        }
+        String stripped = STATEMENT_PROTECT_PATTERN.matcher(cleaned).replaceAll("").trim();
+        if (stripped.isEmpty() || stripped.matches("[/\\s]+")) {
+            return false;
+        }
+
         boolean result = false;
         Pattern pattern = Pattern.compile(
                 STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
                         + "|(?<END>" + MULTI_LINE_END + ")"
         );
-        Matcher matcher = pattern.matcher(remainderSql);
+        Matcher matcher = pattern.matcher(cleaned);
         while (matcher.find()) {
             if (matcher.group("END") != null) {
                 result = true;
@@ -645,8 +844,8 @@ public class SqlParserUtil {
         }
 
         if (!result) {
-            boolean containBegin = isMultiLineSqlStart(remainderSql) || isAnonymousBlockStart(remainderSql);
-            if (!containBegin && isExecutableStatement(remainderSql)) {
+            boolean containBegin = isMultiLineSqlStart(cleaned) || isAnonymousBlockStart(cleaned);
+            if (!containBegin && isExecutableStatement(cleaned)) {
                 result = true;
             }
         }
@@ -763,13 +962,80 @@ public class SqlParserUtil {
         return sql.substring(offset);
     }
 
+    /**
+     * Strips a leading MySQL {@code DELIMITER xxx} directive line.
+     * The delimiter change is already handled by {@code processSegments()};
+     * this just removes the directive line so it doesn't interfere with
+     * statement classification in {@code modifySql()}.
+     */
+    private static String stripLeadingDelimiterDirective(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return sql;
+        }
+        String trimmed = sql.stripLeading();
+        if (trimmed.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
+            int lineEnd = trimmed.indexOf('\n');
+            if (lineEnd < 0) {
+                return ""; // entire text is a delimiter directive
+            }
+            return trimmed.substring(lineEnd + 1);
+        }
+        return sql;
+    }
+
+    /**
+     * Maps the raw dbtype + sqlmode to a standardised parser dialect key.
+     * GBase 8S with sqlmode=gbase (default) → INFORMIX,
+     * sqlmode=oracle → ORACLE, sqlmode=mysql → MYSQL.
+     */
+    private static String resolveEffectiveDialect(Sql sql) {
+        if (sql == null) return "";
+        String sqlmode = sql.getSqlmode();
+        if (sqlmode != null && !sqlmode.isBlank()) {
+            switch (sqlmode.toLowerCase()) {
+                case "oracle": return "ORACLE";
+                case "mysql":  return "MYSQL";
+                case "gbase":  return "INFORMIX";
+                default:       break;
+            }
+        }
+        String raw = sql.getDialect();
+        if (raw == null || raw.isEmpty()) return "";
+        String upper = raw.toUpperCase().trim();
+        if ("GBASE 8S".equalsIgnoreCase(upper)) return "INFORMIX";
+        if ("ORACLE".equalsIgnoreCase(upper)) return "ORACLE";
+        if ("DAMENG".equalsIgnoreCase(upper)) return "ORACLE";
+        if ("MYSQL".equalsIgnoreCase(upper)) return "MYSQL";
+        if ("POSTGRESQL".equalsIgnoreCase(upper)) return "POSTGRESQL";
+        if ("INFORMIX".equalsIgnoreCase(upper)) return "INFORMIX";
+        if ("SQLITE".equalsIgnoreCase(upper)) return "SQLITE";
+        return upper;
+    }
+
+    /**
+     * Detects a GBase 8S {@code SET ENVIRONMENT SQLMODE 'xxx'} statement
+     * and returns the sqlmode value (gbase / oracle / mysql), or null.
+     */
+    private static String detectGbaseSqlmodeChange(String addSql) {
+        if (addSql == null || addSql.isBlank()) return null;
+        String normalized = addSql.toLowerCase().replaceAll("[ \\t\\r\\n]+", "");
+        if (normalized.startsWith("setenvironmentsqlmode'gbase'")) return "gbase";
+        if (normalized.startsWith("setenvironmentsqlmode'oracle'")) return "oracle";
+        if (normalized.startsWith("setenvironmentsqlmode'mysql'")) return "mysql";
+        if (normalized.startsWith("setenvironmentsqlmode\"gbase\"")) return "gbase";
+        if (normalized.startsWith("setenvironmentsqlmode\"oracle\"")) return "oracle";
+        if (normalized.startsWith("setenvironmentsqlmode\"mysql\"")) return "mysql";
+        return null;
+    }
+
     private static void updateBlockDepth(Sql sql, String addSql) {
         int blockDepth = sql.getBlockDepth();
         Matcher matcher = BLOCK_DEPTH_TOKEN_PATTERN.matcher(addSql);
         while (matcher.find()) {
             if (matcher.group("BEGIN") != null) {
                 blockDepth++;
-            } else if (matcher.group("PLAINEND") != null && blockDepth > 0) {
+            } else if ((matcher.group("PLAINEND") != null || matcher.group("NAMEDEND") != null)
+                    && blockDepth > 0) {
                 blockDepth--;
             }
         }
@@ -782,14 +1048,31 @@ public class SqlParserUtil {
     }
 
     private static boolean isMultiLineSqlStart(String sql) {
+        return isMultiLineSqlStart(sql, "");
+    }
+
+    private static boolean isMultiLineSqlStart(String sql, String effectiveDialect) {
         String normalized = stripCommentsOnly(sql).trim();
         if (normalized.isEmpty()) {
             return false;
         }
         if (TRIGGER_DECLARATION_PATTERN.matcher(normalized).find()) {
+            // Oracle-style triggers have BEGIN...END body → multi-line.
+            // PostgreSQL-style triggers use EXECUTE FUNCTION/PROCEDURE → single-statement.
+            if (isPostgreSqlTriggerStyle(normalized)) {
+                return false;
+            }
             return true;
         }
         if (TYPE_DECLARATION_PATTERN.matcher(normalized).find()) {
+            // Only TYPE BODY needs multi-line handling (Oracle/Dameng style).
+            // Simple CREATE TYPE ... AS (...) / CREATE TYPE ... AS ENUM (...)
+            // (PostgreSQL) end with ); — treat as single-statement.
+            Matcher typeMatcher = TYPE_DECLARATION_PATTERN.matcher(normalized);
+            if (typeMatcher.find() && !" body".equalsIgnoreCase(
+                    typeMatcher.group(1) != null ? typeMatcher.group(1).trim() : "")) {
+                return false;
+            }
             String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
             if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
                 return true;
@@ -799,17 +1082,19 @@ public class SqlParserUtil {
             }
             return false;
         }
-        if (PACKAGE_DECLARATION_PATTERN.matcher(normalized).find()) {
-            String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
-            // Same-line AS/IS: "... PACKAGE name AS ..." / "... name IS ..."
-            if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
-                return true;
+        // PACKAGE only exists in Oracle/Dameng — skip for other dialects
+        if (!"POSTGRESQL".equals(effectiveDialect) && !"MYSQL".equals(effectiveDialect)
+                && !"SQLITE".equals(effectiveDialect) && !"INFORMIX".equals(effectiveDialect)) {
+            if (PACKAGE_DECLARATION_PATTERN.matcher(normalized).find()) {
+                String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
+                if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
+                    return true;
+                }
+                if (Pattern.compile("(?im)^\\s*(as|is)\\b").matcher(normalized).find()) {
+                    return true;
+                }
+                return false;
             }
-            // Oracle style: AS/IS alone on the next line (no leading space before keyword on that line)
-            if (Pattern.compile("(?im)^\\s*(as|is)\\b").matcher(normalized).find()) {
-                return true;
-            }
-            return false;
         }
 
         Matcher matcher = ROUTINE_DECLARATION_PATTERN.matcher(normalized);
@@ -857,7 +1142,23 @@ public class SqlParserUtil {
     }
 
     private static boolean isAnonymousBlockStart(String sql) {
+        return isAnonymousBlockStart(sql, "");
+    }
+
+    private static boolean isAnonymousBlockStart(String sql, String effectiveDialect) {
         return NO_NAME_BLOCK_PATTERN.matcher(stripCommentsOnly(sql)).find();
+    }
+
+    /**
+     * PostgreSQL-style triggers use {@code EXECUTE FUNCTION procname()} or
+     * {@code EXECUTE PROCEDURE procname()} instead of a PL/SQL BEGIN...END body.
+     * They are single-statement, not multi-line.
+     */
+    private static boolean isPostgreSqlTriggerStyle(String normalized) {
+        // Look for EXECUTE FUNCTION or EXECUTE PROCEDURE after FOR EACH ROW/STATEMENT
+        return Pattern.compile(
+                "(?i)\\bfor\\s+each\\s+(row|statement)\\b[\\s\\S]*\\bexecute\\s+(function|procedure)\\b"
+        ).matcher(normalized).find();
     }
 
     private static int skipWhitespace(String sql, int index) {
