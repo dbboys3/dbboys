@@ -5,9 +5,9 @@ import com.dbboys.app.AppState;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.ConnectionPropertyUtil;
-import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.*;
 import com.dbboys.core.DatabasePlatform;
+import com.dbboys.core.SqlParser;
 import com.dbboys.ui.treemodel.*;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.notification.NotificationUtil;
@@ -171,7 +171,7 @@ public class DatabaseImportHandler {
                 updateResult.setUpdateSql(importSummary);
                 updateResult.setStartTime(beginTime);
                 try {
-                    DatabaseImportBundle bundle = resolveDatabaseImportBundle(dir);
+                    DatabaseImportBundle bundle = resolveDatabaseImportBundle(dir, baseConnect);
                     bundleRef.set(bundle);
                     backSqlTask.setDatabaseName(bundle.databaseName);
                     int flowTotalSteps = resolveDatabaseImportFlowTotalSteps(bundle);
@@ -529,7 +529,7 @@ public class DatabaseImportHandler {
                 || Thread.currentThread().isInterrupted();
     }
 
-    private static DatabaseImportBundle resolveDatabaseImportBundle(File dir) throws Exception {
+    private static DatabaseImportBundle resolveDatabaseImportBundle(File dir, Connect connect) throws Exception {
         if (dir == null || !dir.exists() || !dir.isDirectory()) {
             throw new IOException(I18n.t("metadata.import_ddl_data.error.invalid_dir", "导入目录无效，请选择 .dbb 导出目录：%s")
                     .formatted(dir == null ? "" : dir.getAbsolutePath()));
@@ -541,7 +541,8 @@ public class DatabaseImportHandler {
         }
 
         String preSql = readBundleScript(preDdlFile);
-        if (SqlParserUtil.countExecutableStatements(preSql) <= 0) {
+        SqlParser parser = TreeObjectCrudHandler.resolvePlatformResolver().requirePlatform(connect).parser();
+        if (parser.countExecutableStatements(preSql) <= 0) {
             throw new IOException(I18n.t("metadata.import_ddl_data.error.pre_invalid", "预处理脚本中没有可执行语句：%s")
                     .formatted(preDdlFile.getName()));
         }
@@ -549,7 +550,7 @@ public class DatabaseImportHandler {
         File postDdlFile = findBundleSqlFile(dir, "02_post_data.sql", "_02_post_data.sql");
         if (postDdlFile != null) {
             String postSql = readBundleScript(postDdlFile);
-            if (SqlParserUtil.countExecutableStatements(postSql) <= 0) {
+            if (parser.countExecutableStatements(postSql) <= 0) {
                 postDdlFile = null;
             }
         }

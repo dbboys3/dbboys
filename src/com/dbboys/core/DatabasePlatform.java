@@ -557,4 +557,13 @@ public interface DatabasePlatform {
     DdlRepository ddl();
 
     InstanceAdminRepository admin();
+
+    /**
+     * Returns the dialect-aware SQL parser for this platform.
+     * Defaults to {@code DefaultSqlParser} (plain single-statement, no multi-line support).
+     * Dialect implementations should override to return their specific parser.
+     */
+    default SqlParser parser() {
+        return new DefaultSqlParser();
+    }
 }

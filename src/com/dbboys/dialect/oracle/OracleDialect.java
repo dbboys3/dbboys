@@ -8,6 +8,7 @@ import com.dbboys.core.DdlRepository;
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.MetadataRepository;
+import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.ui.icon.IconPaths;
@@ -1034,6 +1035,11 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     @Override
     public InstanceAdminRepository admin() {
         return instanceAdminRepository;
+    }
+
+    @Override
+    public SqlParser parser() {
+        return new OracleSqlParser();
     }
 
     /** 建连时写入巡检用动态指标；打开巡检页时 {@link #buildCheckTable} 会再次实时查询覆盖。 */

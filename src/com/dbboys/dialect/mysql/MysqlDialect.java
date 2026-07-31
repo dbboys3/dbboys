@@ -7,6 +7,7 @@ import com.dbboys.core.DdlRepository;
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.MetadataRepository;
+import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.core.ConnectionService;
@@ -855,6 +856,11 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
     @Override
     public InstanceAdminRepository admin() {
         return instanceAdminRepository;
+    }
+
+    @Override
+    public SqlParser parser() {
+        return new MysqlSqlParser();
     }
 
     private static String qualify(String schemaName, String tableName) {

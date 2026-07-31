@@ -8,6 +8,7 @@ import com.dbboys.core.DdlRepository;
 import com.dbboys.core.InstanceManagerCapability;
 import com.dbboys.core.InstanceAdminRepository;
 import com.dbboys.core.InstanceTabCapability;
+import com.dbboys.core.SqlParser;
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.NamedServerConnectionCapability;
 import com.dbboys.core.ReconnectFallbackCapability;
@@ -526,6 +527,11 @@ public final class InformixDialect implements DatabasePlatform, ConnectionSuppor
     @Override
     public InstanceAdminRepository admin() {
         return instanceAdminRepository;
+    }
+
+    @Override
+    public SqlParser parser() {
+        return new InformixSqlParser();
     }
 }
 

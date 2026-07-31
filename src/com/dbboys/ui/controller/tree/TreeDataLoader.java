@@ -3,6 +3,8 @@ import com.dbboys.ui.treemodel.*;
 
 import com.dbboys.core.ConnectionService;
 import com.dbboys.core.DatabasePlatform;
+import com.dbboys.core.SqlParser;
+import com.dbboys.dialect.common.OracleFamilySqlParser;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.core.MetaObjectService;
@@ -288,7 +290,14 @@ public class TreeDataLoader {
                         if (!packageDDL.isEmpty()) {
                             ((DBPackage) treeItem.getValue()).setDDL(packageDDL);
 
-                            List<SqlParserUtil.PackageMember> members = SqlParserUtil.parsePackageMembers(packageDDL);
+                            SqlParser parser = TreeMenuCapabilities.resolvePlatformResolver()
+                                    .requirePlatform(TreeNavigator.getMetaConnect(treeItem)).parser();
+                            List<SqlParserUtil.PackageMember> members;
+                            if (parser instanceof OracleFamilySqlParser oracleParser) {
+                                members = oracleParser.parsePackageMembers(packageDDL);
+                            } else {
+                                members = new com.dbboys.dialect.oracle.OracleSqlParser().parsePackageMembers(packageDDL);
+                            }
 
                             Platform.runLater(() -> {
                                 treeItem.getChildren().clear();

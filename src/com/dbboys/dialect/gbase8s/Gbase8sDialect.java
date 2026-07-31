@@ -11,6 +11,7 @@ import com.dbboys.core.InstanceTabCapability;
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.NamedServerConnectionCapability;
 import com.dbboys.core.ReconnectFallbackCapability;
+import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.icon.IconPaths;
@@ -565,6 +566,11 @@ public final class Gbase8sDialect implements DatabasePlatform, ConnectionSupport
     @Override
     public InstanceAdminRepository admin() {
         return instanceAdminRepository;
+    }
+
+    @Override
+    public SqlParser parser() {
+        return new Gbase8sSqlParser();
     }
 }
 

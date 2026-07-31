@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bash build.sh)"
+      "Bash(bash build.sh)",
+      "Bash(javac -encoding UTF-8 -sourcepath src -Xlint:all,-path src/com/dbboys/core/SqlParser.java src/com/dbboys/core/DefaultSqlParser.java src/com/dbboys/dialect/common/CommonSqlParser.java)",
+      "Bash(javac -encoding UTF-8 -sourcepath src -cp \"lib/*;extlib/*/*.jar\" src/com/dbboys/core/SqlParser.java)",
+      "Bash(javac -encoding UTF-8 -sourcepath src -cp \"lib/*;extlib/*/*.jar\" src/com/dbboys/core/SqlParser.java src/com/dbboys/infra/util/SqlParserUtil.java src/com/dbboys/model/Sql.java src/com/dbboys/core/DefaultSqlParser.java src/com/dbboys/dialect/common/CommonSqlParser.java)"
     ]
   }
 }

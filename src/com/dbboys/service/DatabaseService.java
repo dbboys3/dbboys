@@ -4,6 +4,7 @@ import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.MetaObjectService;
 import com.dbboys.core.DdlRepository;
+import com.dbboys.core.SqlParser;
 import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.service.BackgroundSqlService;
@@ -328,16 +329,19 @@ public class DatabaseService implements MetaObjectService {
 
                     AtomicInteger executedCount = new AtomicInteger();
                     AtomicInteger totalStatements = new AtomicInteger(-1);
+                    SqlParser parser = platformResolver.requirePlatform(connect).parser();
                     CompletableFuture<Integer> countFuture = startImportSqlCountTask(
                             scriptText,
                             backSqlTask,
                             executedCount,
-                            totalStatements
+                            totalStatements,
+                            parser
                     );
                     countFutureRef.set(countFuture);
 
                     int affectedRows = executeStatements(
                             connect,
+                            parser,
                             scriptText,
                             file.getName(),
                             backSqlTask,
@@ -406,17 +410,19 @@ public class DatabaseService implements MetaObjectService {
         }
 
         AtomicInteger executedCount = new AtomicInteger();
-        AtomicInteger totalStatements = new AtomicInteger(Math.max(0, SqlParserUtil.countExecutableStatements(scriptText)));
+        SqlParser parser = platformResolver.requirePlatform(connect).parser();
+        AtomicInteger totalStatements = new AtomicInteger(Math.max(0, parser.countExecutableStatements(scriptText)));
         updateImportSqlProgress(effectiveTask, 0, totalStatements.get());
-        return executeStatements(connect, scriptText, file.getName(), effectiveTask, executedCount, totalStatements);
+        return executeStatements(connect, parser, scriptText, file.getName(), effectiveTask, executedCount, totalStatements);
     }
 
     private CompletableFuture<Integer> startImportSqlCountTask(String scriptText,
                                                                BackgroundSqlTask backSqlTask,
                                                                AtomicInteger executedCount,
-                                                               AtomicInteger totalStatements) {
+                                                               AtomicInteger totalStatements,
+                                                               SqlParser parser) {
         CompletableFuture<Integer> countFuture = CompletableFuture.supplyAsync(
-                () -> SqlParserUtil.countExecutableStatements(scriptText),
+                () -> parser.countExecutableStatements(scriptText),
                 BackgroundSqlService.backSqlExecutor
         );
         countFuture.whenComplete((count, throwable) -> {
@@ -439,6 +445,7 @@ public class DatabaseService implements MetaObjectService {
     }
 
     private int executeStatements(Connect connect,
+                                  SqlParser parser,
                                   String scriptText,
                                   String scriptName,
                                   BackgroundSqlTask backSqlTask,
@@ -452,14 +459,13 @@ public class DatabaseService implements MetaObjectService {
 
             int affectedRows = 0;
             Sql currentSql = new Sql();
-            currentSql.setDialect(connect.getDbtype());
 
             for (SqlParserUtil.Segment segment : SqlParserUtil.split(scriptText)) {
                 String remainingChunk = segment.getText();
                 while (remainingChunk != null && !remainingChunk.isBlank()) {
                     checkImportSqlCancelled(backSqlTask);
 
-                    currentSql = SqlParserUtil.modifySql(currentSql, remainingChunk);
+                    currentSql = parser.modifySql(currentSql, remainingChunk);
                     if (!currentSql.getSqlEnd()) {
                         break;
                     }
@@ -472,7 +478,6 @@ public class DatabaseService implements MetaObjectService {
 
                     remainingChunk = currentSql.getSqlRemainder();
                     currentSql = new Sql();
-                    currentSql.setDialect(connect.getDbtype());
                 }
             }
 

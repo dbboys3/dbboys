@@ -3,6 +3,7 @@ import com.dbboys.ui.util.ReadOnlyGuard;
 
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.SqlModeCapability;
+import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.app.AppContext;
 import com.dbboys.ui.component.CustomResultsetTab;
@@ -102,7 +103,8 @@ public class SqlExecutionHelper {
         }
 
         ctrl.sqlUsedTime = 0;
-        ctrl.isSingleSql = SqlParserUtil.isSingleStatement(ctrl.sqlText);
+        SqlParser parser = platformResolver.requirePlatform(ctrl.sqlConnect).parser();
+        ctrl.isSingleSql = parser.isSingleStatement(ctrl.sqlText);
         ctrl.clearUpdateResults();
         ctrl.sqlTask = new Task<>() {
             @Override
@@ -113,11 +115,10 @@ public class SqlExecutionHelper {
                 updateMessage(I18n.t("sql.exec.running"));
 
                 final Sql[] currentSql = {new Sql()};
-                currentSql[0].setDialect(ctrl.sqlConnect.getDbtype());
                 ctrl.sqlStatementCount = 0;
                 SqlParserUtil.forEachSegment(ctrl.sqlText, segment -> {
                     String sqlChunk = segment.getText();
-                    if (SqlParserUtil.sqlContrainMoreThanOneCommit(sqlChunk)) {
+                    if (parser.hasMoreThanOneStatement(sqlChunk)) {
                         ctrl.isSingleSql = false;
                     }
 
@@ -126,7 +127,7 @@ public class SqlExecutionHelper {
                         if (isCancelled()) {
                             return false;
                         }
-                        currentSql[0] = SqlParserUtil.modifySql(currentSql[0], sqlChunk);
+                        currentSql[0] = parser.modifySql(currentSql[0], sqlChunk);
                         if (currentSql[0].getSqlEnd() && SqlParserUtil.isExecutableStatement(currentSql[0].getSqlstr())) {
                             ctrl.sqlParamList.clear();
                             ctrl.sqlExe = stripTrailingSemicolon(currentSql[0].getSqlstr());
@@ -156,7 +157,7 @@ public class SqlExecutionHelper {
                             currentSql[0].setSqlType("");
                         }
                         sqlChunk = "";
-                        sqlContainsCommit = SqlParserUtil.sqlContrainCommit(currentSql[0].getSqlRemainder());
+                        sqlContainsCommit = parser.hasMoreStatements(currentSql[0].getSqlRemainder());
                     } while (sqlContainsCommit);
                     return true;
                 });
@@ -522,7 +523,8 @@ public class SqlExecutionHelper {
     }
 
     private String validateExplainSql(String sqlText) {
-        if (!SqlParserUtil.isSingleStatement(sqlText)) {
+        SqlParser parser = platformResolver.requirePlatform(ctrl.sqlConnect).parser();
+        if (!parser.isSingleStatement(sqlText)) {
             return "sql.explain.single_only";
         }
         String normalizedSql = sqlText == null ? "" : stripTrailingExplainDelimiter(sqlText.trim());

@@ -11,6 +11,8 @@ import com.dbboys.infra.config.ConfigManager;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.ui.util.KeywordsHighlightUtil;
 import com.dbboys.ui.util.MenuItemUtil;
+import com.dbboys.core.DefaultSqlParser;
+import com.dbboys.core.SqlParser;
 import com.dbboys.infra.util.SqlFormatter;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.CatalogNode;
@@ -539,8 +541,10 @@ public class CustomSqlEditCodeArea extends CodeArea {
         return !getSelectedText().isEmpty() || selectCurrentStatementAtCaret();
     }
 
+    private static final SqlParser EDITOR_PARSER = new DefaultSqlParser();
+
     private boolean selectCurrentStatementAtCaret() {
-        SqlParserUtil.StatementRange range = SqlParserUtil.findStatementRangeAtCaret(getText(), getCaretPosition());
+        SqlParserUtil.StatementRange range = SqlParserUtil.findStatementRangeAtCaret(getText(), getCaretPosition(), EDITOR_PARSER);
         if (range == null) {
             return false;
         }

@@ -1,14 +1,12 @@
 package com.dbboys.infra.util;
 
+import com.dbboys.core.DefaultSqlParser;
+import com.dbboys.core.SqlParser;
 import com.dbboys.infra.util.SqlParserUtil.Segment;
 import com.dbboys.model.Sql;
 
 import java.util.*;
 import java.util.regex.*;
-
-import static com.dbboys.infra.util.SqlParserUtil.isExecutableStatement;
-import static com.dbboys.infra.util.SqlParserUtil.modifySql;
-import static com.dbboys.infra.util.SqlParserUtil.split;
 
 public class SqlFormatter {
     private static final String STRING_PATTERN_TEXT = "'([^'\\\\]*(\\\\.[^'\\\\]*)*)'" + "|" + "'[\\s\\S]*";
@@ -115,24 +113,26 @@ public class SqlFormatter {
         return sb.toString();
     }
 
+    private static final SqlParser FORMAT_PARSER = new DefaultSqlParser();
+
     private static List<String> splitStatementsForFormat(String sql) {
         List<String> statements = new ArrayList<>();
         Sql currentSql = new Sql();
-        for (Segment segment : split(sql)) {
+        for (Segment segment : SqlParserUtil.split(sql)) {
             String remainingChunk = segment.getText();
             while (remainingChunk != null && !remainingChunk.isBlank()) {
-                currentSql = modifySql(currentSql, remainingChunk);
+                currentSql = FORMAT_PARSER.modifySql(currentSql, remainingChunk);
                 if (!currentSql.getSqlEnd()) {
                     break;
                 }
-                if (isExecutableStatement(currentSql.getSqlstr())) {
+                if (SqlParserUtil.isExecutableStatement(currentSql.getSqlstr())) {
                     statements.add(currentSql.getSqlstr());
                 }
                 remainingChunk = currentSql.getSqlRemainder();
                 currentSql = new Sql();
             }
         }
-        if (isExecutableStatement(currentSql.getSqlstr())) {
+        if (SqlParserUtil.isExecutableStatement(currentSql.getSqlstr())) {
             statements.add(currentSql.getSqlstr());
         }
         return statements;

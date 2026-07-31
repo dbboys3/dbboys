@@ -3,7 +3,7 @@ package com.dbboys.service;
 import com.dbboys.core.DatabasePlatformResolver;
 import com.dbboys.core.MetaObjectService;
 import com.dbboys.core.MetaObjectService.DdlFetcher;
-import com.dbboys.infra.util.SqlParserUtil;
+import com.dbboys.dialect.oracle.OracleSqlParser;
 import com.dbboys.model.Connect;
 import com.dbboys.model.DBPackage;
 import com.dbboys.model.Database;
@@ -41,7 +41,7 @@ public class PackageService implements MetaObjectService {
     }
 
     public String getChildrenDDL(String packageDDL,String objectName) throws SQLException {
-        return SqlParserUtil.printPackageFunction(packageDDL, objectName);
+        return new OracleSqlParser().printPackageFunction(packageDDL, objectName);
     }
 
 }

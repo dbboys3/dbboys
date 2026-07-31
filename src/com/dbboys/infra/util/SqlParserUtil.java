@@ -1,9 +1,9 @@
 package com.dbboys.infra.util;
 
+import com.dbboys.core.SqlParser;
 import com.dbboys.model.Sql;
 
 import java.util.*;
-import java.util.concurrent.CancellationException;
 import java.util.regex.*;
 
 public class SqlParserUtil {
@@ -147,7 +147,7 @@ public class SqlParserUtil {
     }
 
     @FunctionalInterface
-    private interface SegmentHandler {
+    public interface SegmentHandler {
         boolean handle(Segment segment);
     }
 
@@ -160,20 +160,6 @@ public class SqlParserUtil {
         private SegmentProcessingRuntimeException(Exception cause) {
             super(cause);
         }
-    }
-
-    public static boolean isSingleStatement(String sql) {
-        if (sql == null || sql.isBlank()) {
-            return true;
-        }
-        return countExecutableStatements(sql, 2) <= 1;
-    }
-
-    public static int countExecutableStatements(String sqlText) {
-        if (sqlText == null || sqlText.isBlank()) {
-            return 0;
-        }
-        return countExecutableStatements(sqlText, Integer.MAX_VALUE);
     }
 
     public static boolean isExecutableStatement(String sqlText) {
@@ -212,11 +198,12 @@ public class SqlParserUtil {
         }
     }
 
-    public static StatementRange findStatementRangeAtCaret(String sqlText, int caretPosition) {
+    public static StatementRange findStatementRangeAtCaret(String sqlText, int caretPosition,
+                                                           SqlParser parser) {
         if (sqlText == null || sqlText.isBlank()) {
             return null;
         }
-        List<StatementRange> ranges = collectExecutableStatementRanges(sqlText);
+        List<StatementRange> ranges = collectExecutableStatementRanges(sqlText, parser);
         if (ranges.isEmpty()) {
             return null;
         }
@@ -297,7 +284,8 @@ public class SqlParserUtil {
         return null;
     }
 
-    private static List<StatementRange> collectExecutableStatementRanges(String sqlText) {
+    private static List<StatementRange> collectExecutableStatementRanges(String sqlText,
+                                                                           SqlParser parser) {
         List<StatementRange> ranges = new ArrayList<>();
         Sql currentSql = new Sql();
         int currentStatementStart = 0;
@@ -312,7 +300,7 @@ public class SqlParserUtil {
 
             boolean sqlContainsCommit;
             do {
-                currentSql = modifySql(currentSql, sqlChunk);
+                currentSql = parser.modifySql(currentSql, sqlChunk);
                 if (currentSql.getSqlEnd()) {
                     appendExecutableRange(sqlText, ranges, currentStatementStart, currentSql.getSqlstr());
                     String remainder = currentSql.getSqlRemainder();
@@ -323,7 +311,7 @@ public class SqlParserUtil {
                     }
                 }
                 sqlChunk = "";
-                sqlContainsCommit = sqlContrainCommit(currentSql.getSqlRemainder());
+                sqlContainsCommit = parser.hasMoreStatements(currentSql.getSqlRemainder());
             } while (sqlContainsCommit);
 
             previousSegmentEnd = segment.getEndIndex();
@@ -364,6 +352,10 @@ public class SqlParserUtil {
             trimmedEnd--;
         }
         return trimmedStart < trimmedEnd ? new StatementRange(trimmedStart, trimmedEnd) : null;
+    }
+
+    public static boolean processSegmentsPublic(String sql, SegmentHandler handler) {
+        return processSegments(sql, handler);
     }
 
     private static boolean processSegments(String sql, SegmentHandler handler) {
@@ -657,258 +649,13 @@ public class SqlParserUtil {
         return endIndex;
     }
 
-    public static Sql modifySql(Sql sql, String addSql) {
-        if (!sql.getSqlRemainder().trim().isEmpty()) {
-            addSql = sql.getSqlRemainder() + addSql;
-            sql.setSqlRemainder("");
+    // ===== Remaining utility methods (modifySql, sqlContrainCommit, etc. moved to CommonSqlParser) =====
+
+    private static String stripProtectedContent(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return "";
         }
-        if (sql.getSqlstr().isEmpty()) {
-            sql.setBlockDepth(0);
-            sql.setBlockName("");
-            sql.setPlainBlockMode(false);
-            addSql = stripLeadingSqlDelimiter(addSql);
-            // Strip DELIMITER directive at the start of a statement — it's a meta-command,
-            // not SQL. processSegments already handles delimiter changes; here we just
-            // remove the DELIMITER line so it doesn't confuse statement classification.
-            addSql = stripLeadingDelimiterDirective(addSql);
-            // Detect GBase 8S SET ENVIRONMENT SQLMODE change
-            String detectedMode = detectGbaseSqlmodeChange(addSql);
-            if (detectedMode != null) {
-                sql.setSqlmode(detectedMode);
-            }
-            if (addSql.isBlank()) {
-                sql.setSqlEnd(false);
-                return sql;
-            }
-        }
-        sql.setSqlEnd(false);
-
-        String effectiveDialect = resolveEffectiveDialect(sql);
-
-        Pattern pattern = Pattern.compile(
-                STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-        );
-        Matcher matcherAll = pattern.matcher(addSql);
-        String checkText = addSql.trim();
-
-        if (matcherAll.find()) {
-            checkText = matcherAll.replaceAll("").trim();
-        }
-
-        if (sql.getSqlstr().isEmpty() && checkText.isEmpty()) {
-            sql.setSqlType("");
-            sql.setSqlStr("");
-            sql.setSqlEnd(true);
-            return sql;
-        }
-
-        if (sql.getSqlstr().isEmpty()) {
-            if (checkText.toUpperCase().startsWith("SELECT") || checkText.toUpperCase().startsWith("WITH")) {
-                pattern = Pattern.compile("(?i)\\binto\\b");
-                Matcher matcher = pattern.matcher(checkText);
-                if (matcher.find()) {
-                    sql.setSqlType("SELECT_INTO");
-                } else {
-                    sql.setSqlType("SELECT");
-                }
-                sql.setSqlEnd(true);
-            } else if (checkText.toUpperCase().startsWith("CALL") || checkText.toUpperCase().startsWith("EXECUTE")) {
-                sql.setSqlType("CALL");
-                sql.setSqlEnd(true);
-            } else {
-                Matcher matcher;
-                boolean isMultiLine = isMultiLineSqlStart(addSql, effectiveDialect);
-                boolean isAnonBlock = isAnonymousBlockStart(addSql, effectiveDialect);
-                if (isMultiLine) {
-                    sql.setSqlType("MULTI_LINE_SQL");
-                    configureBlockState(sql, addSql);
-                } else if (isAnonBlock) {
-                    sql.setSqlType("CALL_BLOCK");
-                    configureBlockState(sql, addSql);
-                }
-
-                if (isMultiLine || isAnonBlock) {
-                    pattern = Pattern.compile(
-                            STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                    + "|(?<END>" + MULTI_LINE_END + ")"
-                    );
-                    matcher = pattern.matcher(addSql);
-                    while (matcher.find()) {
-                        if (matcher.group("END") != null) {
-                            sql.setSqlRemainder(addSql.substring(matcher.end("END")));
-                            addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
-                            sql.setSqlEnd(true);
-                            break;
-                        }
-                    }
-                }
-
-                if (!sql.getSqlEnd() && sql.getPlainBlockMode()) {
-                    updateBlockDepth(sql, addSql);
-                    if (sql.getBlockDepth() <= 0 && containsPlainBlockEnd(addSql)) {
-                        sql.setSqlEnd(true);
-                        sql.setBlockDepth(0);
-                    }
-                }
-                if (!sql.getSqlEnd() && !sql.getPlainBlockMode()) {
-                    // Track block depth for named routines to prevent premature end on nested blocks
-                    updateBlockDepth(sql, addSql);
-                }
-                if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
-                    if (sql.getPlainBlockMode() || sql.getBlockDepth() <= 0) {
-                        sql.setSqlEnd(true);
-                        sql.setBlockDepth(0);
-                    }
-                }
-
-                if (!sql.getSqlType().equals("MULTI_LINE_SQL") && !sql.getSqlType().equals("CALL_BLOCK")) {
-                    sql.setSqlEnd(true);
-                    pattern = Pattern.compile(
-                            STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT + "|" + DROP_DATABASE
-                                    + "|" + CREATE_DATABASE
-                    );
-                    matcher = pattern.matcher(addSql);
-                    while (matcher.find()) {
-                        if (matcher.group("dbname") != null) {
-                            sql.setSqlType("DATABASE " + matcher.group("dbname").toLowerCase());
-                        }
-                    }
-                }
-            }
-            sql.setSqlStr(addSql);
-        } else {
-            if (sql.getSqlType().equals("MULTI_LINE_SQL") || sql.getSqlType().equals("CALL_BLOCK")) {
-                pattern = Pattern.compile(
-                        STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                + "|(?<END>" + MULTI_LINE_END + ")"
-                );
-                Matcher matcher = pattern.matcher(addSql);
-                while (matcher.find()) {
-                    if (matcher.group("END") != null) {
-                        sql.setSqlRemainder(addSql.substring(matcher.end("END")));
-                        addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
-                        sql.setSqlEnd(true);
-                        break;
-                    }
-                }
-                if (!sql.getSqlEnd() && sql.getPlainBlockMode()) {
-                    updateBlockDepth(sql, addSql);
-                    if (sql.getBlockDepth() <= 0 && containsPlainBlockEnd(addSql)) {
-                        sql.setSqlEnd(true);
-                        sql.setBlockDepth(0);
-                    }
-                }
-                if (!sql.getSqlEnd() && !sql.getPlainBlockMode()) {
-                    // Track block depth for named routines to prevent premature end on nested blocks
-                    updateBlockDepth(sql, addSql);
-                }
-                if (!sql.getSqlEnd() && containsNamedBlockEnd(addSql, sql.getBlockName())) {
-                    if (sql.getPlainBlockMode() || sql.getBlockDepth() <= 0) {
-                        sql.setSqlEnd(true);
-                        sql.setBlockDepth(0);
-                    }
-                }
-                sql.setSqlStr(sql.getSqlstr() + addSql);
-            }
-        }
-
-        return sql;
-    }
-
-    public static boolean sqlContrainCommit(String remainderSql) {
-        if (remainderSql == null || remainderSql.isBlank()) {
-            return false;
-        }
-        // Strip leading delimiters and protected content to avoid false positives
-        // from whitespace-only, comment-only, or slash-only remainders
-        String cleaned = stripLeadingSqlDelimiter(remainderSql);
-        if (cleaned.isBlank()) {
-            return false;
-        }
-        String stripped = STATEMENT_PROTECT_PATTERN.matcher(cleaned).replaceAll("").trim();
-        if (stripped.isEmpty() || stripped.matches("[/\\s]+")) {
-            return false;
-        }
-
-        boolean result = false;
-        Pattern pattern = Pattern.compile(
-                STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                        + "|(?<END>" + MULTI_LINE_END + ")"
-        );
-        Matcher matcher = pattern.matcher(cleaned);
-        while (matcher.find()) {
-            if (matcher.group("END") != null) {
-                result = true;
-            }
-            break;
-        }
-
-        if (!result) {
-            boolean containBegin = isMultiLineSqlStart(cleaned) || isAnonymousBlockStart(cleaned);
-            if (!containBegin && isExecutableStatement(cleaned)) {
-                result = true;
-            }
-        }
-
-        return result;
-    }
-
-    public static boolean sqlContrainMoreThanOneCommit(String remainderSql) {
-        boolean result = false;
-        Pattern pattern = Pattern.compile(
-                STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                        + "|(?<END>" + MULTI_LINE_END + ")"
-        );
-        int count = 0;
-        Matcher matcher = pattern.matcher(remainderSql);
-        while (matcher.find()) {
-            if (matcher.group("END") != null) {
-                count++;
-            }
-            if (count > 1) {
-                result = true;
-            }
-        }
-        return result;
-    }
-
-    private static int countExecutableStatements(String sqlText, int stopAfterCount) {
-        Sql[] currentSql = {new Sql()};
-        int[] statementCount = {0};
-        boolean[] stoppedEarly = {false};
-
-        processSegments(sqlText, segment -> {
-            checkCountInterrupted();
-            String sqlChunk = segment.getText();
-            boolean sqlContainsCommit;
-            do {
-                checkCountInterrupted();
-                currentSql[0] = modifySql(currentSql[0], sqlChunk);
-                if (currentSql[0].getSqlEnd() && isExecutableStatement(currentSql[0].getSqlstr())) {
-                    statementCount[0]++;
-                    if (statementCount[0] >= stopAfterCount) {
-                        stoppedEarly[0] = true;
-                        return false;
-                    }
-                    resetSqlStatementState(currentSql[0]);
-                }
-                sqlChunk = "";
-                sqlContainsCommit = sqlContrainCommit(currentSql[0].getSqlRemainder());
-            } while (sqlContainsCommit);
-            return true;
-        });
-
-        checkCountInterrupted();
-        if (!stoppedEarly[0] && isExecutableStatement(currentSql[0].getSqlstr())) {
-            statementCount[0]++;
-        }
-        return statementCount[0];
-    }
-
-    private static void checkCountInterrupted() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("sql statement counting cancelled");
-        }
+        return STATEMENT_PROTECT_PATTERN.matcher(sql).replaceAll("");
     }
 
     private static void resetSqlStatementState(Sql sql) {
@@ -920,21 +667,14 @@ public class SqlParserUtil {
         sql.setPlainBlockMode(false);
     }
 
-    private static String stripProtectedContent(String sql) {
-        if (sql == null || sql.isEmpty()) {
-            return "";
-        }
-        return STATEMENT_PROTECT_PATTERN.matcher(sql).replaceAll("");
-    }
-
-    private static String stripCommentsOnly(String sql) {
+    static String stripCommentsOnly(String sql) {
         if (sql == null || sql.isEmpty()) {
             return "";
         }
         return COMMENT_ONLY_PATTERN.matcher(sql).replaceAll(" ");
     }
 
-    private static String stripLeadingSqlDelimiter(String sql) {
+    public static String stripLeadingSqlDelimiter(String sql) {
         if (sql == null || sql.isEmpty()) {
             return "";
         }
@@ -968,7 +708,7 @@ public class SqlParserUtil {
      * this just removes the directive line so it doesn't interfere with
      * statement classification in {@code modifySql()}.
      */
-    private static String stripLeadingDelimiterDirective(String sql) {
+    public static String stripLeadingDelimiterDirective(String sql) {
         if (sql == null || sql.isEmpty()) {
             return sql;
         }
@@ -976,7 +716,7 @@ public class SqlParserUtil {
         if (trimmed.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
             int lineEnd = trimmed.indexOf('\n');
             if (lineEnd < 0) {
-                return ""; // entire text is a delimiter directive
+                return "";
             }
             return trimmed.substring(lineEnd + 1);
         }
@@ -985,10 +725,10 @@ public class SqlParserUtil {
 
     /**
      * Maps the raw dbtype + sqlmode to a standardised parser dialect key.
-     * GBase 8S with sqlmode=gbase (default) → INFORMIX,
-     * sqlmode=oracle → ORACLE, sqlmode=mysql → MYSQL.
+     * @deprecated Replaced by {@link SqlParser} resolution via {@code DatabasePlatform.parser()}.
      */
-    private static String resolveEffectiveDialect(Sql sql) {
+    @Deprecated
+    public static String resolveEffectiveDialect(Sql sql) {
         if (sql == null) return "";
         String sqlmode = sql.getSqlmode();
         if (sqlmode != null && !sqlmode.isBlank()) {
@@ -1013,10 +753,11 @@ public class SqlParserUtil {
     }
 
     /**
-     * Detects a GBase 8S {@code SET ENVIRONMENT SQLMODE 'xxx'} statement
-     * and returns the sqlmode value (gbase / oracle / mysql), or null.
+     * Detects a GBase 8S {@code SET ENVIRONMENT SQLMODE 'xxx'} statement.
+     * @deprecated Moved to {@link com.dbboys.dialect.common.InformixFamilySqlParser#detectGbaseSqlmodeChange}.
      */
-    private static String detectGbaseSqlmodeChange(String addSql) {
+    @Deprecated
+    public static String detectGbaseSqlmodeChange(String addSql) {
         if (addSql == null || addSql.isBlank()) return null;
         String normalized = addSql.toLowerCase().replaceAll("[ \\t\\r\\n]+", "");
         if (normalized.startsWith("setenvironmentsqlmode'gbase'")) return "gbase";
@@ -1028,137 +769,13 @@ public class SqlParserUtil {
         return null;
     }
 
-    private static void updateBlockDepth(Sql sql, String addSql) {
-        int blockDepth = sql.getBlockDepth();
-        Matcher matcher = BLOCK_DEPTH_TOKEN_PATTERN.matcher(addSql);
-        while (matcher.find()) {
-            if (matcher.group("BEGIN") != null) {
-                blockDepth++;
-            } else if ((matcher.group("PLAINEND") != null || matcher.group("NAMEDEND") != null)
-                    && blockDepth > 0) {
-                blockDepth--;
-            }
-        }
-        sql.setBlockDepth(blockDepth);
-    }
+    // ===== Helper methods used by processSegments (must stay in this class) =====
 
-    private static void configureBlockState(Sql sql, String addSql) {
-        sql.setBlockName(extractBlockName(addSql));
-        sql.setPlainBlockMode(usesPlainBlockEnd(sql.getSqlType(), addSql));
-    }
-
-    private static boolean isMultiLineSqlStart(String sql) {
-        return isMultiLineSqlStart(sql, "");
-    }
-
-    private static boolean isMultiLineSqlStart(String sql, String effectiveDialect) {
-        String normalized = stripCommentsOnly(sql).trim();
-        if (normalized.isEmpty()) {
+    private static boolean startsWithIgnoreCase(String text, int start, String value) {
+        if (start < 0 || start + value.length() > text.length()) {
             return false;
         }
-        if (TRIGGER_DECLARATION_PATTERN.matcher(normalized).find()) {
-            // Oracle-style triggers have BEGIN...END body → multi-line.
-            // PostgreSQL-style triggers use EXECUTE FUNCTION/PROCEDURE → single-statement.
-            if (isPostgreSqlTriggerStyle(normalized)) {
-                return false;
-            }
-            return true;
-        }
-        if (TYPE_DECLARATION_PATTERN.matcher(normalized).find()) {
-            // Only TYPE BODY needs multi-line handling (Oracle/Dameng style).
-            // Simple CREATE TYPE ... AS (...) / CREATE TYPE ... AS ENUM (...)
-            // (PostgreSQL) end with ); — treat as single-statement.
-            Matcher typeMatcher = TYPE_DECLARATION_PATTERN.matcher(normalized);
-            if (typeMatcher.find() && !" body".equalsIgnoreCase(
-                    typeMatcher.group(1) != null ? typeMatcher.group(1).trim() : "")) {
-                return false;
-            }
-            String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
-            if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
-                return true;
-            }
-            if (Pattern.compile("(?im)^\\s*(as|is)\\b").matcher(normalized).find()) {
-                return true;
-            }
-            return false;
-        }
-        // PACKAGE only exists in Oracle/Dameng — skip for other dialects
-        if (!"POSTGRESQL".equals(effectiveDialect) && !"MYSQL".equals(effectiveDialect)
-                && !"SQLITE".equals(effectiveDialect) && !"INFORMIX".equals(effectiveDialect)) {
-            if (PACKAGE_DECLARATION_PATTERN.matcher(normalized).find()) {
-                String lowerNormalized = normalized.toLowerCase(Locale.ROOT);
-                if (lowerNormalized.contains(" as") || lowerNormalized.contains(" is")) {
-                    return true;
-                }
-                if (Pattern.compile("(?im)^\\s*(as|is)\\b").matcher(normalized).find()) {
-                    return true;
-                }
-                return false;
-            }
-        }
-
-        Matcher matcher = ROUTINE_DECLARATION_PATTERN.matcher(normalized);
-        if (!matcher.find()) {
-            return false;
-        }
-
-        String routineType = matcher.group("TYPE").toLowerCase(Locale.ROOT);
-        int index = skipWhitespace(normalized, matcher.end());
-        if (startsWithIgnoreCase(normalized, index, "if not exists")) {
-            index = skipWhitespace(normalized, index + "if not exists".length());
-        }
-
-        int nameEnd = skipQualifiedName(normalized, index);
-        if (nameEnd <= index) {
-            return false;
-        }
-
-        int remainderStart = skipWhitespace(normalized, nameEnd);
-        if (remainderStart < normalized.length() && normalized.charAt(remainderStart) == '(') {
-            int closeParenIndex = findMatchingParenthesis(normalized, remainderStart);
-            if (closeParenIndex < 0) {
-                return false;
-            }
-            remainderStart = skipWhitespace(normalized, closeParenIndex + 1);
-        }
-
-        String remainder = normalized.substring(remainderStart).trim().toLowerCase(Locale.ROOT);
-        if (remainder.isEmpty()) {
-            return false;
-        }
-
-        if ("function".equals(routineType)) {
-            return remainder.startsWith("return")
-                    || remainder.startsWith("returns")
-                    || remainder.startsWith("returning")
-                    || remainder.startsWith("as")
-                    || remainder.startsWith("is");
-        }
-
-        return remainder.startsWith("as")
-                || remainder.startsWith("is")
-                || remainder.startsWith("begin")
-                || remainder.startsWith("define");
-    }
-
-    private static boolean isAnonymousBlockStart(String sql) {
-        return isAnonymousBlockStart(sql, "");
-    }
-
-    private static boolean isAnonymousBlockStart(String sql, String effectiveDialect) {
-        return NO_NAME_BLOCK_PATTERN.matcher(stripCommentsOnly(sql)).find();
-    }
-
-    /**
-     * PostgreSQL-style triggers use {@code EXECUTE FUNCTION procname()} or
-     * {@code EXECUTE PROCEDURE procname()} instead of a PL/SQL BEGIN...END body.
-     * They are single-statement, not multi-line.
-     */
-    private static boolean isPostgreSqlTriggerStyle(String normalized) {
-        // Look for EXECUTE FUNCTION or EXECUTE PROCEDURE after FOR EACH ROW/STATEMENT
-        return Pattern.compile(
-                "(?i)\\bfor\\s+each\\s+(row|statement)\\b[\\s\\S]*\\bexecute\\s+(function|procedure)\\b"
-        ).matcher(normalized).find();
+        return text.regionMatches(true, start, value, 0, value.length());
     }
 
     private static int skipWhitespace(String sql, int index) {
@@ -1169,119 +786,7 @@ public class SqlParserUtil {
         return result;
     }
 
-    private static boolean startsWithIgnoreCase(String text, int start, String value) {
-        if (start < 0 || start + value.length() > text.length()) {
-            return false;
-        }
-        return text.regionMatches(true, start, value, 0, value.length());
-    }
-
-    private static int skipQualifiedName(String sql, int index) {
-        int result = index;
-        while (result < sql.length()) {
-            char current = sql.charAt(result);
-            if (Character.isWhitespace(current) || current == '(') {
-                break;
-            }
-            if (current == '"') {
-                result++;
-                while (result < sql.length() && sql.charAt(result) != '"') {
-                    result++;
-                }
-                if (result < sql.length()) {
-                    result++;
-                }
-                continue;
-            }
-            result++;
-        }
-        return result;
-    }
-
-    private static boolean usesPlainBlockEnd(String sqlType, String addSql) {
-        if ("CALL_BLOCK".equals(sqlType)) {
-            return true;
-        }
-        if (!"MULTI_LINE_SQL".equals(sqlType)) {
-            return false;
-        }
-        String normalized = stripProtectedContent(addSql).trim().toLowerCase(Locale.ROOT);
-        return ORACLE_PLAIN_BLOCK_OBJECT_HEAD_PATTERN.matcher(normalized).find()
-                || normalized.startsWith("create procedure if not exists ")
-                || normalized.startsWith("create function if not exists ");
-    }
-
-    private static String extractBlockName(String addSql) {
-        String normalized = stripCommentsOnly(addSql).trim();
-        Matcher matcher = BLOCK_NAME_DECLARATION_PATTERN.matcher(normalized);
-        if (matcher.find()) {
-            int index = skipWhitespace(normalized, matcher.end());
-            if (startsWithIgnoreCase(normalized, index, "if not exists")) {
-                index = skipWhitespace(normalized, index + "if not exists".length());
-            }
-            int nameEnd = skipQualifiedName(normalized, index);
-            if (nameEnd > index) {
-                return extractLastIdentifier(normalized.substring(index, nameEnd));
-            }
-        }
-        return "";
-    }
-
-    private static String extractLastIdentifier(String identifierChain) {
-        if (identifierChain == null || identifierChain.isBlank()) {
-            return "";
-        }
-        String value = identifierChain.trim();
-        int lastDot = -1;
-        boolean inQuotes = false;
-        for (int i = 0; i < value.length(); i++) {
-            char current = value.charAt(i);
-            if (current == '"') {
-                inQuotes = !inQuotes;
-            } else if (current == '.' && !inQuotes) {
-                lastDot = i;
-            }
-        }
-        String lastPart = lastDot >= 0 ? value.substring(lastDot + 1) : value;
-        return normalizeIdentifier(lastPart);
-    }
-
-    private static String normalizeIdentifier(String identifier) {
-        if (identifier == null) {
-            return "";
-        }
-        String normalized = identifier.trim();
-        if (normalized.startsWith("\"") && normalized.endsWith("\"") && normalized.length() >= 2) {
-            normalized = normalized.substring(1, normalized.length() - 1);
-        }
-        return normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean containsPlainBlockEnd(String addSql) {
-        Matcher matcher = PLAIN_BLOCK_END_PATTERN.matcher(addSql);
-        while (matcher.find()) {
-            if (matcher.group("PLAINEND") != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean containsNamedBlockEnd(String addSql, String blockName) {
-        if (blockName == null || blockName.isBlank()) {
-            return false;
-        }
-        Matcher matcher = NAMED_BLOCK_END_PATTERN.matcher(addSql);
-        while (matcher.find()) {
-            if (matcher.group("NAMEDEND") != null) {
-                String matchedName = normalizeIdentifier(matcher.group("ENDNAME"));
-                if (blockName.equals(matchedName)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+    // ===== SELECT parsing utilities (dialect-agnostic) =====
 
     public static String getFromTable(String sql) {
         String fromTable = null;
@@ -1378,6 +883,10 @@ public class SqlParserUtil {
         return t.matches("(?i)^[a-z0-9_$#]+\\.\\*$");
     }
 
+    /**
+     * @deprecated Moved to {@link com.dbboys.dialect.common.OracleFamilySqlParser#parsePackageMembers}.
+     */
+    @Deprecated
     public static List<PackageMember> parsePackageMembers(String packageDdl) {
         List<PackageMember> members = new ArrayList<>();
         if (packageDdl == null || packageDdl.isEmpty()) {
@@ -1449,6 +958,10 @@ public class SqlParserUtil {
         return "";
     }
 
+    /**
+     * @deprecated Moved to {@link com.dbboys.dialect.common.OracleFamilySqlParser#printPackageFunction}.
+     */
+    @Deprecated
     public static String printPackageFunction(String packagesql, String function) {
         if (packagesql == null || packagesql.isBlank() || function == null || function.isBlank()) {
             return "";
