@@ -148,12 +148,12 @@ public class SqlParserUtil {
         int clampedCaret = Math.max(0, Math.min(caretPosition, sqlText.length()));
         StatementRange range = findContainingRange(ranges, clampedCaret);
         if (range != null) {
-            return range;
+            return expandDelimiterBlockRange(sqlText, range);
         }
         if (clampedCaret > 0) {
             range = findContainingRange(ranges, clampedCaret - 1);
             if (range != null) {
-                return range;
+                return expandDelimiterBlockRange(sqlText, range);
             }
         }
         range = findDelimiterBlockRangeForCaret(sqlText, clampedCaret, ranges);
@@ -161,7 +161,7 @@ public class SqlParserUtil {
             return range;
         }
         range = findStatementRangeForCaretInOracleSlashGap(ranges, sqlText, clampedCaret);
-        return range;
+        return expandDelimiterBlockRange(sqlText, range);
     }
 
     /**
@@ -175,38 +175,63 @@ public class SqlParserUtil {
             return null;
         }
         for (StatementRange range : ranges) {
-            int lineStart = lineStartBefore(range.getStart(), sqlText);
-            String line = sqlText.substring(lineStart, range.getStart()).trim();
-            if (!startsWithIgnoreCase(line, 0, "delimiter")) {
-                continue;
-            }
-            int tokenStart = "delimiter".length();
-            while (tokenStart < line.length() && Character.isWhitespace(line.charAt(tokenStart))) {
-                tokenStart++;
-            }
-            int tokenEnd = tokenStart;
-            while (tokenEnd < line.length() && !Character.isWhitespace(line.charAt(tokenEnd))) {
-                tokenEnd++;
-            }
-            if (tokenStart >= tokenEnd) {
-                continue;
-            }
-            String token = line.substring(tokenStart, tokenEnd);
-            if (";".equals(token)) {
-                continue;
-            }
-
-            int closeStart = skipWhitespace(sqlText, range.getEnd());
-            if (closeStart + token.length() > sqlText.length()
-                    || !sqlText.regionMatches(true, closeStart, token, 0, token.length())) {
-                continue;
-            }
-            int closeEnd = closeStart + token.length();
-            if (caret >= lineStart && caret <= closeEnd) {
-                return range;
+            StatementRange expanded = expandDelimiterBlockRange(sqlText, range);
+            if (expanded != range) {
+                int whitespaceEnd = expanded.getEnd();
+                while (whitespaceEnd < sqlText.length()
+                        && Character.isWhitespace(sqlText.charAt(whitespaceEnd))) {
+                    whitespaceEnd++;
+                }
+                if (caret >= expanded.getStart() && caret <= whitespaceEnd) {
+                    return expanded;
+                }
             }
         }
         return null;
+    }
+
+    /**
+     * Expands a delimiter block's content range to also cover the leading
+     * {@code DELIMITER xx} line and the trailing custom delimiter, so the whole
+     * block can be selected and executed as one statement. Plain statements are
+     * returned unchanged.
+     */
+    private static StatementRange expandDelimiterBlockRange(String sqlText,
+                                                            StatementRange range) {
+        if (sqlText == null || range == null) {
+            return range;
+        }
+        int lineStart = lineStartBefore(range.getStart(), sqlText);
+        String line = sqlText.substring(lineStart, range.getStart()).trim();
+        if (!startsWithIgnoreCase(line, 0, "delimiter")) {
+            return range;
+        }
+        int tokenStart = "delimiter".length();
+        while (tokenStart < line.length() && Character.isWhitespace(line.charAt(tokenStart))) {
+            tokenStart++;
+        }
+        int tokenEnd = tokenStart;
+        while (tokenEnd < line.length() && !Character.isWhitespace(line.charAt(tokenEnd))) {
+            tokenEnd++;
+        }
+        if (tokenStart >= tokenEnd) {
+            return range;
+        }
+        String token = line.substring(tokenStart, tokenEnd);
+        if (";".equals(token)) {
+            return range;
+        }
+
+        int closeStart = skipWhitespace(sqlText, range.getEnd());
+        if (closeStart + token.length() > sqlText.length()
+                || !sqlText.regionMatches(true, closeStart, token, 0, token.length())) {
+            return range;
+        }
+        int closeEnd = closeStart + token.length();
+        if (lineStart < range.getStart()) {
+            return new StatementRange(lineStart, closeEnd);
+        }
+        return range;
     }
 
     private static int lineStartBefore(int end, String text) {
