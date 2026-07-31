@@ -217,6 +217,15 @@ public class SqlExecutionHelper {
     }
 
     private void highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
+        // A DELIMITER block is executed as one whole statement. Its segment text
+        // starts after the consumed "DELIMITER xx" line, so the normal offset math
+        // shifts the selection right. Keep the whole selected block highlighted.
+        if (isDelimiterBlockSegment(ctrl.sqlText, segment)) {
+            if (!ctrl.isSqlRefresh) {
+                ctrl.selectRangeAndFollow(ctrl.sqlSelectionRange[0], ctrl.sqlSelectionRange[1]);
+            }
+            return;
+        }
         int finalI = segment.getEndIndex();
         // IMPORTANT: selection/highlight must be aligned with the editor text, not the executable SQL.
         // ctrl.sqlExe is stripped of trailing ';' (and may be trimmed), so using its length here
@@ -242,6 +251,29 @@ public class SqlExecutionHelper {
                         ctrl.sqlSelectionRange[0] + finalI + 1);
             }
         }
+    }
+
+    private static boolean isDelimiterBlockSegment(String sqlText,
+                                                   SqlParserUtil.Segment segment) {
+        if (sqlText == null || segment == null || segment.getStartIndex() <= 0) {
+            return false;
+        }
+        String prefix = sqlText.substring(0, segment.getStartIndex()).trim();
+        if (!prefix.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
+            return false;
+        }
+        int idx = "delimiter".length();
+        if (idx >= prefix.length() || !Character.isWhitespace(prefix.charAt(idx))) {
+            return false;
+        }
+        while (idx < prefix.length() && Character.isWhitespace(prefix.charAt(idx))) {
+            idx++;
+        }
+        int end = idx;
+        while (end < prefix.length() && !Character.isWhitespace(prefix.charAt(end))) {
+            end++;
+        }
+        return end > idx && end == prefix.length();
     }
 
     private void executeSingleSelect(SimpleDateFormat sdf, Task<?> task) {
