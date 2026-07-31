@@ -7,6 +7,7 @@ import com.dbboys.infra.i18n.I18n;
 import com.dbboys.infra.util.ConnectionPropertyUtil;
 import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.*;
+import com.dbboys.core.DatabasePlatform;
 import com.dbboys.ui.treemodel.*;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.notification.NotificationUtil;
@@ -141,6 +142,9 @@ public class DatabaseImportHandler {
             return;
         }
 
+        // 三层模型（PG）提前取 Database 节点名作为 parentDb，后台任务不碰 TreeItem
+        String parentDbName = resolveImportParentDbName(selectedItem, metaConnect);
+
         Connect baseConnect = new Connect(metaConnect);
         long beginMillis = System.currentTimeMillis();
         String beginTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(beginMillis);
@@ -179,7 +183,7 @@ public class DatabaseImportHandler {
                             backSqlTask,
                             I18n.t("metadata.import_ddl_data.progress.preparing", "准备中")
                     );
-                    int affectedRows = importDatabaseBundle(baseConnect, bundle, backSqlTask, runtime);
+                    int affectedRows = importDatabaseBundle(baseConnect, bundle, backSqlTask, runtime, parentDbName);
                     long endMillis = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endMillis - beginMillis) / 1000.0) + " sec");
@@ -233,14 +237,26 @@ public class DatabaseImportHandler {
     private static int importDatabaseBundle(Connect baseConnect,
                                             DatabaseImportBundle bundle,
                                             BackgroundSqlTask backSqlTask,
-                                            DatabaseImportRuntime runtime) throws Exception {
+                                            DatabaseImportRuntime runtime,
+                                            String parentDbName) throws Exception {
         if (baseConnect == null || bundle == null) {
             return 0;
         }
 
-        Database database = new Database(bundle.databaseName);
-        database.setDbLocale(bundle.dbLocale);
-        database.setDbLog(bundle.dbLog);
+        // 三层模型（DATABASE_SCHEMA）：导入的是模式，用 Schema + parentDb 保留库名，避免把模式名当库名拼进 JDBC URL
+        CatalogNode database;
+        if (parentDbName != null && !parentDbName.isBlank()) {
+            Schema schema = new Schema(bundle.databaseName);
+            schema.setParentDb(parentDbName);
+            schema.setDbLocale(bundle.dbLocale);
+            schema.setDbLog(bundle.dbLog);
+            database = schema;
+        } else {
+            Database db = new Database(bundle.databaseName);
+            db.setDbLocale(bundle.dbLocale);
+            db.setDbLog(bundle.dbLog);
+            database = db;
+        }
         Connect bootstrapConnect = new Connect(baseConnect);
         applyImportBootstrapConnectionProps(bootstrapConnect);
         if (bundle.dbLocale != null && !bundle.dbLocale.isBlank()) {
@@ -324,7 +340,7 @@ public class DatabaseImportHandler {
     }
 
     private static int importDatabaseDataFilesParallel(Connect databaseConnect,
-                                                       Database database,
+                                                       CatalogNode database,
                                                        List<File> dataFiles,
                                                        BackgroundSqlTask backSqlTask,
                                                        DatabaseImportRuntime runtime,
@@ -397,7 +413,7 @@ public class DatabaseImportHandler {
                         );
                         runtime.registerTask(workerTask);
                         try {
-                            Database workerDatabase = copyImportDatabase(database);
+                            CatalogNode workerDatabase = copyImportDatabase(database);
                             int importedRows = TreeViewUtil.tableService.importTableDataSync(
                                     new Connect(workerConnect),
                                     workerDatabase,
@@ -471,7 +487,7 @@ public class DatabaseImportHandler {
         }
     }
 
-    private static Database copyImportDatabase(Database database) {
+    private static Database copyImportDatabase(CatalogNode database) {
         Database copy = new Database(database == null ? "" : database.getName());
         if (database != null) {
             copy.setDbLocale(database.getDbLocale());
@@ -757,5 +773,32 @@ public class DatabaseImportHandler {
                 I18n.t("metadata.import_ddl_data.error.title", "导入数据库失败"),
                 message
         ));
+    }
+
+    /**
+     * 在 FX 线程定位三层模型下导入模式所属的 Database 节点名。非三层模型返回 null。
+     */
+    private static String resolveImportParentDbName(TreeItem<TreeData> selectedItem, Connect connect) {
+        if (selectedItem == null || connect == null) {
+            return null;
+        }
+        try {
+            var platform = TreeMenuCapabilities.resolvePlatformResolver().getPlatform(connect.getDbtype());
+            if (platform == null
+                    || platform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+                return null;
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        // 从 selectedItem 的父链找 Database 节点
+        TreeItem<TreeData> current = selectedItem;
+        while (current != null) {
+            if (current.getValue() instanceof Database db) {
+                return db.getName();
+            }
+            current = current.getParent();
+        }
+        return null;
     }
 }
