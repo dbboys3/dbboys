@@ -185,7 +185,7 @@ public class TreeContextMenuBuilder {
         exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
         Group exportDdlAndDataIcon = IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.6, 0.6);
-        exportDdlAndDataIcon.setTranslateX(1);
+        exportDdlAndDataIcon.setTranslateX(-1);
         CustomShortcutMenuItem exportDdlAndDataItem =
                 MenuItemUtil.createMenuItemI18n("metadata.menu.export_ddl_data", exportDdlAndDataIcon);
 
@@ -1556,16 +1556,12 @@ public class TreeContextMenuBuilder {
                     if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
                         treeview_menu.getItems().add(setDefaultDatabaseItem);
                     }
-                    // 三层模型：库节点下可新建模式、导入模式
+                    // 三层模型：库节点下可新建模式
                     if (dbNodePlatform != null
                             && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
                         treeview_menu.getItems().add(createDatabaseItem);
-
-                        importDdlAndDataItem.textProperty().unbind();
-                        importDdlAndDataItem.textProperty().bind(I18n.bind("metadata.menu.import_ddl_schema", "导入模式"));
-                        treeview_menu.getItems().add(importDdlAndDataItem);
                     }
 
                     // ---- 统计、拷贝、刷新 ---- //
@@ -1584,10 +1580,18 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(deleteItem);
                     }
 
-                    // ---- 两层模型：导入SQL脚本 ---- //
-                    if (dbNodePlatform != null
-                            && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE) {
+                    // ---- 非三层模型：导入SQL脚本（倒数第三，导出数据库前面） ---- //
+                    if (dbNodePlatform == null
+                            || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
                         treeview_menu.getItems().add(importSqlScriptItem);
+                    }
+
+                    // 三层模型：导入模式（倒数第三，导出数据库前面）
+                    if (dbNodePlatform != null
+                            && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+                        importDdlAndDataItem.textProperty().unbind();
+                        importDdlAndDataItem.textProperty().bind(I18n.bind("metadata.menu.import_ddl_schema", "导入模式"));
+                        treeview_menu.getItems().add(importDdlAndDataItem);
                     }
 
                     // ---- 导出数据库 ---- //
