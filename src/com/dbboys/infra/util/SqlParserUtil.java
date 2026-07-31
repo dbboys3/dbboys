@@ -15,82 +15,9 @@ public class SqlParserUtil {
     private static final String DOUBLE_STRING_PATTERN_TEXT = "\"[^\"]*\"" + "|" + "\"[\\s\\S]*";
     private static final String FANYINHAO_STRING_PATTERN_TEXT = "`[^`]*`" + "|" + "`[\\s\\S]*";
     private static final String COMMENT_PATTERN_TEXT = "--[^\\n]*" + "|"+"/\\*[\\s\\S]*?\\*/"+"|"+"/\\*[\\s\\S]*" +"|"+"\\{[\\s\\S]*?\\}";
-    private static final String NO_NAME_BLOCK =
-            "(?i)^\\s*\\b(begin)(?!\\s*(;|work))|(?i)^\\s*\\b(DECLARE)(?!\\s*;)" +
-            "|(?i)^\\s*\\bdo\\s+\\$\\$" +       // PostgreSQL DO $$ blocks
-            "|(?i)^\\s*\\bdo\\s+\\$[a-zA-Z_]\\w*\\$";  // PostgreSQL DO $tag$ blocks
-    private static final String MULTI_LINE_END =
-            "(?i)\\bend\\s+(procedure|function)\\s*;?" + "|" +
-            "(?i)\\bend\\s*;\\s*/" + "|" +
-            "(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$.]*)?\\s*/" + "|" +
-            "(?m)^\\s*/\\s*$" + "|" +
-            // PostgreSQL: dollar-quote closing + optional language clause + ;
-            "\\$\\$(\\s*language\\s+\\w+)?\\s*;" + "|" +
-            "\\$[a-zA-Z_]\\w*\\$(\\s*language\\s+\\w+)?\\s*;" + "|" +
-            // Legacy PostgreSQL: single-quote closing + language clause + ;
-            "\\'\\s*language\\s+\\w+\\s*;";
-    private static final String DROP_DATABASE = "(?i)(?:drop\\s+)+database\\s+(\\w+)";
-    private static final String CREATE_DATABASE = "(?i)(?:create\\s+)?database\\s+(?<dbname>(\\w+))";
-    /** Optional Oracle clause after {@code CREATE [OR REPLACE]} before object kind (trigger, package, procedure, …). */
-    private static final String ORACLE_EDITION_MODIFIER = "(?:editionable\\s+|editioning\\s+|noneditionable\\s+)?";
-    /** Matches {@code CREATE [OR REPLACE] [EDITIONABLE] PACKAGE BODY} with quoted or schema-qualified names. */
-    private static final String PACKAGE_BODY_PATTERN =
-            "(?i)\\bcreate\\s+(?:or\\s+replace\\s+)?(?:editionable\\s+|editioning\\s+|noneditionable\\s+)?package\\s+body\\s+"
-                    + "((?:\\\"[^\\\"]+\\\"|[a-zA-Z_][a-zA-Z0-9_$#]*)(?:\\s*\\.\\s*(?:\\\"[^\\\"]+\\\"|[a-zA-Z_][a-zA-Z0-9_$#]*))*)\\s*"
-                    + "(AS|IS)\\b";
-    private static final String PACKAGE_MEMBER_PATTERN =
-            "(?i)\\bfunction\\s+(?<FUNC>[a-zA-Z0-9_$.]+)\\s*(\\([\\s\\S]*?\\))?\\s+return\\s+([a-zA-Z0-9_$.]+)\\s*(PIPELINED\\s+|DETERMINISTIC\\s+|RESULT_CACHE\\s+)?(AS|IS|;)"
-            + "|"
-            + "(?i)\\bprocedure\\s+(?<PROC>[a-zA-Z0-9_$.]+)\\s*(\\([\\s\\S]*?\\))?\\s*(AS|IS|;)";
     private static final Pattern COMMENT_ONLY_PATTERN = Pattern.compile(COMMENT_PATTERN_TEXT);
-    private static final Pattern NO_NAME_BLOCK_PATTERN = Pattern.compile(NO_NAME_BLOCK);
-    private static final Pattern ROUTINE_DECLARATION_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER + "(?<TYPE>function|procedure)\\b"
-    );
-    private static final Pattern PACKAGE_DECLARATION_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER + "package(\\s+body)?\\b"
-    );
-    private static final Pattern TRIGGER_DECLARATION_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER + "trigger\\b"
-    );
-    /** Oracle object / collection {@code TYPE} or {@code TYPE BODY}. */
-    private static final Pattern TYPE_DECLARATION_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER + "type(\\s+body)?\\b"
-    );
-    private static final Pattern BLOCK_NAME_DECLARATION_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER
-                    + "(?<TYPE>package(\\s+body)?|procedure|function|trigger|type(\\s+body)?)\\b"
-    );
-    /** {@code CREATE [OR REPLACE] [EDITIONABLE|…] (PROCEDURE|FUNCTION|TRIGGER|TYPE BODY)} for plain {@code END;} termination. */
-    private static final Pattern ORACLE_PLAIN_BLOCK_OBJECT_HEAD_PATTERN = Pattern.compile(
-            "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?" + ORACLE_EDITION_MODIFIER
-                    + "(?:procedure|function|trigger|type\\s+body)\\b"
-    );
     private static final Pattern STATEMENT_PROTECT_PATTERN = Pattern.compile(
             STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + FANYINHAO_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-    );
-    private static final Pattern BLOCK_DEPTH_TOKEN_PATTERN = Pattern.compile(
-            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
-                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
-                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
-                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
-                    + "|(?<BEGIN>(?i)\\bbegin\\b(?!\\s*work\\b))"
-                    + "|(?<PLAINEND>(?i)\\bend\\s*;)"
-                    + "|(?<NAMEDEND>(?i)\\bend\\b\\s+[a-zA-Z_][a-zA-Z0-9_$#\"]*\\s*;)"
-    );
-    private static final Pattern PLAIN_BLOCK_END_PATTERN = Pattern.compile(
-            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
-                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
-                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
-                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
-                    + "|(?<PLAINEND>(?i)\\bend\\s*;)"
-    );
-    private static final Pattern NAMED_BLOCK_END_PATTERN = Pattern.compile(
-            "(?<STRING>" + STRING_PATTERN_TEXT + ")"
-                    + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
-                    + "|(?<BACKTICK>" + FANYINHAO_STRING_PATTERN_TEXT + ")"
-                    + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
-                    + "|(?<NAMEDEND>(?i)\\bend\\s+(?<ENDNAME>[a-zA-Z_][a-zA-Z0-9_$.]*|\"[^\"]+\")\\s*;)"
     );
     public static class PackageMember {
         private final String name;
@@ -888,74 +815,7 @@ public class SqlParserUtil {
      */
     @Deprecated
     public static List<PackageMember> parsePackageMembers(String packageDdl) {
-        List<PackageMember> members = new ArrayList<>();
-        if (packageDdl == null || packageDdl.isEmpty()) {
-            return members;
-        }
-
-        Pattern bodyPattern = Pattern.compile(
-                "(?<STRING>" + STRING_PATTERN_TEXT + ")"
-                        + "|(?<DOUBLESTRING>" + DOUBLE_STRING_PATTERN_TEXT + ")"
-                        + "|(?<COMMENT>" + COMMENT_PATTERN_TEXT + ")"
-                        + "|(?<BODY>" + PACKAGE_BODY_PATTERN + ")"
-        );
-        Matcher bodyMatcher = bodyPattern.matcher(packageDdl);
-        String bodySql = "";
-        while (bodyMatcher.find()) {
-            if (bodyMatcher.group("BODY") != null) {
-                bodySql = packageDdl.substring(bodyMatcher.start("BODY"));
-            }
-        }
-        if (bodySql.isEmpty()) {
-            bodySql = extractPackageBodyAfterSqlPlusSlash(packageDdl);
-        }
-        if (bodySql.isEmpty()) {
-            bodySql = packageDdl;
-        }
-
-        Pattern memberPattern = Pattern.compile(
-                STRING_PATTERN_TEXT
-                        + "|" + DOUBLE_STRING_PATTERN_TEXT
-                        + "|" + COMMENT_PATTERN_TEXT
-                        + "|" + PACKAGE_MEMBER_PATTERN
-        );
-        Matcher memberMatcher = memberPattern.matcher(bodySql);
-        LinkedHashMap<String, PackageMember> dedup = new LinkedHashMap<>();
-        while (memberMatcher.find()) {
-            if (memberMatcher.group("FUNC") != null) {
-                String n = memberMatcher.group("FUNC");
-                dedup.putIfAbsent("F:" + n.toLowerCase(Locale.ROOT), new PackageMember(n, "FUNC"));
-            }
-            if (memberMatcher.group("PROC") != null) {
-                String n = memberMatcher.group("PROC");
-                dedup.putIfAbsent("P:" + n.toLowerCase(Locale.ROOT), new PackageMember(n, "PROC"));
-            }
-        }
-        members.addAll(dedup.values());
-
-        return members;
-    }
-
-    /**
-     * When spec+body are concatenated with a SQL*Plus {@code /} line, prefer scanning only the body so forward
-     * declarations in the spec are not merged with implementations (which produced duplicate tree nodes).
-     */
-    private static String extractPackageBodyAfterSqlPlusSlash(String ddl) {
-        if (ddl == null || ddl.isBlank()) {
-            return "";
-        }
-        String[] chunks = ddl.split("\\R\\s*/\\s*\\R");
-        Pattern bodyStart = Pattern.compile(
-                "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?(?:editionable\\s+|editioning\\s+|noneditionable\\s+)?package\\s+body\\b");
-        for (String chunk : chunks) {
-            if (chunk == null) {
-                continue;
-            }
-            if (bodyStart.matcher(chunk.stripLeading()).find()) {
-                return chunk;
-            }
-        }
-        return "";
+        return new com.dbboys.dialect.oracle.OracleSqlParser().parsePackageMembers(packageDdl);
     }
 
     /**
@@ -963,60 +823,7 @@ public class SqlParserUtil {
      */
     @Deprecated
     public static String printPackageFunction(String packagesql, String function) {
-        if (packagesql == null || packagesql.isBlank() || function == null || function.isBlank()) {
-            return "";
-        }
-
-        String functionString = "";
-        String stringPattern = "'([^'\\\\]*(\\\\.[^'\\\\]*)*)'" + "|" + "'[\\s\\S]*";
-        String doubleStringPattern = "\"[^\"]*\"" + "|" + "\"[\\s\\S]*";
-        String commentPattern = "--[^\\n]*" + "|" + "/\\*[\\s\\S]*?\\*/" + "|" + "/\\*[\\s\\S]*" + "|" + "\\{[\\s\\S]*?\\}";
-        String bodyPattern = "(?i)\\bcreate\\s+(OR\\s+REPLACE\\s+)?package\\s+body\\b[\\s\\S]*?\\b(AS|IS)\\b";
-
-        String normalizedName = function.trim().replace("\"", "");
-        String escapedName = Pattern.quote(normalizedName);
-        String namePattern = "\\\"?" + escapedName + "\\\"?";
-        String functionPattern =
-                "(?is)\\bfunction\\s+" + namePattern +
-                        "\\s*(\\([\\s\\S]*?\\))?\\s+return\\s+([a-zA-Z0-9_$.\\\"]+)" +
-                        "\\s*(PIPELINED\\s+|DETERMINISTIC\\s+|RESULT_CACHE\\s+)?(AS|IS)\\b" +
-                        "[\\s\\S]*?\\bend\\s*(" + namePattern + ")?\\s*;"
-                        + "|"
-                        + "(?is)\\bprocedure\\s+" + namePattern +
-                        "\\s*(\\([\\s\\S]*?\\))?\\s*(AS|IS)\\b" +
-                        "[\\s\\S]*?\\bend\\s*(" + namePattern + ")?\\s*;";
-
-        Pattern pattern = Pattern.compile(
-                "(?<STRING>" + stringPattern + ")"
-                        + "|(?<DOUBLESTRING>" + doubleStringPattern + ")"
-                        + "|(?<COMMENT>" + commentPattern + ")"
-                        + "|(?<BODY>" + bodyPattern + ")"
-        );
-        Matcher matcher = pattern.matcher(packagesql);
-        String bodySql = "";
-        while (matcher.find()) {
-            if (matcher.group("BODY") != null) {
-                bodySql = packagesql.substring(matcher.start("BODY"));
-            }
-        }
-        if (bodySql.isEmpty()) {
-            bodySql = packagesql;
-        }
-
-        pattern = Pattern.compile(
-                "(?<STRING>" + stringPattern + ")"
-                        + "|(?<DOUBLESTRING>" + doubleStringPattern + ")"
-                        + "|(?<COMMENT>" + commentPattern + ")"
-                        + "|(?<FUNC>" + functionPattern + ")"
-        );
-        matcher = pattern.matcher(bodySql);
-        while (matcher.find()) {
-            if (matcher.group("FUNC") != null) {
-                functionString = matcher.group("FUNC");
-                break;
-            }
-        }
-        return functionString;
+        return new com.dbboys.dialect.oracle.OracleSqlParser().printPackageFunction(packagesql, function);
     }
 
     private static int findMatchingParenthesis(String sql, int openParenIndex) {
