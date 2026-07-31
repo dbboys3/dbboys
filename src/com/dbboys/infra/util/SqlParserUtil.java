@@ -39,15 +39,25 @@ public class SqlParserUtil {
 
     public static class Segment {
         private final String text;
+        private final int startIndex;
         private final int endIndex;
 
         public Segment(String text, int endIndex) {
+            this(text, 0, endIndex);
+        }
+
+        public Segment(String text, int startIndex, int endIndex) {
             this.text = text;
+            this.startIndex = startIndex;
             this.endIndex = endIndex;
         }
 
         public String getText() {
             return text;
+        }
+
+        public int getStartIndex() {
+            return startIndex;
         }
 
         public int getEndIndex() {
@@ -146,8 +156,68 @@ public class SqlParserUtil {
                 return range;
             }
         }
+        range = findDelimiterBlockRangeForCaret(sqlText, clampedCaret, ranges);
+        if (range != null) {
+            return range;
+        }
         range = findStatementRangeForCaretInOracleSlashGap(ranges, sqlText, clampedCaret);
         return range;
+    }
+
+    /**
+     * When the caret is on a {@code DELIMITER xx} line or on the matching closing
+     * delimiter, maps it to the single statement enclosed by the delimiter block.
+     */
+    private static StatementRange findDelimiterBlockRangeForCaret(String sqlText,
+                                                                  int caret,
+                                                                  List<StatementRange> ranges) {
+        if (sqlText == null || ranges == null || ranges.isEmpty()) {
+            return null;
+        }
+        for (StatementRange range : ranges) {
+            int lineStart = lineStartBefore(range.getStart(), sqlText);
+            String line = sqlText.substring(lineStart, range.getStart()).trim();
+            if (!startsWithIgnoreCase(line, 0, "delimiter")) {
+                continue;
+            }
+            int tokenStart = "delimiter".length();
+            while (tokenStart < line.length() && Character.isWhitespace(line.charAt(tokenStart))) {
+                tokenStart++;
+            }
+            int tokenEnd = tokenStart;
+            while (tokenEnd < line.length() && !Character.isWhitespace(line.charAt(tokenEnd))) {
+                tokenEnd++;
+            }
+            if (tokenStart >= tokenEnd) {
+                continue;
+            }
+            String token = line.substring(tokenStart, tokenEnd);
+            if (";".equals(token)) {
+                continue;
+            }
+
+            int closeStart = skipWhitespace(sqlText, range.getEnd());
+            if (closeStart + token.length() > sqlText.length()
+                    || !sqlText.regionMatches(true, closeStart, token, 0, token.length())) {
+                continue;
+            }
+            int closeEnd = closeStart + token.length();
+            if (caret >= lineStart && caret <= closeEnd) {
+                return range;
+            }
+        }
+        return null;
+    }
+
+    private static int lineStartBefore(int end, String text) {
+        int idx = end - 1;
+        while (idx >= 0 && (text.charAt(idx) == '\n' || text.charAt(idx) == '\r')) {
+            idx--;
+        }
+        while (idx >= 0 && text.charAt(idx) != '\n' && text.charAt(idx) != '\r') {
+            idx--;
+        }
+        return idx + 1;
     }
 
     /**
@@ -216,11 +286,10 @@ public class SqlParserUtil {
         List<StatementRange> ranges = new ArrayList<>();
         Sql currentSql = new Sql();
         int currentStatementStart = 0;
-        int previousSegmentEnd = -1;
 
         for (Segment segment : split(sqlText)) {
             String sqlChunk = segment.getText();
-            int segmentStart = previousSegmentEnd + 1;
+            int segmentStart = segment.getStartIndex();
             if (currentSql.getSqlstr().isEmpty() && currentSql.getSqlRemainder().isEmpty()) {
                 currentStatementStart = segmentStart + leadingDelimiterOffset(sqlChunk);
             }
@@ -233,7 +302,7 @@ public class SqlParserUtil {
                     String remainder = currentSql.getSqlRemainder();
                     resetSqlStatementState(currentSql);
                     if (remainder != null && !remainder.isEmpty()) {
-                        int remainderStart = segment.getEndIndex() + 1 - remainder.length();
+                        int remainderStart = segment.getStartIndex() + segment.getText().length() - remainder.length();
                         currentStatementStart = remainderStart + leadingDelimiterOffset(remainder);
                     }
                 }
@@ -241,7 +310,6 @@ public class SqlParserUtil {
                 sqlContainsCommit = parser.hasMoreStatements(currentSql.getSqlRemainder());
             } while (sqlContainsCommit);
 
-            previousSegmentEnd = segment.getEndIndex();
         }
 
         appendExecutableRange(sqlText, ranges, currentStatementStart, currentSql.getSqlstr());
@@ -298,12 +366,12 @@ public class SqlParserUtil {
         boolean inBlockComment = false;
         boolean inBrackets = false;
         String currentDelimiter = ";";
+        int segmentStart = 0;
 
         StringBuilder buffer = new StringBuilder();
         for (int i = 0; i < sql.length(); i++) {
             char current = sql.charAt(i);
             char next = (i + 1 < sql.length()) ? sql.charAt(i + 1) : '\0';
-            buffer.append(current);
 
             // Only check DELIMITER directive at potential statement start
             boolean atStatementStart = buffer.toString().trim().isEmpty()
@@ -333,9 +401,12 @@ public class SqlParserUtil {
                     dEnd++;
                 }
                 buffer.setLength(0);
+                segmentStart = dEnd;
                 i = dEnd - 1; // -1 because for loop does i++
                 continue;
             }
+
+            buffer.append(current);
 
             // Line comment detection
             if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
@@ -384,8 +455,10 @@ public class SqlParserUtil {
                 inBacktickQuote = !inBacktickQuote;
             }
 
-            // Dollar-quote detection (PostgreSQL $$...$$ and $tag$...$tag$)
-            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote
+            // Dollar-quote detection (PostgreSQL $$...$$ and $tag$...$tag$).
+            // A custom DELIMITER (e.g. "$$") wins over dollar-quote interpretation,
+            // otherwise the terminator would be swallowed as an unclosed dollar quote.
+            if (";".equals(currentDelimiter) && !inSingleQuote && !inDoubleQuote && !inBacktickQuote
                     && !inLineComment && !inBlockComment && !inBrackets) {
                 if (!inDollarQuote && current == '$') {
                     int tagEnd = scanDollarQuoteEnd(sql, i);
@@ -449,7 +522,7 @@ public class SqlParserUtil {
                         segText = segText.substring(0, segText.length() - trimLen);
                     }
                 }
-                if (!handler.handle(new Segment(segText, i))) {
+                if (!handler.handle(new Segment(segText, segmentStart, i))) {
                     return false;
                 }
                 buffer.setLength(0);
@@ -457,6 +530,7 @@ public class SqlParserUtil {
                 if (atDelimiter && currentDelimiter.length() > 1) {
                     i += currentDelimiter.length() - 1;
                 }
+                segmentStart = i + 1;
             }
         }
         return true;

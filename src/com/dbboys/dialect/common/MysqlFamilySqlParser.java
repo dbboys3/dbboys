@@ -17,7 +17,8 @@ public abstract class MysqlFamilySqlParser extends CommonSqlParser {
     @Override
     protected String multiLineEndPattern() {
         return "(?i)\\bend\\s+(procedure|function)\\s*;?"
-                + "|" + "(?i)\\bend\\s*;\\s*/";
+                + "|" + "(?i)\\bend\\s*;\\s*/"
+                + "|" + "(?i)\\bend\\s*;?$";
     }
 
     @Override

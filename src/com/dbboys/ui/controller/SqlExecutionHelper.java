@@ -132,6 +132,16 @@ public class SqlExecutionHelper {
                         currentSql[0] = parser.modifySql(currentSql[0], sqlChunk);
                         if (currentSql[0].getSqlEnd() && SqlParserUtil.isExecutableStatement(currentSql[0].getSqlstr())) {
                             ctrl.sqlParamList.clear();
+                            // Skip executing the naked custom delimiter (e.g. "$$" left from
+                            // "DELIMITER $$\nselect * from t;$$\nDELIMITER ;")
+                            if (isJustDelimiter(currentSql[0].getSqlstr())) {
+                                currentSql[0].setSqlStr("");
+                                currentSql[0].setSqlEnd(false);
+                                currentSql[0].setSqlType("");
+                                sqlChunk = "";
+                                sqlContainsCommit = parser.hasMoreStatements(currentSql[0].getSqlRemainder());
+                                continue;
+                            }
                             ctrl.sqlExe = stripTrailingSemicolon(currentSql[0].getSqlstr());
                             ctrl.sqlStatementCount++;
                             highlightCurrentSegment(segment, currentSql[0]);
@@ -669,5 +679,17 @@ public class SqlExecutionHelper {
             case "sqlmode=mysql"  -> new com.dbboys.dialect.mysql.MysqlSqlParser();
             default               -> platformParser; // sqlmode=gbase or unknown → Informix family
         };
+    }
+
+    /**
+     * Returns true if the sql string is just a custom delimiter token
+     * (e.g. "$$", "//") that should not be executed.
+     */
+    private static boolean isJustDelimiter(String sql) {
+        if (sql == null || sql.isBlank()) return true;
+        String t = sql.trim();
+        if (";".equals(t)) return true;
+        // Common custom delimiters that are NOT valid SQL
+        return t.matches("\\$\\$|//|!!|@@");
     }
 }

@@ -119,6 +119,115 @@ public abstract class CommonSqlParser implements SqlParser {
         // no-op by default
     }
 
+    /**
+     * Current statement delimiter, set by {@code DELIMITER xx} directive.
+     * When set to a non-standard value (e.g. {@code $$}), multi-line end patterns
+     * should also match {@code END keyword + delimiter}.
+     */
+    protected String currentDelimiter = ";";
+
+    /**
+     * Detects and strips a leading {@code DELIMITER xx} directive from {@code addSql}.
+     * If found, updates {@link #currentDelimiter}.
+     * Returns the text with the directive line removed.
+     */
+    protected String detectDelimiterDirective(String addSql) {
+        if (addSql == null || addSql.isEmpty()) return addSql;
+        String trimmed = addSql.stripLeading();
+        if (!trimmed.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
+            return addSql;
+        }
+        int tokenStart = "delimiter".length();
+        tokenStart = skipWhitespace(trimmed, tokenStart);
+        int tokenEnd = tokenStart;
+        while (tokenEnd < trimmed.length() && !Character.isWhitespace(trimmed.charAt(tokenEnd))) {
+            tokenEnd++;
+        }
+        if (tokenEnd > tokenStart) {
+            this.currentDelimiter = trimmed.substring(tokenStart, tokenEnd);
+        }
+        int lineEnd = trimmed.indexOf('\n');
+        if (lineEnd < 0) return "";
+        return trimmed.substring(lineEnd + 1);
+    }
+
+    // remove the delimitResetWouldResetToSemicolon method
+
+    private static boolean delimitResetWouldResetToSemicolon(String text, int idx) {
+        String remaining = text.substring(idx).stripLeading();
+        return remaining.regionMatches(true, 0, "delimiter ;", 0, "delimiter ;".length())
+                || remaining.equalsIgnoreCase("delimiter ;");
+    }
+
+    /**
+     * Returns the effective multi-line end pattern, incorporating the current
+     * delimiter. When a custom delimiter is active, also matches
+     * {@code END FUNCTION <delim>} / {@code END PROCEDURE <delim>}.
+     */
+    protected String effectiveMultiLineEndPattern() {
+        String base = multiLineEndPattern();
+        if (!";".equals(currentDelimiter)) {
+            String delim = Pattern.quote(currentDelimiter);
+            base = base + "|" + "(?i)\\bend\\s+(procedure|function)\\s*" + delim;
+        }
+        return base;
+    }
+
+    /**
+     * After a statement completes, if a custom delimiter is active, strip any
+     * trailing "delimiter ;" line and trailing custom delimiter from the remainder.
+     * Returns the cleaned remainder.
+     */
+    protected String cleanRemainder(String remainder) {
+        if (remainder == null || remainder.isEmpty()) return "";
+        if (!";".equals(currentDelimiter)) {
+            // Find "delimiter ;" line within the remainder
+            int delimResetIdx = findDelimiterResetLine(remainder);
+            if (delimResetIdx >= 0) {
+                this.currentDelimiter = ";";
+                String before = remainder.substring(0, delimResetIdx);
+                // Also strip any trailing custom delimiter from "before"
+                String trimmed = before.stripTrailing();
+                if (!trimmed.isEmpty() && trimmed.endsWith(currentDelimiter)) {
+                    trimmed = trimmed.substring(0, trimmed.length() - currentDelimiter.length()).stripTrailing();
+                }
+                // Return empty string if nothing meaningful remains
+                return trimmed.isEmpty() ? "" : trimmed;
+            }
+            // Strip trailing custom delimiter
+            String trimmed = remainder.stripTrailing();
+            if (trimmed.endsWith(currentDelimiter)) {
+                trimmed = trimmed.substring(0, trimmed.length() - currentDelimiter.length()).stripTrailing();
+            }
+            // If the whole thing is just the delimiter, return empty
+            String justDelim = trimmed.strip();
+            if (justDelim.equals(currentDelimiter)) {
+                return "";
+            }
+            return trimmed.isEmpty() ? "" : trimmed;
+        }
+        return remainder;
+    }
+
+    /**
+     * Finds "delimiter ;" (case-insensitive) anywhere in text.
+     */
+    private static int findDelimiterResetLine(String text) {
+        // Look for "delimiter ;" as a standalone line (only whitespace around it)
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].trim().equalsIgnoreCase("delimiter ;")) {
+                // Return position at the start of this line
+                int pos = 0;
+                for (int j = 0; j < i; j++) {
+                    pos += lines[j].length() + 1; // +1 for the \n
+                }
+                return Math.min(pos, text.length());
+            }
+        }
+        return -1;
+    }
+
     // ------------------------------------------------------------------
     // Template method: modifySql
     // ------------------------------------------------------------------
@@ -134,13 +243,31 @@ public abstract class CommonSqlParser implements SqlParser {
             sql.setBlockName("");
             sql.setPlainBlockMode(false);
             addSql = SqlParserUtil.stripLeadingSqlDelimiter(addSql);
+            addSql = detectDelimiterDirective(addSql);
             addSql = SqlParserUtil.stripLeadingDelimiterDirective(addSql);
             onNewStatementStart(sql, addSql);
+
+            // If addSql is the trailing custom delimiter (e.g. "$$" left from
+            // "END FUNCTION$$\ndelimiter ;"), consume it silently.
+            // BUT only if cleanRemainder already reset the delimiter to ";".
+            // Check: if currentDelimiter is already ";" (was just reset), skip $$.
+            // If currentDelimiter is still $$, this means the statement ended with
+            // END FUNCTION$$ and the remainder $$ didn't have "delimiter ;" after it.
+            boolean isJustDelim = addSql.stripLeading().equals(currentDelimiter)
+                    || (!";".equals(currentDelimiter) && addSql.stripLeading().equals(currentDelimiter));
+            if (isJustDelim) {
+                sql.setSqlType("");
+                sql.setSqlStr(addSql);
+                sql.setSqlEnd(true);
+                return sql;
+            }
+
             if (addSql.isBlank()) {
                 sql.setSqlEnd(false);
                 return sql;
             }
         }
+
         sql.setSqlEnd(false);
 
         Pattern pattern = Pattern.compile(
@@ -173,6 +300,14 @@ public abstract class CommonSqlParser implements SqlParser {
             } else if (checkText.toUpperCase().startsWith("CALL") || checkText.toUpperCase().startsWith("EXECUTE")) {
                 sql.setSqlType("CALL");
                 sql.setSqlEnd(true);
+            } else if (!";".equals(currentDelimiter) && checkText.isBlank()) {
+                // Only the custom delimiter itself remains (after stripping)
+                // This is the trailing "$$" from "END FUNCTION$$\ndelimiter ;"
+                // cleanRemainder already handled the "delimiter ;" part
+                sql.setSqlType("");
+                sql.setSqlStr("");
+                sql.setSqlEnd(true);
+                return sql;
             } else {
                 Matcher matcher;
                 boolean isMultiLine = isMultiLineSqlStart(addSql);
@@ -188,12 +323,13 @@ public abstract class CommonSqlParser implements SqlParser {
                 if (isMultiLine || isAnonBlock) {
                     pattern = Pattern.compile(
                             STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                    + "|(?<END>" + multiLineEndPattern() + ")"
+                                    + "|(?<END>" + effectiveMultiLineEndPattern() + ")"
                     );
                     matcher = pattern.matcher(addSql);
                     while (matcher.find()) {
                         if (matcher.group("END") != null) {
-                            sql.setSqlRemainder(addSql.substring(matcher.end("END")));
+                            String rawRemainder = addSql.substring(matcher.end("END"));
+                            sql.setSqlRemainder(cleanRemainder(rawRemainder));
                             addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
                             sql.setSqlEnd(true);
                             break;
@@ -237,12 +373,13 @@ public abstract class CommonSqlParser implements SqlParser {
             if (sql.getSqlType().equals("MULTI_LINE_SQL") || sql.getSqlType().equals("CALL_BLOCK")) {
                 pattern = Pattern.compile(
                         STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                                + "|(?<END>" + multiLineEndPattern() + ")"
+                                + "|(?<END>" + effectiveMultiLineEndPattern() + ")"
                 );
                 Matcher matcher = pattern.matcher(addSql);
                 while (matcher.find()) {
                     if (matcher.group("END") != null) {
-                        sql.setSqlRemainder(addSql.substring(matcher.end("END")));
+                        String rawRemainder = addSql.substring(matcher.end("END"));
+                        sql.setSqlRemainder(cleanRemainder(rawRemainder));
                         addSql = addSql.substring(0, getRoutineStatementEndIndex(matcher));
                         sql.setSqlEnd(true);
                         break;
@@ -280,9 +417,22 @@ public abstract class CommonSqlParser implements SqlParser {
         if (remainderSql == null || remainderSql.isBlank()) {
             return false;
         }
+        // Quick check: is the raw remainder just a custom delimiter?
+        if (!";".equals(currentDelimiter)) {
+            String raw = remainderSql.strip();
+            if (raw.equals(currentDelimiter)) {
+                return false;
+            }
+        }
         String cleaned = SqlParserUtil.stripLeadingSqlDelimiter(remainderSql);
         if (cleaned.isBlank()) {
             return false;
+        }
+        if (!";".equals(currentDelimiter)) {
+            String trimmed = cleaned.strip();
+            if (trimmed.equals(currentDelimiter)) {
+                return false;
+            }
         }
         String stripped = STATEMENT_PROTECT_PATTERN.matcher(cleaned).replaceAll("").trim();
         if (stripped.isEmpty() || stripped.matches("[/\\s]+")) {
@@ -292,7 +442,7 @@ public abstract class CommonSqlParser implements SqlParser {
         boolean result = false;
         Pattern pattern = Pattern.compile(
                 STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                        + "|(?<END>" + multiLineEndPattern() + ")"
+                        + "|(?<END>" + effectiveMultiLineEndPattern() + ")"
         );
         Matcher matcher = pattern.matcher(cleaned);
         while (matcher.find()) {
@@ -314,10 +464,12 @@ public abstract class CommonSqlParser implements SqlParser {
 
     @Override
     public boolean hasMoreThanOneStatement(String remainderSql) {
+        if (remainderSql == null || remainderSql.isBlank()) return false;
+        if (!";".equals(currentDelimiter) && remainderSql.stripLeading().equals(currentDelimiter)) return false;
         boolean result = false;
         Pattern pattern = Pattern.compile(
                 STRING_PATTERN_TEXT + "|" + DOUBLE_STRING_PATTERN_TEXT + "|" + COMMENT_PATTERN_TEXT
-                        + "|(?<END>" + multiLineEndPattern() + ")"
+                        + "|(?<END>" + effectiveMultiLineEndPattern() + ")"
         );
         int count = 0;
         Matcher matcher = pattern.matcher(remainderSql);
@@ -361,6 +513,11 @@ public abstract class CommonSqlParser implements SqlParser {
                     if (statementCount[0] >= stopAfterCount) {
                         stoppedEarly[0] = true;
                         return false;
+                    }
+                    // Use cleanRemainder to strip delimiter cruft & reset delimiter
+                    String rawRem = currentSql[0].getSqlRemainder();
+                    if (!rawRem.isBlank()) {
+                        currentSql[0].setSqlRemainder(cleanRemainder(rawRem));
                     }
                     resetSqlStatementState(currentSql[0]);
                 }
