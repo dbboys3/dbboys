@@ -19,7 +19,7 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
     protected String multiLineEndPattern() {
         return "(?i)\\bend\\s+(procedure|function)\\s*;?"
                 + "|" + "(?i)\\bend\\s*;\\s*/"
-                + "|" + "(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$.]*)\\s*/"
+                + "|" + "(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$#\".]*)\\s*/"
                 + "|" + "(?m)^\\s*/\\s*$";
     }
 
@@ -30,7 +30,7 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
             return false;
         }
 
-        // Check CREATE [OR REPLACE] [FUNCTION|PROCEDURE]
+        // CREATE [OR REPLACE] [FUNCTION|PROCEDURE]
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
                 "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?(?<TYPE>function|procedure)\\b"
         ).matcher(normalized);
@@ -44,34 +44,12 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
             index = skipWhitespace(normalized, index + "if not exists".length());
         }
 
-        int nameEnd = skipQualifiedName(normalized, index);
-        if (nameEnd <= index) {
-            return false;
-        }
+        // Skip qualified name: owner.name or "owner"."name"
 
-        int remainderStart = skipWhitespace(normalized, nameEnd);
-        if (remainderStart < normalized.length() && normalized.charAt(remainderStart) == '(') {
-            int closeParenIndex = findMatchingParenthesis(normalized, remainderStart);
-            if (closeParenIndex < 0) {
-                return false;
-            }
-            remainderStart = skipWhitespace(normalized, closeParenIndex + 1);
-        }
-
-        String remainder = normalized.substring(remainderStart).trim().toLowerCase(Locale.ROOT);
-        if (remainder.isEmpty()) {
-            return false;
-        }
-
-        if ("function".equals(routineType)) {
-            return remainder.startsWith("return")
-                    || remainder.startsWith("returns")
-                    || remainder.startsWith("returning");
-        }
-
-        return remainder.startsWith("as")
-                || remainder.startsWith("begin")
-                || remainder.startsWith("define");
+        // For Informix SPL: any CREATE FUNCTION/PROCEDURE is multi-line,
+        // regardless of what follows. The body must always end with
+        // END FUNCTION / END PROCEDURE.
+        return true;
     }
 
     @Override
