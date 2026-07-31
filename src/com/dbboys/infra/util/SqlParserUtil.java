@@ -532,12 +532,14 @@ public class SqlParserUtil {
                     || (atDelimiter
                         && !shouldKeepRoutineTerminatorWithPreviousSegment(sql, i + currentDelimiter.length()))) {
                 String segText = buffer.toString();
+                int delimiterStart = atDelimiter ? i : -1;
                 // Trim trailing delimiter chars from segment for non-';' delimiters
                 // so the segment text doesn't end with (e.g.) '$$'
                 if (atDelimiter && currentDelimiter.length() > 1) {
-                    int trimLen = currentDelimiter.length() - 1;
-                    if (segText.length() >= trimLen) {
-                        segText = segText.substring(0, segText.length() - trimLen);
+                    // Only the first delimiter character was appended to the buffer,
+                    // so remove exactly one char (e.g. the first '$' of "$$$").
+                    if (segText.length() >= 1) {
+                        segText = segText.substring(0, segText.length() - 1);
                     }
                 }
                 if (!handler.handle(new Segment(segText, segmentStart, i))) {
@@ -548,10 +550,33 @@ public class SqlParserUtil {
                 if (atDelimiter && currentDelimiter.length() > 1) {
                     i += currentDelimiter.length() - 1;
                 }
+                // A custom delimiter closed on its own line terminates the block:
+                // reset to ";" so SQL after the block parses normally. Delimiters
+                // attached to a statement (e.g. "END$$") keep MySQL semantics and
+                // stay active until an explicit "delimiter ;".
+                if (atDelimiter && !";".equals(currentDelimiter)
+                        && isStandaloneDelimiterLine(sql, delimiterStart, currentDelimiter)) {
+                    currentDelimiter = ";";
+                }
                 segmentStart = i + 1;
             }
         }
         return true;
+    }
+
+    private static boolean isStandaloneDelimiterLine(String sql, int delimiterStart,
+                                                     String delimiter) {
+        int lineStart = delimiterStart;
+        while (lineStart > 0 && sql.charAt(lineStart - 1) != '\n'
+                && sql.charAt(lineStart - 1) != '\r') {
+            lineStart--;
+        }
+        int lineEnd = delimiterStart;
+        while (lineEnd < sql.length() && sql.charAt(lineEnd) != '\n'
+                && sql.charAt(lineEnd) != '\r') {
+            lineEnd++;
+        }
+        return sql.substring(lineStart, lineEnd).trim().equals(delimiter);
     }
 
     /**
