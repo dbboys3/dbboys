@@ -103,12 +103,14 @@ public class SqlExecutionHelper {
         }
 
         ctrl.sqlUsedTime = 0;
-        SqlParser parser = platformResolver.requirePlatform(ctrl.sqlConnect).parser();
-        ctrl.isSingleSql = parser.isSingleStatement(ctrl.sqlText);
+        SqlParser platformParser = platformResolver.requirePlatform(ctrl.sqlConnect).parser();
+        ctrl.isSingleSql = platformParser.isSingleStatement(ctrl.sqlText);
         ctrl.clearUpdateResults();
         ctrl.sqlTask = new Task<>() {
             @Override
             protected Void call() throws Exception {
+                // For GBase 8S, resolve parser per-statement based on current sqlmode
+                SqlParser parser = resolveGbaseParser(platformParser, ctrl.sqlSqlModeChoiceBox.getValue());
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
                 ctrl.sqlExecutionSuccess = false;
                 ctrl.sqlExecutionResult = "";
@@ -649,5 +651,23 @@ public class SqlExecutionHelper {
             normalized = normalized.substring(0, normalized.length() - 1).trim();
         }
         return normalized;
+    }
+
+    /**
+     * For GBase 8S, maps the UI sqlmode choice to the correct family parser.
+     * For all other dialects, returns the platform parser unchanged.
+     */
+    private static SqlParser resolveGbaseParser(SqlParser platformParser, String sqlmode) {
+        if (!(platformParser instanceof com.dbboys.dialect.gbase8s.Gbase8sSqlParser gbase)) {
+            return platformParser;
+        }
+        if (sqlmode == null || sqlmode.isBlank()) {
+            return platformParser; // default → Informix family
+        }
+        return switch (sqlmode) {
+            case "sqlmode=oracle" -> new com.dbboys.dialect.oracle.OracleSqlParser();
+            case "sqlmode=mysql"  -> new com.dbboys.dialect.mysql.MysqlSqlParser();
+            default               -> platformParser; // sqlmode=gbase or unknown → Informix family
+        };
     }
 }
