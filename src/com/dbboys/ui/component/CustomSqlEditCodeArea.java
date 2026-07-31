@@ -538,7 +538,16 @@ public class CustomSqlEditCodeArea extends CodeArea {
     }
 
     public boolean ensureExecuteTargetSelected() {
-        return !getSelectedText().isEmpty() || selectCurrentStatementAtCaret();
+        // Only keep an existing selection when the caret is still inside it.
+        // Otherwise a stale selection (e.g. a previous whole-text run) would be
+        // re-executed even though the caret moved to a different statement.
+        if (!getSelectedText().isEmpty()) {
+            int caret = getCaretPosition();
+            if (caret >= getSelection().getStart() && caret <= getSelection().getEnd()) {
+                return true;
+            }
+        }
+        return selectCurrentStatementAtCaret();
     }
 
     private static final SqlParser EDITOR_PARSER = new DefaultSqlParser();

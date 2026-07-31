@@ -290,11 +290,30 @@ public class SqlParserUtil {
         }
         for (String line : gap.split("\n", -1)) {
             String t = line.trim();
-            if (!t.isEmpty() && !t.equals("/")) {
-                return false;
+            if (t.isEmpty() || t.equals("/") || isDelimiterDirectiveLine(t)) {
+                continue;
             }
+            return false;
         }
         return true;
+    }
+
+    private static boolean isDelimiterDirectiveLine(String line) {
+        if (line == null || !line.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
+            return false;
+        }
+        int idx = "delimiter".length();
+        if (idx >= line.length() || !Character.isWhitespace(line.charAt(idx))) {
+            return false;
+        }
+        while (idx < line.length() && Character.isWhitespace(line.charAt(idx))) {
+            idx++;
+        }
+        int end = idx;
+        while (end < line.length() && !Character.isWhitespace(line.charAt(end))) {
+            end++;
+        }
+        return end > idx;
     }
 
     private static StatementRange findContainingRange(List<StatementRange> ranges, int position) {

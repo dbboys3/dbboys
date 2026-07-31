@@ -42,8 +42,8 @@ public class SqlExecutionHelper {
                 && ctrl.currentResultSetTabController.lastSqlTextField.getTooltip() != null) {
             return ctrl.currentResultSetTabController.lastSqlTextField.getTooltip().getText();
         }
-        if (ctrl.sqlEditCodeArea.getSelectedText().isEmpty()) {
-            ctrl.sqlEditCodeArea.ensureExecuteTargetSelected();
+        if (!ctrl.sqlEditCodeArea.ensureExecuteTargetSelected()) {
+            return "";
         }
         return ctrl.sqlEditCodeArea.getSelectedText();
     }
@@ -223,7 +223,11 @@ public class SqlExecutionHelper {
         SqlParserUtil.StatementRange blockRange = findDelimiterBlockRange(ctrl.sqlText, segment);
         if (blockRange != null) {
             if (!ctrl.isSqlRefresh) {
-                ctrl.selectRangeAndFollow(blockRange.getStart(), blockRange.getEnd());
+                // blockRange is relative to the executed selection (ctrl.sqlText);
+                // convert it to absolute editor coordinates before highlighting.
+                ctrl.selectRangeAndFollow(
+                        ctrl.sqlSelectionRange[0] + blockRange.getStart(),
+                        ctrl.sqlSelectionRange[0] + blockRange.getEnd());
             }
             return;
         }
