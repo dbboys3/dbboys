@@ -185,7 +185,6 @@ public class TreeContextMenuBuilder {
         exportDdlMenu.setGraphic(IconFactory.group(IconPaths.METADATA_DDL_MENU, 0.65, 0.65));
 
         Group exportDdlAndDataIcon = IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.6, 0.6);
-        exportDdlAndDataIcon.setTranslateX(-1);
         CustomShortcutMenuItem exportDdlAndDataItem =
                 MenuItemUtil.createMenuItemI18n("metadata.menu.export_ddl_data", exportDdlAndDataIcon);
 
