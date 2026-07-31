@@ -219,10 +219,11 @@ public class SqlExecutionHelper {
     private void highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
         // A DELIMITER block is executed as one whole statement. Its segment text
         // starts after the consumed "DELIMITER xx" line, so the normal offset math
-        // shifts the selection right. Keep the whole selected block highlighted.
-        if (isDelimiterBlockSegment(ctrl.sqlText, segment)) {
+        // would shift the selection right. Highlight the whole enclosing block.
+        SqlParserUtil.StatementRange blockRange = findDelimiterBlockRange(ctrl.sqlText, segment);
+        if (blockRange != null) {
             if (!ctrl.isSqlRefresh) {
-                ctrl.selectRangeAndFollow(ctrl.sqlSelectionRange[0], ctrl.sqlSelectionRange[1]);
+                ctrl.selectRangeAndFollow(blockRange.getStart(), blockRange.getEnd());
             }
             return;
         }
@@ -253,27 +254,46 @@ public class SqlExecutionHelper {
         }
     }
 
-    private static boolean isDelimiterBlockSegment(String sqlText,
-                                                   SqlParserUtil.Segment segment) {
+    /**
+     * Returns the full editor range of the DELIMITER block owning {@code segment}
+     * (directive line start to closing delimiter end), or {@code null} when the
+     * segment is not inside a DELIMITER block.
+     */
+    private static SqlParserUtil.StatementRange findDelimiterBlockRange(
+            String sqlText, SqlParserUtil.Segment segment) {
         if (sqlText == null || segment == null || segment.getStartIndex() <= 0) {
-            return false;
+            return null;
         }
-        String prefix = sqlText.substring(0, segment.getStartIndex()).trim();
-        if (!prefix.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
-            return false;
+        int lineStart = segment.getStartIndex();
+        while (lineStart > 0 && (sqlText.charAt(lineStart - 1) == '\n'
+                || sqlText.charAt(lineStart - 1) == '\r')) {
+            lineStart--;
+        }
+        while (lineStart > 0 && sqlText.charAt(lineStart - 1) != '\n'
+                && sqlText.charAt(lineStart - 1) != '\r') {
+            lineStart--;
+        }
+        String line = sqlText.substring(lineStart, segment.getStartIndex()).trim();
+        if (!line.regionMatches(true, 0, "delimiter", 0, "delimiter".length())) {
+            return null;
         }
         int idx = "delimiter".length();
-        if (idx >= prefix.length() || !Character.isWhitespace(prefix.charAt(idx))) {
-            return false;
-        }
-        while (idx < prefix.length() && Character.isWhitespace(prefix.charAt(idx))) {
+        while (idx < line.length() && Character.isWhitespace(line.charAt(idx))) {
             idx++;
         }
-        int end = idx;
-        while (end < prefix.length() && !Character.isWhitespace(prefix.charAt(end))) {
-            end++;
+        int tokenEnd = idx;
+        while (tokenEnd < line.length() && !Character.isWhitespace(line.charAt(tokenEnd))) {
+            tokenEnd++;
         }
-        return end > idx && end == prefix.length();
+        if (tokenEnd <= idx) {
+            return null;
+        }
+        String token = line.substring(idx, tokenEnd);
+        int closeEnd = segment.getEndIndex() + token.length();
+        if (closeEnd > sqlText.length()) {
+            return null;
+        }
+        return new SqlParserUtil.StatementRange(lineStart, closeEnd);
     }
 
     private void executeSingleSelect(SimpleDateFormat sdf, Task<?> task) {
