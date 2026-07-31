@@ -412,13 +412,6 @@ public class SqlParserUtil {
                     dEnd++;
                 }
                 currentDelimiter = dEnd > tokenStart ? sql.substring(tokenStart, dEnd) : ";";
-                // Only accept single-char delimiters and "$$" (MySQL standard alternative).
-                // Multi-char delimiters like "//" conflict with Oracle SQL*Plus slash.
-                if (currentDelimiter.length() == 1 || "$$".equals(currentDelimiter)) {
-                    // accepted
-                } else {
-                    currentDelimiter = ";";
-                }
                 while (dEnd < sql.length() && sql.charAt(dEnd) != '\n') {
                     dEnd++;
                 }
