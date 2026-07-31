@@ -1556,12 +1556,16 @@ public class TreeContextMenuBuilder {
                     if (dbNodePlatform == null || dbNodePlatform.supportsSetDefaultDatabase()) {
                         treeview_menu.getItems().add(setDefaultDatabaseItem);
                     }
-                    // 三层模型：库节点下可新建模式
+                    // 三层模型：库节点下可新建模式、导入模式
                     if (dbNodePlatform != null
                             && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
                         treeview_menu.getItems().add(createDatabaseItem);
+
+                        importDdlAndDataItem.textProperty().unbind();
+                        importDdlAndDataItem.textProperty().bind(I18n.bind("metadata.menu.import_ddl_schema", "导入模式"));
+                        treeview_menu.getItems().add(importDdlAndDataItem);
                     }
 
                     // ---- 统计、拷贝、刷新 ---- //

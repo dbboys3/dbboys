@@ -62,6 +62,8 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
         ddl.append("-- PostgreSQL Schema DDL Export: ").append(schema).append("\n");
         ddl.append("-- ============================================================\n\n");
 
+        ddl.append("CREATE SCHEMA IF NOT EXISTS ").append(quoteIdentifier(schema)).append(";\n\n");
+
         // Tables
         List<String> tables = listSchemaObjects(conn, schema, "BASE TABLE");
         for (String table : tables) {
