@@ -170,7 +170,10 @@ public abstract class CommonSqlParser implements SqlParser {
             String delim = Pattern.quote(currentDelimiter);
             base = base + "|" + "(?i)\\bend\\s+(procedure|function)\\s*" + delim;
         }
-        return base;
+        // The segmenter strips the custom closing delimiter (e.g. "$$"), so the
+        // final chunk ends with a bare "END" (or "END;"). Accept it at end of
+        // input so delimiter blocks complete for every dialect parser.
+        return base + "|" + "(?i)\\bend\\s*;?$";
     }
 
     /**
