@@ -3832,27 +3832,30 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         int trigId = 0;
         try (PreparedStatement preparedStatement = connection.prepareStatement(sqlstr);
              ResultSet resultSet = preparedStatement.executeQuery()) {
-            if (resultSet.next()){
-                trigId = resultSet.getInt("trigid");
-                trigName = resultSet.getString("trigname");
-                trigMode = resultSet.getString("trigmode");
-                trigBoday = resultSet.getString("trigbody");
-                trigDisabled = ("D".equals(resultSet.getString("state")))?true:false;
-            }
             while (resultSet.next()){
-                if (resultSet.getInt("segno") == 0){
+                int currentTrigId = resultSet.getInt("trigid");
+                String bodyPart = resultSet.getString("trigbody");
+                if (trigId == 0){
+                    trigId = currentTrigId;
+                    trigName = resultSet.getString("trigname");
+                    trigMode = resultSet.getString("trigmode");
+                    trigBoday = bodyPart == null ? "" : bodyPart;
+                    trigDisabled = "D".equals(resultSet.getString("state"));
+                } else if (currentTrigId == trigId){
+                    if (bodyPart != null) {
+                        trigBoday = trigBoday + bodyPart;
+                    }
+                } else {
                     Trigger trigger = new Trigger(trigName);
                     trigger.setTriggerMode(trigMode);
                     trigger.setTriggerBody(trigBoday);
                     trigger.setIsdisabled(trigDisabled);
                     trigArrayList.add(trigger);
-                    trigId = resultSet.getInt("trigid");
+                    trigId = currentTrigId;
                     trigName = resultSet.getString("trigname");
                     trigMode = resultSet.getString("trigmode");
-                    trigBoday = resultSet.getString("trigbody");
-                    trigDisabled = ("D".equals(resultSet.getString("state")))?true:false;
-                } else {
-                    trigBoday = trigBoday + resultSet.getString("trigbody");
+                    trigBoday = bodyPart == null ? "" : bodyPart;
+                    trigDisabled = "D".equals(resultSet.getString("state"));
                 }
             }
         }
@@ -3860,6 +3863,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
             Trigger trigger = new Trigger(trigName);
             trigger.setTriggerMode(trigMode);
             trigger.setTriggerBody(trigBoday);
+            trigger.setIsdisabled(trigDisabled);
             trigArrayList.add(trigger);
         }
         for (int i=0;i<trigArrayList.size();i++){
