@@ -214,7 +214,7 @@ public class DatabaseImportHandler {
                             I18n.t("metadata.import_ddl_data.progress.preparing", "准备中")
                     );
                     int affectedRows = importDatabaseBundle(
-                            baseConnect, bundle, backSqlTask, runtime, parentDbName, databaseLevelImport);
+                            baseConnect, bundle, backSqlTask, runtime, parentDbName);
                     long endMillis = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endMillis - beginMillis) / 1000.0) + " sec");
@@ -250,7 +250,7 @@ public class DatabaseImportHandler {
             DatabaseImportBundle bundle = bundleRef.get();
             String databaseName = bundle == null ? queuedDatabaseName : bundle.databaseName;
             String bundlePath = bundle == null ? dir.getAbsolutePath() : bundle.directory.getAbsolutePath();
-            if (databaseLevelImport) {
+            if (bundle != null && bundle.schemaParts != null && !bundle.schemaParts.isEmpty()) {
                 // Full database bundle: the new database is created under the
                 // selected item's parent folder, so refresh that folder.
                 TreeItem<TreeData> parent = selectedItem.getParent();
@@ -280,12 +280,11 @@ public class DatabaseImportHandler {
                                             DatabaseImportBundle bundle,
                                             BackgroundSqlTask backSqlTask,
                                             DatabaseImportRuntime runtime,
-                                            String parentDbName,
-                                            boolean databaseLevelImport) throws Exception {
+                                            String parentDbName) throws Exception {
         if (baseConnect == null || bundle == null) {
             return 0;
         }
-        if (databaseLevelImport) {
+        if (bundle.schemaParts != null && !bundle.schemaParts.isEmpty()) {
             return importDatabaseSchemaBundle(baseConnect, bundle, backSqlTask, runtime);
         }
 
@@ -312,14 +311,23 @@ public class DatabaseImportHandler {
                     bootstrapConnect,
                     TreeObjectCrudHandler.PROP_DB_LOCALE,
                     bundle.dbLocale
-            );
+                );
         }
+
+        Connect databaseConnect = new Connect(baseConnect);
+        TreeObjectCrudHandler.applyDatabaseConnectionProps(databaseConnect, database, database.getName());
+        // Three-layer schema import targets an existing database, so the schema
+        // DDL must run against that database. Database-level imports still run
+        // the pre-data script (which may contain the create-database bootstrap)
+        // against the maintenance connection.
+        boolean schemaImportIntoExistingDatabase = parentDbName != null && !parentDbName.isBlank();
+        Connect preDdlConnect = schemaImportIntoExistingDatabase ? databaseConnect : bootstrapConnect;
 
         int affectedRows = 0;
         int flowTotalSteps = resolveDatabaseImportFlowTotalSteps(bundle);
         updateDatabaseImportTask(
                 backSqlTask,
-                bootstrapConnect,
+                preDdlConnect,
                 database.getName(),
                 formatDatabaseImportFlowStep(
                         database.getName(),
@@ -329,15 +337,13 @@ public class DatabaseImportHandler {
                         "导入DDL")
         );
         affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
-                new Connect(bootstrapConnect),
+                new Connect(preDdlConnect),
                 bundle.preDdlFile,
                 backSqlTask
         );
         backSqlTask.setConnection(null);
         backSqlTask.setStmt(null);
 
-        Connect databaseConnect = new Connect(baseConnect);
-        TreeObjectCrudHandler.applyDatabaseConnectionProps(databaseConnect, database, database.getName());
         affectedRows += importDatabaseDataFilesParallel(
                 databaseConnect,
                 database,
@@ -761,11 +767,6 @@ public class DatabaseImportHandler {
         if (databaseLevelImport) {
             File createDatabaseFile = new File(dir, "00_create_database.sql");
             String createSql = createDatabaseFile.isFile() ? readBundleScript(createDatabaseFile) : "";
-            String databaseName = parseBundleDatabaseName(createSql, dir);
-            if (databaseName.isBlank()) {
-                throw new IOException(I18n.t("metadata.import_ddl_data.error.database_name", "无法识别导入数据库名：%s")
-                        .formatted(dir.getAbsolutePath()));
-            }
 
             List<SchemaImportPart> schemaParts = new ArrayList<>();
             File[] children = dir.listFiles(File::isDirectory);
@@ -790,23 +791,26 @@ public class DatabaseImportHandler {
                             schemaDir.getName(), schemaDir, pre, post, dataFiles));
                 }
             }
-            if (schemaParts.isEmpty()) {
-                throw new IOException(I18n.t(
-                        "metadata.import_ddl_data.error.schema_missing",
-                        "导入目录中未找到可导入的模式文件夹（每个模式需要 01_pre_data.sql）：%s")
-                        .formatted(dir.getAbsolutePath()));
+            if (!schemaParts.isEmpty()) {
+                String databaseName = parseBundleDatabaseName(createSql, dir);
+                if (databaseName.isBlank()) {
+                    throw new IOException(I18n.t("metadata.import_ddl_data.error.database_name", "无法识别导入数据库名：%s")
+                            .formatted(dir.getAbsolutePath()));
+                }
+                return new DatabaseImportBundle(
+                        dir,
+                        null,
+                        null,
+                        createDatabaseFile.isFile() ? createDatabaseFile : null,
+                        schemaParts,
+                        databaseName,
+                        parseBundleDbLocale(createSql),
+                        parseBundleDbLog(createSql),
+                        List.of()
+                );
             }
-            return new DatabaseImportBundle(
-                    dir,
-                    null,
-                    null,
-                    createDatabaseFile.isFile() ? createDatabaseFile : null,
-                    schemaParts,
-                    databaseName,
-                    parseBundleDbLocale(createSql),
-                    parseBundleDbLog(createSql),
-                    List.of()
-            );
+            // No schema subfolders: the chosen directory is a flat schema export.
+            // Fall through to the legacy single-script layout below.
         }
 
         File preDdlFile = findBundleSqlFile(dir, "01_pre_data.sql", "_01_pre_data.sql");

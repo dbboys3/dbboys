@@ -2905,7 +2905,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         return checkInfoUniqueList;
     }
 
-    private String getIndexCols(Connection connection, String idxColsString, ArrayList<ColumnsInfo> columnsInfoList, String sqlmode) throws SQLException {
+    String getIndexCols(Connection connection, String idxColsString, ArrayList<ColumnsInfo> columnsInfoList, int tableId, String sqlmode) throws SQLException {
         // idxColsString: <-234>(1, '2') [1], -3 [1]
         // 索引字段（函数索引字段）以，为分隔符
         // 示例中：<-234>(1, '2', '4') [1] 表示 函数号-234（内置函数），对应的字段是1，-(负值，如有)表示desc排序，'2','4'用于多值参数的函数，[1] 是读取方式（默认该值）；-3表示第三个字段desc排序。
@@ -2944,7 +2944,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 sortby = (currcolno<0)?" DESC,":",";
                 int colno = Math.abs(currcolno);
                 currcolname = columnsInfoList.stream()
-                        .filter(c -> c.getColNo() == colno)
+                        .filter(c -> c.getTabId() == tableId && c.getColNo() == colno)
                         .map(ColumnsInfo::getColName)
                         .findFirst()
                         .orElse("");
@@ -2960,7 +2960,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 sortby = (currcolno<0)?" DESC,":",";
                 int colno = Math.abs(currcolno);
                 currcolname = columnsInfoList.stream()
-                        .filter(c -> c.getColNo() == colno)
+                        .filter(c -> c.getTabId() == tableId && c.getColNo() == colno)
                         .map(ColumnsInfo::getColName)
                         .findFirst()
                         .orElse("");
@@ -3000,7 +3000,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 primaryKeyInfo.setConstrType(resultSet.getString("constrtype"));
                 // 这里需要将序号转换为列名。
                 String sqlmode = getTableSqlModeByFlags(resultSet.getInt("flags"));
-                primaryKeyInfo.setIdxCols(getIndexCols(connection, resultSet.getString("idxcols"), columnsInfoList, sqlmode));
+                primaryKeyInfo.setIdxCols(getIndexCols(connection, resultSet.getString("idxcols"), columnsInfoList, resultSet.getInt("tabid"), sqlmode));
                 primaryKeyInfoList.add(primaryKeyInfo);
             }
         }
