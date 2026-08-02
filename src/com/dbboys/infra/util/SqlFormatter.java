@@ -25,7 +25,7 @@ public class SqlFormatter {
     private static final Pattern FORMAT_OPERATOR_SPACING_PATTERN = Pattern.compile("\\s*([=<>+*/-])\\s*");
     private static final Pattern FORMAT_OPEN_PAREN_SPACING_PATTERN = Pattern.compile("(\\()\\s+");
     private static final Pattern FORMAT_CLOSE_PAREN_SPACING_PATTERN = Pattern.compile("\\s+(\\))");
-    private static final Pattern FORMAT_DOUBLE_OPERATOR_PATTERN = Pattern.compile("([=<>+*/-]) ([=<>+*/-])");
+    private static final Pattern FORMAT_DOUBLE_OPERATOR_PATTERN = Pattern.compile("([=<>+*/-]) ([=<>+*/-])(?![\\d.])");
     private static final Pattern FORMAT_COMMA_SPACING_PATTERN = Pattern.compile("\\s*,\\s*");
     private static final Pattern FORMAT_COMMENT_PLACEHOLDER_PATTERN = Pattern.compile("(?i)(__PLACEHOLDER_COMMENT_[0-9]+__)\\n?\\s*");
     private static final Pattern FORMAT_CLAUSE_BREAK_PATTERN = Pattern.compile(
@@ -210,11 +210,36 @@ public class SqlFormatter {
 
     private static String normalizeFormatStatement(String sql) {
         String normalizedSql = FORMAT_COMPACT_SPACES_PATTERN.matcher(sql.trim()).replaceAll(" ");
-        normalizedSql = FORMAT_OPERATOR_SPACING_PATTERN.matcher(normalizedSql).replaceAll(" $1 ");
+        normalizedSql = spaceOperators(normalizedSql);
         normalizedSql = normalizedSql.replaceAll("\\s+", " ").trim();
         normalizedSql = FORMAT_OPEN_PAREN_SPACING_PATTERN.matcher(normalizedSql).replaceAll("$1");
         normalizedSql = FORMAT_CLOSE_PAREN_SPACING_PATTERN.matcher(normalizedSql).replaceAll("$1");
         return FORMAT_DOUBLE_OPERATOR_PATTERN.matcher(normalizedSql).replaceAll("$1$2");
+    }
+
+    /**
+     * Puts spaces around binary operators while leaving unary plus/minus signs
+     * attached to their numeric literal (e.g. {@code a = -1} must not become
+     * {@code a = - 1}).
+     */
+    private static String spaceOperators(String sql) {
+        Matcher matcher = FORMAT_OPERATOR_SPACING_PATTERN.matcher(sql);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String op = matcher.group(1);
+            int start = matcher.start();
+            char previous = start > 0 ? sql.charAt(start - 1) : '\0';
+            int end = matcher.end();
+            boolean unarySign = ("+".equals(op) || "-".equals(op))
+                    && (start == 0 || previous == ' ' || previous == '\t' || previous == '('
+                        || previous == ',' || previous == '=' || previous == '<' || previous == '>'
+                        || previous == '+' || previous == '-' || previous == '*' || previous == '/')
+                    && end < sql.length()
+                    && (Character.isDigit(sql.charAt(end)) || sql.charAt(end) == '.');
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(unarySign ? op : " " + op + " "));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     private static boolean shouldFormatStatement(String sql) {
