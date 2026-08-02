@@ -409,6 +409,7 @@ public class SqlParserUtil {
         boolean inLineComment = false;
         boolean inBlockComment = false;
         boolean inBrackets = false;
+        int parenDepth = 0;
         String currentDelimiter = ";";
         int segmentStart = 0;
 
@@ -533,8 +534,21 @@ public class SqlParserUtil {
                 }
             }
 
+            // Track parenthesis depth so semicolons inside a parenthesized
+            // statement list (e.g. Informix trigger action lists) do not split
+            // the enclosing statement.
+            if (!inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+                    && !inLineComment && !inBlockComment && !inBrackets) {
+                if (current == '(') {
+                    parenDepth++;
+                } else if (current == ')' && parenDepth > 0) {
+                    parenDepth--;
+                }
+            }
+
             // Segment boundary: end of input or delimiter match
-            boolean atDelimiter = !inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
+            boolean atDelimiter = parenDepth == 0
+                    && !inSingleQuote && !inDoubleQuote && !inBacktickQuote && !inDollarQuote
                     && !inLineComment && !inBlockComment && !inBrackets
                     && matchesCurrentDelimiter(sql, i, currentDelimiter);
 
@@ -638,7 +652,16 @@ public class SqlParserUtil {
 
     private static boolean shouldKeepRoutineTerminatorWithPreviousSegment(String sql, int nextIndex) {
         int index = skipIgnorableSql(nextIndex, sql);
-        if (index >= sql.length() || !startsWithIgnoreCase(sql, index, "end")) {
+        if (index >= sql.length()) {
+            return false;
+        }
+        // A package body continues when the next member subprogram starts
+        // immediately after the current member's END;.
+        if (startsWithIgnoreCase(sql, index, "procedure")
+                || startsWithIgnoreCase(sql, index, "function")) {
+            return true;
+        }
+        if (!startsWithIgnoreCase(sql, index, "end")) {
             return false;
         }
         index = skipWhitespace(sql, index + 3);
@@ -1000,7 +1023,9 @@ public class SqlParserUtil {
         sql = protectPattern(sql, DOUBLE_STRING_PATTERN, placeholders, index);
         sql = protectPattern(sql, FANYINHAO_STRING_PATTERN, placeholders, index);
         sql = protectPattern(sql, COMMENT_PATTERN, placeholders, index);
-        sql=sql.toLowerCase().replaceAll("__placeholder_","__PLACEHOLDER_");
+        sql=sql.toLowerCase()
+                .replaceAll("__placeholder_comment_", "__PLACEHOLDER_COMMENT_")
+                .replaceAll("__placeholder_", "__PLACEHOLDER_");
         //恢复注释和字符串
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             sql = sql.replace(entry.getKey(), entry.getValue());

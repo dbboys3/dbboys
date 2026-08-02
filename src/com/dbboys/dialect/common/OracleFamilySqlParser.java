@@ -70,7 +70,7 @@ public abstract class OracleFamilySqlParser extends CommonSqlParser {
         return "(?i)\\bend\\s+(procedure|function)\\s*;?"
                 + "|(?i)\\bend\\s*;\\s*/"
                 + "|(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$.]*)\\s*/"
-                + "|(?m)^\\s*/\\s*$";
+                + "|(?m:^\\s*/\\s*$)";
     }
 
     @Override
@@ -141,13 +141,15 @@ public abstract class OracleFamilySqlParser extends CommonSqlParser {
         if ("function".equals(routineType)) {
             return remainder.startsWith("return")
                     || remainder.startsWith("as")
-                    || remainder.startsWith("is");
+                    || remainder.startsWith("is")
+                    || remainder.startsWith("authid");
         }
 
         return remainder.startsWith("as")
                 || remainder.startsWith("is")
                 || remainder.startsWith("begin")
-                || remainder.startsWith("define");
+                || remainder.startsWith("define")
+                || remainder.startsWith("authid");
     }
 
     @Override

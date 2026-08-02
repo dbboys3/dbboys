@@ -1,5 +1,6 @@
 # ---- Build output (build.bat / build.sh) ----
 build/
+test/
 bin/
 *.zip
 lib/lib_nonmodular/dbboys.jar

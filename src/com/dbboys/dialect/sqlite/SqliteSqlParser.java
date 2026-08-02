@@ -20,9 +20,13 @@ public class SqliteSqlParser extends CommonSqlParser {
 
     @Override
     protected boolean isMultiLineSqlStart(String sql) {
-        // SQLite has no multi-line routines in the traditional sense;
-        // CREATE TRIGGER has BEGIN...END but is minimal
-        return false;
+        // CREATE TRIGGER uses a BEGIN ... END block whose body can contain
+        // multiple semicolon-separated statements.
+        String normalized = stripCommentsOnly(sql).trim();
+        return !normalized.isEmpty()
+                && java.util.regex.Pattern.compile(
+                        "(?is)^\\s*create\\s+(?:temp\\s+|temporary\\s+)?(?:or\\s+replace\\s+)?trigger\\b"
+                ).matcher(normalized).find();
     }
 
     @Override

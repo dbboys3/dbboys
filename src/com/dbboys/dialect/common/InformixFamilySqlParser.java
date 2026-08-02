@@ -20,7 +20,8 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
         return "(?i)\\bend\\s+(procedure|function)\\s*;?"
                 + "|" + "(?i)\\bend\\s*;\\s*/"
                 + "|" + "(?i)\\bend\\b\\s+([a-zA-Z_][a-zA-Z0-9_$#\".]*)\\s*/"
-                + "|" + "(?m)^\\s*/\\s*$";
+                + "|" + "(?m:^\\s*/\\s*$)"
+                + "|" + "(?i)\\bLANGUAGE\\s+(C|JAVA)\\s*;";
     }
 
     @Override
@@ -32,7 +33,7 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
 
         // CREATE [OR REPLACE] [FUNCTION|PROCEDURE]
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?(?<TYPE>function|procedure)\\b"
+                "(?is)^\\s*create\\s+(?:dba\\s+)?(?:or\\s+replace\\s+)?(?<TYPE>function|procedure)\\b"
         ).matcher(normalized);
         if (!matcher.find()) {
             return false;
@@ -67,7 +68,7 @@ public abstract class InformixFamilySqlParser extends CommonSqlParser {
     protected String extractBlockName(String normalizedSql) {
         String normalized = stripCommentsOnly(normalizedSql).trim();
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                "(?is)^\\s*create\\s+(?:or\\s+replace\\s+)?"
+                "(?is)^\\s*create\\s+(?:dba\\s+)?(?:or\\s+replace\\s+)?"
                         + "(?<TYPE>procedure|function)\\b"
         ).matcher(normalized);
         if (matcher.find()) {

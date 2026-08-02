@@ -89,13 +89,15 @@ public abstract class PostgreSqlFamilySqlParser extends CommonSqlParser {
                     || remainder.startsWith("returns")
                     || remainder.startsWith("returning")
                     || remainder.startsWith("as")
-                    || remainder.startsWith("is");
+                    || remainder.startsWith("is")
+                    || remainder.startsWith("language");
         }
 
         return remainder.startsWith("as")
                 || remainder.startsWith("is")
                 || remainder.startsWith("begin")
-                || remainder.startsWith("define");
+                || remainder.startsWith("define")
+                || remainder.startsWith("language");
     }
 
     @Override

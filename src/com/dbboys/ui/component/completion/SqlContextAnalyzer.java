@@ -61,7 +61,7 @@ public class SqlContextAnalyzer {
         String prefix = fullSql.substring(scanStart, caretPos);
 
         BackwardScanResult scan = scanBackwardForContext(prefix);
-        if (scan.disabled) {
+        if (scan.disabled || endsInsideProtectedRegion(prefix)) {
             return CompletionContext.disabled().setCaretPosition(caretPos).build();
         }
 
@@ -106,6 +106,71 @@ public class SqlContextAnalyzer {
     }
 
     // ---- backward scan ----
+
+    /**
+     * Forward scan that determines whether the caret sits inside a string
+     * literal or comment. The backward scan alone cannot detect an open string
+     * or comment when the partial word immediately precedes the caret.
+     */
+    private static boolean endsInsideProtectedRegion(String text) {
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inBacktick = false;
+        boolean inLineComment = false;
+        boolean inBlockComment = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            char next = (i + 1 < text.length()) ? text.charAt(i + 1) : '\0';
+
+            if (!inSingleQuote && !inDoubleQuote && !inBacktick
+                    && !inLineComment && !inBlockComment) {
+                if (c == '-' && next == '-') {
+                    inLineComment = true;
+                    i++;
+                } else if (c == '/' && next == '*') {
+                    inBlockComment = true;
+                    i++;
+                } else if (c == '{') {
+                    inBlockComment = true;
+                } else if (c == '\'') {
+                    inSingleQuote = true;
+                } else if (c == '"') {
+                    inDoubleQuote = true;
+                } else if (c == '`') {
+                    inBacktick = true;
+                }
+            } else if (inLineComment) {
+                if (c == '\n' || c == '\r') {
+                    inLineComment = false;
+                }
+            } else if (inBlockComment) {
+                if (c == '}') {
+                    inBlockComment = false;
+                } else if (c == '*' && next == '/') {
+                    inBlockComment = false;
+                    i++;
+                }
+            } else if (inSingleQuote) {
+                if (c == '\'') {
+                    if (next == '\'') {
+                        i++; // escaped quote, stay inside the literal
+                    } else {
+                        inSingleQuote = false;
+                    }
+                }
+            } else if (inDoubleQuote) {
+                if (c == '"') {
+                    inDoubleQuote = false;
+                }
+            } else if (inBacktick) {
+                if (c == '`') {
+                    inBacktick = false;
+                }
+            }
+        }
+        return inSingleQuote || inDoubleQuote || inBacktick || inLineComment || inBlockComment;
+    }
 
     private BackwardScanResult scanBackwardForContext(String prefix) {
         boolean inSingleQuote = false;
