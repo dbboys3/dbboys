@@ -59,7 +59,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             (
             SELECT
             trim(st.dbsname) dbname,
-            replace(format_units(sum(sin.ti_nptotal*sd.pagesize),'b'),' ','') allocedsize
+            format_units(sum(sin.ti_nptotal*sd.pagesize),'b') allocedsize
             from
             sysmaster:systabnames st JOIN sysmaster:systabinfo sin ON  st.partnum=sin.ti_partnum
             JOIN sysmaster:sysdbspaces sd ON sd.dbsnum = trunc(st.partnum/1048576)
@@ -89,7 +89,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             (
             SELECT
             trim(st.dbsname) dbname,
-            replace(format_units(sum(sin.ti_nptotal*sd.pagesize),'b'),' ','') allocedsize
+            format_units(sum(sin.ti_nptotal*sd.pagesize),'b') allocedsize
             from
             sysmaster.systabnames st JOIN sysmaster.systabinfo sin ON  st.partnum=sin.ti_partnum
             JOIN sysmaster.sysdbspaces sd ON sd.dbsnum = trunc(st.partnum/1048576)
@@ -117,7 +117,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             (
             SELECT
             trim(st.dbsname) dbname,
-            replace(format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b'),' ','') allocedsize
+            format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b') allocedsize
             from
             sysmaster:systabnames st JOIN sysmaster:systabinfo sin ON  st.partnum=sin.ti_partnum
             where st.dbsname=?
@@ -163,7 +163,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_USER_TABLES_SIZE = """
-            select replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')
+            select format_units(sum(ti_nptotal*ti_pagesize),'b')
             from systables s left join sysmaster:systabnames n on s.tabname=trim(n.tabname)
             left join sysmaster:systabinfo i on i.ti_partnum=n.partnum
             where tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION')  and n.dbsname=?
@@ -174,7 +174,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_SYSTEM_TABLES_SIZE = """
-            select replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')
+            select format_units(sum(ti_nptotal*ti_pagesize),'b')
             from systables s left join sysmaster:systabnames n on s.tabname=trim(n.tabname)
             left join sysmaster:systabinfo i on i.ti_partnum=n.partnum
             where tabid<=(SELECT tabid FROM systables WHERE tabname = ' VERSION') and n.dbsname=?
@@ -183,8 +183,8 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
     private static final String SQL_SYSTEM_TABLES = """
             select %s,dt.tabname,max(dt.owner),max(to_char(dt.created,'YYYY-MM-DD')),max(case when dt.tabtype=='V' then 'view' else 'table' end ),max(dt.locklevel) lock_level,
             max(case when dt.partnum==0 then 1 else 0 end) isfragment,sum(ti_nextns) extents,
-            sum(sin.ti_nrows) nrows,max(sin.ti_pagesize) pagesize, sum(sin.ti_nptotal) nptotal, nvl(replace(format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b'),' ','') ,'0.000B')  total_size,
-            sum(sin.ti_npdata) npused,nvl(replace(format_units(sum(sin.ti_npdata*sin.ti_pagesize),'b'),' ',''),'0.000B') used_size
+            sum(sin.ti_nrows) nrows,max(sin.ti_pagesize) pagesize, sum(sin.ti_nptotal) nptotal, nvl(format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b') ,'0.000B')  total_size,
+            sum(sin.ti_npdata) npused,nvl(format_units(sum(sin.ti_npdata*sin.ti_pagesize),'b'),'0.000B') used_size
             from systables dt left join sysmaster:systabnames st
             on trim(dt.tabname)=trim(st.tabname) and st.dbsname=?
             left join sysmaster:systabinfo sin on st.partnum=sin.ti_partnum
@@ -196,8 +196,8 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
     private static final String SQL_USER_TABLES = """
             select %s,tabname,max(owner),max(createtime),max(tabtype),max(locklevel),max(isfragment),
             sum(ti_nextns) extents,
-            sum(ti_nrows) nrows,max(ti_pagesize) pagesize, sum(ti_nptotal) nptotal,  replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')  total_size,
-            sum(ti_npdata) npused,replace(format_units(sum(ti_npdata*ti_pagesize),'b'),' ','')
+            sum(ti_nrows) nrows,max(ti_pagesize) pagesize, sum(ti_nptotal) nptotal,  format_units(sum(ti_nptotal*ti_pagesize),'b')  total_size,
+            sum(ti_npdata) npused,format_units(sum(ti_npdata*ti_pagesize),'b')
              from
             (select tabname,owner,to_char(created,'YYYY-MM-DD') createtime,
             case when bitand(t.flags,16)=16 then 'raw' when bitand(t.flags,32)=32 then 'external' else 'standard' end tabtype,
@@ -215,8 +215,8 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
     private static final String SQL_TABLE_DETAIL = """
             select %s,max(tabname),max(owner),max(createtime),max(tabtype),max(locklevel),max(isfragment),
             sum(ti_nextns) extents,
-            sum(ti_nrows) nrows,max(ti_pagesize) pagesize, sum(ti_nptotal) nptotal,  replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')  total_size,
-            sum(ti_npdata) npused,replace(format_units(sum(ti_npdata*ti_pagesize),'b'),' ','')
+            sum(ti_nrows) nrows,max(ti_pagesize) pagesize, sum(ti_nptotal) nptotal,  format_units(sum(ti_nptotal*ti_pagesize),'b')  total_size,
+            sum(ti_npdata) npused,format_units(sum(ti_npdata*ti_pagesize),'b')
              from
             (select tabname,owner,to_char(created,'YYYY-MM-DD') createtime,
             case when bitand(t.flags,16)=16 then 'raw' when bitand(t.flags,32)=32 then 'external' else 'standard' end tabtype,
@@ -251,7 +251,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             i.nunique,
             sin.ti_pagesize pagesize,
             sum(sin.ti_nptotal) nptotal,
-            replace(format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b'),' ','')  total_size,
+            format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b')  total_size,
             max(o.state)
             from
             systables t join sysindexes i
@@ -269,7 +269,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_INDEX_SIZE = """
-            select replace(format_units(sum(ti_nptotal*ti_pagesize),'b'),' ','')
+            select format_units(sum(ti_nptotal*ti_pagesize),'b')
             from sysindexes s left join sysmaster:systabnames n on trim(s.idxname)=trim(n.tabname)
             left join sysmaster:systabinfo i on i.ti_partnum=n.partnum
             where s.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and %s != ' '
@@ -298,7 +298,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             i.nunique,
             sin.ti_pagesize pagesize,
             sum(sin.ti_nptotal) nptotal,
-            replace(format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b'),' ','')  total_size,
+            format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b')  total_size,
             max(o.state)
             from
             systables t join sysindexes i
