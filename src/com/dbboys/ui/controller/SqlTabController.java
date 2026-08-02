@@ -7,7 +7,13 @@ import com.dbboys.app.AppContext;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.app.AppState;
 import com.dbboys.ui.component.*;
+import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.DefaultSqlParser;
 import com.dbboys.core.ConnectionService;
+import com.dbboys.core.SqlParser;
+import com.dbboys.dialect.gbase8s.Gbase8sSqlParser;
+import com.dbboys.dialect.mysql.MysqlSqlParser;
+import com.dbboys.dialect.oracle.OracleSqlParser;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.service.SqlexeService;
 import com.dbboys.infra.util.*;
@@ -450,10 +456,14 @@ public class SqlTabController {
 
         // Wire autocomplete context — keep it in sync with connection/database selection
         sqlEditCodeArea.setCompletionContext(sqlConnect, sqlDbChoiceBox.getValue());
+        sqlEditCodeArea.setExecuteTargetParser(resolveSqlParserFor(sqlConnect));
         sqlDbChoiceBox.valueProperty().addListener((obs, oldVal, newVal) ->
                 sqlEditCodeArea.setCompletionContext(sqlConnect, newVal));
         sqlConnectChoiceBox.valueProperty().addListener((obs, oldVal, newVal) ->
-                sqlEditCodeArea.setCompletionContext(newVal, sqlDbChoiceBox.getValue()));
+        {
+            sqlEditCodeArea.setCompletionContext(newVal, sqlDbChoiceBox.getValue());
+            sqlEditCodeArea.setExecuteTargetParser(resolveSqlParserFor(newVal));
+        });
 
         sqlRecordButton.setOnAction(envent -> {
             PopupWindowUtil.openSqlHistoryPopupWindow(sqlConnect.getId());
@@ -478,6 +488,7 @@ public class SqlTabController {
 
         sqlSqlModeChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (!sqlTask.isRunning() && newValue != null) {
+                sqlEditCodeArea.setExecuteTargetParser(resolveSqlParserFor(sqlConnect, newValue));
                 sqlTask = executionHelper.createSqlModeTask(sqlConnect, newValue);
                 AppExecutor.runTask(sqlTask);
             }
@@ -906,6 +917,29 @@ public class SqlTabController {
                     + "Return only the converted SQL, no explanations or markdown.\n\n" + sqlText;
             default -> sqlText;
         };
+    }
+
+    private SqlParser resolveSqlParserFor(Connect connect) {
+        if (connect == null) {
+            return new DefaultSqlParser();
+        }
+        try {
+            return DatabasePlatformResolver.getInstance().requirePlatform(connect).parser();
+        } catch (Exception e) {
+            return new DefaultSqlParser();
+        }
+    }
+
+    private SqlParser resolveSqlParserFor(Connect connect, String sqlmode) {
+        SqlParser parser = resolveSqlParserFor(connect);
+        if (parser instanceof Gbase8sSqlParser && sqlmode != null) {
+            return switch (sqlmode) {
+                case "sqlmode=oracle" -> new OracleSqlParser();
+                case "sqlmode=mysql" -> new MysqlSqlParser();
+                default -> parser;
+            };
+        }
+        return parser;
     }
 
 

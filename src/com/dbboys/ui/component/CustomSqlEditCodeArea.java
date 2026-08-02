@@ -550,10 +550,23 @@ public class CustomSqlEditCodeArea extends CodeArea {
         return selectCurrentStatementAtCaret();
     }
 
-    private static final SqlParser EDITOR_PARSER = new DefaultSqlParser();
+    private SqlParser executeTargetParser = new DefaultSqlParser();
+
+    /**
+     * Sets the dialect-aware parser used to locate the statement at the caret
+     * before execution. The default parser cannot recognize multi-line routines
+     * such as Oracle PL/SQL blocks, so callers should keep this in sync with the
+     * active connection.
+     */
+    public void setExecuteTargetParser(SqlParser parser) {
+        if (parser != null) {
+            this.executeTargetParser = parser;
+        }
+    }
 
     private boolean selectCurrentStatementAtCaret() {
-        SqlParserUtil.StatementRange range = SqlParserUtil.findStatementRangeAtCaret(getText(), getCaretPosition(), EDITOR_PARSER);
+        SqlParserUtil.StatementRange range = SqlParserUtil.findStatementRangeAtCaret(
+                getText(), getCaretPosition(), executeTargetParser);
         if (range == null) {
             return false;
         }
