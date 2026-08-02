@@ -261,7 +261,8 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
                 ic.relname AS indexname,
                 pg_catalog.pg_get_indexdef(i.indexrelid) AS indexdef,
                 i.indisunique AS is_unique,
-                i.indisprimary AS is_primary
+                i.indisprimary AS is_primary,
+                pg_catalog.pg_size_pretty(pg_catalog.pg_relation_size(i.indexrelid)) AS index_size
             FROM pg_catalog.pg_index i
             JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
             JOIN pg_catalog.pg_class ic ON ic.oid = i.indexrelid
@@ -604,6 +605,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             index.setIdxtype(rs.getBoolean("is_primary") ? "PRIMARY"
                     : rs.getBoolean("is_unique") ? "UNIQUE" : "NONUNIQUE");
             index.setIsdisabled(false);
+            index.setTotalsize(rs.getString("index_size"));
             return index;
         });
     }
@@ -633,6 +635,7 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
             index.setTabname(rs.getString("tablename"));
             index.setIdxtype(rs.getBoolean("is_primary") ? "PRIMARY"
                     : rs.getBoolean("is_unique") ? "UNIQUE" : "NONUNIQUE");
+            index.setTotalsize(rs.getString("index_size"));
             return index;
         });
     }

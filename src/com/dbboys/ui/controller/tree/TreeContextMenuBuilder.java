@@ -1685,7 +1685,7 @@ public class TreeContextMenuBuilder {
                 //索引
                 else if(selectedItem.getValue() instanceof Index) {
                     DatabasePlatform indexPlatform = TreeNavigator.resolvePlatform(selectedItem);
-                    boolean canToggleIndex = indexPlatform == null || indexPlatform.supportsToggleIndex();
+                    boolean canToggleIndex = indexPlatform != null && indexPlatform.supportsToggleIndex();
                     if (canToggleIndex) {
                         treeview_menu.getItems().add(enableItem);
                         treeview_menu.getItems().add(disableItem);
