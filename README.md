@@ -33,11 +33,11 @@
 
 ## 📸 界面预览
 
-<a href="docs/images/img1.png"><img src="docs/images/img1.png" width="400" alt="主界面"/></a>
-<a href="docs/images/img2.png"><img src="docs/images/img2.png" width="400" alt="容量管理"/></a>
-<a href="docs/images/img3.png"><img src="docs/images/img3.png" width="400" alt="一键巡检"/></a>
-<a href="docs/images/img4.png"><img src="docs/images/img4.png" width="400" alt="ssh连接"/></a>
-<a href="docs/images/img5.png"><img src="docs/images/img5.png" width="400" alt="markdown管理"/></a>
+<a href="docs/DBBOYS/images/img1.png"><img src="docs/DBBOYS/images/img1.png" width="400" alt="主界面"/></a>
+<a href="docs/DBBOYS/images/img2.png"><img src="docs/DBBOYS/images/img2.png" width="400" alt="容量管理"/></a>
+<a href="docs/DBBOYS/images/img3.png"><img src="docs/DBBOYS/images/img3.png" width="400" alt="一键巡检"/></a>
+<a href="docs/DBBOYS/images/img4.png"><img src="docs/DBBOYS/images/img4.png" width="400" alt="ssh连接"/></a>
+<a href="docs/DBBOYS/images/img5.png"><img src="docs/DBBOYS/images/img5.png" width="400" alt="markdown管理"/></a>
 
 ---
 

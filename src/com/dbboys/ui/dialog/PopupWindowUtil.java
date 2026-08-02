@@ -784,6 +784,13 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_log",
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection")),
+                new CompatibilityRow("POSTGRESQL", "14", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.metadata_list",
+                        "main.compatibility.feature.metadata_detail",
+                        "main.compatibility.feature.metadata_change",
+                        "main.compatibility.feature.execute_sql",
+                        "main.compatibility.feature.execution_plan",
+                        "main.compatibility.feature.import_export")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeaturesByKey(
                         "main.compatibility.feature.install",
                         "main.compatibility.feature.uninstall",
@@ -840,6 +847,8 @@ public class PopupWindowUtil {
                         "安装", "卸载",
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
                         "实例信息", "空间管理", "日志管理", "参数管理", "一键巡检")),
+                new CompatibilityRow("POSTGRESQL", "14", compatibilityFeatures(
+                        "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeatures(
                         "安装", "卸载",
                         "元数据列表", "元数据详细信息", "元数据变更", "执行SQL", "执行计划", "导入导出",
