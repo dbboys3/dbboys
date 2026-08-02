@@ -53,7 +53,9 @@ public class Gbase8sMetadataRepository extends InformixFamilyMetadataRepository 
 
     @Override
     public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
-        return Gbase8sDdlRepository.getColInfo(conn, tableName);
+        ArrayList<ColumnsInfo> columns = Gbase8sDdlRepository.getColInfo(conn, tableName);
+        applyPrimaryKeyFlags(conn, tableName, columns);
+        return columns;
     }
 
     @Override

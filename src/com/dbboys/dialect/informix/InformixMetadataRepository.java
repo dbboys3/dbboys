@@ -30,6 +30,8 @@ public class InformixMetadataRepository extends InformixFamilyMetadataRepository
 
     @Override
     public ArrayList<ColumnsInfo> getColumns(Connection conn, String tableName) throws SQLException {
-        return InformixDdlRepository.getColInfo(conn, tableName);
+        ArrayList<ColumnsInfo> columns = InformixDdlRepository.getColInfo(conn, tableName);
+        applyPrimaryKeyFlags(conn, tableName, columns);
+        return columns;
     }
 }

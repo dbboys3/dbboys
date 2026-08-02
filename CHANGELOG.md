@@ -2,6 +2,8 @@
 新增postgresql支持  
 修复sftp无法删除非空文件夹  
 修复arm sz传输大文件卡死失败  
+修复gbase8s/informix双击表没有正确勾选主键  
+修复gbase8s导出库主键错误  
 优化sql解析下放到方言，根据sqlmode或dbtype解析  
 优化方言家族化合并重复代码  
 优化元数据列表模型支持两层结构、三层结构  

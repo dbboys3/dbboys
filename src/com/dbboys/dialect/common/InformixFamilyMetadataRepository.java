@@ -9,7 +9,9 @@ import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Shared metadata implementation for the Informix family of dialects (Informix, GBase 8s).
@@ -430,6 +432,25 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             }
         }
         return result;
+    }
+
+    /**
+     * Marks the primary-key columns on the given column metadata. The
+     * {@code colattr = 128} bit in syscolumns only means "NOT NULL by primary
+     * key", so the columns tab must use the same sysconstraints-based lookup as
+     * the DDL tab instead.
+     */
+    protected final void applyPrimaryKeyFlags(Connection conn, String tableName, ArrayList<ColumnsInfo> columns) throws SQLException {
+        if (columns == null || columns.isEmpty()) {
+            return;
+        }
+        Set<String> pkColumns = new HashSet<>();
+        for (String column : getPrimaryKeyColumns(conn, tableName)) {
+            pkColumns.add(normalizeIdentifier(column));
+        }
+        for (ColumnsInfo column : columns) {
+            column.setIsPK(pkColumns.contains(normalizeIdentifier(column.getColName())));
+        }
     }
 
     public List<User> getUsers(Connection conn) throws SQLException {
