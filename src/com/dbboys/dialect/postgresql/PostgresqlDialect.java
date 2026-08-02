@@ -537,6 +537,16 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public String gatherProcedureFolderSql(String schemaName) {
+        return null; // PostgreSQL has no procedure statistics
+    }
+
+    @Override
+    public String gatherProcedureSql(String schemaName, String procedureName) {
+        return null; // PostgreSQL has no procedure statistics
+    }
+
+    @Override
     public String truncateTableSql(String tableName) {
         return "TRUNCATE TABLE " + tableName + " CASCADE";
     }
