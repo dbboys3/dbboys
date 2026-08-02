@@ -19,7 +19,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,6 +56,8 @@ public class DatabaseImportHandler {
         private final File directory;
         private final File preDdlFile;
         private final File postDdlFile;
+        private final File createDatabaseFile;
+        private final List<SchemaImportPart> schemaParts;
         private final String databaseName;
         private final String dbLocale;
         private final String dbLog;
@@ -62,6 +66,8 @@ public class DatabaseImportHandler {
         private DatabaseImportBundle(File directory,
                                      File preDdlFile,
                                      File postDdlFile,
+                                     File createDatabaseFile,
+                                     List<SchemaImportPart> schemaParts,
                                      String databaseName,
                                      String dbLocale,
                                      String dbLog,
@@ -69,9 +75,31 @@ public class DatabaseImportHandler {
             this.directory = directory;
             this.preDdlFile = preDdlFile;
             this.postDdlFile = postDdlFile;
+            this.createDatabaseFile = createDatabaseFile;
+            this.schemaParts = schemaParts;
             this.databaseName = databaseName;
             this.dbLocale = dbLocale;
             this.dbLog = dbLog;
+            this.dataFiles = dataFiles;
+        }
+    }
+
+    private static final class SchemaImportPart {
+        private final String schemaName;
+        private final File directory;
+        private final File preDdlFile;
+        private final File postDdlFile;
+        private final List<File> dataFiles;
+
+        private SchemaImportPart(String schemaName,
+                                 File directory,
+                                 File preDdlFile,
+                                 File postDdlFile,
+                                 List<File> dataFiles) {
+            this.schemaName = schemaName;
+            this.directory = directory;
+            this.preDdlFile = preDdlFile;
+            this.postDdlFile = postDdlFile;
             this.dataFiles = dataFiles;
         }
     }
@@ -133,6 +161,8 @@ public class DatabaseImportHandler {
             return;
         }
 
+        boolean databaseLevelImport = isDatabaseLevelImport(selectedItem, metaConnect);
+
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle(I18n.t("metadata.import_ddl_data.dir.title", "选择数据库导出目录"));
         File desktopDir = new File(System.getProperty("user.home") + File.separator + "Desktop");
@@ -171,7 +201,7 @@ public class DatabaseImportHandler {
                 updateResult.setUpdateSql(importSummary);
                 updateResult.setStartTime(beginTime);
                 try {
-                    DatabaseImportBundle bundle = resolveDatabaseImportBundle(dir, baseConnect);
+                    DatabaseImportBundle bundle = resolveDatabaseImportBundle(dir, baseConnect, databaseLevelImport);
                     bundleRef.set(bundle);
                     backSqlTask.setDatabaseName(bundle.databaseName);
                     int flowTotalSteps = resolveDatabaseImportFlowTotalSteps(bundle);
@@ -183,7 +213,8 @@ public class DatabaseImportHandler {
                             backSqlTask,
                             I18n.t("metadata.import_ddl_data.progress.preparing", "准备中")
                     );
-                    int affectedRows = importDatabaseBundle(baseConnect, bundle, backSqlTask, runtime, parentDbName);
+                    int affectedRows = importDatabaseBundle(
+                            baseConnect, bundle, backSqlTask, runtime, parentDbName, databaseLevelImport);
                     long endMillis = System.currentTimeMillis();
                     updateResult.setAffectedRows(affectedRows);
                     updateResult.setElapsedTime(String.format("%.3f", (endMillis - beginMillis) / 1000.0) + " sec");
@@ -219,9 +250,20 @@ public class DatabaseImportHandler {
             DatabaseImportBundle bundle = bundleRef.get();
             String databaseName = bundle == null ? queuedDatabaseName : bundle.databaseName;
             String bundlePath = bundle == null ? dir.getAbsolutePath() : bundle.directory.getAbsolutePath();
-            selectedItem.getChildren().clear();
-            selectedItem.setExpanded(false);
-            selectedItem.setExpanded(true);
+            if (databaseLevelImport) {
+                // Full database bundle: the new database is created under the
+                // selected item's parent folder, so refresh that folder.
+                TreeItem<TreeData> parent = selectedItem.getParent();
+                if (parent != null) {
+                    parent.getChildren().clear();
+                    parent.setExpanded(false);
+                    parent.setExpanded(true);
+                }
+            } else {
+                selectedItem.getChildren().clear();
+                selectedItem.setExpanded(false);
+                selectedItem.setExpanded(true);
+            }
             NotificationUtil.showMainNotification(
                     I18n.t("metadata.import_ddl_data.notice.completed", "数据库\"%s\"导入完成：%s")
                             .formatted(databaseName, bundlePath)
@@ -238,9 +280,13 @@ public class DatabaseImportHandler {
                                             DatabaseImportBundle bundle,
                                             BackgroundSqlTask backSqlTask,
                                             DatabaseImportRuntime runtime,
-                                            String parentDbName) throws Exception {
+                                            String parentDbName,
+                                            boolean databaseLevelImport) throws Exception {
         if (baseConnect == null || bundle == null) {
             return 0;
+        }
+        if (databaseLevelImport) {
+            return importDatabaseSchemaBundle(baseConnect, bundle, backSqlTask, runtime);
         }
 
         // 三层模型（DATABASE_SCHEMA）：导入的是模式，用 Schema + parentDb 保留库名，避免把模式名当库名拼进 JDBC URL
@@ -322,6 +368,180 @@ public class DatabaseImportHandler {
             backSqlTask.setStmt(null);
         }
         return affectedRows;
+    }
+
+    /**
+     * DATABASE_SCHEMA database bundle import: optionally executes the create
+     * database script against the maintenance database, then imports every
+     * schema folder in order (DDL, data, post-DDL).
+     */
+    private static int importDatabaseSchemaBundle(Connect baseConnect,
+                                                  DatabaseImportBundle bundle,
+                                                  BackgroundSqlTask backSqlTask,
+                                                  DatabaseImportRuntime runtime) throws Exception {
+        Database db = new Database(bundle.databaseName);
+        db.setDbLocale(bundle.dbLocale);
+        db.setDbLog(bundle.dbLog);
+
+        int flowTotalSteps = resolveDatabaseImportFlowTotalSteps(bundle);
+        int step = 0;
+        int affectedRows = 0;
+
+        if (bundle.createDatabaseFile != null) {
+            Connect bootstrapConnect = new Connect(baseConnect);
+            applyImportBootstrapConnectionProps(bootstrapConnect);
+            step++;
+            updateDatabaseImportTask(
+                    backSqlTask,
+                    bootstrapConnect,
+                    db.getName(),
+                    formatDatabaseImportFlowStep(
+                            db.getName(),
+                            step,
+                            flowTotalSteps,
+                            "metadata.import_ddl_data.task.flow.phase_create_database",
+                            "创建数据库")
+            );
+            affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
+                    new Connect(bootstrapConnect),
+                    bundle.createDatabaseFile,
+                    backSqlTask
+            );
+            backSqlTask.setConnection(null);
+            backSqlTask.setStmt(null);
+        }
+
+        // PostgreSQL creates a default "public" schema. If the exported bundle
+        // contains a public schema, drop the default one first so the exported
+        // DDL can recreate it without a name conflict.
+        if (isPostgresqlImport(baseConnect) && containsSchemaPart(bundle.schemaParts, "public")) {
+            throwIfDatabaseImportCancelled(backSqlTask);
+            Connect dropConnect = new Connect(baseConnect);
+            dropConnect.setCatalog(bundle.databaseName);
+            dropConnect.setSessionCatalog("");
+            updateDatabaseImportTask(
+                    backSqlTask,
+                    dropConnect,
+                    db.getName(),
+                    formatDatabaseImportFlowStep(
+                            db.getName(),
+                            step + 1,
+                            flowTotalSteps,
+                            "metadata.import_ddl_data.task.flow.phase_drop_public_schema",
+                            "鍒犻櫎榛樿 public 妯″紡")
+            );
+            try (Connection conn = TreeViewUtil.connectionService.getConnectionWithSessionInit(dropConnect);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP SCHEMA IF EXISTS \"public\" CASCADE");
+            }
+            backSqlTask.setConnection(null);
+            backSqlTask.setStmt(null);
+        }
+
+        for (SchemaImportPart part : bundle.schemaParts) {
+            throwIfDatabaseImportCancelled(backSqlTask);
+            Schema schema = new Schema(part.schemaName);
+            schema.setParentDb(bundle.databaseName);
+            Connect schemaConnect = new Connect(baseConnect);
+            schemaConnect.setCatalog(bundle.databaseName);
+            schemaConnect.setSessionCatalog(part.schemaName);
+
+            step++;
+            updateDatabaseImportTask(
+                    backSqlTask,
+                    schemaConnect,
+                    schema.getName(),
+                    formatDatabaseImportFlowStep(
+                            schema.getName(),
+                            step,
+                            flowTotalSteps,
+                            "metadata.import_ddl_data.task.flow.phase_ddl",
+                            "导入DDL")
+            );
+            affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
+                    new Connect(schemaConnect),
+                    part.preDdlFile,
+                    backSqlTask
+            );
+            backSqlTask.setConnection(null);
+            backSqlTask.setStmt(null);
+
+            step++;
+            affectedRows += importDatabaseDataFilesParallel(
+                    schemaConnect,
+                    schema,
+                    part.dataFiles,
+                    backSqlTask,
+                    runtime,
+                    flowTotalSteps);
+
+            if (part.postDdlFile != null) {
+                throwIfDatabaseImportCancelled(backSqlTask);
+                step++;
+                updateDatabaseImportTask(
+                        backSqlTask,
+                        schemaConnect,
+                        schema.getName(),
+                        formatDatabaseImportFlowStep(
+                                schema.getName(),
+                                step,
+                                flowTotalSteps,
+                                "metadata.import_ddl_data.task.flow.phase_constraints",
+                                "导入约束/索引/触发器")
+                );
+                affectedRows += TreeViewUtil.databaseService.importSqlScriptSync(
+                        new Connect(schemaConnect),
+                        part.postDdlFile,
+                        backSqlTask
+                );
+                backSqlTask.setConnection(null);
+                backSqlTask.setStmt(null);
+            }
+        }
+        return affectedRows;
+    }
+
+    private static boolean isPostgresqlImport(Connect connect) {
+        if (connect == null) {
+            return false;
+        }
+        try {
+            var platform = TreeObjectCrudHandler.resolvePlatformResolver().getPlatform(connect.getDbtype());
+            return platform != null && "POSTGRESQL".equalsIgnoreCase(platform.getDbType());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean containsSchemaPart(List<SchemaImportPart> schemaParts, String schemaName) {
+        if (schemaParts == null || schemaName == null) {
+            return false;
+        }
+        for (SchemaImportPart part : schemaParts) {
+            if (schemaName.equals(part.schemaName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isDatabaseLevelImport(TreeItem<TreeData> selectedItem, Connect connect) {
+        if (selectedItem == null || selectedItem.getValue() == null) {
+            return false;
+        }
+        TreeData value = selectedItem.getValue();
+        boolean databaseSchemaModel;
+        try {
+            var platform = TreeObjectCrudHandler.resolvePlatformResolver().getPlatform(connect.getDbtype());
+            databaseSchemaModel = platform != null
+                    && platform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA;
+        } catch (Exception e) {
+            databaseSchemaModel = false;
+        }
+        if (value instanceof DatabaseFolder) {
+            return databaseSchemaModel;
+        }
+        return value instanceof Database && databaseSchemaModel;
     }
 
     private static void applyImportBootstrapConnectionProps(Connect connect) {
@@ -529,10 +749,64 @@ public class DatabaseImportHandler {
                 || Thread.currentThread().isInterrupted();
     }
 
-    private static DatabaseImportBundle resolveDatabaseImportBundle(File dir, Connect connect) throws Exception {
+    private static DatabaseImportBundle resolveDatabaseImportBundle(File dir,
+                                                                    Connect connect,
+                                                                    boolean databaseLevelImport) throws Exception {
         if (dir == null || !dir.exists() || !dir.isDirectory()) {
             throw new IOException(I18n.t("metadata.import_ddl_data.error.invalid_dir", "导入目录无效，请选择 .dbb 导出目录：%s")
                     .formatted(dir == null ? "" : dir.getAbsolutePath()));
+        }
+
+        SqlParser parser = TreeObjectCrudHandler.resolvePlatformResolver().requirePlatform(connect).parser();
+        if (databaseLevelImport) {
+            File createDatabaseFile = new File(dir, "00_create_database.sql");
+            String createSql = createDatabaseFile.isFile() ? readBundleScript(createDatabaseFile) : "";
+            String databaseName = parseBundleDatabaseName(createSql, dir);
+            if (databaseName.isBlank()) {
+                throw new IOException(I18n.t("metadata.import_ddl_data.error.database_name", "无法识别导入数据库名：%s")
+                        .formatted(dir.getAbsolutePath()));
+            }
+
+            List<SchemaImportPart> schemaParts = new ArrayList<>();
+            File[] children = dir.listFiles(File::isDirectory);
+            if (children != null) {
+                List<File> schemaDirs = new ArrayList<>(List.of(children));
+                schemaDirs.sort(Comparator.comparing(File::getName));
+                for (File schemaDir : schemaDirs) {
+                    File pre = findBundleSqlFile(schemaDir, "01_pre_data.sql", "_01_pre_data.sql");
+                    if (pre == null) {
+                        continue;
+                    }
+                    String schemaPre = readBundleScript(pre);
+                    if (parser.countExecutableStatements(schemaPre) <= 0) {
+                        continue;
+                    }
+                    File post = findBundleSqlFile(schemaDir, "02_post_data.sql", "_02_post_data.sql");
+                    if (post != null && parser.countExecutableStatements(readBundleScript(post)) <= 0) {
+                        post = null;
+                    }
+                    List<File> dataFiles = listBundleDataFiles(schemaDir, pre, post);
+                    schemaParts.add(new SchemaImportPart(
+                            schemaDir.getName(), schemaDir, pre, post, dataFiles));
+                }
+            }
+            if (schemaParts.isEmpty()) {
+                throw new IOException(I18n.t(
+                        "metadata.import_ddl_data.error.schema_missing",
+                        "导入目录中未找到可导入的模式文件夹（每个模式需要 01_pre_data.sql）：%s")
+                        .formatted(dir.getAbsolutePath()));
+            }
+            return new DatabaseImportBundle(
+                    dir,
+                    null,
+                    null,
+                    createDatabaseFile.isFile() ? createDatabaseFile : null,
+                    schemaParts,
+                    databaseName,
+                    parseBundleDbLocale(createSql),
+                    parseBundleDbLog(createSql),
+                    List.of()
+            );
         }
 
         File preDdlFile = findBundleSqlFile(dir, "01_pre_data.sql", "_01_pre_data.sql");
@@ -541,7 +815,6 @@ public class DatabaseImportHandler {
         }
 
         String preSql = readBundleScript(preDdlFile);
-        SqlParser parser = TreeObjectCrudHandler.resolvePlatformResolver().requirePlatform(connect).parser();
         if (parser.countExecutableStatements(preSql) <= 0) {
             throw new IOException(I18n.t("metadata.import_ddl_data.error.pre_invalid", "预处理脚本中没有可执行语句：%s")
                     .formatted(preDdlFile.getName()));
@@ -566,6 +839,8 @@ public class DatabaseImportHandler {
                 dir,
                 preDdlFile,
                 postDdlFile,
+                null,
+                List.of(),
                 databaseName,
                 parseBundleDbLocale(preSql),
                 parseBundleDbLog(preSql),
@@ -735,6 +1010,13 @@ public class DatabaseImportHandler {
 
     /** 有 02_post 脚本为 3 步（DDL / 数据 / 约束索引触发器），否则为 2 步。 */
     private static int resolveDatabaseImportFlowTotalSteps(DatabaseImportBundle bundle) {
+        if (bundle != null && bundle.schemaParts != null && !bundle.schemaParts.isEmpty()) {
+            int steps = bundle.createDatabaseFile != null ? 1 : 0;
+            for (SchemaImportPart part : bundle.schemaParts) {
+                steps += part.postDdlFile != null ? 3 : 2;
+            }
+            return steps;
+        }
         return bundle != null && bundle.postDdlFile != null ? 3 : 2;
     }
 

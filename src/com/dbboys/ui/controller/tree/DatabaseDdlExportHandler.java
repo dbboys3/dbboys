@@ -19,12 +19,20 @@ import javafx.stage.DirectoryChooser;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CancellationException;
 
 
 public class DatabaseDdlExportHandler {
+
+    @FunctionalInterface
+    private interface ExportProgressReporter {
+        void report(double progress, String message);
+    }
 
     public static void exportDatabaseDdlAndData(TreeView<TreeData> treeView) {
         TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
@@ -42,6 +50,7 @@ public class DatabaseDdlExportHandler {
         }
 
         Connect exportBaseConnect = TreeObjectCrudHandler.buildObjectConnect(selectedItem, false);
+        boolean databaseSchemaBundle = isDatabaseSchemaDatabaseLevelExport(selectedItem);
         File exportDir = new File(dir, database.getName() + ".dbb");
         if (!ensureDatabaseExportDirectory(exportDir)) {
             return;
@@ -70,6 +79,22 @@ public class DatabaseDdlExportHandler {
                 updateProgress(-1, 1);
                 updateMessage(countingMessage);
                 try {
+                    if (databaseSchemaBundle) {
+                        ExportProgressReporter reporter = (progress, message) -> {
+                            updateProgress(progress, 1.0);
+                            updateMessage(message);
+                        };
+                        exportDatabaseSchemaBundle(exportBaseConnect, database, exportDir, this, runtime, reporter);
+                        DatabasePlatform exportPlatform = TreeNavigator.resolvePlatform(selectedItem);
+                        String exportNoticeKey = exportPlatform != null ? exportPlatform.getExportNoticeI18nKey() : "metadata.export.ddl_data.notice.completed";
+                        String exportNoticeDefault = exportPlatform != null ? exportPlatform.getExportNoticeDefaultText() : "数据库已导出到：%s";
+                        Platform.runLater(() -> NotificationUtil.showMainNotification(
+                                I18n.t(exportNoticeKey, exportNoticeDefault)
+                                        .formatted(exportDir.getAbsolutePath())
+                        ));
+                        updateProgress(1, 1);
+                        return null;
+                    }
                     var ddlParts = TreeViewUtil.databaseService.exportDatabaseDdlPartsWithNewConnection(exportBaseConnect, database, (completed, total) -> {
                         if (TableDataTransferHandler.isDatabaseExportCancelled(this, runtime)) {
                             throw new CancellationException("Database DDL export cancelled");
@@ -128,12 +153,14 @@ public class DatabaseDdlExportHandler {
                     runtime.cancel();
                     TableDataTransferHandler.deleteFileQuietly(preDdlFile);
                     TableDataTransferHandler.deleteFileQuietly(postDdlFile);
+                    TableDataTransferHandler.deleteFileQuietly(new File(exportDir, "00_create_database.sql"));
                     deleteDirectoryIfEmpty(exportDir);
                     throw e;
                 } catch (Exception e) {
                     runtime.cancel();
                     TableDataTransferHandler.deleteFileQuietly(preDdlFile);
                     TableDataTransferHandler.deleteFileQuietly(postDdlFile);
+                    TableDataTransferHandler.deleteFileQuietly(new File(exportDir, "00_create_database.sql"));
                     deleteDirectoryIfEmpty(exportDir);
                     throw e;
                 }
@@ -143,7 +170,10 @@ public class DatabaseDdlExportHandler {
         String taskNameKey = taskPlatform != null ? taskPlatform.getExportTaskNameI18nKey() : "metadata.export.ddl_data.task_name";
         String taskNameDefault = taskPlatform != null ? taskPlatform.getExportTaskNameDefaultText() : "导出数据库\"%s\"";
         String taskDisplayName = I18n.t(taskNameKey, taskNameDefault).formatted(database.getName());
-        SqlExportManager.addCustomExportTask(taskDisplayName, preDdlFile, true, exportTask, runtime::cancel);
+        File exportUiFile = databaseSchemaBundle
+                ? new File(exportDir, "00_create_database.sql")
+                : preDdlFile;
+        SqlExportManager.addCustomExportTask(taskDisplayName, exportUiFile, true, exportTask, runtime::cancel);
     }
 
     private static List<String> exportDatabaseCsvFiles(Connect baseConnect,
@@ -176,6 +206,112 @@ public class DatabaseDdlExportHandler {
                 "Database data export cancelled",
                 "Database"
         );
+    }
+
+    /**
+     * DATABASE_SCHEMA database-level export: writes {@code 00_create_database.sql}
+     * at the bundle root and exports every non-system schema into its own
+     * folder (in schema-name order), each with pre/post DDL scripts and CSV data.
+     */
+    private static void exportDatabaseSchemaBundle(Connect exportBaseConnect,
+                                                   CatalogNode database,
+                                                   File exportDir,
+                                                   Task<Void> task,
+                                                   DatabaseExportRuntime runtime,
+                                                   ExportProgressReporter reporter) throws Exception {
+        DatabasePlatform platform = TreeNavigator.resolvePlatformByDbtype(exportBaseConnect.getDbtype());
+        File createDatabaseFile = new File(exportDir, "00_create_database.sql");
+        if (createDatabaseFile.exists()) {
+            createDatabaseFile.delete();
+        }
+        String createSql = platform == null
+                ? "CREATE DATABASE \"" + database.getName().replace("\"", "\"\"") + "\""
+                : platform.createDatabaseSql(database.getName(), "", "");
+        Files.writeString(createDatabaseFile.toPath(),
+                "-- Database export: " + database.getName() + "\n"
+                        + createSql + ";\n",
+                StandardCharsets.UTF_8);
+
+        List<Schema> exportSchemas = new ArrayList<>();
+        Connect dbConnect = new Connect(exportBaseConnect);
+        dbConnect.setCatalog(database.getName());
+        dbConnect.setSessionCatalog("");
+        try (Connection conn = TreeViewUtil.connectionService.getConnectionWithSessionInit(dbConnect)) {
+            List<Schema> schemas = platform == null ? List.of() : platform.metadata().getSchemas(conn);
+            for (Schema schema : schemas) {
+                if (platform == null || !platform.isSystemDatabase(schema.getName())) {
+                    exportSchemas.add(schema);
+                }
+            }
+        }
+        exportSchemas.sort(Comparator.comparing(s -> s.getName().toLowerCase(Locale.ROOT)));
+
+        String loadingSchemaPattern = I18n.t(
+                "metadata.export.ddl_data.progress.schema",
+                "导出模式 %d/%d - %s"
+        );
+        int totalSchemas = Math.max(1, exportSchemas.size());
+        int schemaIndex = 0;
+        for (Schema schema : exportSchemas) {
+            if (TableDataTransferHandler.isDatabaseExportCancelled(task, runtime)) {
+                throw new CancellationException("Database DDL export cancelled");
+            }
+            schemaIndex++;
+            final int currentSchemaIndex = schemaIndex;
+            reporter.report((double) schemaIndex / totalSchemas,
+                    loadingSchemaPattern.formatted(schemaIndex, totalSchemas, schema.getName()));
+
+            Schema schemaNode = new Schema(schema.getName());
+            schemaNode.setParentDb(database.getName());
+            File schemaDir = new File(exportDir, schema.getName());
+            if (!schemaDir.isDirectory() && !schemaDir.mkdirs()) {
+                throw new java.io.IOException("Failed to create schema export directory: "
+                        + schemaDir.getAbsolutePath());
+            }
+            File preDdlFile = new File(schemaDir, "01_pre_data.sql");
+            File postDdlFile = new File(schemaDir, "02_post_data.sql");
+            if (preDdlFile.exists()) {
+                preDdlFile.delete();
+            }
+            if (postDdlFile.exists()) {
+                postDdlFile.delete();
+            }
+
+            try (Connection conn = TreeViewUtil.connectionService.getConnectionWithSessionInit(dbConnect)) {
+                String ddl = platform == null ? "" : platform.ddl().printDatabase(conn, schema.getName());
+                Files.writeString(preDdlFile.toPath(), ddl, StandardCharsets.UTF_8);
+                Files.writeString(postDdlFile.toPath(), "", StandardCharsets.UTF_8);
+
+                List<Table> tables = platform == null
+                        ? List.of()
+                        : platform.metadata().getUserTables(conn, schema.getName());
+                Connect schemaConnect = new Connect(exportBaseConnect);
+                schemaConnect.setCatalog(database.getName());
+                schemaConnect.setSessionCatalog(schema.getName());
+                List<String> failures = exportDatabaseCsvFiles(
+                        schemaConnect,
+                        schemaDir,
+                        new ArrayList<>(tables),
+                        completed -> reporter.report(
+                                (currentSchemaIndex - 1 + (double) completed / Math.max(1, tables.size())) / totalSchemas,
+                                loadingSchemaPattern.formatted(currentSchemaIndex, totalSchemas, schema.getName())),
+                        () -> TableDataTransferHandler.isDatabaseExportCancelled(task, runtime),
+                        runtime
+                );
+                if (!failures.isEmpty()) {
+                    throw new Exception(buildDatabaseExportFailureMessage(failures));
+                }
+            }
+        }
+    }
+
+    private static boolean isDatabaseSchemaDatabaseLevelExport(TreeItem<TreeData> selectedItem) {
+        if (selectedItem == null || !(selectedItem.getValue() instanceof Database)) {
+            return false;
+        }
+        DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
+        return platform != null
+                && platform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA;
     }
 
     private static boolean ensureDatabaseExportDirectory(File exportDir) {

@@ -34,7 +34,12 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
         String schema = databaseName != null && !databaseName.isBlank() ? databaseName : currentSchema(conn);
         String sql = """
                 SELECT
-                    (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE')
+                    (SELECT COUNT(*) FROM pg_catalog.pg_type t
+                     JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                     WHERE n.nspname = ? AND t.typtype IN ('e', 'c', 'd')
+                       AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class c
+                                       WHERE c.oid = t.typrelid AND c.relkind IN ('r','p','v','m','f')))
+                  + (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE')
                   + (SELECT COUNT(*) FROM information_schema.views WHERE table_schema = ?)
                   + (SELECT COUNT(*) FROM information_schema.sequences WHERE sequence_schema = ?)
                   + (SELECT COUNT(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
@@ -43,7 +48,7 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
                 AS cnt
                 """;
         SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        Long cnt = runner.queryOne(sql, List.of(schema, schema, schema, schema, schema), rs -> rs.getLong(1));
+        Long cnt = runner.queryOne(sql, List.of(schema, schema, schema, schema, schema, schema), rs -> rs.getLong(1));
         return cnt == null ? 0 : cnt;
     }
 
@@ -64,6 +69,18 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
 
         ddl.append("CREATE SCHEMA ").append(quoteIdentifier(schema)).append(";\n\n");
 
+        // User-defined types first: table columns may reference enums/composites/domains
+        List<String> types = listUserDefinedTypes(conn, schema);
+        for (String type : types) {
+            ddl.append(printType(conn, plainQualified(schema, type))).append("\n\n");
+            completed = notifyProgress(progressCallback, completed);
+        }
+        // Sequences second: table columns often use DEFAULT nextval('seq')
+        List<String> sequences = listSequenceNames(conn, schema);
+        for (String seq : sequences) {
+            ddl.append(printSequence(conn, plainQualified(schema, seq))).append("\n\n");
+            completed = notifyProgress(progressCallback, completed);
+        }
         // Tables
         List<String> tables = listSchemaObjects(conn, schema, "BASE TABLE");
         for (String table : tables) {
@@ -74,12 +91,6 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
         List<String> views = listSchemaObjects(conn, schema, "VIEW");
         for (String view : views) {
             ddl.append(printView(conn, plainQualified(schema, view))).append("\n\n");
-            completed = notifyProgress(progressCallback, completed);
-        }
-        // Sequences
-        List<String> sequences = listSequenceNames(conn, schema);
-        for (String seq : sequences) {
-            ddl.append(printSequence(conn, plainQualified(schema, seq))).append("\n\n");
             completed = notifyProgress(progressCallback, completed);
         }
         // Routines by oid so every overload is exported, not just an arbitrary one
@@ -281,6 +292,133 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
             return "-- Function " + qualifyName(schema, func) + " not found";
         }
         return funcDef + ";";
+    }
+
+    @Override
+    public String printType(Connection conn, String objectName) throws Exception {
+        String schema = parseSchema(objectName, conn);
+        String type = parseObjectName(objectName);
+
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        String typtype = runner.queryOne("""
+                SELECT t.typtype
+                FROM pg_catalog.pg_type t
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ? AND t.typname = ?
+                """, List.of(schema, type), rs -> rs.getString(1));
+        if (typtype == null) {
+            return "-- Type " + qualifyName(schema, type) + " not found";
+        }
+        return switch (typtype) {
+            case "e" -> printEnumType(conn, schema, type);
+            case "c" -> printCompositeType(conn, schema, type);
+            case "d" -> printDomainType(conn, schema, type);
+            default -> "-- Type " + qualifyName(schema, type)
+                    + " (typtype=" + typtype + ") not exported";
+        };
+    }
+
+    private String printEnumType(Connection conn, String schema, String type) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        List<String> labels = runner.query("""
+                SELECT e.enumlabel
+                FROM pg_catalog.pg_enum e
+                JOIN pg_catalog.pg_type t ON t.oid = e.enumtypid
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ? AND t.typname = ?
+                ORDER BY e.enumsortorder
+                """, List.of(schema, type), rs -> rs.getString("enumlabel"));
+        StringBuilder ddl = new StringBuilder("CREATE TYPE ").append(qualifyName(schema, type)).append(" AS ENUM (");
+        ddl.append(labels.stream()
+                .map(label -> "'" + label.replace("'", "''") + "'")
+                .reduce((a, b) -> a + ", " + b)
+                .orElse(""));
+        ddl.append(");");
+        return ddl.toString();
+    }
+
+    private String printCompositeType(Connection conn, String schema, String type) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        List<String> fields = runner.query("""
+                SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type
+                FROM pg_catalog.pg_attribute a
+                JOIN pg_catalog.pg_type t ON t.oid = a.attrelid
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ? AND t.typname = ?
+                  AND a.attnum > 0 AND NOT a.attisdropped
+                ORDER BY a.attnum
+                """, List.of(schema, type),
+                rs -> quoteIdentifier(rs.getString("attname")) + " " + rs.getString("data_type"));
+        if (fields.isEmpty()) {
+            return "-- Type " + qualifyName(schema, type) + " not found";
+        }
+        StringBuilder ddl = new StringBuilder("CREATE TYPE ").append(qualifyName(schema, type)).append(" AS (\n");
+        ddl.append(fields.stream().map(f -> "    " + f).reduce((a, b) -> a + ",\n" + b).orElse(""));
+        ddl.append("\n);");
+        return ddl.toString();
+    }
+
+    private String printDomainType(Connection conn, String schema, String type) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        String[] domainInfo = runner.queryOne("""
+                SELECT pg_catalog.format_type(t.typbasetype, t.typtypmod) AS base_type,
+                       t.typnotnull AS not_null,
+                       COALESCE(pg_catalog.pg_get_expr(t.typdefaultbin, 0), t.typdefault) AS default_value
+                FROM pg_catalog.pg_type t
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ? AND t.typname = ?
+                """, List.of(schema, type), rs -> new String[]{
+                rs.getString("base_type"),
+                rs.getBoolean("not_null") ? "true" : "false",
+                rs.getString("default_value")
+        });
+        if (domainInfo == null) {
+            return "-- Type " + qualifyName(schema, type) + " not found";
+        }
+
+        StringBuilder ddl = new StringBuilder("CREATE DOMAIN ")
+                .append(qualifyName(schema, type))
+                .append(" AS ")
+                .append(domainInfo[0]);
+        String defaultValue = domainInfo[2];
+        if (defaultValue != null && !defaultValue.isBlank()) {
+            ddl.append(" DEFAULT ").append(defaultValue);
+        }
+        if ("true".equals(domainInfo[1])) {
+            ddl.append(" NOT NULL");
+        }
+
+        List<String> constraints = runner.query("""
+                SELECT con.conname, pg_catalog.pg_get_constraintdef(con.oid) AS def
+                FROM pg_catalog.pg_constraint con
+                JOIN pg_catalog.pg_type t ON t.oid = con.contypid
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ? AND t.typname = ? AND con.contype = 'c'
+                ORDER BY con.conname
+                """, List.of(schema, type),
+                rs -> "CONSTRAINT " + quoteIdentifier(rs.getString("conname")) + " " + rs.getString("def"));
+        for (String constraint : constraints) {
+            ddl.append("\n    ").append(constraint);
+        }
+        ddl.append(";");
+        return ddl.toString();
+    }
+
+    private List<String> listUserDefinedTypes(Connection conn, String schema) throws SQLException {
+        String sql = """
+                SELECT t.typname
+                FROM pg_catalog.pg_type t
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = ?
+                  AND t.typtype IN ('e', 'c', 'd')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pg_catalog.pg_class c
+                      WHERE c.oid = t.typrelid AND c.relkind IN ('r','p','v','m','f')
+                  )
+                ORDER BY t.typname
+                """;
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        return runner.query(sql, List.of(schema), rs -> rs.getString("typname"));
     }
 
     @Override
