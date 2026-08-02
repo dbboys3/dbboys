@@ -250,20 +250,10 @@ public class DatabaseImportHandler {
             DatabaseImportBundle bundle = bundleRef.get();
             String databaseName = bundle == null ? queuedDatabaseName : bundle.databaseName;
             String bundlePath = bundle == null ? dir.getAbsolutePath() : bundle.directory.getAbsolutePath();
-            if (bundle != null && bundle.schemaParts != null && !bundle.schemaParts.isEmpty()) {
-                // Full database bundle: the new database is created under the
-                // selected item's parent folder, so refresh that folder.
-                TreeItem<TreeData> parent = selectedItem.getParent();
-                if (parent != null) {
-                    parent.getChildren().clear();
-                    parent.setExpanded(false);
-                    parent.setExpanded(true);
-                }
-            } else {
-                selectedItem.getChildren().clear();
-                selectedItem.setExpanded(false);
-                selectedItem.setExpanded(true);
-            }
+            // Refresh the current node for both database and schema imports.
+            selectedItem.getChildren().clear();
+            selectedItem.setExpanded(false);
+            selectedItem.setExpanded(true);
             NotificationUtil.showMainNotification(
                     I18n.t("metadata.import_ddl_data.notice.completed", "数据库\"%s\"导入完成：%s")
                             .formatted(databaseName, bundlePath)
