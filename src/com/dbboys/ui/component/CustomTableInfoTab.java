@@ -1273,7 +1273,9 @@ private String buildCreateColumnDefinition(ObservableList<String> columnRow) {
         }
     }
     if (columnRow.size() > 6 && "是".equals(columnRow.get(6)) && supportsEditableAutoIncrement()) {
-        sqlBuilder.append(" AUTO_INCREMENT");
+        if (!isAutoIncrementType(normalizeTableMetaValue(columnRow.get(1)))) {
+            sqlBuilder.append(" ").append(autoIncrementClause());
+        }
     }
     return sqlBuilder.toString();
 }
@@ -1655,6 +1657,17 @@ private boolean supportsEditableAutoIncrement() {
     }
 }
 
+private String autoIncrementClause() {
+    if (connect == null) {
+        return "AUTO_INCREMENT";
+    }
+    try {
+        return platformResolver.requirePlatform(connect).autoIncrementClause();
+    } catch (Exception ignored) {
+        return "AUTO_INCREMENT";
+    }
+}
+
 
 private boolean supportsModifyColumn() {
     if (connect == null) {
@@ -1769,7 +1782,9 @@ private void appendMysqlColumnAttributes(StringBuilder sqlBuilder, ObservableLis
         }
     }
     if (row.size() > 6 && "是".equals(row.get(6))) {
-        sqlBuilder.append(" AUTO_INCREMENT");
+        if (!isAutoIncrementType(normalizeTableMetaValue(row.get(1)))) {
+            sqlBuilder.append(" ").append(autoIncrementClause());
+        }
     }
 }
 
@@ -1779,6 +1794,7 @@ private boolean isAutoIncrementType(String type) {
     }
     String upper = type.trim().toUpperCase();
     return upper.startsWith("SERIAL")
+            || upper.startsWith("SMALLSERIAL")
             || upper.startsWith("SERIAL8")
             || upper.startsWith("BIGSERIAL");
 }
@@ -1967,7 +1983,9 @@ private String buildAddColumnDefinition(ObservableList<String> columnRow) {
     }
 
     if (supportsEditableAutoIncrement() && columnRow.size() > 6 && "是".equals(columnRow.get(6))) {
-        sqlBuilder.append(" AUTO_INCREMENT");
+        if (!isAutoIncrementType(normalizeTableMetaValue(columnRow.get(1)))) {
+            sqlBuilder.append(" ").append(autoIncrementClause());
+        }
     }
 
     // 位置（before xxx）
@@ -2102,4 +2120,3 @@ private String generateDropColumnsSQL(String schemaName, String tableName, List<
         return errorPane;
     }
 }
-

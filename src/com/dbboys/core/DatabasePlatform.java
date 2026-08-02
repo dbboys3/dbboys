@@ -94,9 +94,14 @@ public interface DatabasePlatform {
     default boolean supportsDatabaseExport() {
         return true;
     }
-    /** When true, table designer allows toggling AUTO_INCREMENT on columns (MySQL). */
+    /** When true, table designer allows toggling auto-increment on columns. */
     default boolean supportsEditableAutoIncrement() {
         return false;
+    }
+
+    /** SQL fragment appended to a column when auto-increment is toggled on. */
+    default String autoIncrementClause() {
+        return "AUTO_INCREMENT";
     }
 
     default List<String> getColumnTypes() {
