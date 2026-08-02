@@ -233,6 +233,8 @@ public class TreeObjectCrudHandler {
         String sql;
         if (dropPlatform != null && selectedItem.getValue() instanceof Index index) {
             sql = dropPlatform.dropIndexSql(index.getName(), index.getTabname());
+        } else if (dropPlatform != null && selectedItem.getValue() instanceof Trigger trigger) {
+            sql = dropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName());
         } else {
             sql = dropPlatform != null
                     ? dropPlatform.dropObjectSql(objectType, selectedItem.getValue().getName())

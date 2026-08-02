@@ -362,6 +362,11 @@ public interface DatabasePlatform {
         return toggleTriggerSql(null, true) != null;
     }
 
+    /** Drops a trigger. PostgreSQL requires ON <table>, other dialects do not. */
+    default String dropTriggerSql(String triggerName, String tableName) {
+        return dropObjectSql("trigger", triggerName);
+    }
+
     default String gatherSchemaSql(String schemaName) {
         return "update statistics";
     }

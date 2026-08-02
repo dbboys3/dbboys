@@ -1023,6 +1023,8 @@ public class TreeContextMenuBuilder {
                 for (TreeItem<TreeData> item : selectedItems) {
                     if (batchDropPlatform != null && item.getValue() instanceof Index index) {
                         sqlList.add(batchDropPlatform.dropIndexSql(index.getName(), index.getTabname()));
+                    } else if (batchDropPlatform != null && item.getValue() instanceof Trigger trigger) {
+                        sqlList.add(batchDropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName()));
                     } else {
                         sqlList.add(batchDropPlatform != null
                                 ? batchDropPlatform.dropObjectSql(objectType, item.getValue().getName())

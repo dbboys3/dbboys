@@ -511,6 +511,12 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public String dropTriggerSql(String triggerName, String tableName) {
+        String onTable = tableName == null || tableName.isBlank() ? "" : " ON " + tableName;
+        return "DROP TRIGGER IF EXISTS " + triggerName + onTable + " CASCADE";
+    }
+
+    @Override
     public String gatherSchemaSql(String schemaName) {
         return "ANALYZE";
     }
