@@ -163,6 +163,11 @@ public interface ConnectionSupport {
         return true;
     }
 
+    /** Whether ALTER TABLE ADD COLUMN supports BEFORE/AFTER position clauses (MySQL). */
+    default boolean supportsColumnPosition() {
+        return false;
+    }
+
     default boolean supportsCommentOnTable() {
         return true;
     }

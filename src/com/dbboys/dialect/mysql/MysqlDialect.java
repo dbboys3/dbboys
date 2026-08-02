@@ -509,6 +509,11 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
     }
 
     @Override
+    public boolean supportsColumnPosition() {
+        return true;
+    }
+
+    @Override
     public String renameObjectSql(String objectType, String oldName, String newName) {
         String type = normalizeObjectType(objectType);
         String oldIdentifier = qualify(null, oldName);

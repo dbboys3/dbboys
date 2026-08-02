@@ -9,6 +9,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Shared metadata implementation for the PostgreSQL family of dialects.
@@ -208,6 +210,9 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
               AND NOT a.attisdropped
             ORDER BY a.attnum
             """;
+
+    private static final Pattern TYPE_PRECISION_SCALE_PATTERN =
+            Pattern.compile("^(.*?)\\((\\d+)(?:,\\s*(\\d+))?\\)(.*)$");
 
     // ------------------------------------------------------------------
     // Indexes
@@ -558,13 +563,35 @@ public abstract class PostgreSqlFamilyMetadataRepository implements MetadataRepo
         return new ArrayList<>(runner.query(SQL_COLUMNS, List.of(lookupSchema, lookupTable), rs -> {
             ColumnsInfo col = new ColumnsInfo();
             col.setColName(rs.getString("column_name"));
-            col.setColType(rs.getString("data_type"));
+            String[] typeParts = splitTypePrecisionScale(rs.getString("data_type"));
+            col.setColType(typeParts[0]);
+            col.setTypeP(Integer.parseInt(typeParts[1]));
+            col.setTypeS(Integer.parseInt(typeParts[2]));
             col.setColNo(rs.getInt("colno"));
             col.setIsNullable(!rs.getBoolean("not_null"));
             col.setColComm(blankToEmpty(rs.getString("col_comment")));
             col.setColDef(blankToEmpty(rs.getString("column_default")));
             return col;
         }));
+    }
+
+    /**
+     * Splits a pg_catalog.format_type value like {@code character varying(50)}
+     * or {@code numeric(10,2)} into {base type, precision, scale}. Types without
+     * modifiers are returned unchanged with precision/scale 0.
+     */
+    private static String[] splitTypePrecisionScale(String formattedType) {
+        if (formattedType == null) {
+            return new String[]{"", "0", "0"};
+        }
+        Matcher matcher = TYPE_PRECISION_SCALE_PATTERN.matcher(formattedType.trim());
+        if (matcher.matches()) {
+            String baseType = (matcher.group(1) + matcher.group(4)).trim();
+            String precision = matcher.group(2);
+            String scale = matcher.group(3) == null ? "0" : matcher.group(3);
+            return new String[]{baseType, precision, scale};
+        }
+        return new String[]{formattedType.trim(), "0", "0"};
     }
 
     @Override

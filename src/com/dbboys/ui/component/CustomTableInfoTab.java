@@ -1680,6 +1680,17 @@ private boolean supportsModifyColumn() {
     }
 }
 
+private boolean supportsColumnPosition() {
+    if (connect == null) {
+        return false;
+    }
+    try {
+        return platformResolver.requirePlatform(connect).connection().supportsColumnPosition();
+    } catch (Exception ignored) {
+        return false;
+    }
+}
+
 private String dialectAddColumnsSql(String tableName, java.util.List<String> columnDefs) {
     try {
         return platformResolver.requirePlatform(connect).connection().addColumnsSql(tableName, columnDefs);
@@ -1917,9 +1928,8 @@ private String normalizeValue(String value) {
 private String generateAddColumnSQL(String schemaName, String tableName, ObservableList<String> columnRow) {
     StringBuilder sqlBuilder = new StringBuilder();
     
-    sqlBuilder.append("ALTER TABLE ");
-    // 去掉schema引用
-    sqlBuilder.append(tableName).append(" ADD ").append(buildAddColumnDefinition(columnRow)).append(";\n");
+    String addSql = dialectAddColumnsSql(tableName, java.util.List.of(buildAddColumnDefinition(columnRow)));
+    sqlBuilder.append(addSql).append(";\n");
 
     // 注释独立语句
     String comment = columnRow.get(8);
@@ -1988,10 +1998,12 @@ private String buildAddColumnDefinition(ObservableList<String> columnRow) {
         }
     }
 
-    // 位置（before xxx）
-    String beforeColumn = getNextColumnName(columnRow);
-    if (beforeColumn != null && !beforeColumn.isEmpty()) {
-        sqlBuilder.append(" BEFORE ").append(beforeColumn);
+    // 位置（before xxx，仅 MySQL 等支持）
+    if (supportsColumnPosition()) {
+        String beforeColumn = getNextColumnName(columnRow);
+        if (beforeColumn != null && !beforeColumn.isEmpty()) {
+            sqlBuilder.append(" BEFORE ").append(beforeColumn);
+        }
     }
 
     return sqlBuilder.toString();
@@ -2083,11 +2095,12 @@ private String getNextColumnName(ObservableList<String> columnRow) {
  */
 private String generateDropColumnSQL(String schemaName, String tableName, String columnName) {
     StringBuilder sqlBuilder = new StringBuilder();
-    
-    sqlBuilder.append("ALTER TABLE ");
-    // 去掉schema引用
-    sqlBuilder.append(tableName).append(" DROP ").append(columnName).append(";\n");
-    
+    try {
+        String sql = platformResolver.requirePlatform(connect).connection().dropColumnSql(tableName, columnName);
+        sqlBuilder.append(sql).append(";\n");
+    } catch (Exception ignored) {
+        sqlBuilder.append("ALTER TABLE ").append(tableName).append(" DROP COLUMN ").append(columnName).append(";\n");
+    }
     return sqlBuilder.toString();
 }
 
