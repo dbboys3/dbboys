@@ -37,7 +37,7 @@ public class NotificationUtil {
 
         Label label = new Label(text);
         label.getStyleClass().add("notification-label");
-        label.setFont(Font.font(10));
+        label.setFont(Font.font(10.5));
         boolean hasPrevious = old != null;
         label.setOpacity(hasPrevious ? 1 : 0);
 
