@@ -174,6 +174,9 @@ public class ResultSetTabController {
     private final List<Labeled> boundLabels = new ArrayList<>();
     private final List<Control> tooltipBoundControls = new ArrayList<>();
     private ChangeListener<Boolean> placeholderVisibilityListener;
+    private ObservableList<String> emptyResultPlaceholderRow;
+    private boolean placeholderInserted;
+    private boolean syncingPlaceholder;
 
     public ResultSetTabController(Connect sqlConnect, StackPane sqlExecuteProcessStackPane) {
         this.sqlExecuteProcessStackPane = sqlExecuteProcessStackPane;
@@ -346,10 +349,15 @@ public class ResultSetTabController {
             @Override
             protected void updateItem(ObservableList<String> item, boolean empty) {
                 super.updateItem(item, empty);
+                boolean isPlaceholder = item == emptyResultPlaceholderRow;
+                setVisible(!isPlaceholder);
+                setDisable(isPlaceholder);
+                setOpacity(isPlaceholder ? 0 : 1);
+                setMouseTransparent(isPlaceholder);
                 getStyleClass().removeAll(
                         "resultset-pending-dml-row",
                         "resultset-pending-delete-row");
-                if (empty || item == null) {
+                if (isPlaceholder || empty || item == null) {
                     return;
                 }
                 if (pendingDeleteRows.contains(item)) {
@@ -373,6 +381,45 @@ public class ResultSetTabController {
         });
 
         setupResultSetContextMenu();
+    }
+
+    void syncEmptyResultPlaceholder() {
+        if (syncingPlaceholder) {
+            return;
+        }
+        syncingPlaceholder = true;
+        try {
+            if (placeholderInserted) {
+                ObservableList<ObservableList<String>> items = resultSetTableView.getItems();
+                for (int i = 0; i < items.size(); i++) {
+                    if (items.get(i) == emptyResultPlaceholderRow) {
+                        items.remove(i);
+                        break;
+                    }
+                }
+                placeholderInserted = false;
+            }
+            boolean hasDataColumns = resultSetTableView.getColumns().size() > 1;
+            boolean hasRows = !resultSetTableView.getItems().isEmpty();
+            if (!hasRows && hasDataColumns) {
+                if (emptyResultPlaceholderRow == null) {
+                    emptyResultPlaceholderRow = FXCollections.observableArrayList(
+                            Collections.nCopies(resultSetTableView.getColumns().size(), ""));
+                }
+                resultSetTableView.getItems().add(emptyResultPlaceholderRow);
+                placeholderInserted = true;
+            }
+        } finally {
+            syncingPlaceholder = false;
+        }
+    }
+
+    boolean hasResultRows() {
+        return resultRowCount() > 0;
+    }
+
+    int resultRowCount() {
+        return resultSetTableView.getItems().size() - (placeholderInserted ? 1 : 0);
     }
 
     private ScrollBar findVerticalScrollBar() {
@@ -437,7 +484,7 @@ public class ResultSetTabController {
         });
         resultSetExportButton.setOnAction(event -> {
             String sqlText = lastSqlTextField.getText();
-            if (resultSetTableView.getItems().isEmpty()) {
+            if (!hasResultRows()) {
                 AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("resultset.export.empty_sql", "没有可以导出的结果集！"));
                 return;
@@ -490,7 +537,7 @@ public class ResultSetTabController {
         ObservableList<String> template;
         int anchor = minSelectedRowIndex();
         boolean hasValidAnchor = anchor >= 0 && anchor < items.size();
-        if (items.isEmpty()) {
+        if (!hasResultRows()) {
             insertIndex = 0;
             template = null;
         } else if (hasValidAnchor) {
@@ -502,6 +549,7 @@ public class ResultSetTabController {
         }
         ObservableList<String> newRow = template == null ? newEmptyResultRow(n) : copyResultRow(template);
         items.add(insertIndex, newRow);
+        syncEmptyResultPlaceholder();
         pendingInsertRows.add(newRow);
         resultSetTableView.getSelectionModel().clearSelection();
         resultSetTableView.getSelectionModel().select(insertIndex);
@@ -629,13 +677,14 @@ public class ResultSetTabController {
         if (physicallyRemoved) {
             selectPreviousRowAfterDelete(firstDeletedIndex);
         }
+        syncEmptyResultPlaceholder();
         resultSetTableView.refresh();
     }
 
     private void selectPreviousRowAfterDelete(int deletedRowIndex) {
         ObservableList<ObservableList<String>> items = resultSetTableView.getItems();
         resultSetTableView.getSelectionModel().clearSelection();
-        if (items == null || items.isEmpty()) {
+        if (items == null || !hasResultRows()) {
             return;
         }
         int targetIndex = deletedRowIndex <= 0 ? 0 : Math.min(deletedRowIndex - 1, items.size() - 1);
@@ -711,6 +760,7 @@ public class ResultSetTabController {
                         removeResultSetRowByIdentity(row);
                     }
                     clearAllPendingDmlState();
+                    syncEmptyResultPlaceholder();
                 });
             } catch (SQLException ex) {
                 log.error(ex.getMessage(), ex);
@@ -745,6 +795,7 @@ public class ResultSetTabController {
             removeResultSetRowByIdentity(row);
         }
         clearAllPendingDmlState();
+        syncEmptyResultPlaceholder();
     }
 
     private boolean removeResultSetRowByIdentity(ObservableList<String> targetRow) {
@@ -779,6 +830,7 @@ public class ResultSetTabController {
         sqlFetchEndTime = System.currentTimeMillis();
         sqlFetchedTime += sqlFetchEndTime - sqlFetchStartTime;
         resultSetTableView.getItems().addAll(sqlResultSetList);
+        syncEmptyResultPlaceholder();
         if (sqlFetchedRows > 0) {
             int current = Integer.parseInt(resultSetFetchedRowsLabel.getText());
             resultSetFetchedRowsLabel.setText(String.valueOf(current + sqlFetchedRows));
@@ -803,6 +855,7 @@ public class ResultSetTabController {
             resultSetTableView.setEditable(false);
             resultSetTableView.getColumns().setAll(resultSetTableView.getColumns().get(0));
             resultSetTableView.getItems().clear();
+            syncEmptyResultPlaceholder();
             resultSetFetchedRowsLabel.setText("0");
             resultSetTotalRowsLabel.setText("?");
             sqlUsedTimeLabel.setText("0");
@@ -1073,8 +1126,8 @@ public class ResultSetTabController {
             }
             tooltipBoundControls.clear();
 
-            resultSetTableView.getItems().clear();
             resultSetTableView.getColumns().clear();
+            resultSetTableView.getItems().clear();
             resultSetTableView.setPlaceholder(null);
             sqlResultSetList.clear();
             colList.clear();

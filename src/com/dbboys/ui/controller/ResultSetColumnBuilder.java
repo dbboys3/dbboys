@@ -184,7 +184,7 @@ public class ResultSetColumnBuilder {
             column.setGraphic(headerBox);
             column.getGraphic().addEventHandler(MouseEvent.MOUSE_CLICKED, event -> {
                 ctrl.resultSetTableView.getSelectionModel().clearSelection();
-                for (int rowIndex = 0; rowIndex < ctrl.resultSetTableView.getItems().size(); rowIndex++) {
+                for (int rowIndex = 0; rowIndex < ctrl.resultRowCount(); rowIndex++) {
                     ctrl.resultSetTableView.getSelectionModel().select(rowIndex, column);
                 }
                 event.consume();

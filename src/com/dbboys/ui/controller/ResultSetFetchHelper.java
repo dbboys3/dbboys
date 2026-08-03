@@ -71,6 +71,7 @@ public class ResultSetFetchHelper {
             ctrl.lastSqlTextField.getTooltip().setText(sqlExe);
             ctrl.resultSetTableView.getColumns().addAll(ctrl.colList);
             ctrl.resultSetTableView.getItems().addAll(ctrl.sqlResultSetList);
+            ctrl.syncEmptyResultPlaceholder();
             ctrl.resultSetTableView.refresh();
             ctrl.resultSetFetchedRowsLabel.setText(ctrl.sqlFetchedRows.toString());
             ctrl.sqlUsedTimeLabel.setText(String.format("%.3f", ctrl.sqlFetchedTime / 1000.0));
