@@ -318,7 +318,7 @@ public class MainController {
         sshSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         rebuildMarkdownIndexButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.65));
         markdownSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
-        statusBackSqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.5, IconFactory.stopColor()));
+        statusBackSqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.55, IconFactory.stopColor()));
         statusBackSqlListButton.setGraphic(IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.45));
         statusBackSqlProgress.setImage(new Image(IconPaths.LOADING_GIF));
         statusBackSqlProgress.setFitWidth(10);
