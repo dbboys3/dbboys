@@ -62,7 +62,7 @@
   -color-markdown-search-title: #5f6672;
   -color-markdown-search-snippet: #8a8f98;
   -fx-background-color: -color-bg-default;
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
 }
 
 .root.popup {
@@ -5498,7 +5498,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 .code-area .context-menu .menu-item {
   -fx-font-family: "System Regular";
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
 }
 
 .paragraph-box:has-caret {
@@ -5675,7 +5675,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 .boot-subtitle,
 .boot-status {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-text-fill: -color-fg-muted;
 }
 
@@ -5831,32 +5831,32 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .markdown-heading-3 {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-font-weight: bold;
   -fx-padding: 6 0 3 0;
 }
 
 .markdown-heading-4 {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-font-weight: bold;
   -fx-padding: 4 0 2 0;
 }
 
 .markdown-heading-5 {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-font-weight: bold;
   -fx-padding: 2 0 1 0;
 }
 
 .markdown-heading-6 {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-font-weight: bold;
   -fx-padding: 1 0 1 0;
 }
 
 .markdown-styled-area {
   -fx-font-family: system;
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
 }
 
 
@@ -6271,7 +6271,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .resultset-header-name {
-  -fx-font-size: 11px;
+  -fx-font-size: 11.5px;
   -fx-font-weight: bold;
   -fx-padding: 0 0 0 3.2;
 }
