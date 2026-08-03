@@ -258,11 +258,11 @@ public class ResultSetTabController {
     private void setupIcons() {
         lastSqlCopyButton.setGraphic(IconFactory.group(IconPaths.COPY, 0.6));
         lastSqlRefreshButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.6));
-        resultSetEditHelpButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDIT_HELP, 0.48));
-        resultSetInsertRowButton.setGraphic(semanticIcon(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.55, "icon-success"));
-        resultSetDeleteRowButton.setGraphic(semanticIcon(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.47, "icon-resultset-delete"));
-        resultSetSaveEditsButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.45));
-        resultSetCancelEditsButton.setGraphic(semanticIcon(IconPaths.RESULTSET_CANCEL_EDITS, 0.7, "icon-danger"));
+        resultSetEditHelpButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDIT_HELP, 0.528));
+        resultSetInsertRowButton.setGraphic(semanticIcon(IconPaths.CREATE_CONNECT_ADD_DRIVER, 0.65, "icon-success"));
+        resultSetDeleteRowButton.setGraphic(semanticIcon(IconPaths.CREATE_CONNECT_REMOVE_DRIVER, 0.52, "icon-resultset-delete"));
+        resultSetSaveEditsButton.setGraphic(IconFactory.group(IconPaths.GENERIC_SAVE_AS, 0.52));
+        resultSetCancelEditsButton.setGraphic(semanticIcon(IconPaths.RESULTSET_CANCEL_EDITS, 0.78, "icon-danger"));
         resultSetNextPageButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_NEXT_PAGE, 0.6));
         resultSetAllRowsButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_ALL_ROWS, 0.5));
         resultSetCountButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_COUNT, 0.5));
