@@ -5938,11 +5938,11 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 #aiInputField {
   -fx-padding: 6 44 34 6;
-  -fx-font-size: 10px;
+  -fx-font-size: 11px;
 }
 
 #aiModelChoiceBox {
-  -fx-font-size: 9px;
+  -fx-font-size: 10px;
 }
 
 #sqlTabStackPane {
@@ -5950,17 +5950,17 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 #statusHBox {
-  -fx-font-size: 10;
+  -fx-font-size: 11;
 }
 
 #statusBackSqlCountLabel,
 .status-back-sql-count-muted {
-  -fx-font-size: 7;
+  -fx-font-size: 9;
   -fx-opacity: 0.5;
 }
 
 .status-back-sql-count-active {
-  -fx-font-size: 7;
+  -fx-font-size: 9;
   -fx-opacity: 1;
 }
 

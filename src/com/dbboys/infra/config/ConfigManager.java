@@ -19,7 +19,9 @@ public class ConfigManager {
         Map.entry("RESULT_FETCH_PER_TIME", "200"),
         Map.entry("SPLIT_DRIVER_MAIN", "0.2"),
         Map.entry("SPLIT_DRIVER_SQL", "0.6"),
-        Map.entry("SQL_EDITOR_FONT_SIZE", "12"),
+        Map.entry("SQL_EDITOR_FONT_SIZE", "13"),
+        Map.entry("SSH_TERMINAL_FONT_SIZE", "13"),
+        Map.entry("SSH_TERMINAL_RAWLOG", "false"),
         Map.entry("UI_LANG", "zh-CN"),
         Map.entry("UI_THEME", "dark")
     );

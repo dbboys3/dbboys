@@ -40,7 +40,7 @@ import java.util.regex.Pattern;
 public class CustomSqlEditCodeArea extends CodeArea {
     private static final int LOCAL_HIGHLIGHT_MAX = 4000;
     private static final int LOOKBACK_RANGE = 2000; // 娑撳﹥鏋冮張鈧径姘礀濠ь垵绻栨稊鍫濐樋鐎涙顑佺亸婵婄槸鐏炩偓闁劑鐝敓?
-    private static final int DEFAULT_FONT_SIZE = 12;
+    private static final int DEFAULT_FONT_SIZE = 13;
     private static final int MIN_FONT_SIZE = 9;
     private static final int MAX_FONT_SIZE = 40;
     private static final int FONT_SIZE_STEP = 1;
