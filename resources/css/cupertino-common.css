@@ -1338,7 +1338,7 @@ Text {
 .tree-cell {
   -fx-background-color: -color-cell-bg;
   -fx-text-fill: -color-cell-fg;
-  -fx-padding: 0.4em 0 0.4em 0;
+  -fx-padding: 0.3em 0 0.3em 0;
   -fx-indent: 1.2em;
 }
 
@@ -1347,10 +1347,11 @@ Text {
 }
 
 .tree-cell > .tree-disclosure-node {
-  -fx-padding: 0.5em 0.7em 0.5em 0.7em;
+  -fx-padding: 0.5em 0.5em 0.5em 0.5em;
   -fx-background-color: transparent;
-  -fx-background-insets: 0;
+  -fx-background-insets: 2px;
   -fx-background-radius: 3px;
+  -fx-alignment: center;
 }
 
 .tree-cell > .tree-disclosure-node > .arrow,
