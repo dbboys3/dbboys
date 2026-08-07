@@ -515,7 +515,8 @@ public final class InformixDdlRepository implements DdlRepository {
         /*  SQL语句中不要以下两行，可以直接依据程序中计算得到（同时解决p,s允许空的问题（不赋值））
          *        ,CASE WHEN mod(sc.coltype,256) in (1,2,52,17,6,18,53,5,8) THEN 10 WHEN mod(sc.coltype,256) in (3,4) THEN 2 ELSE 0 END as typep
          *        ,CASE WHEN mod(sc.coltype,256) in (5,8) THEN MOD(sc.collength,256) ELSE 0 END as types
-         */
+         *   bitand(sc.colattr,1) = 0 用于去除隐藏列
+         */  
         String sql = """
                 SELECT
                    sc.colno colno

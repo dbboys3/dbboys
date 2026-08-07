@@ -646,6 +646,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         /*  SQL语句中不要以下两行，可以直接依据程序中计算得到（同时解决p,s允许空的问题（不赋值））
          *        ,CASE WHEN mod(sc.coltype,256) in (1,2,52,17,6,18,53,5,8) THEN 10 WHEN mod(sc.coltype,256) in (3,4) THEN 2 ELSE 0 END as typep
          *        ,CASE WHEN mod(sc.coltype,256) in (5,8) THEN MOD(sc.collength,256) ELSE 0 END as types
+         *   bitand(sc.colattr,1) = 0 用于去除隐藏列
          */
         String sql = """
                 SELECT
@@ -653,7 +654,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                   ,sc.colname colname
                   ,sc.coltype,sc.collength
                   ,CASE WHEN bitand(sc.coltype,256) = 256 THEN 0 ELSE 1 END as isnullable
-                  ,CASE WHEN sc.colattr = 128 THEN 1 ELSE 0 END as ispk
+                  ,sc.colattr colattr
                   ,df.type as coldeftype
                   ,CASE df.type
                          WHEN 'L' THEN get_default_value(sc.coltype, sc.extended_id, sc.collength, df.default::lvarchar(256))::VARCHAR(254)
@@ -688,10 +689,11 @@ public final class Gbase8sDdlRepository implements DdlRepository {
             columnsInfo.setColLength(resultSet.getInt("collength"));  
             columnsInfo.setColTypePS(resultSet.getInt("collength"), coltypename, tableInfo.getDbVersion());     
             columnsInfo.setIsNullable((resultSet.getInt("isnullable") == 1));
-            columnsInfo.setIsPK((resultSet.getInt("ispk") == 1));
+            columnsInfo.setIsPK(getIsPkColattr(resultSet.getInt("colattr")));
             columnsInfo.setColDefType(resultSet.getString("coldeftype"));
             columnsInfo.setColDef(trim(resultSet.getString("coldef")));
             columnsInfo.setIsAutoincrement((resultSet.getInt("isautoincrement") == 1));
+            columnsInfo.setColCollate(getMySQLCollate(resultSet.getInt("colattr")));
             return columnsInfo;
         });
 
@@ -709,6 +711,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 columnsInfo.setColDefType(last.getColDefType());
                 columnsInfo.setColDef(last.getColDef() + trim(columnsInfo.getColDef()));
                 columnsInfo.setIsAutoincrement(last.isIsAutoincrement());
+                columnsInfo.setColCollate(last.getColCollate());
                 arrayList.set(size - 1, columnsInfo); 
             } else {
                 arrayList.add(columnsInfo);
@@ -1247,6 +1250,12 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                     column.getColType(),
                     column.getColLength()
             ));
+            // mysql模式增加collate
+            if ("MySQL".equalsIgnoreCase(sqlmode)){
+                if (! "".equals(column.getColCollate())){
+                    ddl.append(" collate ").append(column.getColCollate());
+                }
+            }
             // 修改为先 default, 再not null
             if (column.getColDefType() != null) {
                 ddl.append(" DEFAULT ").append(getDefaults(
@@ -2704,6 +2713,34 @@ public final class Gbase8sDdlRepository implements DdlRepository {
     }
 
     /**
+     * SQLMODE=MySQL时，返回collate，现暂时只知道binary_ci，后续追加
+     * liaosnet 2026-08-07
+     * @param colattr
+     * @return
+     */
+    private static String getMySQLCollate(int colattr){
+        String tmp_collate = "";
+        if ((colattr & 4096) == 4096){
+            tmp_collate = "binary_ci";
+        }
+        return tmp_collate;
+    }
+
+    /**
+     * 从syscolumns.colattr中获取是否是Primary Key，该方法获取的结果似乎不确定，实际非使用。
+     * liaosnet 2026-08-07
+     * @param colattr
+     * @return
+     */
+    private static boolean getIsPkColattr(int colattr){
+        boolean tmp_ispk = false;
+        if ((colattr & 128) == 128){
+            tmp_ispk = true;
+        }
+        return tmp_ispk;
+    }
+
+    /**
      * 获取所有表的列信息，去除物化视图 "mtab$_"。每行唯一。
      * @param connection
      * @param maxtabid
@@ -2714,6 +2751,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         ArrayList<ColumnsInfo> columnsInfoUniqueList = new ArrayList<>();
         ArrayList<ColumnsInfo> columnsInfoList = new ArrayList<>();
         // 对于虚拟表，sysdefaultsexpr可能多行定义
+        //  bitand(sc.colattr,1) = 0 用于去除隐藏列
         String sqlstr = """
                 SELECT
                    t.tabid tabid
@@ -2722,7 +2760,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                   ,sc.colname colname
                   ,sc.coltype,sc.collength
                   ,CASE WHEN bitand(sc.coltype,256) = 256 THEN 0 ELSE 1 END as isnullable
-                  ,CASE WHEN sc.colattr = 128 THEN 1 ELSE 0 END as ispk
+                  ,sc.colattr colattr
                   ,df.type as coldeftype
                   ,CASE df.type
                          WHEN 'L' THEN get_default_value(sc.coltype, sc.extended_id, sc.collength, df.default::lvarchar(256))::VARCHAR(254)
@@ -2763,11 +2801,12 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 columnsInfo.setColLength(resultSet.getInt("collength"));  
                 columnsInfo.setColTypePS(resultSet.getInt("collength"), coltypename, dbversion); 
                 columnsInfo.setIsNullable((resultSet.getInt("isnullable") == 1));
-                columnsInfo.setIsPK((resultSet.getInt("ispk") == 1));
+                columnsInfo.setIsPK(getIsPkColattr(resultSet.getInt("colattr")));
                 columnsInfo.setColDefType(resultSet.getString("coldeftype"));
                 // 可能存在多行默认值定义的情况，后续进行合并
                 columnsInfo.setColDef(trim(resultSet.getString("coldef")));
                 columnsInfo.setIsAutoincrement((resultSet.getInt("isautoincrement") == 1));
+                columnsInfo.setColCollate(getMySQLCollate(resultSet.getInt("colattr")));
                 columnsInfoList.add(columnsInfo);
             }
         }
@@ -3299,6 +3338,12 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                 ddl.append("  ").append(getName(columnsInfo.getColName(),tableInfo.getTableSqlMode()));
                 // 字段类型
                 ddl.append(" ").append(getColTypeName(columnsInfo.getColType(),columnsInfo.getColLength()));
+                // mysql模式增加collate
+                if ("MySQL".equalsIgnoreCase(tableInfo.getTableSqlMode())){
+                    if (! "".equals(columnsInfo.getColCollate())){
+                        ddl.append(" collate ").append(columnsInfo.getColCollate());
+                    }
+                }
                 // 默认值 
                 if (columnsInfo.getColDefType() != null){
                     ddl.append(" DEFAULT ").append(getDefaults(columnsInfo.getColType(),
