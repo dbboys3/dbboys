@@ -177,6 +177,28 @@
                                 <TreeView fx:id="sshTreeView" prefHeight="2000"></TreeView>
                             </VBox>
                         </CustomTreeviewTab>
+                        <CustomTreeviewTab fx:id="migrationTab" closable="false">
+                            <VBox>
+                                <HBox minHeight="30" alignment="CENTER_LEFT">
+                                    <Button fx:id="create_migration_task" focusTraversable="false" onAction="#createMigrationTask">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </Button>
+                                    <CustomUserTextField fx:id="migrationSearchTextField" prefWidth="2000">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </CustomUserTextField>
+                                    <Button fx:id="migrationSearchButton" focusTraversable="false" styleClass="small" disable="true">
+                                        <tooltip>
+                                            <Tooltip/>
+                                        </tooltip>
+                                    </Button>
+                                </HBox>
+                                <TreeView fx:id="migrationTreeView" prefHeight="2000"></TreeView>
+                            </VBox>
+                        </CustomTreeviewTab>
                         <CustomTreeviewTab fx:id="markdownTab" closable="false">
                             <VBox fx:id="markdownTreeViewVBox" >
                                 <HBox minHeight="30" alignment="CENTER_LEFT">

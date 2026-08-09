@@ -35,8 +35,8 @@ public abstract class CommonSqlParser implements SqlParser {
     protected static final String DOUBLE_STRING_PATTERN_TEXT = "\"[^\"]*\"" + "|" + "\"[\\s\\S]*";
     protected static final String FANYINHAO_STRING_PATTERN_TEXT = "`[^`]*`" + "|" + "`[\\s\\S]*";
     protected static final String COMMENT_PATTERN_TEXT = "--[^\\n]*" + "|" + "/\\*[\\s\\S]*?\\*/" + "|" + "/\\*[\\s\\S]*" + "|" + "\\{[\\s\\S]*?\\}";
-    protected static final String DROP_DATABASE = "(?i)(?:drop\\s+)+database\\s+(\\w+)";
-    protected static final String CREATE_DATABASE = "(?i)(?:create\\s+)?database\\s+(?<dbname>(\\w+))";
+    protected static final String DROP_DATABASE = "(?i)^\\s*(?:drop\\s+)+database\\s+(\\w+)";
+    protected static final String CREATE_DATABASE = "(?i)^\\s*(?:create\\s+)?database\\s+(?<dbname>(\\w+))";
 
     protected static final Pattern COMMENT_ONLY_PATTERN = Pattern.compile(COMMENT_PATTERN_TEXT);
     protected static final Pattern STATEMENT_PROTECT_PATTERN = Pattern.compile(

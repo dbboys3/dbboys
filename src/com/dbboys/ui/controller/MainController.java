@@ -79,6 +79,16 @@ public class MainController {
     @FXML
     public CustomTreeviewTab sshTab;
     @FXML
+    public CustomTreeviewTab migrationTab;
+    @FXML
+    public Button create_migration_task;
+    @FXML
+    public CustomUserTextField migrationSearchTextField;
+    @FXML
+    public Button migrationSearchButton;
+    @FXML
+    public TreeView<TreeData> migrationTreeView;
+    @FXML
     public CustomTreeviewTab markdownTab;
     @FXML
     public CustomTreeviewTab aiTab;
@@ -253,6 +263,7 @@ public class MainController {
         initSplitPaneResizeBehavior();
         initTreeView();
         initSshTreeView();
+        initMigrationTreeView();
         initStatusBar();
         Main.loadProgressBar.setProgress(0.8);
         initBackgroundTasks();
@@ -314,8 +325,10 @@ public class MainController {
 
         create_connect.setGraphic(IconFactory.group(IconPaths.MAIN_ADD_CONNECT, 0.65));
         create_ssh.setGraphic(IconFactory.group(IconPaths.MAIN_ADD_CONNECT, 0.65));
+        create_migration_task.setGraphic(IconFactory.group(IconPaths.MAIN_ADD_CONNECT, 0.65));
         connectSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         sshSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
+        migrationSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         rebuildMarkdownIndexButton.setGraphic(IconFactory.group(IconPaths.MAIN_REBUILD, 0.65));
         markdownSearchButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
         statusBackSqlStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.55, IconFactory.stopColor()));
@@ -338,6 +351,7 @@ public class MainController {
                 Dragboard db = event.getDragboard();
                 String payload = db.getString();
                 if (("DATABASEOBJECTDRAG".equals(payload))
+                        || payload.startsWith("MIGRATIONTASKDRAG;")
                         || MarkdownUtil.sourceTreeItems == null
                         || (MarkdownUtil.sourceTreeItems.size() == 1
                             && !new File(payload.replace(";", "")).isDirectory())) {
@@ -351,7 +365,10 @@ public class MainController {
             Dragboard db = event.getDragboard();
             if (db.hasString()) {  //拖入表或库
                 event.setDropCompleted(true);
-                if(!db.getString().equals("DATABASEOBJECTDRAG")){
+                if(db.getString().startsWith("MIGRATIONTASKDRAG;")){
+                    //拖入迁移任务：打开任务明细 tab
+                    openMigrationTaskTabById(db.getString().substring("MIGRATIONTASKDRAG;".length()));
+                }else if(!db.getString().equals("DATABASEOBJECTDRAG")){
                     if(db.getString().endsWith(".md")){
                         TabpaneUtil.addCustomMarkdownTab(new File(db.getString()),false);
                     }else{
@@ -427,7 +444,11 @@ public class MainController {
         sshTab.titleToggleIcon.setScaleY(0.66);
 
         aiTab.titleToggleIcon.setContent(IconPaths.AI_TAB_TOGGLE);
-        
+
+        migrationTab.titleToggleIcon.setContent(IconPaths.MIGRATION_TAB_TOGGLE);
+        migrationTab.titleToggleIcon.setScaleX(0.82);
+        migrationTab.titleToggleIcon.setScaleY(0.82);
+
 
 
         //左侧tabpane默认选中上次关闭前tab，没有配置则默认第一个tab
@@ -456,6 +477,7 @@ public class MainController {
         //搜索事件
         HBox.setHgrow(connectSearchTextField, Priority.ALWAYS);
         HBox.setHgrow(sshSearchTextField, Priority.ALWAYS);
+        HBox.setHgrow(migrationSearchTextField, Priority.ALWAYS);
 
         connectSearchTextField.textProperty().addListener((observable, oldValue, newValue) -> {
             connectSearchTextField.setText(newValue.replace(" ", ""));
@@ -478,6 +500,18 @@ public class MainController {
                     TreeViewUtil.searchTree(sshTreeView,searchText,sshSearchButton);
                 }else{
                     sshSearchButton.setDisable(true);
+                }
+            }
+        });
+
+        migrationSearchTextField.textProperty().addListener((observable, oldValue, newValue) -> {
+            migrationSearchTextField.setText(newValue.replace(" ", ""));
+            if(!migrationSearchTextField.getText().equals(oldValue.replace(" ", ""))){
+                String searchText=migrationSearchTextField.getText();
+                if (!searchText.isEmpty()&&searchText.length()>=2) {
+                    TreeViewUtil.searchTree(migrationTreeView,searchText,migrationSearchButton);
+                }else{
+                    migrationSearchButton.setDisable(true);
                 }
             }
         });
@@ -800,25 +834,34 @@ public class MainController {
             sshTab.titleToggle.textProperty().bind(I18n.bind("main.sidebar.ssh"));
             bindTooltip(sshTab.titleToggle, "main.tooltip.ssh");
         }
+        if (migrationTab != null && migrationTab.titleToggle != null) {
+            migrationTab.titleToggle.textProperty().bind(I18n.bind("main.sidebar.migration"));
+            bindTooltip(migrationTab.titleToggle, "main.tooltip.migration");
+        }
         if (aiTab != null && aiTab.titleToggle != null) {
             aiTab.titleToggle.textProperty().bind(I18n.bind("main.sidebar.ai"));
             bindTooltip(aiTab.titleToggle, "main.tooltip.ai");
         }
         bindTabText(connectTab, "main.sidebar.connections");
         bindTabText(sshTab, "main.sidebar.ssh");
+        bindTabText(migrationTab, "main.sidebar.migration");
         bindTabText(markdownTab, "main.sidebar.knowledge");
         bindTabText(aiTab, "main.sidebar.ai");
 
         bindPrompt(connectSearchTextField, "main.prompt.search_objects");
         bindPrompt(sshSearchTextField, "main.prompt.search_ssh");
+        bindPrompt(migrationSearchTextField, "migration.prompt.search");
         bindPrompt(markdownSearchTextField, "main.prompt.search_knowledge");
 
         bindTooltip(create_connect, "main.tooltip.new_connection");
         bindTooltip(create_ssh, "main.tooltip.new_connection");
+        bindTooltip(create_migration_task, "migration.menu.new_task");
         bindTooltip(connectSearchTextField, "main.tooltip.search_objects_hint");
         bindTooltip(connectSearchButton, "main.tooltip.search_next");
         bindTooltip(sshSearchTextField, "main.tooltip.search_objects_hint");
         bindTooltip(sshSearchButton, "main.tooltip.search_next");
+        bindTooltip(migrationSearchTextField, "main.tooltip.search_objects_hint");
+        bindTooltip(migrationSearchButton, "main.tooltip.search_next");
         bindTooltip(rebuildMarkdownIndexButton, "main.tooltip.rebuild_index");
         bindTooltip(markdownSearchTextField, "main.tooltip.case_insensitive");
         bindTooltip(markdownSearchButton, "main.tooltip.start_search");
@@ -1188,6 +1231,561 @@ public class MainController {
         }
     }
 
+
+
+    // ==================================================================
+    // 数据迁移任务树（结构参照 SSH 树）
+    // ==================================================================
+
+    private void initMigrationTreeView() {
+        try {
+            TreeItem<TreeData> rootItem = new TreeItem<>();
+            rootItem.setExpanded(true);
+            migrationTreeView.setRoot(rootItem);
+            migrationTreeView.setShowRoot(false);
+            migrationTreeView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+            java.util.List<com.dbboys.ui.treemodel.MigrationFolder> folders =
+                    com.dbboys.infra.db.LocalDbRepository.getMigrationFolders();
+            java.util.List<com.dbboys.model.MigrationTask> tasks =
+                    com.dbboys.infra.db.LocalDbRepository.getAllMigrationTasks();
+
+            for (com.dbboys.ui.treemodel.MigrationFolder folder : folders) {
+                TreeItem<TreeData> folderItem = new TreeItem<>(folder) {
+                    @Override
+                    public boolean isLeaf() {
+                        return false;
+                    }
+                };
+                folderItem.setExpanded(folder.getExpand() == 1);
+                rootItem.getChildren().add(folderItem);
+                for (com.dbboys.model.MigrationTask task : tasks) {
+                    if (task.getParentId() == folder.getId()) {
+                        folderItem.getChildren().add(new TreeItem<>(task));
+                    }
+                }
+            }
+
+            migrationTreeView.setCellFactory(param -> new com.dbboys.ui.component.CustomMigrationTreeCell());
+
+            // 双击打开任务明细中央 tab
+            migrationTreeView.setOnMouseClicked(event -> {
+                if (event.getButton().equals(javafx.scene.input.MouseButton.PRIMARY) && event.getClickCount() == 2) {
+                    TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                    if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
+                        com.dbboys.ui.util.TabpaneUtil.addCustomMigrationTaskTab(task);
+                    }
+                }
+            });
+
+            javafx.scene.control.ContextMenu migrationCtxMenu = new com.dbboys.ui.component.CustomContextMenu();
+
+            // --- 通用项 ---
+            javafx.scene.control.MenuItem newMigrationFolderItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.new_folder",
+                    IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65, 0.65));
+            newMigrationFolderItem.setOnAction(e -> createMigrationFolder());
+
+            javafx.scene.control.MenuItem newMigrationTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.new_task",
+                    IconFactory.group(IconPaths.MAIN_ADD_CONNECT, 0.65, 0.65));
+            newMigrationTaskItem.setOnAction(e -> createMigrationTask());
+
+            // --- 任务菜单项 ---
+            javafx.scene.control.MenuItem openTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.open",
+                    IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.6, 0.6));
+            openTaskItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
+                    com.dbboys.ui.util.TabpaneUtil.addCustomMigrationTaskTab(task);
+                }
+            });
+
+            javafx.scene.control.MenuItem startTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.start",
+                    IconFactory.group(IconPaths.SQL_RUN, 0.65, 0.65));
+            startTaskItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
+                    com.dbboys.service.migration.MigrationTaskRunner.start(task);
+                }
+            });
+
+            javafx.scene.control.MenuItem stopTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.stop",
+                    IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.65, IconFactory.stopColor()));
+            stopTaskItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
+                    com.dbboys.service.migration.MigrationTaskRunner.stop(task);
+                }
+            });
+
+            javafx.scene.control.MenuItem editTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.edit",
+                    IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.7, 0.7));
+            editTaskItem.setOnAction(e -> editMigrationTask());
+
+            javafx.scene.control.MenuItem viewTaskLogItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.view_log",
+                    IconFactory.group(IconPaths.METADATA_ONLINE_LOG_ITEM, 0.65, 0.65));
+            viewTaskLogItem.setOnAction(e -> showMigrationTaskLog());
+
+            javafx.scene.control.MenuItem moveTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.move_to",
+                    IconFactory.group(IconPaths.METADATA_MOVE_ITEM, 0.7, 0.7));
+            moveTaskItem.setOnAction(e -> migrationMoveTask());
+
+            javafx.scene.control.MenuItem renameTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.rename",
+                    IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7, 0.7));
+            renameTaskItem.setOnAction(e -> migrationRenameItem());
+
+            javafx.scene.control.MenuItem deleteTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.delete",
+                    IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
+            deleteTaskItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
+                    if (task.isRunning()) {
+                        AlertUtil.CustomAlert(I18n.t("common.hint"),
+                                I18n.t("migration.error.task_running", "Task is running, stop it first"));
+                        return;
+                    }
+                    if (AlertUtil.CustomAlertConfirm(
+                            I18n.t("metadata.menu.delete", "删除"),
+                            I18n.t("migration.confirm.delete_task", "确定要删除任务\"%s\"吗？")
+                                    .formatted(task.getName()))) {
+                        if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationTask(task)) {
+                            selected.getParent().getChildren().remove(selected);
+                        }
+                    }
+                }
+            });
+
+            // --- 文件夹菜单项 ---
+            javafx.scene.control.MenuItem expandMigrationFolderItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.expand_default",
+                    IconFactory.group(IconPaths.METADATA_EXPAND_FOLDER_ITEM, 0.5, 0.5));
+            expandMigrationFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder folder) {
+                    folder.setExpand(1);
+                    com.dbboys.infra.db.LocalDbRepository.updateMigrationFolder(folder);
+                    selected.setExpanded(true);
+                }
+            });
+
+            javafx.scene.control.MenuItem collapseMigrationFolderItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.collapse_default",
+                    IconFactory.group(IconPaths.METADATA_FOLD_FOLDER_ITEM, 0.75, 0.75));
+            collapseMigrationFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder folder) {
+                    folder.setExpand(0);
+                    com.dbboys.infra.db.LocalDbRepository.updateMigrationFolder(folder);
+                    selected.setExpanded(false);
+                }
+            });
+
+            javafx.scene.control.MenuItem renameMigrationFolderItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.rename",
+                    IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7, 0.7));
+            renameMigrationFolderItem.setOnAction(e -> migrationRenameItem());
+
+            javafx.scene.control.MenuItem deleteMigrationFolderItem = MenuItemUtil.createMenuItemI18n(
+                    "metadata.menu.delete",
+                    IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
+            deleteMigrationFolderItem.setOnAction(e -> {
+                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+                if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder folder) {
+                    boolean hasRunning = false;
+                    for (TreeItem<TreeData> child : selected.getChildren()) {
+                        if (child.getValue() instanceof com.dbboys.model.MigrationTask t && t.isRunning()) {
+                            hasRunning = true;
+                            break;
+                        }
+                    }
+                    if (hasRunning) {
+                        AlertUtil.CustomAlert(I18n.t("common.hint"),
+                                I18n.t("migration.error.task_running", "Task is running, stop it first"));
+                        return;
+                    }
+                    if (selected.getChildren().size() > 0) {
+                        if (AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.menu.delete", "删除"),
+                                I18n.t("migration.confirm.delete_folder",
+                                        "删除任务分类\"%s\"将删除该分类下【%d】个任务，确定要删除该分类吗？")
+                                        .formatted(folder.getName(), selected.getChildren().size()))) {
+                            com.dbboys.infra.db.LocalDbRepository.deleteMigrationTasksByParent(folder.getId());
+                            if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationFolder(folder)) {
+                                selected.getParent().getChildren().remove(selected);
+                            }
+                        }
+                    } else {
+                        if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationFolder(folder)) {
+                            selected.getParent().getChildren().remove(selected);
+                        }
+                    }
+                }
+            });
+
+            // 左键单击隐藏菜单
+            migrationTreeView.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+                if (event.getButton().equals(javafx.scene.input.MouseButton.PRIMARY) && event.getClickCount() == 1) {
+                    migrationCtxMenu.hide();
+                }
+            });
+
+            migrationTreeView.setOnContextMenuRequested(event -> {
+                javafx.scene.Node current = event.getTarget() instanceof javafx.scene.Node
+                        ? (javafx.scene.Node) event.getTarget() : null;
+                while (current != null && !(current instanceof javafx.scene.control.TreeCell)) {
+                    current = current.getParent();
+                }
+                if (current instanceof javafx.scene.control.TreeCell) {
+                    javafx.scene.control.TreeCell<?> cell = (javafx.scene.control.TreeCell<?>) current;
+                    Object treeItemObj = cell.getTreeItem();
+                    if (treeItemObj != null) {
+                        migrationTreeView.getSelectionModel().clearSelection();
+                        migrationTreeView.getSelectionModel().select((TreeItem<TreeData>) treeItemObj);
+                    }
+                }
+
+                migrationCtxMenu.getItems().clear();
+                TreeItem<TreeData> sel = migrationTreeView.getSelectionModel().getSelectedItem();
+                boolean isTask = sel != null && sel.getValue() instanceof com.dbboys.model.MigrationTask;
+                boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder;
+
+                if (isTask) {
+                    com.dbboys.model.MigrationTask task = (com.dbboys.model.MigrationTask) sel.getValue();
+                    boolean running = task.isRunning();
+                    startTaskItem.setDisable(running);
+                    stopTaskItem.setDisable(!running);
+                    editTaskItem.setDisable(running);
+                    moveTaskItem.setDisable(running || migrationTreeView.getRoot().getChildren().size() <= 1);
+                    renameTaskItem.setDisable(running);
+                    viewTaskLogItem.setDisable(task.getLastRunLog().isEmpty()
+                            && com.dbboys.infra.db.LocalDbRepository.getLatestMigrationTaskRun(task.getId()) == null);
+                    migrationCtxMenu.getItems().addAll(openTaskItem, startTaskItem, stopTaskItem, editTaskItem,
+                            viewTaskLogItem, moveTaskItem, renameTaskItem,
+                            new javafx.scene.control.SeparatorMenuItem(), deleteTaskItem);
+                } else if (isFolder) {
+                    com.dbboys.ui.treemodel.MigrationFolder folder =
+                            (com.dbboys.ui.treemodel.MigrationFolder) sel.getValue();
+                    migrationCtxMenu.getItems().addAll(newMigrationTaskItem, renameMigrationFolderItem);
+                    expandMigrationFolderItem.setDisable(folder.getExpand() == 1);
+                    collapseMigrationFolderItem.setDisable(folder.getExpand() != 1);
+                    migrationCtxMenu.getItems().addAll(expandMigrationFolderItem, collapseMigrationFolderItem);
+                    deleteMigrationFolderItem.setDisable(migrationTreeView.getRoot().getChildren().size() <= 1);
+                    migrationCtxMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+                    migrationCtxMenu.getItems().add(deleteMigrationFolderItem);
+                } else {
+                    migrationCtxMenu.getItems().addAll(newMigrationTaskItem, newMigrationFolderItem);
+                }
+
+                if (!migrationCtxMenu.getItems().isEmpty()) {
+                    migrationCtxMenu.show(migrationTreeView, event.getScreenX(), event.getScreenY());
+                }
+            });
+
+        } catch (Exception ex) {
+        }
+    }
+
+    /** 新建迁移任务（FXML 按钮 action / 右键菜单共用）。 */
+    public void createMigrationTask() {
+        com.dbboys.model.MigrationTask task = new com.dbboys.model.MigrationTask();
+        // 默认挂到当前选中的文件夹，否则第一个文件夹
+        TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+        if (selected != null && selected.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder folder) {
+            task.setParentId(folder.getId());
+        } else if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask
+                && selected.getParent() != null
+                && selected.getParent().getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder parentFolder) {
+            task.setParentId(parentFolder.getId());
+        } else {
+            java.util.List<com.dbboys.ui.treemodel.MigrationFolder> folders =
+                    com.dbboys.infra.db.LocalDbRepository.getMigrationFolders();
+            if (!folders.isEmpty()) {
+                task.setParentId(folders.get(0).getId());
+            }
+        }
+        MigrationDialogController dlg = new MigrationDialogController();
+        com.dbboys.model.MigrationTask result =
+                dlg.showAndWait(task, com.dbboys.infra.db.LocalDbRepository.getConnectLeafs());
+        if (result != null) {
+            if (result != task) {
+                result.setParentId(task.getParentId());
+            }
+            if (com.dbboys.infra.db.LocalDbRepository.createMigrationTask(result)) {
+                addMigrationTaskToTree(result);
+            }
+            if (dlg.isStartRequested()) {
+                com.dbboys.service.migration.MigrationTaskRunner.start(result);
+            }
+        }
+    }
+
+    /** 编辑选中的迁移任务。 */
+    private void editMigrationTask() {
+        TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.MigrationTask task)) {
+            return;
+        }
+        if (task.isRunning()) {
+            AlertUtil.CustomAlert(I18n.t("common.hint"),
+                    I18n.t("migration.error.task_running", "Task is running, stop it first"));
+            return;
+        }
+        MigrationDialogController dlg = new MigrationDialogController();
+        com.dbboys.model.MigrationTask result =
+                dlg.showAndWait(task, com.dbboys.infra.db.LocalDbRepository.getConnectLeafs());
+        if (result != null) {
+            if (result != task) {
+                result.setId(task.getId());
+                result.setParentId(task.getParentId());
+            }
+            com.dbboys.infra.db.LocalDbRepository.updateMigrationTask(result);
+            migrationTreeView.refresh();
+            if (dlg.isStartRequested()) {
+                com.dbboys.service.migration.MigrationTaskRunner.start(result);
+            }
+        }
+    }
+
+    private void addMigrationTaskToTree(com.dbboys.model.MigrationTask task) {
+        TreeItem<TreeData> newItem = new TreeItem<>(task);
+        for (TreeItem<TreeData> child : migrationTreeView.getRoot().getChildren()) {
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder f
+                    && f.getId() == task.getParentId()) {
+                child.getChildren().add(newItem);
+                if (!child.isExpanded()) {
+                    child.setExpanded(true);
+                }
+                child.getChildren().sort((a, b) ->
+                        a.getValue().getName().compareToIgnoreCase(b.getValue().getName()));
+                migrationTreeView.getSelectionModel().clearSelection();
+                migrationTreeView.getSelectionModel().select(newItem);
+                migrationTreeView.scrollTo(migrationTreeView.getSelectionModel().getSelectedIndex());
+                return;
+            }
+        }
+        migrationTreeView.getRoot().getChildren().add(newItem);
+        migrationTreeView.getSelectionModel().clearSelection();
+        migrationTreeView.getSelectionModel().select(newItem);
+    }
+
+    private void createMigrationFolder() {
+        HBox hbox = new HBox();
+        hbox.getChildren().add(new Label(I18n.t("metadata.dialog.create_folder.name", "Enter folder name")));
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        TextField textField = new TextField();
+        textField.setPrefWidth(200);
+        hbox.getChildren().add(textField);
+
+        ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                I18n.t("migration.menu.new_folder", "新建任务分类"),
+                hbox, 420, 180, btnOk, btnCancel);
+        Button okBtn = dlg.getButton(btnOk);
+        okBtn.setDisable(true);
+        textField.textProperty().addListener((obs, o, n) -> {
+            textField.setText(n.replace(" ", ""));
+            if (n.isBlank()) {
+                okBtn.setDisable(true);
+            } else {
+                boolean exists = false;
+                for (TreeItem<TreeData> treeItem : migrationTreeView.getRoot().getChildren()) {
+                    if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder existing
+                            && existing.getName().equals(n)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                okBtn.setDisable(exists);
+            }
+        });
+
+        if (dlg.showAndWait() == btnOk) {
+            com.dbboys.ui.treemodel.MigrationFolder folder = new com.dbboys.ui.treemodel.MigrationFolder();
+            folder.setName(textField.getText());
+            folder.setExpand(1);
+            com.dbboys.infra.db.LocalDbRepository.createMigrationFolder(folder);
+            TreeItem<TreeData> item = new TreeItem<>(folder) {
+                @Override
+                public boolean isLeaf() {
+                    return false;
+                }
+            };
+            item.setExpanded(true);
+            migrationTreeView.getRoot().getChildren().add(item);
+        }
+    }
+
+    /** 移动任务到其他任务分类。 */
+    private void migrationMoveTask() {
+        TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.MigrationTask task)) {
+            return;
+        }
+
+        HBox hbox = new HBox();
+        hbox.getChildren().add(new Label(I18n.t("metadata.dialog.move_connection.target", "请选择移动到  ")));
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        ChoiceBox<com.dbboys.ui.treemodel.MigrationFolder> choiceBox = new ChoiceBox<>();
+        ObservableList<com.dbboys.ui.treemodel.MigrationFolder> folderList = FXCollections.observableArrayList();
+        for (TreeItem<TreeData> treeItem : migrationTreeView.getRoot().getChildren()) {
+            if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder f
+                    && f.getId() != task.getParentId()) {
+                folderList.add(f);
+            }
+        }
+        if (folderList.isEmpty()) {
+            AlertUtil.CustomAlert(I18n.t("common.hint"),
+                    I18n.t("metadata.notice.no_target_folder", "No other folder available."));
+            return;
+        }
+        choiceBox.setItems(folderList);
+        choiceBox.getSelectionModel().select(0);
+        choiceBox.setPrefWidth(150);
+        hbox.getChildren().add(choiceBox);
+
+        choiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n != null) {
+                task.setParentId(n.getId());
+            }
+        });
+        task.setParentId(choiceBox.getSelectionModel().getSelectedItem().getId());
+
+        ButtonType buttonTypeOk = new ButtonType(I18n.t("common.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType buttonTypeCancel = new ButtonType(I18n.t("common.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                I18n.t("metadata.dialog.move_connection.title", "移动连接"),
+                hbox, 430, 180, buttonTypeOk, buttonTypeCancel);
+
+        if (dialog.showAndWait() == buttonTypeOk) {
+            com.dbboys.infra.db.LocalDbRepository.updateMigrationTask(task);
+            selected.getParent().getChildren().remove(selected);
+            for (TreeItem<TreeData> child : migrationTreeView.getRoot().getChildren()) {
+                if (child.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder f
+                        && f.getId() == task.getParentId()) {
+                    child.getChildren().add(selected);
+                    if (!child.isExpanded()) {
+                        child.setExpanded(true);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /** 重命名选中的迁移任务或任务分类。 */
+    private void migrationRenameItem() {
+        TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getValue() == null) {
+            return;
+        }
+        TreeData data = selected.getValue();
+        HBox hbox = new HBox();
+        hbox.getChildren().add(new Label(I18n.t("metadata.dialog.rename.title", "Enter new name") + "  "));
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        TextField textField = new TextField(data.getName());
+        textField.setPrefWidth(200);
+        hbox.getChildren().add(textField);
+
+        ButtonType btnOk = new ButtonType(I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnCancel = new ButtonType(I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                I18n.t("metadata.menu.rename", "Rename"),
+                hbox, 420, 180, btnOk, btnCancel);
+        Button okBtn = dlg.getButton(btnOk);
+        okBtn.setDisable(true);
+        textField.textProperty().addListener((obs, o, n) -> {
+            textField.setText(n.replace(" ", ""));
+            if (n.isBlank() || n.equals(data.getName())) {
+                okBtn.setDisable(true);
+                return;
+            }
+            boolean exists = false;
+            if (data instanceof com.dbboys.model.MigrationTask) {
+                for (TreeItem<TreeData> folderChild : migrationTreeView.getRoot().getChildren()) {
+                    for (TreeItem<TreeData> taskChild : folderChild.getChildren()) {
+                        if (taskChild.getValue() instanceof com.dbboys.model.MigrationTask existing
+                                && existing.getName().equals(n)) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (exists) break;
+                }
+            } else {
+                for (TreeItem<TreeData> treeItem : migrationTreeView.getRoot().getChildren()) {
+                    if (treeItem.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder existing
+                            && existing.getName().equals(n)) {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+            okBtn.setDisable(exists);
+        });
+
+        if (dlg.showAndWait() == btnOk) {
+            data.setName(textField.getText());
+            if (data instanceof com.dbboys.model.MigrationTask task) {
+                com.dbboys.infra.db.LocalDbRepository.updateMigrationTask(task);
+            } else if (data instanceof com.dbboys.ui.treemodel.MigrationFolder folder) {
+                com.dbboys.infra.db.LocalDbRepository.updateMigrationFolder(folder);
+            }
+            migrationTreeView.refresh();
+        }
+    }
+
+    /** 查看任务最近一次运行日志（内存优先，重启后回退到持久化的运行记录）。 */
+    private void showMigrationTaskLog() {
+        TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.MigrationTask task)) {
+            return;
+        }
+        String logText;
+        if (!task.getLastRunLog().isEmpty()) {
+            logText = String.join("\n", task.getLastRunLog());
+        } else {
+            com.dbboys.model.MigrationTaskRun lastRun =
+                    com.dbboys.infra.db.LocalDbRepository.getLatestMigrationTaskRun(task.getId());
+            logText = lastRun != null && !lastRun.getLog().isBlank()
+                    ? lastRun.getLog()
+                    : I18n.t("migration.log.empty", "暂无运行记录");
+        }
+        javafx.scene.control.TextArea logArea = new javafx.scene.control.TextArea(logText);
+        logArea.setEditable(false);
+        ButtonType btnClose = new ButtonType(I18n.t("migration.button.close", "Close"),
+                ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
+                I18n.t("migration.log.title", "迁移任务\"%s\"运行日志").formatted(task.getName()),
+                logArea, 720, 480, btnClose);
+        dlg.showAndWait();
+    }
+
+    /** 按任务 id 在迁移任务树中查找并打开其明细 tab（拖拽落点用）。 */
+    private void openMigrationTaskTabById(String idText) {
+        try {
+            int taskId = Integer.parseInt(idText.trim());
+            for (TreeItem<TreeData> folderItem : migrationTreeView.getRoot().getChildren()) {
+                for (TreeItem<TreeData> taskItem : folderItem.getChildren()) {
+                    if (taskItem.getValue() instanceof com.dbboys.model.MigrationTask task
+                            && task.getId() == taskId) {
+                        com.dbboys.ui.util.TabpaneUtil.addCustomMigrationTaskTab(task);
+                        return;
+                    }
+                }
+            }
+        } catch (NumberFormatException ignored) {
+        }
+    }
 
 
     public void createSshLeaf() {

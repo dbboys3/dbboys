@@ -10,6 +10,7 @@ import com.dbboys.ui.component.*;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import com.dbboys.model.MigrationTask;
 import com.dbboys.ui.treemodel.ConnectFolder;
 import com.dbboys.model.TreeData;
 import com.dbboys.ui.controller.tree.TreeObjectCrudHandler;
@@ -37,6 +38,7 @@ public class TabpaneUtil {
     private static final String TAB_KEY_TABLE = "table:";
     private static final String TAB_KEY_LOCK_SESSION = "lockSession:";
     private static final String TAB_KEY_SSH = "ssh:";
+    private static final String TAB_KEY_MIGRATION_TASK = "migration_task_";
 
     private TabpaneUtil() {
     }
@@ -105,6 +107,24 @@ public class TabpaneUtil {
         }
             */
         CustomSshTab tab = new CustomSshTab(sshConnect);
+        tabPane().getTabs().add(tab);
+        tabPane().getSelectionModel().select(tab);
+    }
+
+    /**
+     * 打开迁移任务明细中央 tab；同一任务已打开则选中（去重键与
+     * {@link CustomMigrationTaskTab} 的 userData 一致）。
+     */
+    public static void addCustomMigrationTaskTab(MigrationTask task) {
+        if (task == null) {
+            return;
+        }
+        Tab existing = findTabByUserData(TAB_KEY_MIGRATION_TASK + task.getId());
+        if (existing != null) {
+            tabPane().getSelectionModel().select(existing);
+            return;
+        }
+        CustomMigrationTaskTab tab = new CustomMigrationTaskTab(task);
         tabPane().getTabs().add(tab);
         tabPane().getSelectionModel().select(tab);
     }
