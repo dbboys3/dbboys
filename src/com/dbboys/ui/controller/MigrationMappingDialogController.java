@@ -4,14 +4,18 @@ import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.PlatformResolvers;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
+import com.dbboys.model.ColumnsInfo;
 import com.dbboys.service.migration.TableMapping;
-import com.dbboys.ui.dialog.CustomWindowFrameUtil;
-import javafx.beans.property.SimpleStringProperty;
+import com.dbboys.service.migration.TypeMapper;
+import com.dbboys.ui.dialog.AlertUtil;
+import javafx.event.ActionEvent;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -19,9 +23,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,8 +44,9 @@ public class MigrationMappingDialogController {
     private static final double DIALOG_W = 760;
     private static final double DIALOG_H = 500;
 
-    private Stage dialogStage;
     private GridPane rowsGrid;
+    private Connect source;
+    private Connect target;
     private final ObservableList<MappingRow> rows = FXCollections.observableArrayList();
     private List<String> sourceTypes = List.of();
     private List<String> targetTypes = List.of();
@@ -56,30 +59,29 @@ public class MigrationMappingDialogController {
     public Map<String, TableMapping> showAndWait(Window owner, String taskName,
                                                  Connect source, Connect target,
                                                  Map<String, TableMapping> initial) {
+        this.source = source;
+        this.target = target;
         this.sourceTypes = columnTypes(source);
         this.targetTypes = columnTypes(target);
         this.result = null;
 
-        dialogStage = new Stage();
         VBox content = buildContent(initial == null ? Map.of() : initial);
-        CustomWindowFrameUtil.createModalPopup(
-                dialogStage,
-                new SimpleStringProperty(String.format(
-                        I18n.t("migration.mapping.title", "Custom Data Mapping - %s"),
-                        taskName == null ? "" : taskName)),
+        ButtonType okType = new ButtonType(
+                I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelType = new ButtonType(
+                I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                String.format(I18n.t("migration.mapping.title", "Custom Data Mapping - %s"),
+                        taskName == null ? "" : taskName),
                 content,
                 DIALOG_W,
                 DIALOG_H,
-                true,
-                owner);
-        dialogStage.setMinWidth(600);
-        dialogStage.setMinHeight(420);
-        if (owner != null && owner.isShowing()) {
-            dialogStage.setX(owner.getX() + (owner.getWidth() - DIALOG_W) / 2);
-            dialogStage.setY(owner.getY() + (owner.getHeight() - DIALOG_H) / 2);
-        }
-        dialogStage.showAndWait();
-        return result;
+                okType,
+                cancelType);
+        Button okButton = dialog.getButton(okType);
+        okButton.addEventFilter(ActionEvent.ACTION, e -> result = collectResult());
+        ButtonType pickedType = dialog.showAndWait();
+        return pickedType == okType ? result : null;
     }
 
     private VBox buildContent(Map<String, TableMapping> initial) {
@@ -107,38 +109,23 @@ public class MigrationMappingDialogController {
 
         Button addButton = new Button();
         addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
-        addButton.setOnAction(e -> addRow("", ""));
+        addButton.setOnAction(e -> addRow("", "", ""));
 
-        Button okButton = new Button();
-        okButton.textProperty().bind(I18n.bind("common.confirm", "Confirm"));
-        okButton.getStyleClass().add("accent");
-        okButton.setDefaultButton(true);
-        okButton.setOnAction(e -> {
-            result = collectResult();
-            dialogStage.close();
-        });
+        HBox topBar = new HBox(addButton);
+        topBar.setAlignment(Pos.CENTER_LEFT);
 
-        Button cancelButton = new Button();
-        cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
-        cancelButton.setCancelButton(true);
-        cancelButton.setOnAction(e -> dialogStage.close());
-
-        Region buttonSpacer = new Region();
-        HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
-        HBox buttonBar = new HBox(10, addButton, buttonSpacer, okButton, cancelButton);
-        buttonBar.setAlignment(Pos.CENTER_LEFT);
-
-        VBox content = new VBox(8, scroll, hint, buttonBar);
-        content.setPadding(new Insets(10, 14, 10, 14));
+        VBox content = new VBox(8, topBar, scroll, hint);
 
         rebuildGrid();
         TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
         Map<String, String> overrides = global == null ? Map.of() : global.typeOverrides();
-        if (overrides.isEmpty()) {
-            addRow("", "");
+        if (sourceTypes.isEmpty()) {
+            addRow("", "", "");
         } else {
-            for (Map.Entry<String, String> entry : overrides.entrySet()) {
-                addRow(entry.getKey(), entry.getValue());
+            for (String sourceType : sourceTypes) {
+                String defaultTarget = defaultTargetType(sourceType);
+                String override = getIgnoreCase(overrides, sourceType);
+                addRow(sourceType, override != null ? override : defaultTarget, defaultTarget);
             }
         }
         return content;
@@ -158,10 +145,11 @@ public class MigrationMappingDialogController {
         }
     }
 
-    private void addRow(String sourceType, String targetType) {
+    private void addRow(String sourceType, String targetType, String defaultTarget) {
         MappingRow row = new MappingRow();
+        row.defaultTarget = defaultTarget;
         row.sourceType = new ComboBox<>(FXCollections.observableArrayList(sourceTypes));
-        row.sourceType.setEditable(true);
+        row.sourceType.setEditable(false);
         row.sourceType.setValue(sourceType);
         row.sourceType.setPrefWidth(220);
         row.targetType = new ComboBox<>(FXCollections.observableArrayList(targetTypes));
@@ -183,8 +171,10 @@ public class MigrationMappingDialogController {
         for (MappingRow row : rows) {
             String sourceType = row.sourceType.getValue();
             String targetType = row.targetType.getValue();
+            String defaultTarget = row.defaultTarget == null ? "" : row.defaultTarget.trim();
             if (sourceType == null || sourceType.isBlank()
-                    || targetType == null || targetType.isBlank()) {
+                    || targetType == null || targetType.isBlank()
+                    || targetType.trim().equalsIgnoreCase(defaultTarget)) {
                 continue;
             }
             overrides.put(sourceType.trim(), targetType.trim());
@@ -210,7 +200,37 @@ public class MigrationMappingDialogController {
         }
     }
 
+    private String defaultTargetType(String sourceType) {
+        try {
+            ColumnsInfo column = new ColumnsInfo();
+            column.setColName("c");
+            column.setColType(sourceType);
+            TypeMapper.GenericType generic = TypeMapper.normalize(source.getDbtype(), column);
+            return TypeMapper.toTargetType(target.getDbtype(), generic, column, new ArrayList<>());
+        } catch (Exception e) {
+            log.debug("default target type failed for {}", sourceType, e);
+            return "";
+        }
+    }
+
+    private static String getIgnoreCase(Map<String, String> map, String key) {
+        if (map == null || key == null) {
+            return null;
+        }
+        String exact = map.get(key);
+        if (exact != null) {
+            return exact;
+        }
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
     private static final class MappingRow {
+        String defaultTarget;
         ComboBox<String> sourceType;
         ComboBox<String> targetType;
         Button removeButton;

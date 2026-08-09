@@ -226,9 +226,13 @@ public class MigrationDialogController {
         dataCheckBox = boundCheckBox("migration.check.data", "Migrate data", true);
         overwriteCheckBox = boundCheckBox("migration.check.overwrite", "Overwrite existing tables", false);
         editMappingButton = new Button();
-        editMappingButton.textProperty().bind(I18n.bind("migration.mapping.edit", "Edit"));
+        editMappingButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
+        editMappingButton.getStyleClass().add("small");
+        Tooltip mappingTip = new Tooltip();
+        mappingTip.textProperty().bind(I18n.bind("migration.mapping.edit", "Edit"));
+        editMappingButton.setTooltip(mappingTip);
         editMappingButton.setOnAction(e -> openMappingDialog());
-        HBox optionsRow = new HBox(14, ddlCheckBox, dataCheckBox, editMappingButton, overwriteCheckBox);
+        HBox optionsRow = new HBox(14, overwriteCheckBox);
         optionsRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
         optionsBox.setPadding(new Insets(6, 0, 0, 12));
@@ -708,6 +712,8 @@ public class MigrationDialogController {
         final MigrationObjectRef.Kind kind;
         CheckBox checkBox;
         Label countLabel;
+        Label selectedLabel;
+        int count;
         Button editButton;
         /** false=全部（类型级通配），true=自定义挑选。 */
         boolean custom;
@@ -727,7 +733,11 @@ public class MigrationDialogController {
             ts.checkBox = new CheckBox();
             ts.checkBox.textProperty().bind(I18n.bind(kindKey(kind), kindFallback(kind)));
             ts.checkBox.setFocusTraversable(false);
-            ts.checkBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
+            ts.checkBox.selectedProperty().addListener(
+                    (obs, o, n) -> {
+                        refreshMappingEditButton();
+                        updateSelectedLabel(ts);
+                    });
             // 数量未加载前显示 0，源范围选定后后台刷新真实数量
             ts.countLabel = new Label("(0)");
             ts.editButton = new Button();
@@ -737,9 +747,14 @@ public class MigrationDialogController {
             editTip.textProperty().bind(I18n.bind("migration.editor.type_scope_edit", "Edit"));
             ts.editButton.setTooltip(editTip);
             ts.editButton.setOnAction(e -> openPicker(ts));
+            ts.selectedLabel = new Label("0/0");
+            ts.count = 0;
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
-            HBox row = new HBox(8, ts.checkBox, ts.countLabel, spacer, ts.editButton);
+            HBox row = new HBox(10, ts.checkBox, ts.countLabel, ts.selectedLabel, spacer, ts.editButton);
+            if (kind == MigrationObjectRef.Kind.TABLE) {
+                row.getChildren().addAll(ddlCheckBox, dataCheckBox, editMappingButton);
+            }
             row.setAlignment(Pos.CENTER_LEFT);
             typeSelections.add(ts);
             typeRowsBox.getChildren().add(row);
@@ -777,6 +792,8 @@ public class MigrationDialogController {
             // 类型行保持可见可点，数量维持未加载的 (0)
             for (TypeSelection ts : typeSelections) {
                 ts.countLabel.setText("(0)");
+                ts.count = 0;
+                updateSelectedLabel(ts);
             }
             refreshMappingEditButton();
             return;
@@ -815,7 +832,9 @@ public class MigrationDialogController {
                 }
                 for (TypeSelection ts : typeSelections) {
                     Integer count = counts.get(ts.kind);
+                    ts.count = count == null ? 0 : count;
                     ts.countLabel.setText(count == null ? "(0)" : "(" + count + ")");
+                    updateSelectedLabel(ts);
                 }
             });
         });
@@ -866,7 +885,20 @@ public class MigrationDialogController {
         if (!picked.isEmpty()) {
             ts.checkBox.setSelected(true);
         }
+        updateSelectedLabel(ts);
         refreshMappingEditButton();
+    }
+
+    private void updateSelectedLabel(TypeSelection ts) {
+        if (ts == null || ts.selectedLabel == null) {
+            return;
+        }
+        int selected = ts.checkBox.isSelected()
+                ? (ts.custom ? ts.customNames.size() : ts.count)
+                : 0;
+        ts.selectedLabel.setText(String.format(
+                I18n.t("migration.editor.selected_count", "Selected %d/%d"),
+                selected, ts.count));
     }
 
     // ==================================================================
@@ -1167,33 +1199,9 @@ public class MigrationDialogController {
                 }
             });
 
-            Button okButton = new Button();
-            okButton.textProperty().bind(I18n.bind("common.confirm", "Confirm"));
-            okButton.getStyleClass().add("accent");
-            okButton.setDefaultButton(true);
-            Button cancelButton = new Button();
-            cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
-            cancelButton.setCancelButton(true);
-            Region buttonSpacer = new Region();
-            HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
-            HBox buttonBar = new HBox(10, buttonSpacer, okButton, cancelButton);
-            buttonBar.setAlignment(Pos.CENTER_RIGHT);
-
-            VBox content = new VBox(8, topBar, listView, buttonBar);
-            content.setPadding(new Insets(10, 14, 10, 14));
+            VBox content = new VBox(8, topBar, listView);
 
             List<String> result = new ArrayList<>();
-            boolean[] confirmed = {false};
-            okButton.setOnAction(e -> {
-                for (PickItem item : master) {
-                    if (item.selected.get()) {
-                        result.add(item.name);
-                    }
-                }
-                confirmed[0] = true;
-                stage.close();
-            });
-            cancelButton.setOnAction(e -> stage.close());
 
             // 后台加载对象清单
             AppExecutor.runAsync(() -> {
@@ -1225,21 +1233,27 @@ public class MigrationDialogController {
             });
 
             String kindLabel = I18n.t(kindKey(kind), kindFallback(kind));
-            CustomWindowFrameUtil.createModalPopup(
-                    stage,
-                    new SimpleStringProperty(String.format(
-                            I18n.t("migration.editor.pick_title", "Select %s objects"), kindLabel)),
+            ButtonType okType = new ButtonType(
+                    I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancelType = new ButtonType(
+                    I18n.t("common.cancel", "Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+            AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                    String.format(I18n.t("migration.editor.pick_title", "Select %s objects"), kindLabel),
                     content,
                     PICKER_W,
                     PICKER_H,
-                    true,
-                    owner);
-            if (owner != null && owner.isShowing()) {
-                stage.setX(owner.getX() + (owner.getWidth() - PICKER_W) / 2);
-                stage.setY(owner.getY() + (owner.getHeight() - PICKER_H) / 2);
-            }
-            stage.showAndWait();
-            return confirmed[0] ? result : null;
+                    okType,
+                    cancelType);
+            Button okButton = dialog.getButton(okType);
+            okButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+                for (PickItem item : master) {
+                    if (item.selected.get()) {
+                        result.add(item.name);
+                    }
+                }
+            });
+            ButtonType pickedType = dialog.showAndWait();
+            return pickedType == okType ? result : null;
         }
 
         /** CheckBox 单元格：勾选状态与 PickItem 双向绑定。 */
