@@ -45,6 +45,7 @@ public class MigrationMappingDialogController {
     private static final double DIALOG_H = 500;
 
     private GridPane rowsGrid;
+    private GridPane headerGrid;
     private ScrollPane scroll;
     private Connect source;
     private Connect target;
@@ -109,11 +110,22 @@ public class MigrationMappingDialogController {
         targetCol.setMinWidth(160);
         rowsGrid.getColumnConstraints().setAll(sourceCol, targetCol);
 
+        headerGrid = new GridPane();
+        headerGrid.setHgap(10);
+        headerGrid.getColumnConstraints().setAll(sourceCol, targetCol);
+        Label sourceHeader = new Label();
+        sourceHeader.textProperty().bind(
+                I18n.bind("migration.mapping.column.source_type", "Source Type"));
+        Label targetHeader = new Label();
+        targetHeader.textProperty().bind(
+                I18n.bind("migration.mapping.column.target_type", "Target Type"));
+        headerGrid.addRow(0, sourceHeader, targetHeader);
+
         scroll = new ScrollPane(rowsGrid);
         scroll.setFitToWidth(true);
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        VBox content = new VBox(8, scroll);
+        VBox content = new VBox(8, headerGrid, scroll);
 
         rebuildGrid();
         TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
@@ -132,12 +144,7 @@ public class MigrationMappingDialogController {
 
     private void rebuildGrid() {
         rowsGrid.getChildren().clear();
-        Label sourceHeader = new Label();
-        sourceHeader.textProperty().bind(I18n.bind("migration.mapping.column.source_type", "Source Type"));
-        Label targetHeader = new Label();
-        targetHeader.textProperty().bind(I18n.bind("migration.mapping.column.target_type", "Target Type"));
-        rowsGrid.addRow(0, sourceHeader, targetHeader);
-        int rowIndex = 1;
+        int rowIndex = 0;
         for (MappingRow row : rows) {
             rowsGrid.addRow(rowIndex++, row.sourceType, row.targetBox);
         }
