@@ -1403,7 +1403,7 @@ Text {
 .tree-cell {
   -fx-background-color: -color-cell-bg;
   -fx-text-fill: -color-cell-fg;
-  -fx-padding: 0.3em 0 0.3em 0;
+  -fx-padding: 4px;
   -fx-indent: 1.2em;
 }
 

@@ -1537,7 +1537,15 @@ public class CreateConnectController {
                     //确认提交连接
                     if(isCommit){
 
-                        String result=LocalDbRepository.createConnectLeaf(connect);
+                        //编辑连接直接 UPDATE 原行，保持 c_id 不变（迁移任务等按 id 引用连接）；新建/复制仍走 INSERT
+                        boolean isEditConnect = treeDataParam instanceof Connect && !isCopy;
+                        String result;
+                        if (isEditConnect) {
+                            connect.setId(((Connect) treeDataParam).getId());
+                            result = LocalDbRepository.updateConnectLeaf(connect);
+                        } else {
+                            result = LocalDbRepository.createConnectLeaf(connect);
+                        }
                         if(result.equals("")){
                             Platform.runLater(()-> {
                                setConnectingVisible(false);
@@ -1549,13 +1557,12 @@ public class CreateConnectController {
 
 
                             //判断是否为编辑连接，符合条件表示为编辑连�?
-                            if (treeDataParam != null && treeDataParam instanceof Connect &&!isCopy) {
+                            if (isEditConnect) {
                                 Platform.runLater(()->{
                                     TreeItem<TreeData> currItem = new TreeItem<>();
                                     currItem = AppState.getDatabaseMetaTreeView().getSelectionModel().getSelectedItem();
                                     currItem.getParent().getChildren().remove(currItem);
                                     TreeViewUtil.createConnectLeaf(AppState.getDatabaseMetaTreeView(), treeItem);
-                                    LocalDbRepository.deleteConnectLeaf((Connect) treeDataParam);//删除数据库中老节�?
 
                                     //如果当前编辑的连接为空或已断开，不处理
                                     try {

@@ -330,6 +330,44 @@ public  class LocalDbRepository {
         return result;
     }
 
+    //编辑连接：直接 UPDATE 原行（保持 c_id 不变），与 createConnectLeaf 列集一致；错误返回错误信息
+    public static String updateConnectLeaf(Connect connect)  {
+        String result = "";
+        try {
+            com.dbboys.app.AppContext.get(ConnectionService.class).setConnectInfo(connect);
+            try (PreparedStatement psmt=conn.prepareStatement("update t_connect set c_parentid=?,c_name=?,c_dbtype=?,c_driver=?,c_ip=?,c_port=?,c_database=?,c_readonly=?,c_username=?,c_password=?,c_props=?,c_info=?,c_drivermd5=?,c_dbversion=?,c_ssh_host=?,c_ssh_port=?,c_ssh_user=?,c_ssh_password=?,c_ssh_auth_type=?,c_ssh_key_path=?,c_ssh_key_passphrase=?,c_ssh_enabled=? where c_id=?")) {
+                psmt.setObject(1, connect.getParentId());
+                psmt.setObject(2, connect.getName());
+                psmt.setObject(3, connect.getDbtype());
+                psmt.setObject(4, connect.getDriver());
+                psmt.setObject(5, connect.getIp());
+                psmt.setObject(6, connect.getPort());
+                psmt.setObject(7, connect.getCatalog());
+                psmt.setObject(8, connect.getReadonly()?"1":"0");
+                psmt.setObject(9, connect.getUsername());
+                psmt.setObject(10, connect.getPassword());
+                psmt.setObject(11, connect.getProps());
+                psmt.setObject(12, connect.getInfo());
+                psmt.setObject(13, connect.getDrivermd5());
+                psmt.setObject(14, connect.getDbversion());
+                psmt.setObject(15, connect.getSshHost());
+                psmt.setObject(16, connect.getSshPort());
+                psmt.setObject(17, connect.getSshUser());
+                psmt.setObject(18, connect.getSshPassword());
+                psmt.setObject(19, connect.getSshAuthType());
+                psmt.setObject(20, connect.getSshKeyPath());
+                psmt.setObject(21, connect.getSshKeyPassphrase());
+                psmt.setObject(22, connect.getSshEnabled()?"1":"0");
+                psmt.setObject(23, connect.getId());
+                psmt.executeUpdate();
+            }
+        } catch (Exception e) {
+            log.error("SQLite operation failed", e);
+            result=e.getMessage();
+        }
+        return result;
+    }
+
     //删除连接
     public static boolean deleteConnectLeaf(Connect connect)  {
         boolean success = false;
