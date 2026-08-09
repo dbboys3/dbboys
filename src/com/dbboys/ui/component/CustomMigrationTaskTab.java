@@ -128,11 +128,14 @@ public class CustomMigrationTaskTab extends CustomTab {
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
         HBox headerRow = new HBox(10, startButton, stopButton, nameLabel, statusLabel,
-                routeLabel, headerSpacer, successFilterButton, failureFilterButton);
+                routeLabel, headerSpacer);
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         progressBar.setPrefWidth(220);
-        HBox bottomRow = new HBox(10, progressBar, progressLabel, currentObjectLabel, countsLabel);
+        Region bottomSpacer = new Region();
+        HBox.setHgrow(bottomSpacer, Priority.ALWAYS);
+        HBox bottomRow = new HBox(10, progressBar, progressLabel, currentObjectLabel, countsLabel,
+                bottomSpacer, successFilterButton, failureFilterButton);
         bottomRow.setAlignment(Pos.CENTER_LEFT);
 
         // ---- 明细 TableView ----
