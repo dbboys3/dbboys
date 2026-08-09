@@ -465,6 +465,9 @@ public class MigrationDialogController {
         DatabasePlatform.CatalogModel model = platform.catalogModel();
         boolean schemaModel = model == DatabasePlatform.CatalogModel.SCHEMA;
         setSourceCatalogRowsVisible(true, model == DatabasePlatform.CatalogModel.DATABASE_SCHEMA);
+        if (model != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+            setNoDataState(sourceSchemaChoiceBox);
+        }
         // SCHEMA 模型（Oracle/Dameng）：源库位置显示模式列表，标签用源模式键
         sourceDbLabel.textProperty().unbind();
         sourceDbLabel.textProperty().bind(I18n.bind(
@@ -543,14 +546,16 @@ public class MigrationDialogController {
     }
 
     private void setSourceCatalogRowsVisible(boolean showDb, boolean showSchema) {
-        sourceDbLabel.setVisible(showDb);
-        sourceDbLabel.setManaged(showDb);
-        sourceDbChoiceBox.setVisible(showDb);
-        sourceDbChoiceBox.setManaged(showDb);
-        sourceSchemaLabel.setVisible(showSchema);
-        sourceSchemaLabel.setManaged(showSchema);
-        sourceSchemaChoiceBox.setVisible(showSchema);
-        sourceSchemaChoiceBox.setManaged(showSchema);
+        sourceDbLabel.setVisible(true);
+        sourceDbLabel.setManaged(true);
+        sourceDbChoiceBox.setVisible(true);
+        sourceDbChoiceBox.setManaged(true);
+        sourceDbChoiceBox.setDisable(!showDb);
+        sourceSchemaLabel.setVisible(true);
+        sourceSchemaLabel.setManaged(true);
+        sourceSchemaChoiceBox.setVisible(true);
+        sourceSchemaChoiceBox.setManaged(true);
+        sourceSchemaChoiceBox.setDisable(!showSchema);
     }
 
     /** 当前源范围 catalog（DATABASE=库名；SCHEMA=模式名；DATABASE_SCHEMA=库名），未选为 null。 */
@@ -607,6 +612,12 @@ public class MigrationDialogController {
         boolean showDb = model != DatabasePlatform.CatalogModel.SCHEMA;
         boolean showSchema = model != DatabasePlatform.CatalogModel.DATABASE;
         setCatalogRowsVisible(showDb, showSchema);
+        if (!showDb) {
+            setNoDataState(targetDbChoiceBox);
+        }
+        if (!showSchema) {
+            setNoDataState(targetSchemaChoiceBox);
+        }
 
         String preferredDb = firstNonBlank(echoTargetDatabase, preferredCatalogName());
         String preferredSchemaImmediate = firstNonBlank(echoTargetSchema, preferredCatalogName());
@@ -692,14 +703,16 @@ public class MigrationDialogController {
     }
 
     private void setCatalogRowsVisible(boolean showDb, boolean showSchema) {
-        targetDbLabel.setVisible(showDb);
-        targetDbLabel.setManaged(showDb);
-        targetDbChoiceBox.setVisible(showDb);
-        targetDbChoiceBox.setManaged(showDb);
-        targetSchemaLabel.setVisible(showSchema);
-        targetSchemaLabel.setManaged(showSchema);
-        targetSchemaChoiceBox.setVisible(showSchema);
-        targetSchemaChoiceBox.setManaged(showSchema);
+        targetDbLabel.setVisible(true);
+        targetDbLabel.setManaged(true);
+        targetDbChoiceBox.setVisible(true);
+        targetDbChoiceBox.setManaged(true);
+        targetDbChoiceBox.setDisable(!showDb);
+        targetSchemaLabel.setVisible(true);
+        targetSchemaLabel.setManaged(true);
+        targetSchemaChoiceBox.setVisible(true);
+        targetSchemaChoiceBox.setManaged(true);
+        targetSchemaChoiceBox.setDisable(!showSchema);
     }
 
     /** 源/目标库模式默认选中与源连接同名项。 */
