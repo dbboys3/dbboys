@@ -16,6 +16,8 @@ import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.service.migration.TableMapping;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
+import com.dbboys.ui.icon.IconFactory;
+import com.dbboys.ui.icon.IconPaths;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -26,14 +28,16 @@ import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.MenuButton;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -72,8 +76,8 @@ import java.util.Set;
  */
 public class MigrationDialogController {
     private static final Logger log = LogManager.getLogger(MigrationDialogController.class);
-    private static final double DIALOG_W = 950;
-    private static final double DIALOG_H = 640;
+    private static final double DIALOG_W = 555;
+    private static final double DIALOG_H = 478;
 
     private Stage dialogStage;
     private TextField nameField;
@@ -127,16 +131,21 @@ public class MigrationDialogController {
         picksScopeKey = null;
 
         dialogStage = new Stage();
-        VBox content = buildContent(connects == null ? List.of() : connects);
+        DialogPane dialogPane = buildDialogPane(connects == null ? List.of() : connects);
+        int titleBarHeight = 28;
+        int contentH = (int) DIALOG_H - titleBarHeight;
+        dialogPane.setMinSize(DIALOG_W, contentH);
+        dialogPane.setPrefSize(DIALOG_W, contentH);
+        dialogPane.setMaxSize(DIALOG_W, contentH);
         CustomWindowFrameUtil.createModalPopup(
                 dialogStage,
                 I18n.bind("migration.title", "Data Migration"),
-                content,
+                dialogPane,
                 DIALOG_W,
                 DIALOG_H,
-                true);
-        dialogStage.setMinWidth(760);
-        dialogStage.setMinHeight(520);
+                false);
+        dialogStage.setResizable(false);
+        dialogStage.sizeToScene();
 
         Window owner = AppState.getWindow();
         if (owner != null && owner.isShowing()) {
@@ -156,7 +165,9 @@ public class MigrationDialogController {
     // UI 构建
     // ==================================================================
 
-    private VBox buildContent(List<Connect> connects) {
+    private DialogPane buildDialogPane(List<Connect> connects) {
+        DialogPane dialogPane = new DialogPane();
+        dialogPane.setHeader(null);
         VBox content = new VBox(8);
         content.setPadding(new Insets(10, 14, 10, 14));
 
@@ -217,37 +228,17 @@ public class MigrationDialogController {
         editMappingButton = new Button();
         editMappingButton.textProperty().bind(I18n.bind("migration.mapping.edit", "Edit"));
         editMappingButton.setOnAction(e -> openMappingDialog());
-        HBox dataRow = new HBox(6, dataCheckBox, editMappingButton);
-        dataRow.setAlignment(Pos.CENTER_LEFT);
-        VBox optionsBox = new VBox(8, optionsLabel, ddlCheckBox, dataRow, overwriteCheckBox);
+        HBox optionsRow = new HBox(14, ddlCheckBox, dataCheckBox, editMappingButton, overwriteCheckBox);
+        optionsRow.setAlignment(Pos.CENTER_LEFT);
+        VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
         optionsBox.setPadding(new Insets(6, 0, 0, 12));
 
-        VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, scopeHint, optionsBox);
+        VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, optionsBox, scopeHint);
         VBox.setVgrow(middleBox, Priority.ALWAYS);
 
         // ---- 底部按钮：保存(accent) / 保存并启动 / 关闭 ----
-        Button saveButton = new Button();
-        saveButton.textProperty().bind(I18n.bind("migration.button.save", "Save"));
-        saveButton.getStyleClass().add("accent");
-        saveButton.setOnAction(e -> save(false));
-
-        Button saveRunButton = new Button();
-        saveRunButton.textProperty().bind(I18n.bind("migration.button.save_run", "Save & Run"));
-        saveRunButton.getStyleClass().add("accent");
-        saveRunButton.setOnAction(e -> save(true));
-
-        Button closeButton = new Button();
-        closeButton.textProperty().bind(I18n.bind("migration.button.close", "Close"));
-        closeButton.getStyleClass().add("button-outlined");
-        closeButton.setCancelButton(true);
-        closeButton.setOnAction(e -> dialogStage.close());
-
-        Region buttonSpacer = new Region();
-        HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
-        HBox buttonBar = new HBox(10, buttonSpacer, saveButton, saveRunButton, closeButton);
-        buttonBar.setAlignment(Pos.CENTER_RIGHT);
-
-        content.getChildren().addAll(form, middleBox, buttonBar);
+        content.getChildren().addAll(form, middleBox);
+        dialogPane.setContent(content);
 
         // ---- 联动 ----
         sourceChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
@@ -282,9 +273,27 @@ public class MigrationDialogController {
         });
         dataCheckBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
 
+        rebuildTypeRows(null);
         applyInitialState(connects);
         refreshMappingEditButton();
-        return content;
+        wireDialogButtons(dialogPane);
+        return dialogPane;
+    }
+
+    private void wireDialogButtons(DialogPane dialogPane) {
+        ButtonType saveType = new ButtonType(
+                I18n.t("migration.button.save", "Save"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType closeType = new ButtonType(
+                I18n.t("migration.button.close", "Close"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialogPane.getButtonTypes().addAll(saveType, closeType);
+
+        Button saveButton = (Button) dialogPane.lookupButton(saveType);
+        saveButton.getStyleClass().add("accent");
+        saveButton.setOnAction(e -> save(false));
+
+        Button closeButton = (Button) dialogPane.lookupButton(closeType);
+        closeButton.setCancelButton(true);
+        closeButton.setOnAction(e -> dialogStage.close());
     }
 
     /** 新建默认选中 / 编辑回显。 */
@@ -324,7 +333,6 @@ public class MigrationDialogController {
                         ts.checkBox.setSelected(true);
                         ts.custom = false;
                         ts.customNames.clear();
-                        updateScopeText(ts);
                     }
                     continue;
                 }
@@ -340,7 +348,6 @@ public class MigrationDialogController {
                     ts.custom = true;
                     ts.customNames.add(ref.name());
                 }
-                updateScopeText(ts);
             }
         } finally {
             applyingEcho = false;
@@ -378,7 +385,8 @@ public class MigrationDialogController {
 
     private static ChoiceBox<String> stringChoiceBox() {
         ChoiceBox<String> choiceBox = new ChoiceBox<>();
-        choiceBox.setPrefWidth(260);
+        choiceBox.setPrefWidth(200);
+        choiceBox.setStyle("-fx-pref-width: 200px;");
         choiceBox.setFocusTraversable(false);
         // 与 SQL 编辑面板库/模式选择器一致（SqlTab.fxml）
         choiceBox.getStyleClass().add("custom-dbname-choicebox");
@@ -700,7 +708,7 @@ public class MigrationDialogController {
         final MigrationObjectRef.Kind kind;
         CheckBox checkBox;
         Label countLabel;
-        MenuButton scopeMenu;
+        Button editButton;
         /** false=全部（类型级通配），true=自定义挑选。 */
         boolean custom;
         final Set<String> customNames = new LinkedHashSet<>();
@@ -714,11 +722,7 @@ public class MigrationDialogController {
     private void rebuildTypeRows(DatabasePlatform platform) {
         typeSelections.clear();
         typeRowsBox.getChildren().clear();
-        if (platform == null) {
-            refreshMappingEditButton();
-            return;
-        }
-        for (MigrationObjectRef.Kind kind : supportedKinds(platform)) {
+        for (MigrationObjectRef.Kind kind : allKinds()) {
             TypeSelection ts = new TypeSelection(kind);
             ts.checkBox = new CheckBox();
             ts.checkBox.textProperty().bind(I18n.bind(kindKey(kind), kindFallback(kind)));
@@ -726,24 +730,16 @@ public class MigrationDialogController {
             ts.checkBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
             // 数量未加载前显示 0，源范围选定后后台刷新真实数量
             ts.countLabel = new Label("(0)");
-            ts.scopeMenu = new MenuButton();
-            ts.scopeMenu.getStyleClass().add("small");
-            MenuItem allItem = new MenuItem();
-            allItem.textProperty().bind(I18n.bind("migration.editor.type_scope_all", "All"));
-            allItem.setOnAction(e -> {
-                ts.custom = false;
-                ts.customNames.clear();
-                updateScopeText(ts);
-            });
-            MenuItem customItem = new MenuItem();
-            customItem.textProperty().bind(
-                    I18n.bind("migration.editor.type_scope_custom_pick", "Custom..."));
-            customItem.setOnAction(e -> openPicker(ts));
-            ts.scopeMenu.getItems().addAll(allItem, customItem);
-            updateScopeText(ts);
+            ts.editButton = new Button();
+            ts.editButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
+            ts.editButton.getStyleClass().add("small");
+            Tooltip editTip = new Tooltip();
+            editTip.textProperty().bind(I18n.bind("migration.editor.type_scope_edit", "Edit"));
+            ts.editButton.setTooltip(editTip);
+            ts.editButton.setOnAction(e -> openPicker(ts));
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
-            HBox row = new HBox(8, ts.checkBox, ts.countLabel, spacer, ts.scopeMenu);
+            HBox row = new HBox(8, ts.checkBox, ts.countLabel, spacer, ts.editButton);
             row.setAlignment(Pos.CENTER_LEFT);
             typeSelections.add(ts);
             typeRowsBox.getChildren().add(row);
@@ -761,13 +757,6 @@ public class MigrationDialogController {
         return null;
     }
 
-    private void updateScopeText(TypeSelection ts) {
-        ts.scopeMenu.setText(ts.custom
-                ? String.format(I18n.t("migration.editor.type_scope_custom", "Custom(%d)"),
-                        ts.customNames.size())
-                : I18n.t("migration.editor.type_scope_all", "All"));
-    }
-
     /** 源范围变化后后台加载各类型对象数量；scope 变更会使旧的自定义挑选失效。 */
     private void reloadTypeCounts() {
         String catalog = currentSourceCatalog();
@@ -779,7 +768,6 @@ public class MigrationDialogController {
                 for (TypeSelection ts : typeSelections) {
                     ts.custom = false;
                     ts.customNames.clear();
-                    updateScopeText(ts);
                 }
                 picksScopeKey = scopeKey;
             }
@@ -794,9 +782,17 @@ public class MigrationDialogController {
             return;
         }
         int generation = ++countGeneration;
+        DatabasePlatform platform = null;
+        try {
+            platform = PlatformResolvers.get().requirePlatform(source);
+        } catch (Exception ignored) {
+            // keep unsupported kinds at (0)
+        }
         List<MigrationObjectRef.Kind> kinds = new ArrayList<>();
         for (TypeSelection ts : typeSelections) {
-            kinds.add(ts.kind);
+            if (isKindSupported(platform, ts.kind)) {
+                kinds.add(ts.kind);
+            }
         }
         AppExecutor.runAsync(() -> {
             Map<MigrationObjectRef.Kind, Integer> counts = new EnumMap<>(MigrationObjectRef.Kind.class);
@@ -870,7 +866,6 @@ public class MigrationDialogController {
         if (!picked.isEmpty()) {
             ts.checkBox.setSelected(true);
         }
-        updateScopeText(ts);
         refreshMappingEditButton();
     }
 
@@ -908,27 +903,31 @@ public class MigrationDialogController {
     // ==================================================================
 
     /** 各平台支持的对象类型：表/视图/触发器恒有，其余看平台能力。 */
-    private static List<MigrationObjectRef.Kind> supportedKinds(DatabasePlatform platform) {
-        List<MigrationObjectRef.Kind> kinds = new ArrayList<>();
-        kinds.add(MigrationObjectRef.Kind.TABLE);
-        kinds.add(MigrationObjectRef.Kind.VIEW);
-        if (platform.supportsSequencesFolder()) {
-            kinds.add(MigrationObjectRef.Kind.SEQUENCE);
+    private static List<MigrationObjectRef.Kind> allKinds() {
+        return List.of(
+                MigrationObjectRef.Kind.TABLE,
+                MigrationObjectRef.Kind.VIEW,
+                MigrationObjectRef.Kind.SEQUENCE,
+                MigrationObjectRef.Kind.SYNONYM,
+                MigrationObjectRef.Kind.TRIGGER,
+                MigrationObjectRef.Kind.FUNCTION,
+                MigrationObjectRef.Kind.PROCEDURE,
+                MigrationObjectRef.Kind.PACKAGE);
+    }
+
+    private static boolean isKindSupported(DatabasePlatform platform, MigrationObjectRef.Kind kind) {
+        if (platform == null) {
+            return false;
         }
-        if (platform.supportsSynonymsFolder()) {
-            kinds.add(MigrationObjectRef.Kind.SYNONYM);
-        }
-        kinds.add(MigrationObjectRef.Kind.TRIGGER);
-        if (platform.supportsFunctionsFolder()) {
-            kinds.add(MigrationObjectRef.Kind.FUNCTION);
-        }
-        if (platform.supportsProceduresFolder()) {
-            kinds.add(MigrationObjectRef.Kind.PROCEDURE);
-        }
-        if (platform.supportsPackages()) {
-            kinds.add(MigrationObjectRef.Kind.PACKAGE);
-        }
-        return kinds;
+        return switch (kind) {
+            case TABLE, VIEW, TRIGGER -> true;
+            case SEQUENCE -> platform.supportsSequencesFolder();
+            case SYNONYM -> platform.supportsSynonymsFolder();
+            case FUNCTION -> platform.supportsFunctionsFolder();
+            case PROCEDURE -> platform.supportsProceduresFolder();
+            case PACKAGE -> platform.supportsPackages();
+            case ALL -> false;
+        };
     }
 
     /** 源端会话：schema 非空→catalog=库 + sessionCatalog=模式；否则走方言 setSessionCatalog。 */
@@ -1174,7 +1173,6 @@ public class MigrationDialogController {
             okButton.setDefaultButton(true);
             Button cancelButton = new Button();
             cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
-            cancelButton.getStyleClass().add("button-outlined");
             cancelButton.setCancelButton(true);
             Region buttonSpacer = new Region();
             HBox.setHgrow(buttonSpacer, Priority.ALWAYS);

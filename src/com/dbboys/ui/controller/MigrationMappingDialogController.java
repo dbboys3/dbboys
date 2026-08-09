@@ -107,7 +107,6 @@ public class MigrationMappingDialogController {
 
         Button addButton = new Button();
         addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
-        addButton.getStyleClass().add("button-outlined");
         addButton.setOnAction(e -> addRow("", ""));
 
         Button okButton = new Button();
@@ -121,7 +120,6 @@ public class MigrationMappingDialogController {
 
         Button cancelButton = new Button();
         cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
-        cancelButton.getStyleClass().add("button-outlined");
         cancelButton.setCancelButton(true);
         cancelButton.setOnAction(e -> dialogStage.close());
 
