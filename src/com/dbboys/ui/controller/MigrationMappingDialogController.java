@@ -111,10 +111,10 @@ public class MigrationMappingDialogController {
         addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
         addButton.setOnAction(e -> addRow("", "", ""));
 
-        HBox topBar = new HBox(addButton);
-        topBar.setAlignment(Pos.CENTER_LEFT);
+        HBox addBar = new HBox(addButton);
+        addBar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox content = new VBox(8, topBar, scroll, hint);
+        VBox content = new VBox(8, scroll, addBar, hint);
 
         rebuildGrid();
         TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
@@ -150,10 +150,12 @@ public class MigrationMappingDialogController {
         row.defaultTarget = defaultTarget;
         row.sourceType = new ComboBox<>(FXCollections.observableArrayList(sourceTypes));
         row.sourceType.setEditable(false);
+        row.sourceType.getStyleClass().add("choice-box-with-border");
         row.sourceType.setValue(sourceType);
         row.sourceType.setPrefWidth(220);
         row.targetType = new ComboBox<>(FXCollections.observableArrayList(targetTypes));
         row.targetType.setEditable(true);
+        row.targetType.getStyleClass().add("choice-box-with-border");
         row.targetType.setValue(targetType);
         row.targetType.setPrefWidth(260);
         row.removeButton = new Button("✕");

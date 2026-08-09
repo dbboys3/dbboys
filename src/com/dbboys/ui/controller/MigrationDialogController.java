@@ -233,9 +233,10 @@ public class MigrationDialogController {
         editMappingButton.setTooltip(mappingTip);
         editMappingButton.setOnAction(e -> openMappingDialog());
         HBox optionsRow = new HBox(14, overwriteCheckBox);
+        optionsRow.setPadding(new Insets(0, 0, 0, 12));
         optionsRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
-        optionsBox.setPadding(new Insets(6, 0, 0, 12));
+        optionsBox.setPadding(new Insets(6, 0, 0, 0));
 
         VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, optionsBox, scopeHint);
         VBox.setVgrow(middleBox, Priority.ALWAYS);
@@ -424,12 +425,30 @@ public class MigrationDialogController {
         }
     }
 
+    private static void setNoDataState(ChoiceBox<String> choiceBox) {
+        choiceBox.getItems().setAll("N/A");
+        choiceBox.getSelectionModel().select(0);
+        choiceBox.setDisable(true);
+    }
+
+    private static void setDataState(ChoiceBox<String> choiceBox, List<String> names, String preferred) {
+        choiceBox.setDisable(false);
+        if (names == null || names.isEmpty()) {
+            setNoDataState(choiceBox);
+            return;
+        }
+        choiceBox.getItems().setAll(names);
+        selectMatching(choiceBox, preferred);
+    }
+
     private void reloadSourceCatalogs() {
         Connect source = sourceChoiceBox.getValue();
         sourceDbChoiceBox.getItems().clear();
         sourceSchemaChoiceBox.getItems().clear();
         if (source == null) {
-            setSourceCatalogRowsVisible(false, false);
+            setSourceCatalogRowsVisible(true, false);
+            setNoDataState(sourceDbChoiceBox);
+            setNoDataState(sourceSchemaChoiceBox);
             rebuildTypeRows(null);
             return;
         }
@@ -437,7 +456,9 @@ public class MigrationDialogController {
         try {
             platform = PlatformResolvers.get().requirePlatform(source);
         } catch (Exception e) {
-            setSourceCatalogRowsVisible(false, false);
+            setSourceCatalogRowsVisible(true, false);
+            setNoDataState(sourceDbChoiceBox);
+            setNoDataState(sourceSchemaChoiceBox);
             rebuildTypeRows(null);
             return;
         }
@@ -453,8 +474,11 @@ public class MigrationDialogController {
 
         String preferred = firstNonBlank(echoSourceCatalog, preferredCatalogName());
         if (preferred != null && !preferred.isBlank()) {
+            sourceDbChoiceBox.setDisable(false);
             sourceDbChoiceBox.getItems().setAll(preferred);
             sourceDbChoiceBox.getSelectionModel().select(0);
+        } else {
+            setNoDataState(sourceDbChoiceBox);
         }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
@@ -473,8 +497,7 @@ public class MigrationDialogController {
                 if (sourceChoiceBox.getValue() != source) {
                     return;
                 }
-                sourceDbChoiceBox.getItems().setAll(names);
-                selectMatching(sourceDbChoiceBox, preferred);
+                setDataState(sourceDbChoiceBox, names, preferred);
             });
         });
     }
@@ -483,13 +506,16 @@ public class MigrationDialogController {
     private void loadSourceSchemas(String dbName) {
         Connect source = sourceChoiceBox.getValue();
         if (source == null || dbName == null || dbName.isBlank()) {
-            sourceSchemaChoiceBox.getItems().clear();
+            setNoDataState(sourceSchemaChoiceBox);
             return;
         }
         String preferred = firstNonBlank(echoSourceSchema, null);
         if (preferred != null && !preferred.isBlank()) {
+            sourceSchemaChoiceBox.setDisable(false);
             sourceSchemaChoiceBox.getItems().setAll(preferred);
             sourceSchemaChoiceBox.getSelectionModel().select(0);
+        } else {
+            setNoDataState(sourceSchemaChoiceBox);
         }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
@@ -511,8 +537,7 @@ public class MigrationDialogController {
                         || !dbName.equals(sourceDbChoiceBox.getValue())) {
                     return;
                 }
-                sourceSchemaChoiceBox.getItems().setAll(names);
-                selectMatching(sourceSchemaChoiceBox, preferred);
+                setDataState(sourceSchemaChoiceBox, names, preferred);
             });
         });
     }
@@ -564,14 +589,18 @@ public class MigrationDialogController {
         targetDbChoiceBox.getItems().clear();
         targetSchemaChoiceBox.getItems().clear();
         if (target == null) {
-            setCatalogRowsVisible(false, false);
+            setCatalogRowsVisible(true, true);
+            setNoDataState(targetDbChoiceBox);
+            setNoDataState(targetSchemaChoiceBox);
             return;
         }
         DatabasePlatform platform;
         try {
             platform = PlatformResolvers.get().requirePlatform(target);
         } catch (Exception e) {
-            setCatalogRowsVisible(false, false);
+            setCatalogRowsVisible(true, true);
+            setNoDataState(targetDbChoiceBox);
+            setNoDataState(targetSchemaChoiceBox);
             return;
         }
         DatabasePlatform.CatalogModel model = platform.catalogModel();
@@ -582,11 +611,17 @@ public class MigrationDialogController {
         String preferredDb = firstNonBlank(echoTargetDatabase, preferredCatalogName());
         String preferredSchemaImmediate = firstNonBlank(echoTargetSchema, preferredCatalogName());
         if (showDb && preferredDb != null && !preferredDb.isBlank()) {
+            targetDbChoiceBox.setDisable(false);
             targetDbChoiceBox.getItems().setAll(preferredDb);
             targetDbChoiceBox.getSelectionModel().select(0);
         } else if (showSchema && preferredSchemaImmediate != null && !preferredSchemaImmediate.isBlank()) {
+            targetSchemaChoiceBox.setDisable(false);
             targetSchemaChoiceBox.getItems().setAll(preferredSchemaImmediate);
             targetSchemaChoiceBox.getSelectionModel().select(0);
+        } else if (showDb) {
+            setNoDataState(targetDbChoiceBox);
+        } else if (showSchema) {
+            setNoDataState(targetSchemaChoiceBox);
         }
         // SCHEMA 模型（Oracle/Dameng）一层是模式：回显用任务保存的目标模式
         String preferredSchema = firstNonBlank(echoTargetSchema, preferredCatalogName());
@@ -608,11 +643,9 @@ public class MigrationDialogController {
                     return;
                 }
                 if (showDb) {
-                    targetDbChoiceBox.getItems().setAll(names);
-                    selectMatching(targetDbChoiceBox, preferredDb);
+                    setDataState(targetDbChoiceBox, names, preferredDb);
                 } else if (showSchema) {
-                    targetSchemaChoiceBox.getItems().setAll(names);
-                    selectMatching(targetSchemaChoiceBox, preferredSchema);
+                    setDataState(targetSchemaChoiceBox, names, preferredSchema);
                 }
             });
         });
@@ -622,13 +655,16 @@ public class MigrationDialogController {
     private void loadTargetSchemas(String dbName) {
         Connect target = targetChoiceBox.getValue();
         if (target == null || dbName == null || dbName.isBlank()) {
-            targetSchemaChoiceBox.getItems().clear();
+            setNoDataState(targetSchemaChoiceBox);
             return;
         }
         String preferred = firstNonBlank(echoTargetSchema, preferredCatalogName());
         if (preferred != null && !preferred.isBlank()) {
+            targetSchemaChoiceBox.setDisable(false);
             targetSchemaChoiceBox.getItems().setAll(preferred);
             targetSchemaChoiceBox.getSelectionModel().select(0);
+        } else {
+            setNoDataState(targetSchemaChoiceBox);
         }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
@@ -650,8 +686,7 @@ public class MigrationDialogController {
                         || !dbName.equals(targetDbChoiceBox.getValue())) {
                     return;
                 }
-                targetSchemaChoiceBox.getItems().setAll(names);
-                selectMatching(targetSchemaChoiceBox, preferred);
+                setDataState(targetSchemaChoiceBox, names, preferred);
             });
         });
     }
@@ -1131,11 +1166,11 @@ public class MigrationDialogController {
     }
 
     private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return value == null || value.isBlank() || "N/A".equalsIgnoreCase(value.trim());
     }
 
     private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
+        return value == null || value.isBlank() || "N/A".equalsIgnoreCase(value.trim()) ? null : value;
     }
 
     // ==================================================================
