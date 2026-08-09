@@ -41,10 +41,11 @@ import java.util.Set;
  */
 public class MigrationMappingDialogController {
     private static final Logger log = LogManager.getLogger(MigrationMappingDialogController.class);
-    private static final double DIALOG_W = 760;
+    private static final double DIALOG_W = 456;
     private static final double DIALOG_H = 500;
 
     private GridPane rowsGrid;
+    private ScrollPane scroll;
     private Connect source;
     private Connect target;
     private final ObservableList<MappingRow> rows = FXCollections.observableArrayList();
@@ -98,14 +99,9 @@ public class MigrationMappingDialogController {
         removeCol.setMinWidth(36);
         rowsGrid.getColumnConstraints().setAll(sourceCol, targetCol, removeCol);
 
-        ScrollPane scroll = new ScrollPane(rowsGrid);
+        scroll = new ScrollPane(rowsGrid);
         scroll.setFitToWidth(true);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-
-        Label hint = new Label();
-        hint.textProperty().bind(I18n.bind("migration.mapping.global_hint",
-                "Applies to all tables; leave target type empty to use the default mapping"));
-        hint.setWrapText(true);
 
         Button addButton = new Button();
         addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
@@ -114,7 +110,7 @@ public class MigrationMappingDialogController {
         HBox addBar = new HBox(addButton);
         addBar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox content = new VBox(8, scroll, addBar, hint);
+        VBox content = new VBox(8, scroll, addBar);
 
         rebuildGrid();
         TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
@@ -152,12 +148,12 @@ public class MigrationMappingDialogController {
         row.sourceType.setEditable(false);
         row.sourceType.getStyleClass().add("choice-box-with-border");
         row.sourceType.setValue(sourceType);
-        row.sourceType.setPrefWidth(220);
+        row.sourceType.setPrefWidth(180);
         row.targetType = new ComboBox<>(FXCollections.observableArrayList(targetTypes));
         row.targetType.setEditable(true);
         row.targetType.getStyleClass().add("choice-box-with-border");
         row.targetType.setValue(targetType);
-        row.targetType.setPrefWidth(260);
+        row.targetType.setPrefWidth(180);
         row.removeButton = new Button("✕");
         row.removeButton.getStyleClass().add("small");
         row.removeButton.setOnAction(e -> {
@@ -166,6 +162,17 @@ public class MigrationMappingDialogController {
         });
         rows.add(row);
         rebuildGrid();
+        scrollToBottom();
+    }
+
+    private void scrollToBottom() {
+        if (scroll == null) {
+            return;
+        }
+        javafx.application.Platform.runLater(() -> {
+            scroll.setVvalue(1.0);
+            scroll.layout();
+        });
     }
 
     private Map<String, TableMapping> collectResult() {
