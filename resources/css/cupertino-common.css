@@ -632,25 +632,28 @@ Text {
   -fx-stroke: -color-fg-muted;
 }
 
+/* ComboBox 外观与 ChoiceBox 保持一致：扁平无边框、同款下拉箭头与内边距。
+   可编辑 ComboBox 的内嵌输入框保留标准输入框样式。 */
 .combo-box-base {
-  -fx-background-color: -color-border-default, -color-bg-default;
-  -fx-background-insets: 0, 1px;
-  -fx-background-radius: 6px, 5px;
+  -fx-background-color: -color-bg-default;
+  -fx-background-insets: 0;
+  -fx-background-radius: 5px;
   -fx-text-fill: -color-fg-default;
   -fx-alignment: CENTER;
   -fx-content-display: LEFT;
+  -fx-padding: 0px 4px 0px 4px;
 }
 .combo-box-base:disabled {
   -fx-opacity: 0.4;
 }
 .combo-box-base:success, .combo-box-base:success:focused {
-  -fx-background-color: -color-success-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .combo-box-base:danger, .combo-box-base:danger:focused {
-  -fx-background-color: -color-danger-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .combo-box-base:focused {
-  -fx-background-color: -color-accent-emphasis, -color-bg-default;
+  -fx-background-color: -color-bg-default;
 }
 .combo-box-base.left-pill {
   -fx-background-radius: 6px 0 0 6px, 5px 0 0 5px;
@@ -674,16 +677,19 @@ Text {
   -fx-background-insets: 0, 1px;
 }
 .combo-box-base > .arrow-button {
-  -fx-padding: 6px 12px 6px 12px;
+  -fx-padding: 0 6px 0 2px;
 }
 .combo-box-base > .arrow-button > .arrow {
-  -fx-shape: "M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z";
+  -fx-shape: "M7 10l5 5 5-5z";
   -fx-scale-shape: false;
   -fx-background-color: -color-accent-fg;
+  -fx-padding: 0.24em 0.18em 0.24em 0.18em;
+  -fx-scale-x: 0.76;
+  -fx-scale-y: 0.76;
 }
 .combo-box-base > .text-field {
-  -fx-background-insets: 0, 1px 0 1px 1px;
-  -fx-background-radius: 6px 0 0 6px, 5px 0 0 5px;
+  -fx-background-insets: 0, 1px;
+  -fx-background-radius: 6px, 5px;
 }
 .combo-box-base:success > .arrow-button > .arrow {
   -fx-background-color: -color-success-fg;
@@ -699,7 +705,7 @@ Text {
 .combo-box > .list-cell {
   -fx-background-color: transparent;
   -fx-text-fill: -color-fg-default;
-  -fx-padding: 6px 12px 6px 12px;
+  -fx-padding: 0 2px 0 0;
   -fx-graphic-text-gap: 6px;
 }
 .combo-box:success > .list-cell {
@@ -708,16 +714,20 @@ Text {
 .combo-box:danger > .list-cell {
   -fx-text-fill: -color-danger-fg;
 }
-.combo-box.small > .list-cell {
+.combo-box.small {
   -fx-padding: 4.2857142857px 8.5714285714px 4.2857142857px 8.5714285714px;
+}
+.combo-box.small > .list-cell {
   -fx-font-size: 0.8em;
 }
 .combo-box.small > .text-field {
-  -fx-padding: 4.2857142857px 8.5714285714px 4.2857142857px 8.5714285714px;
+  -fx-padding: 2px 4px 2px 4px;
   -fx-font-size: 0.8em;
 }
-.combo-box.large > .list-cell {
+.combo-box.large {
   -fx-padding: 8.4px 16.8px 8.4px 16.8px;
+}
+.combo-box.large > .list-cell {
   -fx-font-size: 1.25em;
 }
 .combo-box.large > .text-field {
@@ -737,7 +747,7 @@ Text {
   -fx-cell-size: 0;
   -fx-background-color: -color-bg-default;
   -fx-background-radius: 6px, 5px;
-  -fx-padding: 6px 12px 6px 12px;
+  -fx-padding: 4px 12px 4px 12px;
   -fx-graphic-text-gap: 6px;
   -fx-text-fill: -color-fg-default;
 }
