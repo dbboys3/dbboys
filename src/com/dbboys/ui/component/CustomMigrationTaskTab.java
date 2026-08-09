@@ -7,12 +7,14 @@ import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.MigrationRunItem;
 import com.dbboys.model.MigrationTask;
 import com.dbboys.service.migration.MigrationTaskRunner;
+import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -20,9 +22,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.util.LinkedHashSet;
@@ -51,6 +54,15 @@ public class CustomMigrationTaskTab extends CustomTab {
     private final Label progressLabel = new Label();
     private final Label currentObjectLabel = new Label();
     private final Label countsLabel = new Label();
+    private final FilteredList<MigrationRunItem> filteredItems;
+    private final TableView<MigrationRunItem> detailTable;
+    private Button successFilterButton;
+    private Button failureFilterButton;
+    private FilterMode filterMode = FilterMode.ALL;
+
+    private enum FilterMode {
+        ALL, SUCCESS, FAILURE
+    }
 
     /** 单行状态变化 → 刷新进度/计数；随 runItems 增删挂接/摘除。 */
     private final ChangeListener<MigrationRunItem.Status> rowStatusListener =
@@ -84,9 +96,6 @@ public class CustomMigrationTaskTab extends CustomTab {
         statusLabel.textProperty().bind(Bindings.createStringBinding(this::runStateText,
                 task.runStateProperty(), task.lastRunResultProperty(), I18n.localeProperty()));
 
-        HBox titleRow = new HBox(12, nameLabel, statusLabel);
-        titleRow.setAlignment(Pos.CENTER_LEFT);
-
         Label routeLabel = new Label(buildRouteText());
 
         Button startButton = new Button();
@@ -101,18 +110,37 @@ public class CustomMigrationTaskTab extends CustomTab {
                 task.runStateProperty().isNotEqualTo(MigrationTask.RunState.RUNNING));
         stopButton.setOnAction(event -> MigrationTaskRunner.stop(task));
 
+        startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.8));
+        startButton.getStyleClass().add("custom-button");
+        Tooltip startTip = new Tooltip();
+        startTip.textProperty().bind(I18n.bind("migration.menu.start", "Start"));
+        startButton.setTooltip(startTip);
+
+        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.8, IconFactory.stopColor()));
+        stopButton.getStyleClass().add("custom-button");
+        Tooltip stopTip = new Tooltip();
+        stopTip.textProperty().bind(I18n.bind("migration.menu.stop", "Stop"));
+        stopButton.setTooltip(stopTip);
+
+        successFilterButton = createFilterButton(true);
+        failureFilterButton = createFilterButton(false);
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        HBox headerRow = new HBox(10, startButton, stopButton, nameLabel, statusLabel,
+                routeLabel, headerSpacer, successFilterButton, failureFilterButton);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
+
         progressBar.setPrefWidth(220);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox progressRow = new HBox(10, progressBar, progressLabel, currentObjectLabel,
-                countsLabel, spacer, startButton, stopButton);
-        progressRow.setAlignment(Pos.CENTER_LEFT);
+        HBox bottomRow = new HBox(10, progressBar, progressLabel, currentObjectLabel, countsLabel);
+        bottomRow.setAlignment(Pos.CENTER_LEFT);
 
         // ---- 明细 TableView ----
-        TableView<MigrationRunItem> table = buildDetailTable();
-        VBox.setVgrow(table, Priority.ALWAYS);
+        filteredItems = new FilteredList<>(task.getRunItems(), item -> true);
+        detailTable = buildDetailTable();
+        VBox.setVgrow(detailTable, Priority.ALWAYS);
 
-        VBox root = new VBox(8, titleRow, routeLabel, progressRow, table);
+        VBox root = new VBox(8, headerRow, detailTable, bottomRow);
         root.setPadding(new Insets(10));
         setContent(root);
 
@@ -216,7 +244,7 @@ public class CustomMigrationTaskTab extends CustomTab {
     // ==================================================================
 
     private TableView<MigrationRunItem> buildDetailTable() {
-        TableView<MigrationRunItem> table = new TableView<>(task.getRunItems());
+        TableView<MigrationRunItem> table = new TableView<>(filteredItems);
 
         TableColumn<MigrationRunItem, String> kindColumn = new TableColumn<>();
         kindColumn.textProperty().bind(I18n.bind("migration.detail.column.kind", "Kind"));
@@ -307,6 +335,65 @@ public class CustomMigrationTaskTab extends CustomTab {
                 I18n.t("migration.detail.counts", "Success: %d, Skipped: %d, Failed: %d"),
                 success, skipped, failed));
         currentObjectLabel.setText(currentObject);
+        refreshFilterButtons(success, failed);
+    }
+
+    private Button createFilterButton(boolean success) {
+        Button button = new Button();
+        button.getStyleClass().addAll("result-filter-button",
+                success ? "result-filter-success" : "result-filter-failure");
+        Region dot = new Region();
+        dot.getStyleClass().addAll("result-filter-dot",
+                success ? "result-filter-dot-success" : "result-filter-dot-failure");
+        button.setGraphic(dot);
+        button.setOnAction(e -> {
+            FilterMode next = filterMode == (success ? FilterMode.SUCCESS : FilterMode.FAILURE)
+                    ? FilterMode.ALL
+                    : (success ? FilterMode.SUCCESS : FilterMode.FAILURE);
+            setFilterMode(next);
+        });
+        return button;
+    }
+
+    private void setFilterMode(FilterMode mode) {
+        filterMode = mode;
+        applyFilter();
+        refreshProgress();
+    }
+
+    private void refreshFilterButtons(long success, long failed) {
+        if (successFilterButton != null) {
+            successFilterButton.setText(
+                    I18n.t("migration.status.success", "Success") + " " + success);
+        }
+        if (failureFilterButton != null) {
+            failureFilterButton.setText(
+                    I18n.t("migration.status.failed", "Failed") + " " + failed);
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        if (filteredItems == null) {
+            return;
+        }
+        filteredItems.setPredicate(item -> switch (filterMode) {
+            case ALL -> true;
+            case SUCCESS -> item != null && item.getStatus() == MigrationRunItem.Status.SUCCESS;
+            case FAILURE -> item != null && item.getStatus() == MigrationRunItem.Status.FAILED;
+        });
+        if (successFilterButton != null) {
+            successFilterButton.getStyleClass().remove("result-filter-active");
+            if (filterMode == FilterMode.SUCCESS) {
+                successFilterButton.getStyleClass().add("result-filter-active");
+            }
+        }
+        if (failureFilterButton != null) {
+            failureFilterButton.getStyleClass().remove("result-filter-active");
+            if (filterMode == FilterMode.FAILURE) {
+                failureFilterButton.getStyleClass().add("result-filter-active");
+            }
+        }
     }
 
     // ==================================================================

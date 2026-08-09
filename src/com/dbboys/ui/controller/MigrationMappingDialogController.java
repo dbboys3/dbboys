@@ -1,25 +1,19 @@
 package com.dbboys.ui.controller;
 
-import com.dbboys.app.AppExecutor;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.PlatformResolvers;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Connect;
-import com.dbboys.model.Table;
-import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.service.migration.TableMapping;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
-import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
@@ -32,65 +26,42 @@ import javafx.stage.Window;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.sql.Connection;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * 自定义数据映射对话框：对迁移任务选中的表逐表配置"排除列 + 目标类型覆盖"。
- * <p>
- * 左侧表清单（表类型为"全部"时后台加载全量表名，自定义时用勾选的表）；
- * 右侧当前表的列编辑区：每列一行 = CheckBox(迁移) + 列名 + 源类型 + 目标类型
- * （可编辑 ComboBox，候选值为目标平台 {@code DatabasePlatform.getColumnTypes()}，可手输，
- * 留空=默认映射）。列元数据用源会话 {@code getColumns} 后台懒加载。
- * 返回更新后的 mappings（取消返回 null），本身不落库。
+ * 全局数据映射对话框：源类型基名 → 目标类型文本，对所有表生效，不再按表列出。
+ * 编辑结果保存在任务 mappings 的 {@code "*"} 条目中，由
+ * {@link TableMapping#globalTypeOverrides(Map)} 消费。
  */
 public class MigrationMappingDialogController {
     private static final Logger log = LogManager.getLogger(MigrationMappingDialogController.class);
-    private static final double DIALOG_W = 860;
-    private static final double DIALOG_H = 560;
+    private static final double DIALOG_W = 760;
+    private static final double DIALOG_H = 500;
 
     private Stage dialogStage;
-    private ListView<String> tableList;
-    private GridPane columnsGrid;
-
-    private Connect source;
-    private String catalog;
-    private String schema;
-    private List<String> targetColumnTypes = List.of();
-    /** 工作副本：切表/确定时提交，取消丢弃。 */
-    private Map<String, TableMapping> workingMappings = new LinkedHashMap<>();
-    /** 列元数据缓存（避免切表重复查询）。 */
-    private final Map<String, ArrayList<ColumnsInfo>> columnsCache = new HashMap<>();
-    private String currentTable;
-    private final List<ColumnRow> currentRows = new ArrayList<>();
+    private GridPane rowsGrid;
+    private final ObservableList<MappingRow> rows = FXCollections.observableArrayList();
+    private List<String> sourceTypes = List.of();
+    private List<String> targetTypes = List.of();
     private Map<String, TableMapping> result;
-    /** 列加载代数：丢弃过期回调。 */
-    private int loadGeneration;
 
     /**
-     * 打开映射对话框。fixedTables=null 表示表类型为"全部"（后台加载全量表名）；
-     * 否则用传入的勾选表清单。返回更新后的 mappings；取消返回 null。
+     * 打开全局数据映射对话框。
+     * {@code initial} 中 {@code "*"} 条目的 typeOverrides 为源类型 → 目标类型。
      */
     public Map<String, TableMapping> showAndWait(Window owner, String taskName,
-                                                 Connect source, String catalog, String schema,
-                                                 List<String> fixedTables,
-                                                 List<String> targetColumnTypes,
+                                                 Connect source, Connect target,
                                                  Map<String, TableMapping> initial) {
-        this.source = source;
-        this.catalog = catalog;
-        this.schema = schema;
-        this.targetColumnTypes = targetColumnTypes == null ? List.of() : targetColumnTypes;
-        this.workingMappings = new LinkedHashMap<>(initial == null ? Map.of() : initial);
+        this.sourceTypes = columnTypes(source);
+        this.targetTypes = columnTypes(target);
         this.result = null;
 
         dialogStage = new Stage();
-        VBox content = buildContent(fixedTables);
+        VBox content = buildContent(initial == null ? Map.of() : initial);
         CustomWindowFrameUtil.createModalPopup(
                 dialogStage,
                 new SimpleStringProperty(String.format(
@@ -101,7 +72,7 @@ public class MigrationMappingDialogController {
                 DIALOG_H,
                 true,
                 owner);
-        dialogStage.setMinWidth(640);
+        dialogStage.setMinWidth(600);
         dialogStage.setMinHeight(420);
         if (owner != null && owner.isShowing()) {
             dialogStage.setX(owner.getX() + (owner.getWidth() - DIALOG_W) / 2);
@@ -111,257 +82,139 @@ public class MigrationMappingDialogController {
         return result;
     }
 
-    private VBox buildContent(List<String> fixedTables) {
-        // ---- 左：表清单 ----
-        Label tablesLabel = new Label();
-        tablesLabel.textProperty().bind(I18n.bind("migration.mapping.tables", "Tables"));
-        tableList = new ListView<>();
-        Label tablesPlaceholder = new Label();
-        tablesPlaceholder.textProperty().bind(I18n.bind("migration.status.loading", "Loading..."));
-        tableList.setPlaceholder(tablesPlaceholder);
-        tableList.setPrefWidth(220);
-        VBox.setVgrow(tableList, Priority.ALWAYS);
-        VBox leftBox = new VBox(6, tablesLabel, tableList);
+    private VBox buildContent(Map<String, TableMapping> initial) {
+        rowsGrid = new GridPane();
+        rowsGrid.setHgap(10);
+        rowsGrid.setVgap(6);
+        ColumnConstraints sourceCol = new ColumnConstraints();
+        sourceCol.setHgrow(Priority.ALWAYS);
+        sourceCol.setMinWidth(180);
+        ColumnConstraints targetCol = new ColumnConstraints();
+        targetCol.setHgrow(Priority.ALWAYS);
+        targetCol.setMinWidth(220);
+        ColumnConstraints removeCol = new ColumnConstraints();
+        removeCol.setMinWidth(36);
+        rowsGrid.getColumnConstraints().setAll(sourceCol, targetCol, removeCol);
 
-        // ---- 右：列编辑区 ----
-        columnsGrid = new GridPane();
-        columnsGrid.setHgap(10);
-        columnsGrid.setVgap(6);
-        ColumnConstraints migrateCol = new ColumnConstraints();
-        migrateCol.setMinWidth(60);
-        ColumnConstraints nameCol = new ColumnConstraints();
-        nameCol.setHgrow(Priority.ALWAYS);
-        nameCol.setMinWidth(140);
-        ColumnConstraints sourceTypeCol = new ColumnConstraints();
-        sourceTypeCol.setMinWidth(110);
-        ColumnConstraints targetTypeCol = new ColumnConstraints();
-        targetTypeCol.setMinWidth(170);
-        columnsGrid.getColumnConstraints().setAll(migrateCol, nameCol, sourceTypeCol, targetTypeCol);
-        ScrollPane columnsScroll = new ScrollPane(columnsGrid);
-        columnsScroll.setFitToWidth(true);
-        HBox.setHgrow(columnsScroll, Priority.ALWAYS);
+        ScrollPane scroll = new ScrollPane(rowsGrid);
+        scroll.setFitToWidth(true);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        HBox mainBox = new HBox(12, leftBox, columnsScroll);
-        VBox.setVgrow(mainBox, Priority.ALWAYS);
+        Label hint = new Label();
+        hint.textProperty().bind(I18n.bind("migration.mapping.global_hint",
+                "Applies to all tables; leave target type empty to use the default mapping"));
+        hint.setWrapText(true);
 
-        Label hintLabel = new Label();
-        hintLabel.textProperty().bind(I18n.bind("migration.mapping.hint",
-                "Leave target type empty to use the default mapping; uncheck a column to skip it"));
-        hintLabel.setWrapText(true);
+        Button addButton = new Button();
+        addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
+        addButton.getStyleClass().add("button-outlined");
+        addButton.setOnAction(e -> addRow("", ""));
 
         Button okButton = new Button();
         okButton.textProperty().bind(I18n.bind("common.confirm", "Confirm"));
+        okButton.getStyleClass().add("accent");
         okButton.setDefaultButton(true);
         okButton.setOnAction(e -> {
-            commitCurrentTable();
-            result = workingMappings;
+            result = collectResult();
             dialogStage.close();
         });
+
         Button cancelButton = new Button();
         cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
+        cancelButton.getStyleClass().add("button-outlined");
         cancelButton.setCancelButton(true);
         cancelButton.setOnAction(e -> dialogStage.close());
+
         Region buttonSpacer = new Region();
         HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
-        HBox buttonBar = new HBox(10, buttonSpacer, okButton, cancelButton);
-        buttonBar.setAlignment(Pos.CENTER_RIGHT);
+        HBox buttonBar = new HBox(10, addButton, buttonSpacer, okButton, cancelButton);
+        buttonBar.setAlignment(Pos.CENTER_LEFT);
 
-        tableList.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
-            commitCurrentTable();
-            showTable(n);
-        });
-
-        VBox content = new VBox(8, mainBox, hintLabel, buttonBar);
+        VBox content = new VBox(8, scroll, hint, buttonBar);
         content.setPadding(new Insets(10, 14, 10, 14));
 
-        // ---- 表清单来源 ----
-        if (fixedTables != null) {
-            tableList.getItems().setAll(fixedTables);
-            selectFirstTable();
+        rebuildGrid();
+        TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
+        Map<String, String> overrides = global == null ? Map.of() : global.typeOverrides();
+        if (overrides.isEmpty()) {
+            addRow("", "");
         } else {
-            loadAllTables(tablesPlaceholder);
+            for (Map.Entry<String, String> entry : overrides.entrySet()) {
+                addRow(entry.getKey(), entry.getValue());
+            }
         }
         return content;
     }
 
-    /** 表类型为"全部"：后台加载源范围下全量表名。 */
-    private void loadAllTables(Label placeholder) {
-        AppExecutor.runAsync(() -> {
-            List<String> names = new ArrayList<>();
-            String error = null;
-            try {
-                Connect sessionConnect = buildSessionConnect(source, catalog, schema);
-                String dbName = schema != null && !schema.isBlank() ? schema : catalog;
-                try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
-                    List<Table> tables = PlatformResolvers.get().metadata(sessionConnect)
-                            .getUserTables(conn, dbName);
-                    if (tables != null) {
-                        for (Table table : tables) {
-                            if (table != null && table.getName() != null && !table.getName().isBlank()) {
-                                names.add(table.getName());
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("load mapping tables failed", e);
-                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            }
-            String loadError = error;
-            Platform.runLater(() -> {
-                tableList.getItems().setAll(names);
-                if (loadError != null) {
-                    placeholder.textProperty().unbind();
-                    placeholder.setText(loadError);
-                } else if (names.isEmpty()) {
-                    placeholder.textProperty().unbind();
-                    placeholder.setText("(0)");
-                }
-                selectFirstTable();
-            });
-        });
-    }
-
-    private void selectFirstTable() {
-        if (!tableList.getItems().isEmpty()) {
-            tableList.getSelectionModel().select(0);
-        }
-    }
-
-    // ==================================================================
-    // 列编辑区
-    // ==================================================================
-
-    /** 当前表的一列编辑状态。 */
-    private static final class ColumnRow {
-        String name;
-        CheckBox migrate;
-        ComboBox<String> targetType;
-    }
-
-    private void showTable(String table) {
-        currentTable = table;
-        currentRows.clear();
-        columnsGrid.getChildren().clear();
-        if (table == null) {
-            return;
-        }
-        ArrayList<ColumnsInfo> cached = columnsCache.get(table);
-        if (cached != null) {
-            buildColumnRows(cached);
-            return;
-        }
-        Label loading = new Label();
-        loading.textProperty().bind(I18n.bind("migration.status.loading", "Loading..."));
-        columnsGrid.add(loading, 0, 0, 4, 1);
-        int generation = ++loadGeneration;
-        AppExecutor.runAsync(() -> {
-            ArrayList<ColumnsInfo> columns;
-            String error = null;
-            try {
-                Connect sessionConnect = buildSessionConnect(source, catalog, schema);
-                try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
-                    columns = PlatformResolvers.get().metadata(sessionConnect).getColumns(conn, table);
-                }
-            } catch (Exception e) {
-                log.warn("load columns failed for {}", table, e);
-                columns = new ArrayList<>();
-                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            }
-            String loadError = error;
-            ArrayList<ColumnsInfo> fetched = columns == null ? new ArrayList<>() : columns;
-            Platform.runLater(() -> {
-                columnsCache.put(table, fetched);
-                if (generation != loadGeneration || !table.equals(currentTable)) {
-                    return;
-                }
-                if (loadError != null) {
-                    columnsGrid.getChildren().clear();
-                    columnsGrid.add(new Label(loadError), 0, 0, 4, 1);
-                    return;
-                }
-                buildColumnRows(fetched);
-            });
-        });
-    }
-
-    /** 构建列编辑行：初始状态回显 workingMappings（排除列=未勾、覆盖类型=目标类型列文本）。 */
-    private void buildColumnRows(List<ColumnsInfo> columns) {
-        columnsGrid.getChildren().clear();
-        currentRows.clear();
-        Label migrateHeader = new Label();
-        migrateHeader.textProperty().bind(I18n.bind("migration.mapping.column.migrate", "Migrate"));
-        Label nameHeader = new Label();
-        nameHeader.textProperty().bind(I18n.bind("migration.mapping.column.name", "Column"));
-        Label sourceTypeHeader = new Label();
-        sourceTypeHeader.textProperty().bind(
-                I18n.bind("migration.mapping.column.source_type", "Source Type"));
-        Label targetTypeHeader = new Label();
-        targetTypeHeader.textProperty().bind(
-                I18n.bind("migration.mapping.column.target_type", "Target Type"));
-        columnsGrid.addRow(0, migrateHeader, nameHeader, sourceTypeHeader, targetTypeHeader);
-
-        TableMapping mapping = TableMapping.forTable(workingMappings, currentTable);
+    private void rebuildGrid() {
+        rowsGrid.getChildren().clear();
+        Label sourceHeader = new Label();
+        sourceHeader.textProperty().bind(I18n.bind("migration.mapping.column.source_type", "Source Type"));
+        Label targetHeader = new Label();
+        targetHeader.textProperty().bind(I18n.bind("migration.mapping.column.target_type", "Target Type"));
+        Label removeHeader = new Label("");
+        rowsGrid.addRow(0, sourceHeader, targetHeader, removeHeader);
         int rowIndex = 1;
-        for (ColumnsInfo column : columns) {
-            if (column == null || column.getColName() == null || column.getColName().isBlank()) {
+        for (MappingRow row : rows) {
+            rowsGrid.addRow(rowIndex++, row.sourceType, row.targetType, row.removeButton);
+        }
+    }
+
+    private void addRow(String sourceType, String targetType) {
+        MappingRow row = new MappingRow();
+        row.sourceType = new ComboBox<>(FXCollections.observableArrayList(sourceTypes));
+        row.sourceType.setEditable(true);
+        row.sourceType.setValue(sourceType);
+        row.sourceType.setPrefWidth(220);
+        row.targetType = new ComboBox<>(FXCollections.observableArrayList(targetTypes));
+        row.targetType.setEditable(true);
+        row.targetType.setValue(targetType);
+        row.targetType.setPrefWidth(260);
+        row.removeButton = new Button("✕");
+        row.removeButton.getStyleClass().add("small");
+        row.removeButton.setOnAction(e -> {
+            rows.remove(row);
+            rebuildGrid();
+        });
+        rows.add(row);
+        rebuildGrid();
+    }
+
+    private Map<String, TableMapping> collectResult() {
+        Map<String, String> overrides = new LinkedHashMap<>();
+        for (MappingRow row : rows) {
+            String sourceType = row.sourceType.getValue();
+            String targetType = row.targetType.getValue();
+            if (sourceType == null || sourceType.isBlank()
+                    || targetType == null || targetType.isBlank()) {
                 continue;
             }
-            ColumnRow row = new ColumnRow();
-            row.name = column.getColName();
-            row.migrate = new CheckBox();
-            row.migrate.setSelected(mapping == null || !mapping.isExcluded(row.name));
-            Label nameLabel = new Label(row.name);
-            Label sourceTypeLabel = new Label(column.getColType() == null ? "" : column.getColType());
-            row.targetType = new ComboBox<>(FXCollections.observableArrayList(targetColumnTypes));
-            row.targetType.setEditable(true);
-            row.targetType.setPrefWidth(160);
-            String override = mapping == null ? null : mapping.overrideType(row.name);
-            row.targetType.setValue(override == null ? "" : override);
-            columnsGrid.addRow(rowIndex++, row.migrate, nameLabel, sourceTypeLabel, row.targetType);
-            currentRows.add(row);
+            overrides.put(sourceType.trim(), targetType.trim());
+        }
+        if (overrides.isEmpty()) {
+            return Map.of();
+        }
+        return Map.of(TableMapping.GLOBAL_TABLE_KEY,
+                new TableMapping(Set.of(), overrides));
+    }
+
+    private static List<String> columnTypes(Connect connect) {
+        if (connect == null) {
+            return List.of();
+        }
+        try {
+            DatabasePlatform platform = PlatformResolvers.get().requirePlatform(connect);
+            List<String> types = platform.getColumnTypes();
+            return types == null ? List.of() : new ArrayList<>(types);
+        } catch (Exception e) {
+            log.debug("load column types failed for {}", connect.getDbtype(), e);
+            return List.of();
         }
     }
 
-    /** 把当前表的编辑状态提交进 workingMappings（空映射则移除条目）。 */
-    private void commitCurrentTable() {
-        if (currentTable == null || currentRows.isEmpty()) {
-            return;
-        }
-        LinkedHashSet<String> excluded = new LinkedHashSet<>();
-        Map<String, String> types = new LinkedHashMap<>();
-        for (ColumnRow row : currentRows) {
-            if (!row.migrate.isSelected()) {
-                excluded.add(row.name.toLowerCase(Locale.ROOT));
-            }
-            String value = row.targetType.getValue();
-            if (value != null && !value.isBlank()) {
-                types.put(row.name, value.trim());
-            }
-        }
-        removeMapping(workingMappings, currentTable);
-        if (!excluded.isEmpty() || !types.isEmpty()) {
-            workingMappings.put(currentTable, new TableMapping(excluded, types));
-        }
-    }
-
-    /** 大小写不敏感移除表映射条目。 */
-    private static void removeMapping(Map<String, TableMapping> mappings, String table) {
-        mappings.keySet().removeIf(key -> key != null && key.equalsIgnoreCase(table));
-    }
-
-    /** 源端会话：schema 非空→catalog=库 + sessionCatalog=模式；否则走方言 setSessionCatalog。 */
-    private static Connect buildSessionConnect(Connect source, String catalogName, String schemaName) {
-        Connect sessionConnect = new Connect(source);
-        DatabasePlatform platform = PlatformResolvers.get().requirePlatform(sessionConnect);
-        if (schemaName != null && !schemaName.isBlank()) {
-            sessionConnect.setCatalog(catalogName);
-            sessionConnect.setSessionCatalog(schemaName);
-        } else if (catalogName != null && !catalogName.isBlank()) {
-            platform.connection().setSessionCatalog(sessionConnect, catalogName);
-        }
-        return sessionConnect;
+    private static final class MappingRow {
+        ComboBox<String> sourceType;
+        ComboBox<String> targetType;
+        Button removeButton;
     }
 }

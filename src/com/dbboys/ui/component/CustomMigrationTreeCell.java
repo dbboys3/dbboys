@@ -58,6 +58,7 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
 
     /** 当前绑定的任务/树节点，updateItem 复用时先解除监听。 */
     private MigrationTask boundTask;
+    private MigrationFolder boundFolder;
     private TreeItem<TreeData> boundTreeItem;
 
     private final ChangeListener<MigrationTask.RunState> runStateListener =
@@ -94,6 +95,15 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
             getStyleClass().remove(HOVER_STYLE_CLASS);
         }
         super.updateItem(item, empty);
+        if (item != null && !empty) {
+            // 同一条目复用时不重建 graphic，避免右键选中/焦点切换导致文字闪烁
+            if (item instanceof MigrationTask task && task == boundTask) {
+                return;
+            }
+            if (item instanceof MigrationFolder folder && folder == boundFolder) {
+                return;
+            }
+        }
         unbindAll();
         if (item == null || empty) {
             return;
@@ -110,6 +120,7 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
     // ==================================================================
 
     private void renderMigrationFolder(TreeData item) {
+        boundFolder = (MigrationFolder) item;
         applyFolderIcon();
         textProperty().bind(item.nameProperty());
         setGraphic(nodeIconStackpane);
@@ -221,6 +232,7 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
             boundTreeItem.expandedProperty().removeListener(expandListener);
             boundTreeItem = null;
         }
+        boundFolder = null;
         setOnDragDetected(null);
         nameLabel.getStyleClass().removeAll(STYLE_RUN_SUCCESS, STYLE_RUN_FAILED);
         resetCellVisualState();

@@ -337,11 +337,16 @@ public class TableMigrationService {
     private String buildDdlScript(MigrationContext ctx, MigrationObjectRef object) throws Exception {
         String objectName = object.name();
         // 自定义数据映射仅对 TABLE 生效；有映射时放弃原生 DDL，改走 TypeMapper 结构生成（同族也如此）
-        TableMapping mapping = object.kind() == MigrationObjectRef.Kind.TABLE
+        boolean isTable = object.kind() == MigrationObjectRef.Kind.TABLE;
+        TableMapping mapping = isTable
                 ? TableMapping.forTable(ctx.request.mappings(), objectName)
                 : null;
+        Map<String, String> globalTypes = isTable
+                ? TableMapping.globalTypeOverrides(ctx.request.mappings())
+                : Map.of();
         boolean applyMapping = mapping != null && !mapping.isEmpty();
-        if (ctx.sameFamily && !applyMapping) {
+        boolean applyGlobal = !globalTypes.isEmpty();
+        if (ctx.sameFamily && !applyMapping && !applyGlobal) {
             // 同族迁移：原生 DDL 全保真，按 kind 分派
             DdlRepository ddl = ctx.resolver.ddl(ctx.sourceSessionConnect);
             return switch (object.kind()) {
@@ -356,13 +361,14 @@ public class TableMigrationService {
                 case ALL -> throw new SQLException("wildcard object has no DDL");
             };
         }
+        // 仅全局类型映射时不打 mapping_applied 日志（避免每张表刷屏）
         if (applyMapping) {
             log(ctx.listener, String.format(
                     I18n.t("migration.log.mapping_applied",
                             "Custom mapping applied for table %s, DDL generated from structure"),
                     objectName));
         }
-        // 跨族或应用自定义映射的表：TypeMapper 类型映射建表
+        // 跨族或应用自定义映射（逐表/全局）的表：TypeMapper 类型映射建表
         ArrayList<ColumnsInfo> columns = ctx.sourceMeta.getColumns(ctx.sourceConn, objectName);
         List<String> primaryKeyColumns = ctx.sourceMeta.getPrimaryKeyColumns(ctx.sourceConn, objectName);
         String tableComment = null;
@@ -374,7 +380,8 @@ public class TableMigrationService {
         List<String> warnings = new ArrayList<>();
         String script = TypeMapper.buildCreateTableScript(
                 ctx.request.source().getDbtype(), ctx.request.target().getDbtype(),
-                objectName, columns, primaryKeyColumns, tableComment, warnings, mapping);
+                objectName, columns, primaryKeyColumns, tableComment, warnings,
+                mapping, globalTypes);
         for (String warning : warnings) {
             log(ctx.listener, String.format(
                     I18n.t("migration.log.type_fallback", "%s type fallback: %s"), object.displayName(), warning));

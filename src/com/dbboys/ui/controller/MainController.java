@@ -1292,16 +1292,6 @@ public class MainController {
             newMigrationTaskItem.setOnAction(e -> createMigrationTask());
 
             // --- 任务菜单项 ---
-            javafx.scene.control.MenuItem openTaskItem = MenuItemUtil.createMenuItemI18n(
-                    "migration.menu.open",
-                    IconFactory.group(IconPaths.MAIN_STATUS_LIST, 0.6, 0.6));
-            openTaskItem.setOnAction(e -> {
-                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
-                    com.dbboys.ui.util.TabpaneUtil.addCustomMigrationTaskTab(task);
-                }
-            });
-
             javafx.scene.control.MenuItem startTaskItem = MenuItemUtil.createMenuItemI18n(
                     "migration.menu.start",
                     IconFactory.group(IconPaths.SQL_RUN, 0.65, 0.65));
@@ -1327,10 +1317,10 @@ public class MainController {
                     IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.7, 0.7));
             editTaskItem.setOnAction(e -> editMigrationTask());
 
-            javafx.scene.control.MenuItem viewTaskLogItem = MenuItemUtil.createMenuItemI18n(
-                    "migration.menu.view_log",
-                    IconFactory.group(IconPaths.METADATA_ONLINE_LOG_ITEM, 0.65, 0.65));
-            viewTaskLogItem.setOnAction(e -> showMigrationTaskLog());
+            javafx.scene.control.MenuItem copyTaskItem = MenuItemUtil.createMenuItemI18n(
+                    "migration.menu.copy",
+                    IconFactory.group(IconPaths.METADATA_COPY_CONNECT_ITEM, 0.7, 0.7));
+            copyTaskItem.setOnAction(e -> copyMigrationTask());
 
             javafx.scene.control.MenuItem moveTaskItem = MenuItemUtil.createMenuItemI18n(
                     "metadata.menu.move_to",
@@ -1447,7 +1437,9 @@ public class MainController {
                 if (current instanceof javafx.scene.control.TreeCell) {
                     javafx.scene.control.TreeCell<?> cell = (javafx.scene.control.TreeCell<?>) current;
                     Object treeItemObj = cell.getTreeItem();
-                    if (treeItemObj != null) {
+                    // 已选中的节点不再重复 clear+select，避免单元格重渲染导致文字闪烁
+                    if (treeItemObj != null
+                            && migrationTreeView.getSelectionModel().getSelectedItem() != treeItemObj) {
                         migrationTreeView.getSelectionModel().clearSelection();
                         migrationTreeView.getSelectionModel().select((TreeItem<TreeData>) treeItemObj);
                     }
@@ -1464,12 +1456,11 @@ public class MainController {
                     startTaskItem.setDisable(running);
                     stopTaskItem.setDisable(!running);
                     editTaskItem.setDisable(running);
+                    copyTaskItem.setDisable(false);
                     moveTaskItem.setDisable(running || migrationTreeView.getRoot().getChildren().size() <= 1);
                     renameTaskItem.setDisable(running);
-                    viewTaskLogItem.setDisable(task.getLastRunLog().isEmpty()
-                            && com.dbboys.infra.db.LocalDbRepository.getLatestMigrationTaskRun(task.getId()) == null);
-                    migrationCtxMenu.getItems().addAll(openTaskItem, startTaskItem, stopTaskItem, editTaskItem,
-                            viewTaskLogItem, moveTaskItem, renameTaskItem,
+                    migrationCtxMenu.getItems().addAll(startTaskItem, stopTaskItem, editTaskItem,
+                            copyTaskItem, moveTaskItem, renameTaskItem,
                             new javafx.scene.control.SeparatorMenuItem(), deleteTaskItem);
                 } else if (isFolder) {
                     com.dbboys.ui.treemodel.MigrationFolder folder =
@@ -1744,30 +1735,57 @@ public class MainController {
         }
     }
 
-    /** 查看任务最近一次运行日志（内存优先，重启后回退到持久化的运行记录）。 */
-    private void showMigrationTaskLog() {
+    /** 复制选中的迁移任务：生成唯一副本名并打开编辑器，保存后落库。 */
+    private void copyMigrationTask() {
         TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
-        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.MigrationTask task)) {
+        if (selected == null || !(selected.getValue() instanceof com.dbboys.model.MigrationTask orig)) {
             return;
         }
-        String logText;
-        if (!task.getLastRunLog().isEmpty()) {
-            logText = String.join("\n", task.getLastRunLog());
-        } else {
-            com.dbboys.model.MigrationTaskRun lastRun =
-                    com.dbboys.infra.db.LocalDbRepository.getLatestMigrationTaskRun(task.getId());
-            logText = lastRun != null && !lastRun.getLog().isBlank()
-                    ? lastRun.getLog()
-                    : I18n.t("migration.log.empty", "暂无运行记录");
+        com.dbboys.model.MigrationTask copy = new com.dbboys.model.MigrationTask();
+        String baseName = orig.getName();
+        String copyName = baseName + "_1";
+        int suffix = 2;
+        java.util.List<com.dbboys.model.MigrationTask> allTasks =
+                com.dbboys.infra.db.LocalDbRepository.getAllMigrationTasks();
+        while (true) {
+            boolean nameExists = false;
+            for (com.dbboys.model.MigrationTask existing : allTasks) {
+                if (existing.getName().equals(copyName)) {
+                    nameExists = true;
+                    break;
+                }
+            }
+            if (!nameExists) break;
+            copyName = baseName + "_" + suffix;
+            suffix++;
         }
-        javafx.scene.control.TextArea logArea = new javafx.scene.control.TextArea(logText);
-        logArea.setEditable(false);
-        ButtonType btnClose = new ButtonType(I18n.t("migration.button.close", "Close"),
-                ButtonBar.ButtonData.CANCEL_CLOSE);
-        AlertUtil.ContentDialog dlg = AlertUtil.createContentDialog(
-                I18n.t("migration.log.title", "迁移任务\"%s\"运行日志").formatted(task.getName()),
-                logArea, 720, 480, btnClose);
-        dlg.showAndWait();
+        copy.setName(copyName);
+        copy.setParentId(orig.getParentId());
+        copy.setSourceId(orig.getSourceId());
+        copy.setTargetId(orig.getTargetId());
+        copy.setTargetDatabase(orig.getTargetDatabase());
+        copy.setTargetSchema(orig.getTargetSchema());
+        copy.setMigrateDdl(orig.isMigrateDdl());
+        copy.setMigrateData(orig.isMigrateData());
+        copy.setOverwrite(orig.isOverwrite());
+        copy.setObjectsJson(orig.getObjectsJson());
+        copy.setMappingsJson(orig.getMappingsJson());
+        copy.setInfo(orig.getInfo());
+
+        MigrationDialogController dlg = new MigrationDialogController();
+        com.dbboys.model.MigrationTask result =
+                dlg.showAndWait(copy, com.dbboys.infra.db.LocalDbRepository.getConnectLeafs());
+        if (result != null) {
+            if (result != copy) {
+                result.setParentId(copy.getParentId());
+            }
+            if (com.dbboys.infra.db.LocalDbRepository.createMigrationTask(result)) {
+                addMigrationTaskToTree(result);
+            }
+            if (dlg.isStartRequested()) {
+                com.dbboys.service.migration.MigrationTaskRunner.start(result);
+            }
+        }
     }
 
     /** 按任务 id 在迁移任务树中查找并打开其明细 tab（拖拽落点用）。 */

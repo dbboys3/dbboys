@@ -31,6 +31,8 @@ import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -198,7 +200,7 @@ public class MigrationDialogController {
         form.add(targetSchemaLabel, 2, 3);
         form.add(targetSchemaChoiceBox, 3, 3);
 
-        // ---- 中部：对象类型选择 + 选项 ----
+        // ---- 中部：对象类型选择 ----
         Label objectsLabel = boundLabel("migration.label.objects", "Objects to Migrate");
         typeRowsBox = new VBox(6);
         typeRowsBox.setPadding(new Insets(4, 0, 0, 12));
@@ -206,10 +208,8 @@ public class MigrationDialogController {
         scopeHint.textProperty().bind(I18n.bind("migration.hint.scope",
                 "Note: migration runs within the selected catalogs/schemas."));
         scopeHint.setWrapText(true);
-        VBox typesBox = new VBox(6, objectsLabel, typeRowsBox, scopeHint);
-        HBox.setHgrow(typesBox, Priority.ALWAYS);
-        VBox.setVgrow(typesBox, Priority.ALWAYS);
 
+        // ---- 选项（对象列表下方）----
         Label optionsLabel = boundLabel("migration.label.options", "Options");
         ddlCheckBox = boundCheckBox("migration.check.ddl", "Migrate table structure (DDL)", true);
         dataCheckBox = boundCheckBox("migration.check.data", "Migrate data", true);
@@ -220,24 +220,25 @@ public class MigrationDialogController {
         HBox dataRow = new HBox(6, dataCheckBox, editMappingButton);
         dataRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(8, optionsLabel, ddlCheckBox, dataRow, overwriteCheckBox);
-        optionsBox.setPadding(new Insets(0, 0, 0, 12));
-        optionsBox.setMinWidth(Region.USE_PREF_SIZE);
+        optionsBox.setPadding(new Insets(6, 0, 0, 12));
 
-        HBox middleBox = new HBox(8, typesBox, optionsBox);
+        VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, scopeHint, optionsBox);
         VBox.setVgrow(middleBox, Priority.ALWAYS);
 
-        // ---- 底部按钮：保存 / 保存并启动 / 关闭 ----
+        // ---- 底部按钮：保存(accent) / 保存并启动 / 关闭 ----
         Button saveButton = new Button();
         saveButton.textProperty().bind(I18n.bind("migration.button.save", "Save"));
+        saveButton.getStyleClass().add("accent");
         saveButton.setOnAction(e -> save(false));
 
         Button saveRunButton = new Button();
         saveRunButton.textProperty().bind(I18n.bind("migration.button.save_run", "Save & Run"));
-        saveRunButton.setDefaultButton(true);
+        saveRunButton.getStyleClass().add("accent");
         saveRunButton.setOnAction(e -> save(true));
 
         Button closeButton = new Button();
         closeButton.textProperty().bind(I18n.bind("migration.button.close", "Close"));
+        closeButton.getStyleClass().add("button-outlined");
         closeButton.setCancelButton(true);
         closeButton.setOnAction(e -> dialogStage.close());
 
@@ -359,7 +360,8 @@ public class MigrationDialogController {
         ChoiceBox<Connect> choiceBox = new ChoiceBox<>();
         choiceBox.setPrefWidth(260);
         choiceBox.setFocusTraversable(false);
-        choiceBox.getStyleClass().add("choice-box-with-border");
+        // 与 SQL 编辑面板连接选择器一致（SqlTab.fxml）
+        choiceBox.getStyleClass().add("custom-connectname-choicebox");
         choiceBox.setConverter(new StringConverter<>() {
             @Override
             public String toString(Connect object) {
@@ -377,6 +379,9 @@ public class MigrationDialogController {
     private static ChoiceBox<String> stringChoiceBox() {
         ChoiceBox<String> choiceBox = new ChoiceBox<>();
         choiceBox.setPrefWidth(260);
+        choiceBox.setFocusTraversable(false);
+        // 与 SQL 编辑面板库/模式选择器一致（SqlTab.fxml）
+        choiceBox.getStyleClass().add("custom-dbname-choicebox");
         return choiceBox;
     }
 
@@ -435,6 +440,10 @@ public class MigrationDialogController {
         rebuildTypeRows(platform);
 
         String preferred = firstNonBlank(echoSourceCatalog, preferredCatalogName());
+        if (preferred != null && !preferred.isBlank()) {
+            sourceDbChoiceBox.getItems().setAll(preferred);
+            sourceDbChoiceBox.getSelectionModel().select(0);
+        }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
             try (Connection conn = BackgroundSqlService.getConnectionService()
@@ -466,6 +475,10 @@ public class MigrationDialogController {
             return;
         }
         String preferred = firstNonBlank(echoSourceSchema, null);
+        if (preferred != null && !preferred.isBlank()) {
+            sourceSchemaChoiceBox.getItems().setAll(preferred);
+            sourceSchemaChoiceBox.getSelectionModel().select(0);
+        }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
             try {
@@ -555,6 +568,14 @@ public class MigrationDialogController {
         setCatalogRowsVisible(showDb, showSchema);
 
         String preferredDb = firstNonBlank(echoTargetDatabase, preferredCatalogName());
+        String preferredSchemaImmediate = firstNonBlank(echoTargetSchema, preferredCatalogName());
+        if (showDb && preferredDb != null && !preferredDb.isBlank()) {
+            targetDbChoiceBox.getItems().setAll(preferredDb);
+            targetDbChoiceBox.getSelectionModel().select(0);
+        } else if (showSchema && preferredSchemaImmediate != null && !preferredSchemaImmediate.isBlank()) {
+            targetSchemaChoiceBox.getItems().setAll(preferredSchemaImmediate);
+            targetSchemaChoiceBox.getSelectionModel().select(0);
+        }
         // SCHEMA 模型（Oracle/Dameng）一层是模式：回显用任务保存的目标模式
         String preferredSchema = firstNonBlank(echoTargetSchema, preferredCatalogName());
         AppExecutor.runAsync(() -> {
@@ -593,6 +614,10 @@ public class MigrationDialogController {
             return;
         }
         String preferred = firstNonBlank(echoTargetSchema, preferredCatalogName());
+        if (preferred != null && !preferred.isBlank()) {
+            targetSchemaChoiceBox.getItems().setAll(preferred);
+            targetSchemaChoiceBox.getSelectionModel().select(0);
+        }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
             try {
@@ -675,7 +700,7 @@ public class MigrationDialogController {
         final MigrationObjectRef.Kind kind;
         CheckBox checkBox;
         Label countLabel;
-        Button scopeButton;
+        MenuButton scopeMenu;
         /** false=全部（类型级通配），true=自定义挑选。 */
         boolean custom;
         final Set<String> customNames = new LinkedHashSet<>();
@@ -699,13 +724,26 @@ public class MigrationDialogController {
             ts.checkBox.textProperty().bind(I18n.bind(kindKey(kind), kindFallback(kind)));
             ts.checkBox.setFocusTraversable(false);
             ts.checkBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
-            ts.countLabel = new Label("");
-            ts.scopeButton = new Button();
+            // 数量未加载前显示 0，源范围选定后后台刷新真实数量
+            ts.countLabel = new Label("(0)");
+            ts.scopeMenu = new MenuButton();
+            ts.scopeMenu.getStyleClass().add("small");
+            MenuItem allItem = new MenuItem();
+            allItem.textProperty().bind(I18n.bind("migration.editor.type_scope_all", "All"));
+            allItem.setOnAction(e -> {
+                ts.custom = false;
+                ts.customNames.clear();
+                updateScopeText(ts);
+            });
+            MenuItem customItem = new MenuItem();
+            customItem.textProperty().bind(
+                    I18n.bind("migration.editor.type_scope_custom_pick", "Custom..."));
+            customItem.setOnAction(e -> openPicker(ts));
+            ts.scopeMenu.getItems().addAll(allItem, customItem);
             updateScopeText(ts);
-            ts.scopeButton.setOnAction(e -> openPicker(ts));
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
-            HBox row = new HBox(8, ts.checkBox, ts.countLabel, spacer, ts.scopeButton);
+            HBox row = new HBox(8, ts.checkBox, ts.countLabel, spacer, ts.scopeMenu);
             row.setAlignment(Pos.CENTER_LEFT);
             typeSelections.add(ts);
             typeRowsBox.getChildren().add(row);
@@ -724,7 +762,7 @@ public class MigrationDialogController {
     }
 
     private void updateScopeText(TypeSelection ts) {
-        ts.scopeButton.setText(ts.custom
+        ts.scopeMenu.setText(ts.custom
                 ? String.format(I18n.t("migration.editor.type_scope_custom", "Custom(%d)"),
                         ts.customNames.size())
                 : I18n.t("migration.editor.type_scope_all", "All"));
@@ -748,19 +786,17 @@ public class MigrationDialogController {
         }
         Connect source = sourceChoiceBox.getValue();
         if (source == null || !complete || typeSelections.isEmpty()) {
+            // 类型行保持可见可点，数量维持未加载的 (0)
             for (TypeSelection ts : typeSelections) {
-                ts.countLabel.setText("");
+                ts.countLabel.setText("(0)");
             }
-            typeRowsBox.setDisable(true);
             refreshMappingEditButton();
             return;
         }
-        typeRowsBox.setDisable(false);
         int generation = ++countGeneration;
         List<MigrationObjectRef.Kind> kinds = new ArrayList<>();
         for (TypeSelection ts : typeSelections) {
             kinds.add(ts.kind);
-            ts.countLabel.setText("…");
         }
         AppExecutor.runAsync(() -> {
             Map<MigrationObjectRef.Kind, Integer> counts = new EnumMap<>(MigrationObjectRef.Kind.class);
@@ -783,7 +819,7 @@ public class MigrationDialogController {
                 }
                 for (TypeSelection ts : typeSelections) {
                     Integer count = counts.get(ts.kind);
-                    ts.countLabel.setText(count == null ? "" : "(" + count + ")");
+                    ts.countLabel.setText(count == null ? "(0)" : "(" + count + ")");
                 }
             });
         });
@@ -812,13 +848,19 @@ public class MigrationDialogController {
     }
 
     /** 对象挑选子对话框：确认返回选中的对象名（列表顺序），取消返回 null。 */
+    /** 对象挑选子对话框：确认返回选中的对象名（列表顺序），取消返回 null。 */
     private void openPicker(TypeSelection ts) {
         Connect source = sourceChoiceBox.getValue();
-        if (source == null || !sourceScopeComplete()) {
+        if (source == null) {
             return;
         }
+        // 范围按钮任何时候可点：源范围缺失时打开空列表（显示 (0)）
+        boolean complete = sourceScopeComplete();
         List<String> picked = ObjectPickerDialog.showAndWait(dialogStage, ts.kind,
-                source, currentSourceCatalog(), currentSourceSchema(), ts.customNames);
+                source,
+                complete ? currentSourceCatalog() : null,
+                complete ? currentSourceSchema() : null,
+                ts.customNames);
         if (picked == null) {
             return;
         }
@@ -833,46 +875,31 @@ public class MigrationDialogController {
     }
 
     // ==================================================================
-    // 自定义数据映射
+    // 自定义数据映射（全局类型映射，对所有表生效）
     // ==================================================================
 
     private void openMappingDialog() {
         Connect source = sourceChoiceBox.getValue();
         Connect target = targetChoiceBox.getValue();
-        TypeSelection tableTs = typeSelectionFor(MigrationObjectRef.Kind.TABLE);
-        if (source == null || target == null || tableTs == null
-                || !tableTs.checkBox.isSelected() || !sourceScopeComplete()) {
+        if (source == null || target == null) {
             return;
         }
-        List<String> targetTypes;
-        try {
-            targetTypes = PlatformResolvers.get().requirePlatform(target).getColumnTypes();
-        } catch (Exception e) {
-            targetTypes = List.of();
-        }
-        // 表类型为"全部"时传 null，由映射对话框后台加载全量表名
-        List<String> fixedTables = tableTs.custom ? new ArrayList<>(tableTs.customNames) : null;
         Map<String, TableMapping> result = new MigrationMappingDialogController().showAndWait(
                 dialogStage,
                 nameField.getText() == null ? "" : nameField.getText().trim(),
-                source, currentSourceCatalog(), currentSourceSchema(),
-                fixedTables, targetTypes, mappings);
+                source, target, mappings);
         if (result != null) {
             mappings = result;
         }
     }
 
-    /** "编辑"映射按钮仅在 迁移数据勾选 + 目标已选 + 表类型勾选（全部或自定义≥1）+ 源范围完整 时可用。 */
+    /** "编辑"映射按钮在源/目标连接已选时可用（全局映射不再要求表类型勾选/源范围）。 */
     private void refreshMappingEditButton() {
         if (editMappingButton == null) {
             return;
         }
-        TypeSelection tableTs = typeSelectionFor(MigrationObjectRef.Kind.TABLE);
-        boolean enabled = dataCheckBox != null && dataCheckBox.isSelected()
-                && targetChoiceBox != null && targetChoiceBox.getValue() != null
-                && tableTs != null && tableTs.checkBox.isSelected()
-                && (!tableTs.custom || !tableTs.customNames.isEmpty())
-                && sourceScopeComplete();
+        boolean enabled = sourceChoiceBox != null && sourceChoiceBox.getValue() != null
+                && targetChoiceBox != null && targetChoiceBox.getValue() != null;
         editMappingButton.setDisable(!enabled);
     }
 
@@ -1143,9 +1170,11 @@ public class MigrationDialogController {
 
             Button okButton = new Button();
             okButton.textProperty().bind(I18n.bind("common.confirm", "Confirm"));
+            okButton.getStyleClass().add("accent");
             okButton.setDefaultButton(true);
             Button cancelButton = new Button();
             cancelButton.textProperty().bind(I18n.bind("common.cancel", "Cancel"));
+            cancelButton.getStyleClass().add("button-outlined");
             cancelButton.setCancelButton(true);
             Region buttonSpacer = new Region();
             HBox.setHgrow(buttonSpacer, Priority.ALWAYS);

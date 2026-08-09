@@ -18,6 +18,9 @@ import java.util.Set;
  */
 public record TableMapping(Set<String> excludedColumns, Map<String, String> typeOverrides) {
 
+    /** 全局类型映射在任务 mappings 中的保留表名键：其 typeOverrides 对所有表生效。 */
+    public static final String GLOBAL_TABLE_KEY = "*";
+
     public TableMapping {
         // 排除列统一归一小写，保证 isExcluded 的大小写不敏感语义对直接构造同样成立
         if (excludedColumns == null) {
@@ -138,5 +141,14 @@ public record TableMapping(Set<String> excludedColumns, Map<String, String> type
             }
         }
         return null;
+    }
+
+    /** 取全局类型覆盖（保留键 {@link #GLOBAL_TABLE_KEY} 条目的 typeOverrides），无则空 Map。 */
+    public static Map<String, String> globalTypeOverrides(Map<String, TableMapping> mappings) {
+        if (mappings == null) {
+            return Map.of();
+        }
+        TableMapping global = mappings.get(GLOBAL_TABLE_KEY);
+        return global == null ? Map.of() : global.typeOverrides();
     }
 }

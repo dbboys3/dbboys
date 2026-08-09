@@ -5,6 +5,7 @@ import com.dbboys.model.ColumnsInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 跨数据库表结构迁移的类型映射器（best-effort 语义）。
@@ -218,6 +219,67 @@ public final class TypeMapper {
     private static String colName(ColumnsInfo column) {
         String name = column == null ? null : column.getColName();
         return (name == null || name.isEmpty()) ? "?" : name;
+    }
+
+    /**
+     * 全局类型覆盖匹配：取列的源类型基名在 globalTypeOverrides 中大小写不敏感查找，
+     * 先全串匹配（如 Informix 的 DATETIME YEAR TO SECOND），不匹配再退到第一个词。
+     * 命中返回 trim 后的目标类型文本，未命中或覆盖值为空白返回 null。
+     */
+    private static String globalOverrideFor(Map<String, String> globalTypeOverrides, String colType) {
+        if (globalTypeOverrides == null || globalTypeOverrides.isEmpty()) {
+            return null;
+        }
+        String base = baseTypeName(colType);
+        if (base.isEmpty()) {
+            return null;
+        }
+        String hit = getIgnoreCase(globalTypeOverrides, base);
+        if (hit == null) {
+            int space = base.indexOf(' ');
+            if (space > 0) {
+                hit = getIgnoreCase(globalTypeOverrides, base.substring(0, space));
+            }
+        }
+        return hit == null || hit.isBlank() ? null : hit.trim();
+    }
+
+    /** 源类型基名：大写、去 {@code (...)} 括号段、去 UNSIGNED/ZEROFILL/IDENTITY 等修饰词、trim。 */
+    private static String baseTypeName(String colType) {
+        if (colType == null) {
+            return "";
+        }
+        String base = colType.trim().toUpperCase(Locale.ROOT);
+        int paren = base.indexOf('(');
+        if (paren >= 0) {
+            base = base.substring(0, paren).trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String word : base.split("\\s+")) {
+            if (word.equals("UNSIGNED") || word.equals("ZEROFILL")
+                    || word.equals("IDENTITY") || word.equals("AUTO_INCREMENT")) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(word);
+        }
+        return sb.toString();
+    }
+
+    /** Map 按键大小写不敏感取值。 */
+    private static String getIgnoreCase(Map<String, String> map, String key) {
+        String exact = map.get(key);
+        if (exact != null) {
+            return exact;
+        }
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /** 字符/二进制列的有效长度：优先 typeP，其次 colLength。 */
@@ -671,6 +733,23 @@ public final class TypeMapper {
     public static String buildCreateTableScript(String sourceDbType, String targetDbType,
             String tableName, List<ColumnsInfo> columns, List<String> primaryKeyColumns,
             String tableComment, List<String> warnings, TableMapping mapping) {
+        return buildCreateTableScript(sourceDbType, targetDbType, tableName, columns,
+                primaryKeyColumns, tableComment, warnings, mapping, null);
+    }
+
+    /**
+     * 源平台感知 + 逐表映射 + 全局类型映射版本。逐列决定类型文本的优先级：
+     * per-table 覆盖（{@code mapping.overrideType}）&gt; 全局类型覆盖
+     * （{@code globalTypeOverrides}，按源类型基名大小写不敏感匹配）&gt; 默认归一化/映射。
+     * 全局命中同样跳过归一化/类型映射（含 SERIAL 替换），warnings 追加
+     * 「列 x 使用全局自定义目标类型 …」。
+     *
+     * @param globalTypeOverrides 全局类型映射（源类型基名 → 目标类型文本），可为 null/空
+     */
+    public static String buildCreateTableScript(String sourceDbType, String targetDbType,
+            String tableName, List<ColumnsInfo> columns, List<String> primaryKeyColumns,
+            String tableComment, List<String> warnings, TableMapping mapping,
+            Map<String, String> globalTypeOverrides) {
         boolean mysql = is(targetDbType, "MYSQL");
         boolean pg = is(targetDbType, "POSTGRESQL");
         boolean oracleFamily = isOracleFamily(targetDbType);
@@ -711,14 +790,21 @@ public final class TypeMapper {
             GenericType gt = normalize(sourceDbType, column);
             boolean auto = column.isIsAutoincrement();
             String override = mapping == null ? null : mapping.overrideType(col);
+            String globalOverride = override == null || override.isBlank()
+                    ? globalOverrideFor(globalTypeOverrides, column.getColType())
+                    : null;
 
             // 自增列的类型替换（PG / Informix 系用 SERIAL 系列类型表达自增）
             String typeSql;
             boolean autoHandledByType = false;
             if (override != null && !override.isBlank()) {
-                // 自定义目标类型：原样使用，跳过归一化/类型映射（含 SERIAL 替换）
+                // 逐表自定义目标类型：原样使用，跳过归一化/类型映射（含 SERIAL 替换）
                 typeSql = override.trim();
                 warnings.add("列 " + col + " 使用自定义目标类型 " + typeSql);
+            } else if (globalOverride != null) {
+                // 全局自定义目标类型：原样使用，跳过归一化/类型映射（含 SERIAL 替换）
+                typeSql = globalOverride;
+                warnings.add("列 " + col + " 使用全局自定义目标类型 " + typeSql);
             } else if (auto && (pg || gbaseFamily)) {
                 if (gt == GenericType.INTEGER) {
                     typeSql = "SERIAL";
