@@ -21,6 +21,7 @@ public class ColumnsInfo {
     private StringProperty colDef;
     private StringProperty colComm;
     private BooleanProperty isAutoincrement;
+    private StringProperty colCollate;
 
     public ColumnsInfo() {
         this.tabId = new SimpleIntegerProperty();
@@ -31,11 +32,13 @@ public class ColumnsInfo {
         this.typeP = new SimpleIntegerProperty();
         this.typeS = new SimpleIntegerProperty();
         this.isNullable = new SimpleBooleanProperty();
+        // 未使用该字段来判断是否为主键，而是使用 PrimaryKeyInfo
         this.isPK = new SimpleBooleanProperty();
         this.colDefType = new SimpleStringProperty();
         this.colDef = new SimpleStringProperty();
         this.colComm = new SimpleStringProperty();
         this.isAutoincrement = new SimpleBooleanProperty();
+        this.colCollate = new SimpleStringProperty();
     }
 
     public int getTabId() {
@@ -220,6 +223,18 @@ public class ColumnsInfo {
 
     public void setIsAutoincrement(boolean isAutoincrement) {
         this.isAutoincrement.set(isAutoincrement);
+    }
+
+    public String getColCollate() {
+        return colCollate.get();
+    }
+
+    public StringProperty colCollateProperty(){
+        return colCollate;
+    }
+
+    public void setColCollate(String colCollate){
+        this.colCollate.set(colCollate);
     }
 
     @Override
