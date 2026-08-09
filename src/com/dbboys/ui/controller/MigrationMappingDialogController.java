@@ -67,6 +67,10 @@ public class MigrationMappingDialogController {
         this.result = null;
 
         VBox content = buildContent(initial == null ? Map.of() : initial);
+        ButtonType addType = new ButtonType(
+                I18n.t("migration.mapping.add", "Add Mapping"), ButtonBar.ButtonData.LEFT);
+        ButtonType resetType = new ButtonType(
+                I18n.t("migration.mapping.reset", "Reset"), ButtonBar.ButtonData.LEFT);
         ButtonType okType = new ButtonType(
                 I18n.t("common.confirm", "Confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelType = new ButtonType(
@@ -77,8 +81,16 @@ public class MigrationMappingDialogController {
                 content,
                 DIALOG_W,
                 DIALOG_H,
+                addType,
+                resetType,
                 okType,
                 cancelType);
+        Button addButton = dialog.getButton(addType);
+        addButton.getStyleClass().add("small");
+        addButton.setOnAction(e -> addRow("", "", ""));
+        Button resetButton = dialog.getButton(resetType);
+        resetButton.getStyleClass().add("small");
+        resetButton.setOnAction(e -> resetRows());
         Button okButton = dialog.getButton(okType);
         okButton.addEventFilter(ActionEvent.ACTION, e -> result = collectResult());
         ButtonType pickedType = dialog.showAndWait();
@@ -94,23 +106,14 @@ public class MigrationMappingDialogController {
         sourceCol.setMinWidth(180);
         ColumnConstraints targetCol = new ColumnConstraints();
         targetCol.setHgrow(Priority.ALWAYS);
-        targetCol.setMinWidth(220);
-        ColumnConstraints removeCol = new ColumnConstraints();
-        removeCol.setMinWidth(36);
-        rowsGrid.getColumnConstraints().setAll(sourceCol, targetCol, removeCol);
+        targetCol.setMinWidth(160);
+        rowsGrid.getColumnConstraints().setAll(sourceCol, targetCol);
 
         scroll = new ScrollPane(rowsGrid);
         scroll.setFitToWidth(true);
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        Button addButton = new Button();
-        addButton.textProperty().bind(I18n.bind("migration.mapping.add", "Add Mapping"));
-        addButton.setOnAction(e -> addRow("", "", ""));
-
-        HBox addBar = new HBox(addButton);
-        addBar.setAlignment(Pos.CENTER_LEFT);
-
-        VBox content = new VBox(8, scroll, addBar);
+        VBox content = new VBox(8, scroll);
 
         rebuildGrid();
         TableMapping global = initial.get(TableMapping.GLOBAL_TABLE_KEY);
@@ -133,11 +136,10 @@ public class MigrationMappingDialogController {
         sourceHeader.textProperty().bind(I18n.bind("migration.mapping.column.source_type", "Source Type"));
         Label targetHeader = new Label();
         targetHeader.textProperty().bind(I18n.bind("migration.mapping.column.target_type", "Target Type"));
-        Label removeHeader = new Label("");
-        rowsGrid.addRow(0, sourceHeader, targetHeader, removeHeader);
+        rowsGrid.addRow(0, sourceHeader, targetHeader);
         int rowIndex = 1;
         for (MappingRow row : rows) {
-            rowsGrid.addRow(rowIndex++, row.sourceType, row.targetType, row.removeButton);
+            rowsGrid.addRow(rowIndex++, row.sourceType, row.targetBox);
         }
     }
 
@@ -145,7 +147,7 @@ public class MigrationMappingDialogController {
         MappingRow row = new MappingRow();
         row.defaultTarget = defaultTarget;
         row.sourceType = new ComboBox<>(FXCollections.observableArrayList(sourceTypes));
-        row.sourceType.setEditable(false);
+        row.sourceType.setEditable(true);
         row.sourceType.getStyleClass().add("choice-box-with-border");
         row.sourceType.setValue(sourceType);
         row.sourceType.setPrefWidth(180);
@@ -160,9 +162,24 @@ public class MigrationMappingDialogController {
             rows.remove(row);
             rebuildGrid();
         });
+        row.targetBox = new HBox(6, row.targetType, row.removeButton);
+        row.targetBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(row.targetType, Priority.ALWAYS);
         rows.add(row);
         rebuildGrid();
         scrollToBottom();
+    }
+
+    private void resetRows() {
+        rows.clear();
+        if (sourceTypes.isEmpty()) {
+            addRow("", "", "");
+        } else {
+            for (String sourceType : sourceTypes) {
+                String defaultTarget = defaultTargetType(sourceType);
+                addRow(sourceType, defaultTarget, defaultTarget);
+            }
+        }
     }
 
     private void scrollToBottom() {
@@ -242,6 +259,7 @@ public class MigrationMappingDialogController {
         String defaultTarget;
         ComboBox<String> sourceType;
         ComboBox<String> targetType;
+        HBox targetBox;
         Button removeButton;
     }
 }
