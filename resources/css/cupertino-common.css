@@ -746,7 +746,7 @@ Text {
   -fx-fill: -color-fg-default;
 }
 .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover {
-  -fx-background-color: -color-base-7;
+  -fx-background-color: -color-hover-bg;
   -fx-text-fill: -color-fg-default;
 }
 .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover .font-icon, .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover .ikonli-font-icon {
@@ -760,14 +760,6 @@ Text {
 .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected .font-icon, .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected .ikonli-font-icon {
   -fx-icon-color: -color-fg-emphasis;
   -fx-fill: -color-fg-emphasis;
-}
-.combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected:hover {
-  -fx-background-color: -color-base-7;
-  -fx-text-fill: -color-fg-default;
-}
-.combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected:hover .font-icon, .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected:hover .ikonli-font-icon {
-  -fx-icon-color: -color-fg-default;
-  -fx-fill: -color-fg-default;
 }
 .combo-box-popup > .list-view > .placeholder > .label {
   -fx-text-fill: -color-fg-muted;
@@ -5672,7 +5664,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .context-menu .radio-menu-item:hover:checked,
 .context-menu .radio-menu-item:focused:checked,
 .list-cell:filled:hover,
-.combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover,
 .list-view.search-result-list > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover,
 .tree-cell:filled.hover,
 .table-row-cell:filled:hover,
