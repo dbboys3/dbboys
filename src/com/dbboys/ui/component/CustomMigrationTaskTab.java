@@ -132,6 +132,9 @@ public class CustomMigrationTaskTab extends CustomTab {
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         progressBar.setPrefWidth(220);
+        // 进度条高度缩小一半
+        progressBar.setPrefHeight(7);
+        progressBar.setMaxHeight(7);
         Region bottomSpacer = new Region();
         HBox.setHgrow(bottomSpacer, Priority.ALWAYS);
         HBox bottomRow = new HBox(10, progressBar, progressLabel, currentObjectLabel, countsLabel,
@@ -144,7 +147,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         VBox.setVgrow(detailTable, Priority.ALWAYS);
 
         VBox root = new VBox(8, headerRow, detailTable, bottomRow);
-        root.setPadding(new Insets(10));
+        root.setPadding(new Insets(0));
         setContent(root);
 
         // ---- 进度/计数监听（关闭时移除，防泄漏） ----
@@ -248,6 +251,38 @@ public class CustomMigrationTaskTab extends CustomTab {
 
     private TableView<MigrationRunItem> buildDetailTable() {
         TableView<MigrationRunItem> table = new TableView<>(filteredItems);
+        // 多选
+        table.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        // 失败行红色文字（运行中状态变化时同步刷新）
+        table.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
+            private MigrationRunItem listened;
+            private final javafx.beans.value.ChangeListener<MigrationRunItem.Status> statusListener =
+                    (o, ov, nv) -> refreshStyle();
+            {
+                itemProperty().addListener((obs, oldItem, newItem) -> {
+                    if (listened != null) {
+                        listened.statusProperty().removeListener(statusListener);
+                    }
+                    listened = newItem;
+                    if (newItem != null) {
+                        newItem.statusProperty().addListener(statusListener);
+                    }
+                    refreshStyle();
+                });
+            }
+            private void refreshStyle() {
+                MigrationRunItem it = getItem();
+                setStyle(it != null && it.getStatus() == MigrationRunItem.Status.FAILED
+                        ? "-fx-text-fill: -color-danger-fg;" : "");
+            }
+        });
+
+        TableColumn<MigrationRunItem, String> rowNoColumn = new TableColumn<>("#");
+        rowNoColumn.setCellValueFactory(cell ->
+                new ReadOnlyStringWrapper(String.valueOf(cell.getTableView().getItems()
+                        .indexOf(cell.getValue()) + 1)));
+        rowNoColumn.setPrefWidth(45);
+        rowNoColumn.setResizable(false);
 
         TableColumn<MigrationRunItem, String> kindColumn = new TableColumn<>();
         kindColumn.textProperty().bind(I18n.bind("migration.detail.column.kind", "Kind"));
@@ -288,6 +323,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         // 错误信息列宽占满剩余空间；prefWidth 被绑定后不允许拖拽改宽，故禁掉列 resize
         errorColumn.setResizable(false);
         errorColumn.prefWidthProperty().bind(table.widthProperty()
+                .subtract(rowNoColumn.widthProperty())
                 .subtract(kindColumn.widthProperty())
                 .subtract(nameColumn.widthProperty())
                 .subtract(statusColumn.widthProperty())
@@ -297,7 +333,7 @@ public class CustomMigrationTaskTab extends CustomTab {
                 .subtract(18));
 
         table.getColumns().setAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
-                kindColumn, nameColumn, statusColumn,
+                rowNoColumn, kindColumn, nameColumn, statusColumn,
                 startColumn, endColumn, rowsColumn, errorColumn));
         return table;
     }

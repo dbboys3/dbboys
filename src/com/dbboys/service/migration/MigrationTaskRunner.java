@@ -10,7 +10,6 @@ import com.dbboys.model.Connect;
 import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.MigrationRunItem;
 import com.dbboys.model.MigrationTask;
-import com.dbboys.model.MigrationTaskRun;
 import com.dbboys.model.MigrationTaskRunItem;
 import com.dbboys.model.TreeData;
 import com.dbboys.service.BackgroundSqlService;
@@ -24,7 +23,9 @@ import java.sql.Connection;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -103,7 +104,7 @@ public final class MigrationTaskRunner {
             return;
         }
         // 有历史运行记录时直接恢复上次逐对象结果
-        List<MigrationTaskRunItem> latestItems = LocalDbRepository.getLatestMigrationTaskRunItems(task.getId());
+        List<MigrationTaskRunItem> latestItems = LocalDbRepository.getMigrationTaskRunItems(task.getId());
         if (!latestItems.isEmpty()) {
             List<MigrationRunItem> restored = new ArrayList<>(latestItems.size());
             for (MigrationTaskRunItem record : latestItems) {
@@ -329,9 +330,7 @@ public final class MigrationTaskRunner {
                     I18n.t("migration.notify.done",
                             "Migration task %s finished: %d succeeded, %d skipped, %d failed"),
                     task.getName(), success, skipped, failed));
-            persistRun(task, startTimeHolder[0],
-                    failed > 0 ? MigrationTaskRun.STATUS_FAILED : MigrationTaskRun.STATUS_SUCCESS,
-                    success, skipped, failed);
+            persistRun(task, startTimeHolder[0]);
         });
         migrationTask.setOnCancelled(event -> {
             task.setRunState(MigrationTask.RunState.IDLE);
@@ -339,7 +338,7 @@ public final class MigrationTaskRunner {
             NotificationUtil.showMainNotification(String.format(
                     I18n.t("migration.notify.failed", "Migration task %s failed: %s"),
                     task.getName(), I18n.t("migration.log.cancelled", "Migration cancelled")));
-            persistRun(task, startTimeHolder[0], MigrationTaskRun.STATUS_CANCELLED, 0, 0, 0);
+            persistRun(task, startTimeHolder[0]);
         });
         migrationTask.setOnFailed(event -> {
             task.setRunState(MigrationTask.RunState.IDLE);
@@ -352,31 +351,46 @@ public final class MigrationTaskRunner {
                     I18n.t("migration.notify.failed", "Migration task %s failed: %s"),
                     task.getName(), message));
             task.getLastRunLog().add(message);
-            persistRun(task, startTimeHolder[0], MigrationTaskRun.STATUS_FAILED, 0, 0, 1);
+            persistRun(task, startTimeHolder[0]);
         });
         BackgroundSqlService.backSqlExecutor.submit(migrationTask);
     }
 
-    /** 运行结束持久化一条运行记录（t_migration_task_run）及逐对象明细（t_migration_task_run_item）。 */
-    private static void persistRun(MigrationTask task, String startTime, String status,
-                                   long success, long skipped, long failed) {
-        MigrationTaskRun run = new MigrationTaskRun();
-        run.setTaskId(task.getId());
-        run.setStartTime(startTime);
-        run.setEndTime(RUN_TIME_FORMAT.format(System.currentTimeMillis()));
-        run.setStatus(status);
-        run.setSuccessCount((int) success);
-        run.setSkippedCount((int) skipped);
-        run.setFailedCount((int) failed);
-        run.setLog(String.join("\n", task.getLastRunLog()));
-        if (!LocalDbRepository.createMigrationTaskRun(run)) {
-            return;
+    /** 运行结束持久化：按类型成功/失败计数与起止时间写到任务表，逐对象明细整批替换。 */
+    private static void persistRun(MigrationTask task, String startTime) {
+        // 按类型统计成功/失败数量（跳过不计）；TOTAL 为总成功/总失败
+        Map<String, long[]> counts = new LinkedHashMap<>();
+        long successTotal = 0;
+        long failedTotal = 0;
+        for (MigrationRunItem item : task.getRunItems()) {
+            if (item.getStatus() != MigrationRunItem.Status.SUCCESS
+                    && item.getStatus() != MigrationRunItem.Status.FAILED) {
+                continue;
+            }
+            String kind = item.getKind() == null ? "" : item.getKind().name();
+            long[] pair = counts.computeIfAbsent(kind, k -> new long[2]);
+            if (item.getStatus() == MigrationRunItem.Status.SUCCESS) {
+                pair[0]++;
+                successTotal++;
+            } else {
+                pair[1]++;
+                failedTotal++;
+            }
         }
-        // 逐对象明细（重启后明细 tab 可恢复上次执行状态）
+        counts.put("TOTAL", new long[]{successTotal, failedTotal});
+        String countsJson = MigrationTask.encodeRunCounts(counts);
+        String endTime = RUN_TIME_FORMAT.format(System.currentTimeMillis());
+        LocalDbRepository.updateMigrationTaskRunInfo(task.getId(), startTime, endTime, countsJson);
+        // 同步任务对象上的最近结果字段
+        task.setLastStartTime(startTime);
+        task.setLastEndTime(endTime);
+        task.setRunCountsJson(countsJson);
+
+        // 逐对象明细整批替换（重启后明细 tab 可恢复上次执行状态）
+        LocalDbRepository.deleteMigrationTaskRunItemsByTask(task.getId());
         List<MigrationTaskRunItem> runItems = new ArrayList<>(task.getRunItems().size());
         for (MigrationRunItem item : task.getRunItems()) {
             MigrationTaskRunItem record = new MigrationTaskRunItem();
-            record.setRunId(run.getId());
             record.setTaskId(task.getId());
             record.setKind(item.getKind() == null ? "" : item.getKind().name());
             record.setName(item.getName() == null ? "" : item.getName());

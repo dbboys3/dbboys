@@ -52,6 +52,11 @@ public class MigrationTask extends TreeData {
     private final StringProperty objectsJson = new SimpleStringProperty("[]");
     private final StringProperty mappingsJson = new SimpleStringProperty("{}");
     private final StringProperty info = new SimpleStringProperty();
+    // ---- 最近一次运行的结果（持久化在 t_migration_task 上） ----
+    private final StringProperty lastStartTime = new SimpleStringProperty("");
+    private final StringProperty lastEndTime = new SimpleStringProperty("");
+    /** JSON：{"TABLE":{"s":成功数,"f":失败数},...,"TOTAL":{"s":总成功,"f":总失败}} */
+    private final StringProperty runCountsJson = new SimpleStringProperty("{}");
 
     // ---- 瞬时运行状态（不持久化；仅在 FX 线程读写 UI 相关属性） ----
     private final ObjectProperty<RunState> runState = new SimpleObjectProperty<>(RunState.IDLE);
@@ -144,6 +149,48 @@ public class MigrationTask extends TreeData {
     public String getInfo() { return info.get(); }
     public StringProperty infoProperty() { return info; }
     public void setInfo(String info) { this.info.set(info); }
+
+    // --- 最近运行结果（持久化） ---
+    public String getLastStartTime() { return lastStartTime.get(); }
+    public StringProperty lastStartTimeProperty() { return lastStartTime; }
+    public void setLastStartTime(String lastStartTime) { this.lastStartTime.set(lastStartTime); }
+
+    public String getLastEndTime() { return lastEndTime.get(); }
+    public StringProperty lastEndTimeProperty() { return lastEndTime; }
+    public void setLastEndTime(String lastEndTime) { this.lastEndTime.set(lastEndTime); }
+
+    public String getRunCountsJson() { return runCountsJson.get(); }
+    public StringProperty runCountsJsonProperty() { return runCountsJson; }
+    public void setRunCountsJson(String runCountsJson) { this.runCountsJson.set(runCountsJson); }
+
+    /** 编码按类型成功/失败计数：key=Kind 名或 TOTAL，value=[成功数,失败数]。 */
+    public static String encodeRunCounts(java.util.Map<String, long[]> counts) {
+        org.json.JSONObject root = new org.json.JSONObject();
+        for (java.util.Map.Entry<String, long[]> entry : counts.entrySet()) {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            obj.put("s", entry.getValue()[0]);
+            obj.put("f", entry.getValue()[1]);
+            root.put(entry.getKey(), obj);
+        }
+        return root.toString();
+    }
+
+    /** 从 runCountsJson 取总数：[总成功, 总失败]；无记录返回 [0,0]。 */
+    public static long[] totalRunCounts(String runCountsJson) {
+        long[] totals = {0, 0};
+        if (runCountsJson == null || runCountsJson.isBlank()) {
+            return totals;
+        }
+        try {
+            org.json.JSONObject total = new org.json.JSONObject(runCountsJson).optJSONObject("TOTAL");
+            if (total != null) {
+                totals[0] = total.optLong("s", 0);
+                totals[1] = total.optLong("f", 0);
+            }
+        } catch (Exception ignored) {
+        }
+        return totals;
+    }
 
     // --- 运行状态（瞬时） ---
     public RunState getRunState() { return runState.get(); }

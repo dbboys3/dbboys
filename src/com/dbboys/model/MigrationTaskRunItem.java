@@ -7,8 +7,7 @@ package com.dbboys.model;
  * <pre>
  * t_migration_task_run_item:
  *   c_id         INTEGER PRIMARY KEY AUTOINCREMENT  -- 记录ID
- *   c_run_id     INTEGER                             -- 所属运行记录（t_migration_task_run.c_id）
- *   c_task_id    INTEGER                             -- 任务ID（冗余，便于按任务查询/级联删除）
+ *   c_task_id    INTEGER                             -- 任务ID（每次运行整批替换）
  *   c_kind       VARCHAR(20)                         -- 对象类型（MigrationObjectRef.Kind）
  *   c_name       VARCHAR(500)                        -- 对象显示名（catalog.schema.name 形式）
  *   c_status     VARCHAR(20)                         -- PENDING/RUNNING/SUCCESS/SKIPPED/FAILED
@@ -21,7 +20,6 @@ package com.dbboys.model;
 public class MigrationTaskRunItem {
 
     private int id;
-    private int runId;
     private int taskId;
     private String kind = "";
     private String name = "";
@@ -33,9 +31,6 @@ public class MigrationTaskRunItem {
 
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
-
-    public int getRunId() { return runId; }
-    public void setRunId(int runId) { this.runId = runId; }
 
     public int getTaskId() { return taskId; }
     public void setTaskId(int taskId) { this.taskId = taskId; }
