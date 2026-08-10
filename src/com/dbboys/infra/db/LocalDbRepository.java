@@ -4,6 +4,7 @@ import com.dbboys.ui.treemodel.ConnectFolder;
 import com.dbboys.model.Connect;
 import com.dbboys.model.MigrationTask;
 import com.dbboys.model.MigrationTaskRun;
+import com.dbboys.model.MigrationTaskRunItem;
 import com.dbboys.ui.treemodel.MigrationFolder;
 import com.dbboys.ui.treemodel.SshFolder;
 import com.dbboys.model.UpdateResult;
@@ -82,6 +83,18 @@ public  class LocalDbRepository {
                 + "c_skipped_count INT,"
                 + "c_failed_count INT,"
                 + "c_log TEXT)");
+        // 逐对象详细执行结果（任务明细持久化）
+        execIgnore("CREATE TABLE IF NOT EXISTS t_migration_task_run_item ("
+                + "c_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                + "c_run_id INTEGER,"
+                + "c_task_id INTEGER,"
+                + "c_kind VARCHAR(20),"
+                + "c_name VARCHAR(500),"
+                + "c_status VARCHAR(20),"
+                + "c_start_time VARCHAR(20),"
+                + "c_end_time VARCHAR(20),"
+                + "c_rows INTEGER,"
+                + "c_error VARCHAR(3200))");
 
         /*老版本升级后t_connect可能少了ssh相关字段，需要加上 */
         String[][] sshColumns = {
@@ -123,6 +136,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("drop table if exists t_migration_folder");
             statement.executeUpdate("drop table if exists t_migration_task");
             statement.executeUpdate("drop table if exists t_migration_task_run");
+            statement.executeUpdate("drop table if exists t_migration_task_run_item");
             statement.executeUpdate("create table if not exists t_connect_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
             statement.executeUpdate("create table if not exists t_connect(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid int,c_name varchar(100),c_dbtype varchar(50),c_dbversion varchar(100),c_driver varchar(100),c_drivermd5 varchar(100),c_ip varchar(50),c_port varchar(50),c_database varchar(100),c_readonly varchar(2),c_username varchar(50),c_password varchar(50),c_props varchar(3200),c_info varchar(3200),c_ssh_host varchar(100),c_ssh_port varchar(10),c_ssh_user varchar(100),c_ssh_password varchar(100),c_ssh_enabled varchar(2))");
             statement.executeUpdate("create table if not exists t_sqlhistory(c_connectid INTEGER,c_database varchar(50),c_sql varchar(32000),c_starttime varchar(20),c_endtime varchar(20),c_elapsedtime varchar(20),c_affect int,c_mark varchar(100))");
@@ -131,6 +145,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("create table if not exists t_migration_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
             statement.executeUpdate("create table if not exists t_migration_task(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_source_id INTEGER,c_target_id INTEGER,c_target_database varchar(200),c_target_schema varchar(200),c_migrate_ddl INT DEFAULT 1,c_migrate_data INT DEFAULT 1,c_overwrite INT DEFAULT 0,c_objects TEXT,c_mappings TEXT,c_info varchar(3200))");
             statement.executeUpdate("create table if not exists t_migration_task_run(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_start_time varchar(20),c_end_time varchar(20),c_status varchar(20),c_success_count INT,c_skipped_count INT,c_failed_count INT,c_log TEXT)");
+            statement.executeUpdate("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_run_id INTEGER,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_rows INTEGER,c_error varchar(3200))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_migration_folder(c_name,c_expand) VALUES ('迁移任务分类[1级系统]',1)");
@@ -1158,6 +1173,7 @@ public  class LocalDbRepository {
 
     public static boolean deleteMigrationTaskRunsByTask(int taskId) {
         try (PreparedStatement ps = conn.prepareStatement("DELETE FROM t_migration_task_run WHERE c_task_id=?")) {
+            deleteMigrationTaskRunItemsByTask(taskId);
             ps.setInt(1, taskId);
             ps.executeUpdate();
             return true;
@@ -1171,6 +1187,7 @@ public  class LocalDbRepository {
         try (PreparedStatement ps = conn.prepareStatement(
                 "DELETE FROM t_migration_task_run WHERE c_task_id IN "
                         + "(SELECT c_id FROM t_migration_task WHERE c_parentid=?)")) {
+            deleteMigrationTaskRunItemsByParent(folderId);
             ps.setInt(1, folderId);
             ps.executeUpdate();
             return true;
@@ -1178,6 +1195,89 @@ public  class LocalDbRepository {
             log.error("Failed to delete migration task runs by parent", e);
             return false;
         }
+    }
+
+    private static boolean deleteMigrationTaskRunItemsByTask(int taskId) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "DELETE FROM t_migration_task_run_item WHERE c_task_id=?")) {
+            ps.setInt(1, taskId);
+            ps.executeUpdate();
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete migration task run items", e);
+            return false;
+        }
+    }
+
+    private static boolean deleteMigrationTaskRunItemsByParent(int folderId) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "DELETE FROM t_migration_task_run_item WHERE c_task_id IN "
+                        + "(SELECT c_id FROM t_migration_task WHERE c_parentid=?)")) {
+            ps.setInt(1, folderId);
+            ps.executeUpdate();
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete migration task run items by parent", e);
+            return false;
+        }
+    }
+
+    // ---- MIGRATION TASK RUN ITEM（逐对象明细） ----
+    public static boolean createMigrationTaskRunItems(List<MigrationTaskRunItem> items) {
+        if (items == null || items.isEmpty()) {
+            return true;
+        }
+        String sql = "INSERT INTO t_migration_task_run_item (c_run_id, c_task_id, c_kind, c_name, c_status, "
+                + "c_start_time, c_end_time, c_rows, c_error) VALUES (?,?,?,?,?,?,?,?,?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (MigrationTaskRunItem item : items) {
+                ps.setInt(1, item.getRunId());
+                ps.setInt(2, item.getTaskId());
+                ps.setString(3, item.getKind());
+                ps.setString(4, item.getName());
+                ps.setString(5, item.getStatus());
+                ps.setString(6, item.getStartTime());
+                ps.setString(7, item.getEndTime());
+                ps.setLong(8, item.getRows());
+                ps.setString(9, item.getError());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to create migration task run items", e);
+            return false;
+        }
+    }
+
+    /** 任务最近一次运行的逐对象明细（无记录返回空列表）。 */
+    public static List<MigrationTaskRunItem> getLatestMigrationTaskRunItems(int taskId) {
+        List<MigrationTaskRunItem> list = new ArrayList<>();
+        String sql = "SELECT c_id, c_run_id, c_task_id, c_kind, c_name, c_status, c_start_time, c_end_time, "
+                + "c_rows, c_error FROM t_migration_task_run_item "
+                + "WHERE c_run_id = (SELECT MAX(c_id) FROM t_migration_task_run WHERE c_task_id=?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, taskId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    MigrationTaskRunItem item = new MigrationTaskRunItem();
+                    item.setId(rs.getInt("c_id"));
+                    item.setRunId(rs.getInt("c_run_id"));
+                    item.setTaskId(rs.getInt("c_task_id"));
+                    item.setKind(rs.getString("c_kind") != null ? rs.getString("c_kind") : "");
+                    item.setName(rs.getString("c_name") != null ? rs.getString("c_name") : "");
+                    item.setStatus(rs.getString("c_status") != null ? rs.getString("c_status") : "");
+                    item.setStartTime(rs.getString("c_start_time") != null ? rs.getString("c_start_time") : "");
+                    item.setEndTime(rs.getString("c_end_time") != null ? rs.getString("c_end_time") : "");
+                    item.setRows(rs.getLong("c_rows"));
+                    item.setError(rs.getString("c_error") != null ? rs.getString("c_error") : "");
+                    list.add(item);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to load latest migration task run items", e);
+        }
+        return list;
     }
 
     private static MigrationTaskRun mapMigrationTaskRun(ResultSet rs) throws SQLException {

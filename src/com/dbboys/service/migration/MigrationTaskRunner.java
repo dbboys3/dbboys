@@ -11,6 +11,7 @@ import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.MigrationRunItem;
 import com.dbboys.model.MigrationTask;
 import com.dbboys.model.MigrationTaskRun;
+import com.dbboys.model.MigrationTaskRunItem;
 import com.dbboys.model.TreeData;
 import com.dbboys.service.BackgroundSqlService;
 import com.dbboys.ui.dialog.AlertUtil;
@@ -94,11 +95,39 @@ public final class MigrationTaskRunner {
 
     /**
      * 明细 tab 打开时调用：任务从未运行（runItems 为空）且未在运行时，
-     * 后台线程展开通配 ref 后用 PENDING 行预填 {@link MigrationTask#getRunItems()}，
-     * 仅做展示，不启动迁移。
+     * 优先从持久化的最近运行记录恢复逐对象明细；无记录时后台展开通配 ref
+     * 用 PENDING 行预填 {@link MigrationTask#getRunItems()}（仅展示，不启动迁移）。
      */
     public static void prepareRunItems(MigrationTask task) {
         if (task == null || task.isRunning() || !task.getRunItems().isEmpty()) {
+            return;
+        }
+        // 有历史运行记录时直接恢复上次逐对象结果
+        List<MigrationTaskRunItem> latestItems = LocalDbRepository.getLatestMigrationTaskRunItems(task.getId());
+        if (!latestItems.isEmpty()) {
+            List<MigrationRunItem> restored = new ArrayList<>(latestItems.size());
+            for (MigrationTaskRunItem record : latestItems) {
+                MigrationObjectRef.Kind kind;
+                MigrationRunItem.Status status;
+                try {
+                    kind = MigrationObjectRef.Kind.valueOf(record.getKind());
+                } catch (Exception e) {
+                    kind = MigrationObjectRef.Kind.TABLE;
+                }
+                try {
+                    status = MigrationRunItem.Status.valueOf(record.getStatus());
+                } catch (Exception e) {
+                    status = MigrationRunItem.Status.PENDING;
+                }
+                MigrationRunItem item = new MigrationRunItem(kind, record.getName());
+                item.setStatus(status);
+                item.setStartTime(record.getStartTime());
+                item.setEndTime(record.getEndTime());
+                item.setRows(record.getRows());
+                item.setErrorMessage(record.getError());
+                restored.add(item);
+            }
+            task.getRunItems().setAll(restored);
             return;
         }
         Connect source = findConnect(task.getSourceId());
@@ -328,7 +357,7 @@ public final class MigrationTaskRunner {
         BackgroundSqlService.backSqlExecutor.submit(migrationTask);
     }
 
-    /** 运行结束持久化一条运行记录（t_migration_task_run），供重启后恢复状态/查看历史日志。 */
+    /** 运行结束持久化一条运行记录（t_migration_task_run）及逐对象明细（t_migration_task_run_item）。 */
     private static void persistRun(MigrationTask task, String startTime, String status,
                                    long success, long skipped, long failed) {
         MigrationTaskRun run = new MigrationTaskRun();
@@ -340,7 +369,25 @@ public final class MigrationTaskRunner {
         run.setSkippedCount((int) skipped);
         run.setFailedCount((int) failed);
         run.setLog(String.join("\n", task.getLastRunLog()));
-        LocalDbRepository.createMigrationTaskRun(run);
+        if (!LocalDbRepository.createMigrationTaskRun(run)) {
+            return;
+        }
+        // 逐对象明细（重启后明细 tab 可恢复上次执行状态）
+        List<MigrationTaskRunItem> runItems = new ArrayList<>(task.getRunItems().size());
+        for (MigrationRunItem item : task.getRunItems()) {
+            MigrationTaskRunItem record = new MigrationTaskRunItem();
+            record.setRunId(run.getId());
+            record.setTaskId(task.getId());
+            record.setKind(item.getKind() == null ? "" : item.getKind().name());
+            record.setName(item.getName() == null ? "" : item.getName());
+            record.setStatus(item.getStatus() == null ? "" : item.getStatus().name());
+            record.setStartTime(item.getStartTime() == null ? "" : item.getStartTime());
+            record.setEndTime(item.getEndTime() == null ? "" : item.getEndTime());
+            record.setRows(item.getRows());
+            record.setError(item.getErrorMessage() == null ? "" : item.getErrorMessage());
+            runItems.add(record);
+        }
+        LocalDbRepository.createMigrationTaskRunItems(runItems);
     }
 
     // ==================================================================
