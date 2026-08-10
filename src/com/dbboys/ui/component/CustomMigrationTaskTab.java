@@ -338,7 +338,14 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         TableColumn<MigrationRunItem, String> speedColumn = new TableColumn<>();
         speedColumn.textProperty().bind(I18n.bind("migration.detail.column.speed", "Speed"));
-        speedColumn.setCellValueFactory(cell -> cell.getValue().speedProperty());
+        // 速度存数值（行/秒，-1 未知），单元格按当前语言格式化，语言切换即时刷新
+        speedColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
+                () -> {
+                    long speed = cell.getValue().getSpeed();
+                    return speed < 0 ? "" : String.format(I18n.t("migration.detail.speed", "%s rows/s"),
+                            String.format("%,d", speed));
+                },
+                cell.getValue().speedProperty(), I18n.localeProperty()));
         speedColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> rowsColumn = new TableColumn<>();

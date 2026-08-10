@@ -503,14 +503,12 @@ public final class MigrationTaskRunner {
         }
     }
 
-    /** 复制速度展示串（行/秒，千分位）：有行数且起止毫秒已知时计算，否则空串。 */
-    public static String computeSpeed(long rows, long startMillis, long endMillis) {
+    /** 复制速度（行/秒）：有行数且起止毫秒已知时计算，否则 -1。 */
+    public static long computeSpeed(long rows, long startMillis, long endMillis) {
         if (rows <= 0 || startMillis <= 0 || endMillis <= 0) {
-            return "";
+            return -1;
         }
-        long speed = rows * 1000 / Math.max(1, endMillis - startMillis);
-        return String.format(I18n.t("migration.detail.speed", "%s rows/s"),
-                String.format("%,d", speed));
+        return rows * 1000 / Math.max(1, endMillis - startMillis);
     }
 
     /** 解析明细行时间（yyyy-MM-dd HH:mm:ss）为 epoch 毫秒；空白/旧格式解析失败返回 0。 */

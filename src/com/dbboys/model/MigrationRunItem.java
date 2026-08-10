@@ -81,11 +81,11 @@ public class MigrationRunItem {
     public StringProperty errorMessageProperty() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage.set(errorMessage); }
 
-    // --- speed（复制速度展示串，如 "1,234 行/秒"；由 runner 计算写入） ---
-    private final StringProperty speed = new SimpleStringProperty("");
-    public String getSpeed() { return speed.get(); }
-    public StringProperty speedProperty() { return speed; }
-    public void setSpeed(String speed) { this.speed.set(speed); }
+    // --- speed（复制速度，行/秒，-1 未知；由 runner 计算写入，展示格式化在明细 tab 按当前语言进行） ---
+    private final LongProperty speed = new SimpleLongProperty(-1);
+    public long getSpeed() { return speed.get(); }
+    public LongProperty speedProperty() { return speed; }
+    public void setSpeed(long speed) { this.speed.set(speed); }
 
     // --- errorSql（出错时正在执行的 SQL，瞬时；双击错误列弹出详情用） ---
     private final StringProperty errorSql = new SimpleStringProperty("");
