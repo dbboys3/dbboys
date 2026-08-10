@@ -564,6 +564,16 @@ public class TableMigrationService {
             placeholders.append('?');
         }
         String selectSql = "SELECT " + columnList + " FROM " + tableName;
+        // 自定义 WHERE 条件过滤（仅数据复制；用户可带或不带 WHERE 关键字）
+        String whereClause = table.where();
+        if (whereClause != null && !whereClause.isBlank()) {
+            String clause = whereClause.trim();
+            if (clause.regionMatches(true, 0, "where", 0, 5)) {
+                selectSql += " " + clause;
+            } else {
+                selectSql += " WHERE " + clause;
+            }
+        }
         String insertSql = "INSERT INTO " + tableName + " (" + columnList + ") VALUES (" + placeholders + ")";
 
         try (PreparedStatement selectStmt = ctx.sourceConn.prepareStatement(

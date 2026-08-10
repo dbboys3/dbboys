@@ -337,7 +337,7 @@ public class MigrationDialogController {
                     for (TypeSelection ts : typeSelections) {
                         ts.checkBox.setSelected(true);
                         ts.custom = false;
-                        ts.customNames.clear();
+                        ts.customObjects.clear();
                     }
                     continue;
                 }
@@ -348,10 +348,10 @@ public class MigrationDialogController {
                 ts.checkBox.setSelected(true);
                 if (ref.name() == null) {
                     ts.custom = false;
-                    ts.customNames.clear();
+                    ts.customObjects.clear();
                 } else {
                     ts.custom = true;
-                    ts.customNames.add(ref.name());
+                    ts.customObjects.put(ref.name(), ref.where() == null ? "" : ref.where());
                 }
             }
         } finally {
@@ -765,7 +765,8 @@ public class MigrationDialogController {
         Button editButton;
         /** false=全部（类型级通配），true=自定义挑选。 */
         boolean custom;
-        final Set<String> customNames = new LinkedHashSet<>();
+        /** 自定义挑选的对象：对象名 → WHERE 条件（可为空串）。 */
+        final java.util.Map<String, String> customObjects = new java.util.LinkedHashMap<>();
 
         TypeSelection(MigrationObjectRef.Kind kind) {
             this.kind = kind;
@@ -830,7 +831,7 @@ public class MigrationDialogController {
             if (!Objects.equals(scopeKey, picksScopeKey)) {
                 for (TypeSelection ts : typeSelections) {
                     ts.custom = false;
-                    ts.customNames.clear();
+                    ts.customObjects.clear();
                 }
                 picksScopeKey = scopeKey;
             }
@@ -910,8 +911,7 @@ public class MigrationDialogController {
         }
     }
 
-    /** 对象挑选子对话框：确认返回选中的对象名（列表顺序），取消返回 null。 */
-    /** 对象挑选子对话框：确认返回选中的对象名（列表顺序），取消返回 null。 */
+    /** 对象挑选子对话框：确认返回选中的对象 ref（含 WHERE 条件），取消返回 null。 */
     private void openPicker(TypeSelection ts) {
         Connect source = sourceChoiceBox.getValue();
         if (source == null) {
@@ -919,16 +919,18 @@ public class MigrationDialogController {
         }
         // 范围按钮任何时候可点：源范围缺失时打开空列表（显示 (0)）
         boolean complete = sourceScopeComplete();
-        List<String> picked = ObjectPickerDialog.showAndWait(dialogStage, ts.kind,
+        List<MigrationObjectRef> picked = ObjectPickerDialog.showAndWait(dialogStage, ts.kind,
                 source,
                 complete ? currentSourceCatalog() : null,
                 complete ? currentSourceSchema() : null,
-                ts.customNames);
+                ts.customObjects);
         if (picked == null) {
             return;
         }
-        ts.customNames.clear();
-        ts.customNames.addAll(picked);
+        ts.customObjects.clear();
+        for (MigrationObjectRef ref : picked) {
+            ts.customObjects.put(ref.name(), ref.where() == null ? "" : ref.where());
+        }
         ts.custom = true;
         if (!picked.isEmpty()) {
             ts.checkBox.setSelected(true);
@@ -942,7 +944,7 @@ public class MigrationDialogController {
             return;
         }
         int selected = ts.checkBox.isSelected()
-                ? (ts.custom ? ts.customNames.size() : ts.count)
+                ? (ts.custom ? ts.customObjects.size() : ts.count)
                 : 0;
         ts.selectedLabel.setText(String.format(
                 I18n.t("migration.editor.selected_count", "Selected %d/%d"),
@@ -1098,8 +1100,9 @@ public class MigrationDialogController {
                 continue;
             }
             if (ts.custom) {
-                for (String name : ts.customNames) {
-                    refs.add(new MigrationObjectRef(catalog, schema, ts.kind, name));
+                for (java.util.Map.Entry<String, String> entry : ts.customObjects.entrySet()) {
+                    refs.add(new MigrationObjectRef(catalog, schema, ts.kind,
+                            entry.getKey(), entry.getValue()));
                 }
             } else {
                 refs.add(MigrationObjectRef.kindWildcard(catalog, schema, ts.kind));
@@ -1192,23 +1195,26 @@ public class MigrationDialogController {
 
     /** 模态对象挑选：搜索过滤 + 全选/清空 + CheckBox 列表（后台加载）+ 确定/取消。 */
     private static final class ObjectPickerDialog {
-        private static final double PICKER_W = 520;
+        private static final double PICKER_W = 660;
         private static final double PICKER_H = 480;
 
         private static final class PickItem {
             final String name;
             final BooleanProperty selected;
+            final javafx.beans.property.StringProperty where;
 
-            PickItem(String name, boolean selected) {
+            PickItem(String name, boolean selected, String where) {
                 this.name = name;
                 this.selected = new SimpleBooleanProperty(selected);
+                this.where = new javafx.beans.property.SimpleStringProperty(
+                        where == null ? "" : where);
             }
         }
 
-        /** 返回选中对象名（master 列表顺序）；取消返回 null。 */
-        static List<String> showAndWait(Window owner, MigrationObjectRef.Kind kind,
+        /** 返回选中对象的 ref 列表（master 列表顺序，含 WHERE 条件）；取消返回 null。 */
+        static List<MigrationObjectRef> showAndWait(Window owner, MigrationObjectRef.Kind kind,
                                         Connect source, String catalog, String schema,
-                                        Set<String> initiallySelected) {
+                                        java.util.Map<String, String> initialWhereByName) {
             Stage stage = new Stage();
 
             TextField searchField = new TextField();
@@ -1228,7 +1234,7 @@ public class MigrationDialogController {
             FilteredList<PickItem> filtered = new FilteredList<>(master, item -> true);
             ListView<PickItem> listView = new ListView<>(filtered);
             listView.setPlaceholder(placeholder);
-            listView.setCellFactory(lv -> new PickCell());
+            listView.setCellFactory(lv -> new PickCell(kind == MigrationObjectRef.Kind.TABLE));
             VBox.setVgrow(listView, Priority.ALWAYS);
 
             searchField.textProperty().addListener((obs, o, n) -> {
@@ -1249,7 +1255,7 @@ public class MigrationDialogController {
 
             VBox content = new VBox(8, topBar, listView);
 
-            List<String> result = new ArrayList<>();
+            List<MigrationObjectRef> result = new ArrayList<>();
 
             // 后台加载对象清单
             AppExecutor.runAsync(() -> {
@@ -1265,8 +1271,10 @@ public class MigrationDialogController {
                 String loadError = error;
                 List<PickItem> items = new ArrayList<>();
                 for (String name : names) {
+                    String where = initialWhereByName == null ? null : initialWhereByName.get(name);
                     items.add(new PickItem(name,
-                            initiallySelected != null && initiallySelected.contains(name)));
+                            initialWhereByName != null && initialWhereByName.containsKey(name),
+                            where));
                 }
                 Platform.runLater(() -> {
                     master.setAll(items);
@@ -1296,7 +1304,8 @@ public class MigrationDialogController {
             okButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
                 for (PickItem item : master) {
                     if (item.selected.get()) {
-                        result.add(item.name);
+                        result.add(new MigrationObjectRef(catalog, schema, kind,
+                                item.name, item.where.get()));
                     }
                 }
             });
@@ -1304,16 +1313,30 @@ public class MigrationDialogController {
             return pickedType == okType ? result : null;
         }
 
-        /** CheckBox 单元格：勾选状态与 PickItem 双向绑定。 */
+        /** 行单元格：CheckBox 勾选 + TABLE 时的 WHERE 条件输入框。 */
         private static final class PickCell extends ListCell<PickItem> {
+            private final boolean showWhere;
             private final CheckBox checkBox = new CheckBox();
+            private final TextField whereField = new TextField();
+            private final HBox rowBox = new HBox(8);
             private PickItem bound;
+
+            PickCell(boolean showWhere) {
+                this.showWhere = showWhere;
+                whereField.promptTextProperty().bind(
+                        I18n.bind("migration.editor.where_hint", "WHERE 条件（可选）"));
+                whereField.setPrefWidth(220);
+                whereField.setFocusTraversable(false);
+                rowBox.setAlignment(Pos.CENTER_LEFT);
+                HBox.setHgrow(checkBox, Priority.ALWAYS);
+            }
 
             @Override
             protected void updateItem(PickItem item, boolean empty) {
                 super.updateItem(item, empty);
                 if (bound != null) {
                     checkBox.selectedProperty().unbindBidirectional(bound.selected);
+                    whereField.textProperty().unbindBidirectional(bound.where);
                     bound = null;
                 }
                 if (empty || item == null) {
@@ -1323,8 +1346,13 @@ public class MigrationDialogController {
                 }
                 checkBox.setText(item.name);
                 checkBox.selectedProperty().bindBidirectional(item.selected);
+                rowBox.getChildren().setAll(checkBox);
+                if (showWhere) {
+                    whereField.textProperty().bindBidirectional(item.where);
+                    rowBox.getChildren().add(whereField);
+                }
                 bound = item;
-                setGraphic(checkBox);
+                setGraphic(rowBox);
             }
         }
     }

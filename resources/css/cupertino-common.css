@@ -6727,3 +6727,8 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-effect: none;
   -fx-opacity: 1;
 }
+
+/* 迁移任务明细：失败行红色文字（行样式类驱动，避免 inline style 无法解析主题色令牌） */
+.table-view .table-row-cell.migration-row-failed .table-cell {
+  -fx-text-fill: -color-danger-fg;
+}

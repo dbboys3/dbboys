@@ -139,6 +139,23 @@ public class MigrationMappingDialogController {
                 addRow(sourceType, override != null ? override : defaultTarget, defaultTarget);
             }
         }
+        // 数据库保存的覆盖类型不在源平台类型列表中时也要回显（否则编辑后会丢值）
+        for (Map.Entry<String, String> entry : overrides.entrySet()) {
+            String savedType = entry.getKey();
+            if (savedType == null || savedType.isBlank()) {
+                continue;
+            }
+            boolean listed = false;
+            for (String sourceType : sourceTypes) {
+                if (savedType.equalsIgnoreCase(sourceType)) {
+                    listed = true;
+                    break;
+                }
+            }
+            if (!listed) {
+                addRow(savedType, entry.getValue(), defaultTargetType(savedType));
+            }
+        }
         return content;
     }
 

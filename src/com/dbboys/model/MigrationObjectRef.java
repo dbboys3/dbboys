@@ -15,7 +15,7 @@ import java.util.List;
  * 运行时展开（能捡到保存后新建的表）；{@code kind != ALL && name == null} 表示
  * 类型级通配（该节点下此类型的全部对象），同样运行时展开。</p>
  */
-public record MigrationObjectRef(String catalog, String schema, Kind kind, String name) {
+public record MigrationObjectRef(String catalog, String schema, Kind kind, String name, String where) {
 
     public enum Kind { TABLE, VIEW, SEQUENCE, SYNONYM, TRIGGER, FUNCTION, PROCEDURE, PACKAGE, ALL }
 
@@ -23,6 +23,12 @@ public record MigrationObjectRef(String catalog, String schema, Kind kind, Strin
         catalog = normalize(catalog);
         schema = normalize(schema);
         name = normalize(name);
+        where = normalize(where);
+    }
+
+    /** 兼容旧调用：无 WHERE 条件。 */
+    public MigrationObjectRef(String catalog, String schema, Kind kind, String name) {
+        this(catalog, schema, kind, name, null);
     }
 
     /** 整节点通配：catalog(/schema) 下全部支持的对象。 */
@@ -80,6 +86,9 @@ public record MigrationObjectRef(String catalog, String schema, Kind kind, Strin
         if (name != null) {
             obj.put("name", name);
         }
+        if (where != null) {
+            obj.put("where", where);
+        }
         return obj;
     }
 
@@ -97,7 +106,8 @@ public record MigrationObjectRef(String catalog, String schema, Kind kind, Strin
                 obj.has("catalog") ? obj.optString("catalog", null) : null,
                 obj.has("schema") ? obj.optString("schema", null) : null,
                 kind,
-                obj.has("name") ? obj.optString("name", null) : null);
+                obj.has("name") ? obj.optString("name", null) : null,
+                obj.has("where") ? obj.optString("where", null) : null);
     }
 
     public static String toJsonArray(List<MigrationObjectRef> refs) {

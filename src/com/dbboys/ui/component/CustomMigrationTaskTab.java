@@ -250,10 +250,13 @@ public class CustomMigrationTaskTab extends CustomTab {
     // ==================================================================
 
     private TableView<MigrationRunItem> buildDetailTable() {
-        TableView<MigrationRunItem> table = new TableView<>(filteredItems);
-        // 多选
-        table.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
-        // 失败行红色文字（运行中状态变化时同步刷新）
+        // CustomTableView 自带行号列、多选/单元格选择、复制菜单
+        CustomTableView<MigrationRunItem> table = new CustomTableView<>();
+        table.setItems(filteredItems);
+        // 移除与本场景无关的“生成SQL”菜单及分隔符，保留复制
+        table.getContextMenu().getItems().removeIf(
+                mi -> mi == table.generateSqlMenu || mi instanceof javafx.scene.control.SeparatorMenuItem);
+        // 失败行红色文字（CSS 类，运行中状态变化时同步刷新）
         table.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
             private MigrationRunItem listened;
             private final javafx.beans.value.ChangeListener<MigrationRunItem.Status> statusListener =
@@ -272,17 +275,16 @@ public class CustomMigrationTaskTab extends CustomTab {
             }
             private void refreshStyle() {
                 MigrationRunItem it = getItem();
-                setStyle(it != null && it.getStatus() == MigrationRunItem.Status.FAILED
-                        ? "-fx-text-fill: -color-danger-fg;" : "");
+                boolean failed = it != null && it.getStatus() == MigrationRunItem.Status.FAILED;
+                if (failed) {
+                    if (!getStyleClass().contains("migration-row-failed")) {
+                        getStyleClass().add("migration-row-failed");
+                    }
+                } else {
+                    getStyleClass().remove("migration-row-failed");
+                }
             }
         });
-
-        TableColumn<MigrationRunItem, String> rowNoColumn = new TableColumn<>("#");
-        rowNoColumn.setCellValueFactory(cell ->
-                new ReadOnlyStringWrapper(String.valueOf(cell.getTableView().getItems()
-                        .indexOf(cell.getValue()) + 1)));
-        rowNoColumn.setPrefWidth(45);
-        rowNoColumn.setResizable(false);
 
         TableColumn<MigrationRunItem, String> kindColumn = new TableColumn<>();
         kindColumn.textProperty().bind(I18n.bind("migration.detail.column.kind", "Kind"));
@@ -323,7 +325,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         // 错误信息列宽占满剩余空间；prefWidth 被绑定后不允许拖拽改宽，故禁掉列 resize
         errorColumn.setResizable(false);
         errorColumn.prefWidthProperty().bind(table.widthProperty()
-                .subtract(rowNoColumn.widthProperty())
+                .subtract(table.getColumns().get(0).widthProperty())
                 .subtract(kindColumn.widthProperty())
                 .subtract(nameColumn.widthProperty())
                 .subtract(statusColumn.widthProperty())
@@ -332,8 +334,8 @@ public class CustomMigrationTaskTab extends CustomTab {
                 .subtract(rowsColumn.widthProperty())
                 .subtract(18));
 
-        table.getColumns().setAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
-                rowNoColumn, kindColumn, nameColumn, statusColumn,
+        table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
+                kindColumn, nameColumn, statusColumn,
                 startColumn, endColumn, rowsColumn, errorColumn));
         return table;
     }
