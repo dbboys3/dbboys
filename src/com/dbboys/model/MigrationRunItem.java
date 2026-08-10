@@ -13,7 +13,7 @@ import javafx.beans.property.StringProperty;
  */
 public class MigrationRunItem {
 
-    public enum Status { PENDING, RUNNING, SUCCESS, SKIPPED, FAILED }
+    public enum Status { PENDING, RUNNING, SUCCESS, FAILED }
 
     private final ObjectProperty<MigrationObjectRef.Kind> kind = new SimpleObjectProperty<>();
     private final StringProperty name = new SimpleStringProperty();
@@ -62,4 +62,24 @@ public class MigrationRunItem {
     public String getErrorMessage() { return errorMessage.get(); }
     public StringProperty errorMessageProperty() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage.set(errorMessage); }
+
+    // --- speed（复制速度展示串，如 "1,234 行/秒"；由 runner 计算写入） ---
+    private final StringProperty speed = new SimpleStringProperty("");
+    public String getSpeed() { return speed.get(); }
+    public StringProperty speedProperty() { return speed; }
+    public void setSpeed(String speed) { this.speed.set(speed); }
+
+    // --- errorSql（出错时正在执行的 SQL，瞬时；双击错误列弹出详情用） ---
+    private final StringProperty errorSql = new SimpleStringProperty("");
+    public String getErrorSql() { return errorSql.get(); }
+    public StringProperty errorSqlProperty() { return errorSql; }
+    public void setErrorSql(String errorSql) { this.errorSql.set(errorSql); }
+
+    // --- 起止时刻毫秒（瞬时不落库；速度计算用，0=未知） ---
+    private transient long startMillis;
+    private transient long endMillis;
+    public long getStartMillis() { return startMillis; }
+    public void setStartMillis(long startMillis) { this.startMillis = startMillis; }
+    public long getEndMillis() { return endMillis; }
+    public void setEndMillis(long endMillis) { this.endMillis = endMillis; }
 }

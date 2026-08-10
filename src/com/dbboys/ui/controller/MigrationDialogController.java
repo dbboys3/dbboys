@@ -36,6 +36,8 @@ import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
@@ -93,7 +95,9 @@ public class MigrationDialogController {
     private Label targetSchemaLabel;
     private CheckBox ddlCheckBox;
     private CheckBox dataCheckBox;
+    private CheckBox truncateCheckBox;
     private CheckBox overwriteCheckBox;
+    private Spinner<Integer> threadCountSpinner;
     private Button editMappingButton;
     private VBox typeRowsBox;
 
@@ -224,6 +228,9 @@ public class MigrationDialogController {
         Label optionsLabel = boundLabel("migration.label.options", "Options");
         ddlCheckBox = boundCheckBox("migration.check.ddl", "Migrate table structure (DDL)", true);
         dataCheckBox = boundCheckBox("migration.check.data", "Migrate data", true);
+        truncateCheckBox = boundCheckBox("migration.check.truncate", "Clear table", false);
+        // 不迁移数据时"清空表"无意义，禁用
+        truncateCheckBox.disableProperty().bind(dataCheckBox.selectedProperty().not());
         overwriteCheckBox = boundCheckBox("migration.check.overwrite", "Overwrite existing tables", false);
         editMappingButton = new Button();
         editMappingButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
@@ -232,7 +239,11 @@ public class MigrationDialogController {
         mappingTip.textProperty().bind(I18n.bind("migration.mapping.edit", "Edit"));
         editMappingButton.setTooltip(mappingTip);
         editMappingButton.setOnAction(e -> openMappingDialog());
-        HBox optionsRow = new HBox(14, overwriteCheckBox);
+        Label threadCountLabel = boundLabel("migration.label.thread_count", "Threads");
+        threadCountSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 16, 1));
+        threadCountSpinner.setPrefWidth(80);
+        threadCountSpinner.setFocusTraversable(false);
+        HBox optionsRow = new HBox(14, overwriteCheckBox, threadCountLabel, threadCountSpinner);
         optionsRow.setPadding(new Insets(0, 0, 0, 12));
         optionsRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
@@ -324,7 +335,9 @@ public class MigrationDialogController {
             mappings = new LinkedHashMap<>(editingTask.getMappings());
             ddlCheckBox.setSelected(editingTask.isMigrateDdl());
             dataCheckBox.setSelected(editingTask.isMigrateData());
+            truncateCheckBox.setSelected(editingTask.isTruncateTable());
             overwriteCheckBox.setSelected(editingTask.isOverwrite());
+            threadCountSpinner.getValueFactory().setValue(Math.max(1, editingTask.getThreadCount()));
             selectConnectById(sourceChoiceBox, editingTask.getSourceId());
             selectConnectById(targetChoiceBox, editingTask.getTargetId());
             // 类型行已在源连接选择监听器里同步重建，这里按 refs 勾选/恢复自定义集
@@ -802,7 +815,7 @@ public class MigrationDialogController {
             HBox.setHgrow(spacer, Priority.ALWAYS);
             HBox row = new HBox(10, ts.checkBox, ts.countLabel, ts.selectedLabel, spacer, ts.editButton);
             if (kind == MigrationObjectRef.Kind.TABLE) {
-                row.getChildren().addAll(ddlCheckBox, dataCheckBox, editMappingButton);
+                row.getChildren().addAll(ddlCheckBox, dataCheckBox, truncateCheckBox, editMappingButton);
             }
             row.setAlignment(Pos.CENTER_LEFT);
             typeSelections.add(ts);
@@ -1169,7 +1182,9 @@ public class MigrationDialogController {
         task.setTargetSchema(targetSchemaChoiceBox.getValue());
         task.setMigrateDdl(ddlCheckBox.isSelected());
         task.setMigrateData(dataCheckBox.isSelected());
+        task.setTruncateTable(truncateCheckBox.isSelected());
         task.setOverwrite(overwriteCheckBox.isSelected());
+        task.setThreadCount(threadCountSpinner.getValue() == null ? 1 : threadCountSpinner.getValue());
         task.setObjectRefs(collectObjectRefs());
         task.setMappings(mappings);
         resultTask = task;

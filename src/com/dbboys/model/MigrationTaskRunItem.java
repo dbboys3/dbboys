@@ -9,8 +9,8 @@ package com.dbboys.model;
  *   c_id         INTEGER PRIMARY KEY AUTOINCREMENT  -- 记录ID
  *   c_task_id    INTEGER                             -- 任务ID（每次运行整批替换）
  *   c_kind       VARCHAR(20)                         -- 对象类型（MigrationObjectRef.Kind）
- *   c_name       VARCHAR(500)                        -- 对象显示名（catalog.schema.name 形式）
- *   c_status     VARCHAR(20)                         -- PENDING/RUNNING/SUCCESS/SKIPPED/FAILED
+ *   c_name       VARCHAR(500)                        -- 对象名
+ *   c_status     VARCHAR(20)                         -- PENDING/RUNNING/SUCCESS/FAILED
  *   c_start_time VARCHAR(20)                         -- 开始时间
  *   c_end_time   VARCHAR(20)                         -- 结束时间
  *   c_rows       INTEGER                             -- 复制行数

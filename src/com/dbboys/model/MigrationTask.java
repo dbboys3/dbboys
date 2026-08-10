@@ -28,6 +28,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   c_migrate_ddl     INT                                 -- 迁移结构 1/0
  *   c_migrate_data    INT                                 -- 迁移数据 1/0
  *   c_overwrite       INT                                 -- 覆盖目标已存在对象 1/0
+ *   c_truncate_table  INT                                 -- 迁移数据前清空目标表 1/0
+ *   c_thread_count    INT                                 -- 迁移线程数（>=1）
  *   c_objects         TEXT                                -- 迁移对象 JSON 数组（见 MigrationObjectRef）
  *   c_info            VARCHAR(3200)                       -- 备注
  * </pre>
@@ -49,6 +51,8 @@ public class MigrationTask extends TreeData {
     private final BooleanProperty migrateDdl = new SimpleBooleanProperty(true);
     private final BooleanProperty migrateData = new SimpleBooleanProperty(true);
     private final BooleanProperty overwrite = new SimpleBooleanProperty(false);
+    private final BooleanProperty truncateTable = new SimpleBooleanProperty(false);
+    private final IntegerProperty threadCount = new SimpleIntegerProperty(1);
     private final StringProperty objectsJson = new SimpleStringProperty("[]");
     private final StringProperty mappingsJson = new SimpleStringProperty("{}");
     private final StringProperty info = new SimpleStringProperty();
@@ -116,6 +120,16 @@ public class MigrationTask extends TreeData {
     public boolean isOverwrite() { return overwrite.get(); }
     public BooleanProperty overwriteProperty() { return overwrite; }
     public void setOverwrite(boolean overwrite) { this.overwrite.set(overwrite); }
+
+    // --- truncateTable ---
+    public boolean isTruncateTable() { return truncateTable.get(); }
+    public BooleanProperty truncateTableProperty() { return truncateTable; }
+    public void setTruncateTable(boolean truncateTable) { this.truncateTable.set(truncateTable); }
+
+    // --- threadCount ---
+    public int getThreadCount() { return threadCount.get(); }
+    public IntegerProperty threadCountProperty() { return threadCount; }
+    public void setThreadCount(int threadCount) { this.threadCount.set(Math.max(1, threadCount)); }
 
     // --- objectsJson ---
     public String getObjectsJson() { return objectsJson.get(); }

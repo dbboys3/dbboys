@@ -91,6 +91,9 @@ public  class LocalDbRepository {
         execIgnore("ALTER TABLE t_migration_task ADD COLUMN c_last_start_time VARCHAR(20)");
         execIgnore("ALTER TABLE t_migration_task ADD COLUMN c_last_end_time VARCHAR(20)");
         execIgnore("ALTER TABLE t_migration_task ADD COLUMN c_run_counts TEXT");
+        // t_migration_task 补迁移参数列：清空目标表、线程数量
+        execIgnore("ALTER TABLE t_migration_task ADD COLUMN c_truncate_table INT DEFAULT 0");
+        execIgnore("ALTER TABLE t_migration_task ADD COLUMN c_thread_count INT DEFAULT 1");
 
         /*老版本升级后t_connect可能少了ssh相关字段，需要加上 */
         String[][] sshColumns = {
@@ -152,7 +155,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("create table if not exists t_ssh_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
             statement.executeUpdate("create table if not exists t_ssh(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_host varchar(100),c_port varchar(10),c_username varchar(100),c_password varchar(100),c_auth_type varchar(10),c_key_path varchar(500),c_key_passphrase varchar(100),c_charset varchar(20) DEFAULT 'UTF-8',c_info varchar(3200))");
             statement.executeUpdate("create table if not exists t_migration_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
-            statement.executeUpdate("create table if not exists t_migration_task(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_source_id INTEGER,c_target_id INTEGER,c_target_database varchar(200),c_target_schema varchar(200),c_migrate_ddl INT DEFAULT 1,c_migrate_data INT DEFAULT 1,c_overwrite INT DEFAULT 0,c_objects TEXT,c_mappings TEXT,c_info varchar(3200),c_last_start_time varchar(20),c_last_end_time varchar(20),c_run_counts TEXT)");
+            statement.executeUpdate("create table if not exists t_migration_task(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_source_id INTEGER,c_target_id INTEGER,c_target_database varchar(200),c_target_schema varchar(200),c_migrate_ddl INT DEFAULT 1,c_migrate_data INT DEFAULT 1,c_overwrite INT DEFAULT 0,c_truncate_table INT DEFAULT 0,c_thread_count INT DEFAULT 1,c_objects TEXT,c_mappings TEXT,c_info varchar(3200),c_last_start_time varchar(20),c_last_end_time varchar(20),c_run_counts TEXT)");
             statement.executeUpdate("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_rows INTEGER,c_error varchar(3200))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
@@ -1026,7 +1029,7 @@ public  class LocalDbRepository {
     public static List<MigrationTask> getAllMigrationTasks() {
         List<MigrationTask> list = new ArrayList<>();
         String sql = "SELECT c_id, c_parentid, c_name, c_source_id, c_target_id, c_target_database, c_target_schema, "
-                + "c_migrate_ddl, c_migrate_data, c_overwrite, c_objects, c_mappings, c_info, "
+                + "c_migrate_ddl, c_migrate_data, c_overwrite, c_truncate_table, c_thread_count, c_objects, c_mappings, c_info, "
                 + "c_last_start_time, c_last_end_time, c_run_counts FROM t_migration_task ORDER BY c_name";
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -1042,6 +1045,8 @@ public  class LocalDbRepository {
                 task.setMigrateDdl(rs.getInt("c_migrate_ddl") != 0);
                 task.setMigrateData(rs.getInt("c_migrate_data") != 0);
                 task.setOverwrite(rs.getInt("c_overwrite") != 0);
+                task.setTruncateTable(rs.getInt("c_truncate_table") != 0);
+                task.setThreadCount(rs.getInt("c_thread_count"));
                 task.setObjectsJson(rs.getString("c_objects") != null ? rs.getString("c_objects") : "[]");
                 task.setMappingsJson(rs.getString("c_mappings") != null ? rs.getString("c_mappings") : "{}");
                 task.setInfo(rs.getString("c_info") != null ? rs.getString("c_info") : "");
@@ -1065,8 +1070,8 @@ public  class LocalDbRepository {
 
     public static boolean createMigrationTask(MigrationTask task) {
         String sql = "INSERT INTO t_migration_task (c_parentid, c_name, c_source_id, c_target_id, c_target_database, "
-                + "c_target_schema, c_migrate_ddl, c_migrate_data, c_overwrite, c_objects, c_mappings, c_info, "
-                + "c_last_start_time, c_last_end_time, c_run_counts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                + "c_target_schema, c_migrate_ddl, c_migrate_data, c_overwrite, c_truncate_table, c_thread_count, c_objects, c_mappings, c_info, "
+                + "c_last_start_time, c_last_end_time, c_run_counts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, task.getParentId());
             ps.setString(2, task.getName());
@@ -1077,12 +1082,14 @@ public  class LocalDbRepository {
             ps.setInt(7, task.isMigrateDdl() ? 1 : 0);
             ps.setInt(8, task.isMigrateData() ? 1 : 0);
             ps.setInt(9, task.isOverwrite() ? 1 : 0);
-            ps.setString(10, task.getObjectsJson());
-            ps.setString(11, task.getMappingsJson());
-            ps.setString(12, task.getInfo());
-            ps.setString(13, task.getLastStartTime());
-            ps.setString(14, task.getLastEndTime());
-            ps.setString(15, task.getRunCountsJson());
+            ps.setInt(10, task.isTruncateTable() ? 1 : 0);
+            ps.setInt(11, task.getThreadCount());
+            ps.setString(12, task.getObjectsJson());
+            ps.setString(13, task.getMappingsJson());
+            ps.setString(14, task.getInfo());
+            ps.setString(15, task.getLastStartTime());
+            ps.setString(16, task.getLastEndTime());
+            ps.setString(17, task.getRunCountsJson());
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) task.setId(keys.getInt(1));
@@ -1097,7 +1104,7 @@ public  class LocalDbRepository {
     public static boolean updateMigrationTask(MigrationTask task) {
         String sql = "UPDATE t_migration_task SET c_parentid=?, c_name=?, c_source_id=?, c_target_id=?, "
                 + "c_target_database=?, c_target_schema=?, c_migrate_ddl=?, c_migrate_data=?, c_overwrite=?, "
-                + "c_objects=?, c_mappings=?, c_info=? WHERE c_id=?";
+                + "c_truncate_table=?, c_thread_count=?, c_objects=?, c_mappings=?, c_info=? WHERE c_id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, task.getParentId());
             ps.setString(2, task.getName());
@@ -1108,10 +1115,12 @@ public  class LocalDbRepository {
             ps.setInt(7, task.isMigrateDdl() ? 1 : 0);
             ps.setInt(8, task.isMigrateData() ? 1 : 0);
             ps.setInt(9, task.isOverwrite() ? 1 : 0);
-            ps.setString(10, task.getObjectsJson());
-            ps.setString(11, task.getMappingsJson());
-            ps.setString(12, task.getInfo());
-            ps.setInt(13, task.getId());
+            ps.setInt(10, task.isTruncateTable() ? 1 : 0);
+            ps.setInt(11, task.getThreadCount());
+            ps.setString(12, task.getObjectsJson());
+            ps.setString(13, task.getMappingsJson());
+            ps.setString(14, task.getInfo());
+            ps.setInt(15, task.getId());
             ps.executeUpdate();
             return true;
         } catch (Exception e) {

@@ -20,7 +20,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,8 +39,9 @@ import java.util.Objects;
  */
 public final class MigrationTaskRunner {
     private static final Logger log = LogManager.getLogger(MigrationTaskRunner.class);
-    /** 明细行开始/结束时间格式。 */
-    private static final DateTimeFormatter RUN_ITEM_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    /** 明细行开始/结束时间格式（带日期）。 */
+    private static final DateTimeFormatter RUN_ITEM_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     /** 运行记录开始/结束时间格式（持久化用）。 */
     private static final java.text.SimpleDateFormat RUN_TIME_FORMAT =
             new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -126,6 +127,12 @@ public final class MigrationTaskRunner {
                 item.setEndTime(record.getEndTime());
                 item.setRows(record.getRows());
                 item.setErrorMessage(record.getError());
+                // 起止时间回算毫秒，能算则补速度列（旧格式 HH:mm:ss 解析失败则不显示）
+                long startMillis = parseRunItemTime(record.getStartTime());
+                long endMillis = parseRunItemTime(record.getEndTime());
+                item.setStartMillis(startMillis);
+                item.setEndMillis(endMillis);
+                item.setSpeed(computeSpeed(record.getRows(), startMillis, endMillis));
                 restored.add(item);
             }
             task.getRunItems().setAll(restored);
@@ -154,7 +161,7 @@ public final class MigrationTaskRunner {
                 }
                 List<MigrationRunItem> pendingItems = new ArrayList<>(expanded.size());
                 for (MigrationObjectRef ref : expanded) {
-                    pendingItems.add(new MigrationRunItem(ref.kind(), ref.displayName()));
+                    pendingItems.add(new MigrationRunItem(ref.kind(), ref.name()));
                 }
                 task.getRunItems().setAll(pendingItems);
             });
@@ -283,12 +290,13 @@ public final class MigrationTaskRunner {
                 task.getTargetDatabase(), task.getTargetSchema(),
                 objects,
                 task.isMigrateDdl(), task.isMigrateData(), task.isOverwrite(),
+                task.isTruncateTable(), task.getThreadCount(),
                 task.getMappings());
 
-        // 明细行：按展开后对象生成 PENDING 行（明细中央 tab 的 TableView 直接绑定）
+        // 明细行：按展开后对象生成 PENDING 行（明细中央 tab 的 TableView 直接绑定；只显示对象名）
         List<MigrationRunItem> pendingItems = new ArrayList<>(objects.size());
         for (MigrationObjectRef ref : objects) {
-            pendingItems.add(new MigrationRunItem(ref.kind(), ref.displayName()));
+            pendingItems.add(new MigrationRunItem(ref.kind(), ref.name()));
         }
         task.getRunItems().setAll(pendingItems);
 
@@ -300,8 +308,8 @@ public final class MigrationTaskRunner {
             }
 
             @Override
-            public void onItemStart(int index, int total, String displayName) {
-                Platform.runLater(() -> markItemRunning(task, displayName));
+            public void onItemStart(int index, int total, String objectName) {
+                Platform.runLater(() -> markItemRunning(task, objectName));
             }
 
             @Override
@@ -316,20 +324,21 @@ public final class MigrationTaskRunner {
         task.setRunState(MigrationTask.RunState.RUNNING);
         task.setLastRunResult(MigrationTask.RunResult.NONE);
         final String[] startTimeHolder = { RUN_TIME_FORMAT.format(System.currentTimeMillis()) };
+        // 明细 tab 底部在运行期间显示本次开始时间
+        task.setLastStartTime(startTimeHolder[0]);
 
         migrationTask.setOnSucceeded(event -> {
             task.setRunState(MigrationTask.RunState.IDLE);
             TableMigrationService.MigrationSummary summary = migrationTask.getValue();
             long success = summary == null ? 0 : summary.count(TableMigrationService.ItemStatus.SUCCESS);
-            long skipped = summary == null ? 0 : summary.count(TableMigrationService.ItemStatus.SKIPPED);
             long failed = summary == null ? 1 : summary.count(TableMigrationService.ItemStatus.FAILED);
             task.setLastRunResult(failed > 0
                     ? MigrationTask.RunResult.FAILED
                     : MigrationTask.RunResult.SUCCESS);
             NotificationUtil.showMainNotification(String.format(
                     I18n.t("migration.notify.done",
-                            "Migration task %s finished: %d succeeded, %d skipped, %d failed"),
-                    task.getName(), success, skipped, failed));
+                            "Migration task %s finished: %d succeeded, %d failed"),
+                    task.getName(), success, failed));
             persistRun(task, startTimeHolder[0]);
         });
         migrationTask.setOnCancelled(event -> {
@@ -408,32 +417,33 @@ public final class MigrationTaskRunner {
     // 明细行维护（FX 线程；重复对象名场景下按出现次序一一对应）
     // ==================================================================
 
-    /** onItemStart：首个 name 相同且仍 PENDING 的行 → RUNNING + 开始时间。 */
-    private static void markItemRunning(MigrationTask task, String displayName) {
+    /** onItemStart：首个对象名相同且仍 PENDING 的行 → RUNNING + 开始时间。 */
+    private static void markItemRunning(MigrationTask task, String objectName) {
         for (MigrationRunItem item : task.getRunItems()) {
             if (item.getStatus() == MigrationRunItem.Status.PENDING
-                    && Objects.equals(item.getName(), displayName)) {
+                    && Objects.equals(item.getName(), objectName)) {
                 item.setStatus(MigrationRunItem.Status.RUNNING);
-                item.setStartTime(LocalTime.now().format(RUN_ITEM_TIME_FORMAT));
+                item.setStartTime(LocalDateTime.now().format(RUN_ITEM_TIME_FORMAT));
+                item.setStartMillis(System.currentTimeMillis());
                 return;
             }
         }
     }
 
     /**
-     * onItemDone：按 result.object() 的 displayName + kind 精确匹配行（优先 RUNNING 行，
-     * 无则退回首个 PENDING 行），写入状态/结束时间/行数/错误信息。
+     * onItemDone：按 result.object() 的对象名 + kind 精确匹配行（优先 RUNNING 行，
+     * 无则退回首个 PENDING 行），写入状态/结束时间/行数/速度/错误信息。
      */
     private static void applyItemResult(MigrationTask task, TableMigrationService.ItemResult result) {
         if (result == null || result.object() == null) {
             return;
         }
-        String displayName = result.object().displayName();
+        String objectName = result.object().name();
         MigrationObjectRef.Kind kind = result.object().kind();
         MigrationRunItem target = null;
         MigrationRunItem pendingFallback = null;
         for (MigrationRunItem item : task.getRunItems()) {
-            if (item.getKind() != kind || !Objects.equals(item.getName(), displayName)) {
+            if (item.getKind() != kind || !Objects.equals(item.getName(), objectName)) {
                 continue;
             }
             if (item.getStatus() == MigrationRunItem.Status.RUNNING) {
@@ -452,11 +462,36 @@ public final class MigrationTaskRunner {
         }
         switch (result.status()) {
             case SUCCESS -> target.setStatus(MigrationRunItem.Status.SUCCESS);
-            case SKIPPED -> target.setStatus(MigrationRunItem.Status.SKIPPED);
             case FAILED -> target.setStatus(MigrationRunItem.Status.FAILED);
         }
-        target.setEndTime(LocalTime.now().format(RUN_ITEM_TIME_FORMAT));
+        target.setEndTime(LocalDateTime.now().format(RUN_ITEM_TIME_FORMAT));
+        target.setEndMillis(System.currentTimeMillis());
         target.setRows(result.rowsCopied());
         target.setErrorMessage(result.message() == null ? "" : result.message());
+        target.setErrorSql(result.errorSql() == null ? "" : result.errorSql());
+        target.setSpeed(computeSpeed(result.rowsCopied(), target.getStartMillis(), target.getEndMillis()));
+    }
+
+    /** 复制速度展示串（行/秒，千分位）：有行数且起止毫秒已知时计算，否则空串。 */
+    private static String computeSpeed(long rows, long startMillis, long endMillis) {
+        if (rows <= 0 || startMillis <= 0 || endMillis <= 0) {
+            return "";
+        }
+        long speed = rows * 1000 / Math.max(1, endMillis - startMillis);
+        return String.format(I18n.t("migration.detail.speed", "%s rows/s"),
+                String.format("%,d", speed));
+    }
+
+    /** 解析明细行时间（yyyy-MM-dd HH:mm:ss）为 epoch 毫秒；空白/旧格式解析失败返回 0。 */
+    private static long parseRunItemTime(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        try {
+            return LocalDateTime.parse(text, RUN_ITEM_TIME_FORMAT)
+                    .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

@@ -1768,6 +1768,8 @@ public class MainController {
         copy.setMigrateDdl(orig.isMigrateDdl());
         copy.setMigrateData(orig.isMigrateData());
         copy.setOverwrite(orig.isOverwrite());
+        copy.setTruncateTable(orig.isTruncateTable());
+        copy.setThreadCount(orig.getThreadCount());
         copy.setObjectsJson(orig.getObjectsJson());
         copy.setMappingsJson(orig.getMappingsJson());
         copy.setInfo(orig.getInfo());
