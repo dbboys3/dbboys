@@ -125,7 +125,9 @@ public final class MigrationTaskRunner {
                 item.setStatus(status);
                 item.setStartTime(record.getStartTime());
                 item.setEndTime(record.getEndTime());
-                item.setRows(record.getRows());
+                // c_rows=已迁移行数；成功行的源表行数=迁移行数，其余源表行数未知（-1 显示空白）
+                item.setMigratedRows(record.getRows());
+                item.setRows(status == MigrationRunItem.Status.SUCCESS ? record.getRows() : -1);
                 item.setErrorMessage(record.getError());
                 // 起止时间回算毫秒，能算则补速度列（旧格式 HH:mm:ss 解析失败则不显示）
                 long startMillis = parseRunItemTime(record.getStartTime());
@@ -316,6 +318,16 @@ public final class MigrationTaskRunner {
             public void onItemDone(int index, int total, TableMigrationService.ItemResult result) {
                 Platform.runLater(() -> applyItemResult(task, result));
             }
+
+            @Override
+            public void onDataProgress(MigrationObjectRef object, long totalRows, long copiedRows) {
+                // 工作线程直写 volatile 实时字段；FX 侧由明细 tab 每秒 tick 搬进属性，避免刷 FX 队列
+                MigrationRunItem item = findRunItem(task, object);
+                if (item != null) {
+                    item.setSourceRowsLive(totalRows);
+                    item.setCopiedRowsLive(copiedRows);
+                }
+            }
         };
 
         javafx.concurrent.Task<TableMigrationService.MigrationSummary> migrationTask =
@@ -406,7 +418,8 @@ public final class MigrationTaskRunner {
             record.setStatus(item.getStatus() == null ? "" : item.getStatus().name());
             record.setStartTime(item.getStartTime() == null ? "" : item.getStartTime());
             record.setEndTime(item.getEndTime() == null ? "" : item.getEndTime());
-            record.setRows(item.getRows());
+            // c_rows 保持"已迁移行数"语义（源表行数不持久化）
+            record.setRows(item.getMigratedRows());
             record.setError(item.getErrorMessage() == null ? "" : item.getErrorMessage());
             runItems.add(record);
         }
@@ -431,32 +444,14 @@ public final class MigrationTaskRunner {
     }
 
     /**
-     * onItemDone：按 result.object() 的对象名 + kind 精确匹配行（优先 RUNNING 行，
-     * 无则退回首个 PENDING 行），写入状态/结束时间/行数/速度/错误信息。
+     * onItemDone：写入状态/结束时间/行数/速度/错误信息。
+     * 行数=源表行数（实时统计值，未知保持 -1）；迁移行数=实际复制行数。
      */
     private static void applyItemResult(MigrationTask task, TableMigrationService.ItemResult result) {
         if (result == null || result.object() == null) {
             return;
         }
-        String objectName = result.object().name();
-        MigrationObjectRef.Kind kind = result.object().kind();
-        MigrationRunItem target = null;
-        MigrationRunItem pendingFallback = null;
-        for (MigrationRunItem item : task.getRunItems()) {
-            if (item.getKind() != kind || !Objects.equals(item.getName(), objectName)) {
-                continue;
-            }
-            if (item.getStatus() == MigrationRunItem.Status.RUNNING) {
-                target = item;
-                break;
-            }
-            if (pendingFallback == null && item.getStatus() == MigrationRunItem.Status.PENDING) {
-                pendingFallback = item;
-            }
-        }
-        if (target == null) {
-            target = pendingFallback;
-        }
+        MigrationRunItem target = findRunItem(task, result.object());
         if (target == null) {
             return;
         }
@@ -466,14 +461,38 @@ public final class MigrationTaskRunner {
         }
         target.setEndTime(LocalDateTime.now().format(RUN_ITEM_TIME_FORMAT));
         target.setEndMillis(System.currentTimeMillis());
-        target.setRows(result.rowsCopied());
+        target.setCopiedRowsLive(result.rowsCopied());
+        if (target.getSourceRowsLive() >= 0) {
+            target.setRows(target.getSourceRowsLive());
+        }
+        target.setMigratedRows(result.rowsCopied());
         target.setErrorMessage(result.message() == null ? "" : result.message());
         target.setErrorSql(result.errorSql() == null ? "" : result.errorSql());
         target.setSpeed(computeSpeed(result.rowsCopied(), target.getStartMillis(), target.getEndMillis()));
     }
 
+    /** 按对象名 + kind 匹配明细行：优先 RUNNING 行，无则退回首个 PENDING 行。 */
+    private static MigrationRunItem findRunItem(MigrationTask task, MigrationObjectRef object) {
+        if (object == null) {
+            return null;
+        }
+        MigrationRunItem pendingFallback = null;
+        for (MigrationRunItem item : task.getRunItems()) {
+            if (item.getKind() != object.kind() || !Objects.equals(item.getName(), object.name())) {
+                continue;
+            }
+            if (item.getStatus() == MigrationRunItem.Status.RUNNING) {
+                return item;
+            }
+            if (pendingFallback == null && item.getStatus() == MigrationRunItem.Status.PENDING) {
+                pendingFallback = item;
+            }
+        }
+        return pendingFallback;
+    }
+
     /** 复制速度展示串（行/秒，千分位）：有行数且起止毫秒已知时计算，否则空串。 */
-    private static String computeSpeed(long rows, long startMillis, long endMillis) {
+    public static String computeSpeed(long rows, long startMillis, long endMillis) {
         if (rows <= 0 || startMillis <= 0 || endMillis <= 0) {
             return "";
         }

@@ -20,8 +20,15 @@ public class MigrationRunItem {
     private final ObjectProperty<Status> status = new SimpleObjectProperty<>(Status.PENDING);
     private final StringProperty startTime = new SimpleStringProperty("");
     private final StringProperty endTime = new SimpleStringProperty("");
-    private final LongProperty rows = new SimpleLongProperty(0);
+    /** 行数=源表行数（-1 未知，复制开始时统计）；由 runner/明细 tab 在 FX 线程维护。 */
+    private final LongProperty rows = new SimpleLongProperty(-1);
+    /** 迁移行数=实际复制行数（-1 未知/未复制）；运行中每秒刷新，完成时写终值。 */
+    private final LongProperty migratedRows = new SimpleLongProperty(-1);
     private final StringProperty errorMessage = new SimpleStringProperty("");
+    /** 实时源表行数（工作线程写、FX 每秒读；-1 未知）。 */
+    private volatile long sourceRowsLive = -1;
+    /** 实时已复制行数（工作线程写、FX 每秒读；-1 未知）。 */
+    private volatile long copiedRowsLive = -1;
 
     public MigrationRunItem(MigrationObjectRef.Kind kind, String name) {
         this.kind.set(kind);
@@ -57,6 +64,17 @@ public class MigrationRunItem {
     public long getRows() { return rows.get(); }
     public LongProperty rowsProperty() { return rows; }
     public void setRows(long rows) { this.rows.set(rows); }
+
+    // --- migratedRows ---
+    public long getMigratedRows() { return migratedRows.get(); }
+    public LongProperty migratedRowsProperty() { return migratedRows; }
+    public void setMigratedRows(long migratedRows) { this.migratedRows.set(migratedRows); }
+
+    // --- 实时进度（volatile 字段，工作线程写、FX 线程读） ---
+    public long getSourceRowsLive() { return sourceRowsLive; }
+    public void setSourceRowsLive(long sourceRowsLive) { this.sourceRowsLive = sourceRowsLive; }
+    public long getCopiedRowsLive() { return copiedRowsLive; }
+    public void setCopiedRowsLive(long copiedRowsLive) { this.copiedRowsLive = copiedRowsLive; }
 
     // --- errorMessage ---
     public String getErrorMessage() { return errorMessage.get(); }

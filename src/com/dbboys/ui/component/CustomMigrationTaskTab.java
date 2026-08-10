@@ -63,6 +63,9 @@ public class CustomMigrationTaskTab extends CustomTab {
     private final Label currentObjectLabel = new Label();
     private final FilteredList<MigrationRunItem> filteredItems;
     private final TableView<MigrationRunItem> detailTable;
+    /** 每秒把实时进度（volatile 字段）搬进 FX 属性，驱动明细表刷新。 */
+    private final javafx.animation.Timeline refreshTimeline = new javafx.animation.Timeline(
+            new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> tickLiveProgress()));
     private Button successFilterButton;
     private Button failureFilterButton;
     private FilterMode filterMode = FilterMode.ALL;
@@ -176,6 +179,10 @@ public class CustomMigrationTaskTab extends CustomTab {
         task.getRunItems().addListener(runItemsListener);
         refreshProgress();
 
+        // 每秒刷新一次明细表（实时行数/速度）
+        refreshTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        refreshTimeline.play();
+
         setOnClosed(event -> dispose());
 
         // 从未运行的任务：后台展开对象清单，预填 PENDING 明细行（不启动迁移）
@@ -184,6 +191,7 @@ public class CustomMigrationTaskTab extends CustomTab {
 
     /** 关闭时移除监听/解绑，防止任务对象持有已关闭 tab。 */
     private void dispose() {
+        refreshTimeline.stop();
         task.getRunItems().removeListener(runItemsListener);
         for (MigrationRunItem item : task.getRunItems()) {
             item.statusProperty().removeListener(rowStatusListener);
@@ -328,10 +336,21 @@ public class CustomMigrationTaskTab extends CustomTab {
         speedColumn.setCellValueFactory(cell -> cell.getValue().speedProperty());
         speedColumn.setPrefWidth(90);
 
-        TableColumn<MigrationRunItem, Number> rowsColumn = new TableColumn<>();
+        TableColumn<MigrationRunItem, String> rowsColumn = new TableColumn<>();
         rowsColumn.textProperty().bind(I18n.bind("migration.detail.column.rows", "Rows"));
-        rowsColumn.setCellValueFactory(cell -> cell.getValue().rowsProperty());
+        // 行数=源表行数；未知（-1）显示空白
+        rowsColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
+                () -> cell.getValue().getRows() < 0 ? "" : String.valueOf(cell.getValue().getRows()),
+                cell.getValue().rowsProperty()));
         rowsColumn.setPrefWidth(90);
+
+        TableColumn<MigrationRunItem, String> migratedColumn = new TableColumn<>();
+        migratedColumn.textProperty().bind(I18n.bind("migration.detail.column.migrated_rows", "Migrated Rows"));
+        // 迁移行数=实际复制行数；未知（-1）显示空白
+        migratedColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
+                () -> cell.getValue().getMigratedRows() < 0 ? "" : String.valueOf(cell.getValue().getMigratedRows()),
+                cell.getValue().migratedRowsProperty()));
+        migratedColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> errorColumn = new TableColumn<>();
         errorColumn.textProperty().bind(I18n.bind("migration.detail.column.error", "Error"));
@@ -364,13 +383,14 @@ public class CustomMigrationTaskTab extends CustomTab {
                 .subtract(statusColumn.widthProperty())
                 .subtract(startColumn.widthProperty())
                 .subtract(endColumn.widthProperty())
-                .subtract(speedColumn.widthProperty())
                 .subtract(rowsColumn.widthProperty())
+                .subtract(migratedColumn.widthProperty())
+                .subtract(speedColumn.widthProperty())
                 .subtract(18));
 
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
-                startColumn, endColumn, rowsColumn, speedColumn, errorColumn));
+                startColumn, endColumn, rowsColumn, migratedColumn, speedColumn, errorColumn));
         return table;
     }
 
@@ -406,6 +426,29 @@ public class CustomMigrationTaskTab extends CustomTab {
                 I18n.t("migration.detail.progress", "%d / %d"), done, total));
         currentObjectLabel.setText(currentObject);
         refreshFilterButtons(success, failed);
+    }
+
+    /** 每秒 tick：运行中把各行的实时进度（工作线程写入的 volatile 字段）同步到 FX 属性。 */
+    private void tickLiveProgress() {
+        if (!task.isRunning()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (MigrationRunItem item : task.getRunItems()) {
+            long sourceRows = item.getSourceRowsLive();
+            if (sourceRows >= 0 && item.getRows() != sourceRows) {
+                item.setRows(sourceRows);
+            }
+            long copiedRows = item.getCopiedRowsLive();
+            if (copiedRows >= 0 && item.getMigratedRows() != copiedRows) {
+                item.setMigratedRows(copiedRows);
+            }
+            // 运行中的行实时速度：已迁移行数 / 已耗时
+            if (item.getStatus() == MigrationRunItem.Status.RUNNING
+                    && copiedRows > 0 && item.getStartMillis() > 0) {
+                item.setSpeed(MigrationTaskRunner.computeSpeed(copiedRows, item.getStartMillis(), now));
+            }
+        }
     }
 
     private Button createFilterButton(boolean success) {

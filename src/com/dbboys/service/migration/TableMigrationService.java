@@ -117,6 +117,8 @@ public class TableMigrationService {
         void onLog(String line);                                       // 工作线程回调，调用方自行切 FX 线程
         void onItemStart(int index, int total, String tableName);      // index 从 0 开始
         void onItemDone(int index, int total, ItemResult result);      // index 从 0 开始
+        /** 数据复制进度（工作线程回调，每批一次；totalRows=源表行数，未知为 -1）。 */
+        default void onDataProgress(MigrationObjectRef object, long totalRows, long copiedRows) {}
     }
 
     /**
@@ -653,16 +655,25 @@ public class TableMigrationService {
         }
         String selectSql = "SELECT " + columnList + " FROM " + tableName;
         // 自定义 WHERE 条件过滤（仅数据复制；用户可带或不带 WHERE 关键字）
+        String whereSql = "";
         String whereClause = table.where();
         if (whereClause != null && !whereClause.isBlank()) {
             String clause = whereClause.trim();
-            if (clause.regionMatches(true, 0, "where", 0, 5)) {
-                selectSql += " " + clause;
-            } else {
-                selectSql += " WHERE " + clause;
-            }
+            whereSql = clause.regionMatches(true, 0, "where", 0, 5)
+                    ? " " + clause
+                    : " WHERE " + clause;
+            selectSql += whereSql;
         }
         String insertSql = "INSERT INTO " + tableName + " (" + columnList + ") VALUES (" + placeholders + ")";
+
+        // 源表行数（含 WHERE 过滤）：供明细 tab"行数"列展示；统计失败按未知 -1，不影响迁移
+        long totalRows = -1;
+        try {
+            totalRows = querySourceRowCount(ws.sourceConn, tableName, whereSql);
+        } catch (Exception e) {
+            log.trace("count source rows failed for {}", tableName, e);
+        }
+        emitDataProgress(ctx, table, totalRows, 0);
 
         // 出错 SQL 归因：查询打开前按 SELECT 计，打开后按 INSERT 计
         String failingSql = selectSql;
@@ -696,6 +707,7 @@ public class TableMigrationService {
                             commitTarget(ctx, ws);
                             batchCount = 0;
                             rowsCopied[0] = rows;
+                            emitDataProgress(ctx, table, totalRows, rows);
                         }
                     }
                     if (batchCount > 0) {
@@ -703,6 +715,7 @@ public class TableMigrationService {
                         commitTarget(ctx, ws);
                     }
                     rowsCopied[0] = rows;
+                    emitDataProgress(ctx, table, totalRows, rows);
                 } finally {
                     ctx.sessions.untrack(insertStmt);
                     ctx.sessions.untrack(selectStmt);
@@ -1004,6 +1017,27 @@ public class TableMigrationService {
 
         String getSql() {
             return sql;
+        }
+    }
+
+    /** 源表行数统计（含自定义 WHERE 过滤）；仅供明细展示，驱动不支持超时设置则忽略。 */
+    private static long querySourceRowCount(Connection conn, String tableName, String whereSql) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            try {
+                stmt.setQueryTimeout(60);
+            } catch (Exception e) {
+                log.trace("setQueryTimeout not supported", e);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + tableName + whereSql)) {
+                return rs.next() ? rs.getLong(1) : -1;
+            }
+        }
+    }
+
+    /** 数据复制进度回调（listener 为空则跳过）。 */
+    private static void emitDataProgress(MigrationContext ctx, MigrationObjectRef table, long totalRows, long copiedRows) {
+        if (ctx.listener != null) {
+            ctx.listener.onDataProgress(table, totalRows, copiedRows);
         }
     }
 
