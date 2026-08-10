@@ -109,13 +109,14 @@ public class CustomMigrationTaskTab extends CustomTab {
                 task.runStateProperty().isNotEqualTo(MigrationTask.RunState.RUNNING));
         stopButton.setOnAction(event -> MigrationTaskRunner.stop(task));
 
-        startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.8, Color.valueOf("#51dd66")));
+        // 图标规格与 SQL 页运行/停止按钮一致
+        startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.85, Color.valueOf("#51dd66")));
         startButton.getStyleClass().add("custom-button");
         Tooltip startTip = new Tooltip();
         startTip.textProperty().bind(I18n.bind("migration.menu.start", "Start"));
         startButton.setTooltip(startTip);
 
-        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.8, IconFactory.stopColor()));
+        stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
         stopButton.getStyleClass().add("custom-button");
         Tooltip stopTip = new Tooltip();
         stopTip.textProperty().bind(I18n.bind("migration.menu.stop", "Stop"));
@@ -131,16 +132,22 @@ public class CustomMigrationTaskTab extends CustomTab {
         // 进度条高度缩小一半
         progressBar.setPrefHeight(7);
         progressBar.setMaxHeight(7);
-        // 运行中显示开始时间，结束后显示完成时间
+        // 总进度后始终显示开始时间（有记录时），完成后再追加完成时间；运行中不显示上一轮残留的完成时间
         timeLabel.textProperty().bind(Bindings.createStringBinding(() -> {
-            if (task.getRunState() == MigrationTask.RunState.RUNNING) {
-                String start = task.getLastStartTime();
-                return start == null || start.isBlank() ? ""
-                        : String.format(I18n.t("migration.detail.started_at", "Started: %s"), start);
+            StringBuilder text = new StringBuilder();
+            String start = task.getLastStartTime();
+            if (start != null && !start.isBlank()) {
+                text.append(String.format(I18n.t("migration.detail.started_at", "Started: %s"), start));
             }
             String end = task.getLastEndTime();
-            return end == null || end.isBlank() ? ""
-                    : String.format(I18n.t("migration.detail.finished_at", "Finished: %s"), end);
+            if (task.getRunState() != MigrationTask.RunState.RUNNING
+                    && end != null && !end.isBlank()) {
+                if (text.length() > 0) {
+                    text.append("  ");
+                }
+                text.append(String.format(I18n.t("migration.detail.finished_at", "Finished: %s"), end));
+            }
+            return text.toString();
         }, task.runStateProperty(), task.lastStartTimeProperty(), task.lastEndTimeProperty(),
                 I18n.localeProperty()));
         // 成功/失败筛选固定右下，spacer 吸收激活样式的尺寸变化，不挤压进度条
@@ -149,6 +156,8 @@ public class CustomMigrationTaskTab extends CustomTab {
         HBox bottomRow = new HBox(10, progressBar, progressLabel, timeLabel, currentObjectLabel,
                 bottomSpacer, successFilterButton, failureFilterButton);
         bottomRow.setAlignment(Pos.CENTER_LEFT);
+        // 行高增加约 20%（上下各加 2px）
+        bottomRow.setPadding(new Insets(2, 0, 2, 0));
 
         // ---- 明细 TableView ----
         filteredItems = new FilteredList<>(task.getRunItems(), item -> true);
@@ -361,7 +370,7 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
-                startColumn, endColumn, speedColumn, rowsColumn, errorColumn));
+                startColumn, endColumn, rowsColumn, speedColumn, errorColumn));
         return table;
     }
 
@@ -461,33 +470,21 @@ public class CustomMigrationTaskTab extends CustomTab {
     // 错误详情弹窗
     // ==================================================================
 
-    /** 双击错误单元格：弹出出错 SQL + 具体错误（SQL 仅本次运行内存中有，恢复的历史记录没有）。 */
+    /** 双击错误单元格：单框展示出错 SQL + 具体错误（SQL 在前、错误在后；SQL 仅本次运行内存中有）。 */
     private static void showErrorDetail(MigrationRunItem item) {
-        VBox box = new VBox(6);
-        if (item.getErrorSql() != null && !item.getErrorSql().isBlank()) {
-            Label sqlCaption = new Label();
-            sqlCaption.textProperty().bind(I18n.bind("migration.detail.error_sql", "Failed SQL"));
-            sqlCaption.setStyle("-fx-font-weight: bold;");
-            TextArea sqlArea = new TextArea(item.getErrorSql());
-            sqlArea.setEditable(false);
-            sqlArea.setWrapText(true);
-            VBox.setVgrow(sqlArea, Priority.ALWAYS);
-            box.getChildren().addAll(sqlCaption, sqlArea);
-        }
-        Label errorCaption = new Label();
-        errorCaption.textProperty().bind(I18n.bind("migration.detail.column.error", "Error"));
-        errorCaption.setStyle("-fx-font-weight: bold;");
-        TextArea errorArea = new TextArea(item.getErrorMessage());
-        errorArea.setEditable(false);
-        errorArea.setWrapText(true);
-        VBox.setVgrow(errorArea, Priority.ALWAYS);
-        box.getChildren().addAll(errorCaption, errorArea);
+        String sql = item.getErrorSql() == null ? "" : item.getErrorSql().trim();
+        String error = item.getErrorMessage() == null ? "" : item.getErrorMessage();
+        String content = sql.isEmpty() ? error
+                : (error.isEmpty() ? sql : sql + "\n\n" + error);
+        TextArea area = new TextArea(content);
+        area.setEditable(false);
+        area.setWrapText(true);
 
         ButtonType closeButton = new ButtonType(
                 I18n.t("migration.button.close", "Close"), ButtonBar.ButtonData.OK_DONE);
         String title = String.format(I18n.t("migration.detail.error_title", "Error Details - %s"),
                 item.getName());
-        AlertUtil.createContentDialog(title, box, 560, 320, closeButton).showAndWait();
+        AlertUtil.createContentDialog(title, area, 560, 320, closeButton).showAndWait();
     }
 
     // ==================================================================

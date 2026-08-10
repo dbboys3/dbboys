@@ -221,6 +221,20 @@ public final class TypeMapper {
         return (name == null || name.isEmpty()) ? "?" : name;
     }
 
+    /** 列名归一化：去首尾空白与包围引号（" / `）后转小写，用于主键列与列清单的名字比对。 */
+    private static String normalizeColumnName(String name) {
+        if (name == null) {
+            return "";
+        }
+        String normalized = name.trim();
+        if (normalized.length() >= 2
+                && ((normalized.startsWith("\"") && normalized.endsWith("\""))
+                || (normalized.startsWith("`") && normalized.endsWith("`")))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        return normalized.toLowerCase(Locale.ROOT);
+    }
+
     /**
      * 全局类型覆盖匹配：取列的源类型基名在 globalTypeOverrides 中大小写不敏感查找，
      * 先全串匹配（如 Informix 的 DATETIME YEAR TO SECOND），不匹配再退到第一个词。
@@ -781,6 +795,25 @@ public final class TypeMapper {
                 }
                 primaryKeyColumns = keptPk;
             }
+        }
+
+        // 主键列防御性过滤：仅保留列清单中真实存在的列（大小写/引号不敏感），输出以列清单原名为准；
+        // 元数据查询异常时不会生成引用不存在列的非法 PRIMARY KEY
+        if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
+            List<String> existingPk = new ArrayList<>();
+            for (String pkColumn : primaryKeyColumns) {
+                String wanted = normalizeColumnName(pkColumn);
+                if (wanted.isEmpty()) {
+                    continue;
+                }
+                for (ColumnsInfo column : columns) {
+                    if (column != null && wanted.equals(normalizeColumnName(column.getColName()))) {
+                        existingPk.add(column.getColName());
+                        break;
+                    }
+                }
+            }
+            primaryKeyColumns = existingPk;
         }
 
         List<String> lines = new ArrayList<>();
