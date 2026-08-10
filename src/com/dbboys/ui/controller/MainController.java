@@ -1294,7 +1294,7 @@ public class MainController {
             // --- 任务菜单项 ---
             javafx.scene.control.MenuItem startTaskItem = MenuItemUtil.createMenuItemI18n(
                     "migration.menu.start",
-                    IconFactory.group(IconPaths.SQL_RUN, 0.65, 0.65));
+                    IconFactory.group(IconPaths.SQL_RUN, 0.78, javafx.scene.paint.Color.valueOf("#51dd66")));
             startTaskItem.setOnAction(e -> {
                 TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
                 if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
@@ -1453,12 +1453,14 @@ public class MainController {
                 if (isTask) {
                     com.dbboys.model.MigrationTask task = (com.dbboys.model.MigrationTask) sel.getValue();
                     boolean running = task.isRunning();
+                    // 运行中只允许停止，其余全部禁用
                     startTaskItem.setDisable(running);
                     stopTaskItem.setDisable(!running);
                     editTaskItem.setDisable(running);
-                    copyTaskItem.setDisable(false);
+                    copyTaskItem.setDisable(running);
                     moveTaskItem.setDisable(running || migrationTreeView.getRoot().getChildren().size() <= 1);
                     renameTaskItem.setDisable(running);
+                    deleteTaskItem.setDisable(running);
                     migrationCtxMenu.getItems().addAll(startTaskItem, stopTaskItem, editTaskItem,
                             copyTaskItem, moveTaskItem, renameTaskItem,
                             new javafx.scene.control.SeparatorMenuItem(), deleteTaskItem);

@@ -1,10 +1,12 @@
 package com.dbboys.ui.component;
 
+import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.MigrationTask;
 import com.dbboys.model.TreeData;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.treemodel.MigrationFolder;
+import javafx.beans.binding.Bindings;
 import javafx.beans.value.ChangeListener;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
@@ -29,8 +31,8 @@ import javafx.scene.shape.SVGPath;
  * Custom TreeCell for the migration task tree view. Renders {@link MigrationFolder}
  * and {@link MigrationTask} items, mimicking {@link CustomSshTreeCell} styling.
  * <p>
- * 任务节点：运行中把图标换成加载动画（监听 runStateProperty），
- * 最近一次运行结果成功/失败给名称标签加/换样式类（监听 lastRunResultProperty）。
+ * 任务节点：运行中把图标换成加载动画（监听 runStateProperty）；名称保持默认色不变，
+ * 右侧按 runState/lastRunResult 显示状态文本（运行中/已完成/失败/已取消/未开始，随语言切换刷新）。
  * updateItem 复用时解除旧监听/解绑，防止泄漏和串状态。
  * <p>
  * 拖拽：任务节点是拖拽源（setOnDragDetected，快照缩略图仿 {@link CustomSshTreeCell}），
@@ -42,13 +44,13 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
     private static final int ICON_SLOT_SIZE = 16;
     private static final String PRIMARY_ICON_STYLE = "icon-primary";
     private static final String HOVER_STYLE_CLASS = "hover";
-    private static final String STYLE_RUN_SUCCESS = "tree-cell-name-connected";
-    private static final String STYLE_RUN_FAILED = "tree-cell-name-disconnected";
     /** 任务拖拽 Dragboard 字符串前缀：内容为 {@code DRAG_PAYLOAD_PREFIX + task.getId()}。 */
     private static final String DRAG_PAYLOAD_PREFIX = "MIGRATIONTASKDRAG;";
     private boolean hovered;
 
     private final Label nameLabel = new Label();
+    /** 右侧任务状态（运行中/已完成/失败/已取消/未开始），样式同连接树的描述标签。 */
+    private final Label statusLabel = new Label();
     private final SVGPath nodeIcon = new SVGPath();
     private final Group nodeIconGroup = new Group(nodeIcon);
     private final StackPane nodeIconStackpane = new StackPane(nodeIconGroup);
@@ -63,13 +65,12 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
 
     private final ChangeListener<MigrationTask.RunState> runStateListener =
             (obs, oldState, newState) -> applyTaskIcon();
-    private final ChangeListener<MigrationTask.RunResult> runResultListener =
-            (obs, oldResult, newResult) -> applyRunResultStyle();
     private final ChangeListener<Boolean> expandListener =
             (obs, oldExpanded, newExpanded) -> applyFolderIcon();
 
     public CustomMigrationTreeCell() {
         graphicHbox.setAlignment(Pos.CENTER_LEFT);
+        statusLabel.getStyleClass().add("tree-cell-description");
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         // Programmatic hover style class to avoid background flash during cell recycling
@@ -153,7 +154,6 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
     private void renderMigrationTask(MigrationTask task) {
         boundTask = task;
         task.runStateProperty().addListener(runStateListener);
-        task.lastRunResultProperty().addListener(runResultListener);
 
         nodeIconStackpane.setMinSize(ICON_SLOT_SIZE, ICON_SLOT_SIZE);
         nodeIconStackpane.setPrefSize(ICON_SLOT_SIZE, ICON_SLOT_SIZE);
@@ -167,33 +167,34 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
 
         nameLabel.textProperty().bind(task.nameProperty());
         applyTaskIcon();
-        applyRunResultStyle();
+        bindTaskStatus(task);
         configureDragActions(task);
     }
 
-    /** RUNNING → 加载动画图标；IDLE → 迁移图标。 */
+    /** RUNNING → 加载动画图标；IDLE → 迁移图标。右侧 spacer 把状态标签推到最右。 */
     private void applyTaskIcon() {
         if (boundTask == null) {
             return;
         }
         boolean running = boundTask.getRunState() == MigrationTask.RunState.RUNNING;
         Node iconNode = running ? loadingIcon : nodeIconStackpane;
-        graphicHbox.getChildren().setAll(iconNode, nameLabel);
+        graphicHbox.getChildren().setAll(iconNode, nameLabel, spacer, statusLabel);
         setGraphic(graphicHbox);
     }
 
-    /** SUCCESS → connected 样式；FAILED → disconnected 样式；NONE → 都不加。 */
-    private void applyRunResultStyle() {
-        if (boundTask == null) {
-            return;
-        }
-        nameLabel.getStyleClass().removeAll(STYLE_RUN_SUCCESS, STYLE_RUN_FAILED);
-        switch (boundTask.getLastRunResult()) {
-            case SUCCESS -> nameLabel.getStyleClass().add(STYLE_RUN_SUCCESS);
-            case FAILED -> nameLabel.getStyleClass().add(STYLE_RUN_FAILED);
-            case NONE -> {
+    /** 右侧状态文本：运行中/已完成/失败/已取消/未开始；任务名保持默认色不变。 */
+    private void bindTaskStatus(MigrationTask task) {
+        statusLabel.textProperty().bind(Bindings.createStringBinding(() -> {
+            if (task.getRunState() == MigrationTask.RunState.RUNNING) {
+                return I18n.t("migration.task.status_running", "Running");
             }
-        }
+            return switch (task.getLastRunResult()) {
+                case SUCCESS -> I18n.t("migration.task.status_done", "Finished");
+                case FAILED -> I18n.t("migration.status.failed", "Failed");
+                case CANCELLED -> I18n.t("migration.status.cancelled", "Cancelled");
+                case NONE -> I18n.t("migration.task.status_not_started", "Not started");
+            };
+        }, task.runStateProperty(), task.lastRunResultProperty(), I18n.localeProperty()));
     }
 
     /**
@@ -225,7 +226,6 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
     private void unbindAll() {
         if (boundTask != null) {
             boundTask.runStateProperty().removeListener(runStateListener);
-            boundTask.lastRunResultProperty().removeListener(runResultListener);
             boundTask = null;
         }
         if (boundTreeItem != null) {
@@ -234,7 +234,8 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
         }
         boundFolder = null;
         setOnDragDetected(null);
-        nameLabel.getStyleClass().removeAll(STYLE_RUN_SUCCESS, STYLE_RUN_FAILED);
+        statusLabel.textProperty().unbind();
+        statusLabel.setText(null);
         resetCellVisualState();
     }
 

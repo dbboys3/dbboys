@@ -39,8 +39,8 @@ public class MigrationTask extends TreeData {
     /** 运行状态（瞬时不落库）。 */
     public enum RunState { IDLE, RUNNING }
 
-    /** 最近一次运行结果（瞬时不落库）：NONE=未运行过。 */
-    public enum RunResult { NONE, SUCCESS, FAILED }
+    /** 最近一次运行结果（瞬时不落库）：NONE=未运行过，CANCELLED=被停止。 */
+    public enum RunResult { NONE, SUCCESS, FAILED, CANCELLED }
 
     private final IntegerProperty id = new SimpleIntegerProperty();
     private final IntegerProperty parentId = new SimpleIntegerProperty(0);

@@ -355,7 +355,7 @@ public final class MigrationTaskRunner {
         });
         migrationTask.setOnCancelled(event -> {
             task.setRunState(MigrationTask.RunState.IDLE);
-            task.setLastRunResult(MigrationTask.RunResult.FAILED);
+            task.setLastRunResult(MigrationTask.RunResult.CANCELLED);
             // 停止后没完成的对象（待执行/运行中）置为已取消
             markUnfinishedItemsCancelled(task);
             NotificationUtil.showMainNotification(String.format(
