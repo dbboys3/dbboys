@@ -13,7 +13,7 @@ import javafx.beans.property.StringProperty;
  */
 public class MigrationRunItem {
 
-    public enum Status { PENDING, RUNNING, SUCCESS, FAILED }
+    public enum Status { PENDING, RUNNING, SUCCESS, FAILED, CANCELLED }
 
     private final ObjectProperty<MigrationObjectRef.Kind> kind = new SimpleObjectProperty<>();
     private final StringProperty name = new SimpleStringProperty();

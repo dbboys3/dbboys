@@ -44,11 +44,10 @@ import java.util.Set;
  * {@link LocalDbRepository#getConnectLeafs()} 解析，解析失败显示 "?"）。
  * <p>
  * 主体：明细 TableView，items 直接绑定 {@link MigrationTask#getRunItems()}（瞬时，
- * 由 {@link MigrationTaskRunner} 在 FX 线程维护）；错误信息列宽自适应剩余空间，
- * 双击错误单元格弹出出错 SQL + 具体错误。
+ * 由 {@link MigrationTaskRunner} 在 FX 线程维护）；列宽不压缩、超出可横向滚动；
+ * 成功/失败筛选按钮悬浮于表格右下角（StackPane 最上层）；双击错误单元格弹出出错 SQL + 具体错误。
  * <p>
- * 底部：总进度（ProgressBar + 已处理/总数）、开始/完成时间、当前对象，
- * 成功/失败筛选按钮固定右下（spacer 吸收激活样式的尺寸变化，不挤压进度条）。
+ * 底部：总进度（ProgressBar + 已处理/总数）、开始/完成时间、当前对象。
  * <p>
  * 进度刷新：监听 runItems 列表变化 + 每行 statusProperty 变化；
  * tab 关闭（setOnClosed）时移除全部监听并解绑标题，防止任务对象长期持有 tab 引用。
@@ -112,15 +111,17 @@ public class CustomMigrationTaskTab extends CustomTab {
                 task.runStateProperty().isNotEqualTo(MigrationTask.RunState.RUNNING));
         stopButton.setOnAction(event -> MigrationTaskRunner.stop(task));
 
-        // 图标规格与 SQL 页运行/停止按钮一致
+        // 图标规格与 SQL 页运行/停止按钮一致；按钮不可获取焦点
         startButton.setGraphic(IconFactory.group(IconPaths.SQL_RUN, 0.85, Color.valueOf("#51dd66")));
         startButton.getStyleClass().add("custom-button");
+        startButton.setFocusTraversable(false);
         Tooltip startTip = new Tooltip();
         startTip.textProperty().bind(I18n.bind("migration.menu.start", "Start"));
         startButton.setTooltip(startTip);
 
         stopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
         stopButton.getStyleClass().add("custom-button");
+        stopButton.setFocusTraversable(false);
         Tooltip stopTip = new Tooltip();
         stopTip.textProperty().bind(I18n.bind("migration.menu.stop", "Stop"));
         stopButton.setTooltip(stopTip);
@@ -153,11 +154,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             return text.toString();
         }, task.runStateProperty(), task.lastStartTimeProperty(), task.lastEndTimeProperty(),
                 I18n.localeProperty()));
-        // 成功/失败筛选固定右下，spacer 吸收激活样式的尺寸变化，不挤压进度条
-        Region bottomSpacer = new Region();
-        HBox.setHgrow(bottomSpacer, Priority.ALWAYS);
-        HBox bottomRow = new HBox(10, progressBar, progressLabel, timeLabel, currentObjectLabel,
-                bottomSpacer, successFilterButton, failureFilterButton);
+        HBox bottomRow = new HBox(10, progressBar, progressLabel, timeLabel, currentObjectLabel);
         bottomRow.setAlignment(Pos.CENTER_LEFT);
         // 行高增加约 20%（上下各加 2px）
         bottomRow.setPadding(new Insets(2, 0, 2, 0));
@@ -165,10 +162,18 @@ public class CustomMigrationTaskTab extends CustomTab {
         // ---- 明细 TableView ----
         filteredItems = new FilteredList<>(task.getRunItems(), item -> true);
         detailTable = buildDetailTable();
-        VBox.setVgrow(detailTable, Priority.ALWAYS);
+
+        // 成功/失败筛选按钮悬浮于表格右下角（StackPane 最上层）；空白处不拦截表格鼠标事件
+        HBox filterOverlay = new HBox(6, successFilterButton, failureFilterButton);
+        filterOverlay.setAlignment(Pos.BOTTOM_RIGHT);
+        filterOverlay.setPickOnBounds(false);
+        filterOverlay.setPadding(new Insets(0, 8, 8, 0));
+        javafx.scene.layout.StackPane tableStack = new javafx.scene.layout.StackPane(detailTable, filterOverlay);
+        javafx.scene.layout.StackPane.setAlignment(filterOverlay, Pos.BOTTOM_RIGHT);
+        VBox.setVgrow(tableStack, Priority.ALWAYS);
 
         // 表格上下不留间距
-        VBox root = new VBox(0, headerRow, detailTable, bottomRow);
+        VBox root = new VBox(0, headerRow, tableStack, bottomRow);
         root.setPadding(new Insets(0));
         setContent(root);
 
@@ -374,19 +379,8 @@ public class CustomMigrationTaskTab extends CustomTab {
                 setText(empty ? null : text);
             }
         });
-        // 错误信息列宽占满剩余空间；prefWidth 被绑定后不允许拖拽改宽，故禁掉列 resize
-        errorColumn.setResizable(false);
-        errorColumn.prefWidthProperty().bind(table.widthProperty()
-                .subtract(table.getColumns().get(0).widthProperty())
-                .subtract(kindColumn.widthProperty())
-                .subtract(nameColumn.widthProperty())
-                .subtract(statusColumn.widthProperty())
-                .subtract(startColumn.widthProperty())
-                .subtract(endColumn.widthProperty())
-                .subtract(rowsColumn.widthProperty())
-                .subtract(migratedColumn.widthProperty())
-                .subtract(speedColumn.widthProperty())
-                .subtract(18));
+        // 错误信息列固定初始宽度：列总宽超出表格时允许横向滚动（CustomTableView 为 UNCONSTRAINED 策略）
+        errorColumn.setPrefWidth(400);
 
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
@@ -416,7 +410,8 @@ public class CustomMigrationTaskTab extends CustomTab {
                         currentObject = item.getName();
                     }
                 }
-                case PENDING -> {
+                case PENDING, CANCELLED -> {
+                    // 已取消不计入完成数（进度保持中断时的真实完成度）
                 }
             }
         }
@@ -455,6 +450,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         Button button = new Button();
         button.getStyleClass().addAll("result-filter-button",
                 success ? "result-filter-success" : "result-filter-failure");
+        button.setFocusTraversable(false);
         Region dot = new Region();
         dot.getStyleClass().addAll("result-filter-dot",
                 success ? "result-filter-dot-success" : "result-filter-dot-failure");
@@ -560,6 +556,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             case RUNNING -> I18n.t("migration.status.running", "Running");
             case SUCCESS -> I18n.t("migration.status.success", "Success");
             case FAILED -> I18n.t("migration.status.failed", "Failed");
+            case CANCELLED -> I18n.t("migration.status.cancelled", "Cancelled");
         };
     }
 }

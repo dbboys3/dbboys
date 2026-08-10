@@ -356,6 +356,8 @@ public final class MigrationTaskRunner {
         migrationTask.setOnCancelled(event -> {
             task.setRunState(MigrationTask.RunState.IDLE);
             task.setLastRunResult(MigrationTask.RunResult.FAILED);
+            // 停止后没完成的对象（待执行/运行中）置为已取消
+            markUnfinishedItemsCancelled(task);
             NotificationUtil.showMainNotification(String.format(
                     I18n.t("migration.notify.failed", "Migration task %s failed: %s"),
                     task.getName(), I18n.t("migration.log.cancelled", "Migration cancelled")));
@@ -489,6 +491,16 @@ public final class MigrationTaskRunner {
             }
         }
         return pendingFallback;
+    }
+
+    /** 停止后未完成的明细行（PENDING/RUNNING）置为 CANCELLED。 */
+    private static void markUnfinishedItemsCancelled(MigrationTask task) {
+        for (MigrationRunItem item : task.getRunItems()) {
+            if (item.getStatus() == MigrationRunItem.Status.PENDING
+                    || item.getStatus() == MigrationRunItem.Status.RUNNING) {
+                item.setStatus(MigrationRunItem.Status.CANCELLED);
+            }
+        }
     }
 
     /** 复制速度展示串（行/秒，千分位）：有行数且起止毫秒已知时计算，否则空串。 */
