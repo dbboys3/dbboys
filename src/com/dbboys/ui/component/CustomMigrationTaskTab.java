@@ -45,7 +45,7 @@ import java.util.Set;
  * <p>
  * 主体：明细 TableView，items 直接绑定 {@link MigrationTask#getRunItems()}（瞬时，
  * 由 {@link MigrationTaskRunner} 在 FX 线程维护）；列宽不压缩、超出可横向滚动；
- * 成功/失败筛选按钮悬浮于表格右下角（StackPane 最上层）；双击错误单元格弹出出错 SQL + 具体错误。
+ * 成功/失败筛选按钮与表格父节点同层，悬浮于整个内容区右下角；双击错误单元格弹出出错 SQL + 具体错误。
  * <p>
  * 底部：总进度（ProgressBar + 已处理/总数）、开始/完成时间、当前对象。
  * <p>
@@ -162,19 +162,19 @@ public class CustomMigrationTaskTab extends CustomTab {
         // ---- 明细 TableView ----
         filteredItems = new FilteredList<>(task.getRunItems(), item -> true);
         detailTable = buildDetailTable();
+        VBox.setVgrow(detailTable, Priority.ALWAYS);
 
-        // 成功/失败筛选按钮悬浮于表格右下角（StackPane 最上层）；空白处不拦截表格鼠标事件
+        // 表格上下不留间距
+        VBox contentBox = new VBox(0, headerRow, detailTable, bottomRow);
+        contentBox.setPadding(new Insets(0));
+
+        // 成功/失败筛选按钮与表格父节点同层：悬浮于整个内容区右下角；空白处不拦截鼠标事件
         HBox filterOverlay = new HBox(6, successFilterButton, failureFilterButton);
         filterOverlay.setAlignment(Pos.BOTTOM_RIGHT);
         filterOverlay.setPickOnBounds(false);
-        filterOverlay.setPadding(new Insets(0, 8, 8, 0));
-        javafx.scene.layout.StackPane tableStack = new javafx.scene.layout.StackPane(detailTable, filterOverlay);
+        filterOverlay.setPadding(new Insets(0, 8, 1, 0));
+        javafx.scene.layout.StackPane root = new javafx.scene.layout.StackPane(contentBox, filterOverlay);
         javafx.scene.layout.StackPane.setAlignment(filterOverlay, Pos.BOTTOM_RIGHT);
-        VBox.setVgrow(tableStack, Priority.ALWAYS);
-
-        // 表格上下不留间距
-        VBox root = new VBox(0, headerRow, tableStack, bottomRow);
-        root.setPadding(new Insets(0));
         setContent(root);
 
         // ---- 进度/计数监听（关闭时移除，防泄漏） ----
