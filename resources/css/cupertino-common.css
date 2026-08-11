@@ -6732,3 +6732,19 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .table-view .table-row-cell.migration-row-failed .table-cell {
   -fx-text-fill: -color-danger-fg;
 }
+
+/* 迁移对象挑选列表：行高比默认（3em）减少 20%；点击选中不改变行底色 */
+.list-view.picker-list .list-cell {
+  -fx-cell-size: 25px;
+}
+.list-view.picker-list > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected,
+.list-view.picker-list:focused > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected {
+  -color-cell-fg: -color-fg-default;
+  -fx-background-color: -color-bg-default;
+}
+.list-view.picker-list{
+  -fx-border-width: 1px;
+  -fx-border-color: -color-border-default;
+  -fx-padding: 0;
+  -fx-background-insets: 0;
+}

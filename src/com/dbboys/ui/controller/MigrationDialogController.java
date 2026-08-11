@@ -1253,6 +1253,8 @@ public class MigrationDialogController {
             ObservableList<PickItem> master = FXCollections.observableArrayList();
             FilteredList<PickItem> filtered = new FilteredList<>(master, item -> true);
             ListView<PickItem> listView = new ListView<>(filtered);
+            // picker-list：行高比默认少 20%，点击选中不改变行底色（样式见 cupertino-common.css 末尾）
+            listView.getStyleClass().add("picker-list");
             listView.setPlaceholder(placeholder);
             listView.setCellFactory(lv -> new PickCell(kind == MigrationObjectRef.Kind.TABLE));
             VBox.setVgrow(listView, Priority.ALWAYS);
