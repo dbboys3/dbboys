@@ -1348,6 +1348,8 @@ public class MainController {
                             I18n.t("migration.confirm.delete_task", "确定要删除任务\"%s\"吗？")
                                     .formatted(task.getName()))) {
                         if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationTask(task)) {
+                            // 详情 tab 打开着则同步关闭
+                            com.dbboys.ui.util.TabpaneUtil.closeMigrationTaskTabIfOpen(task.getId());
                             selected.getParent().getChildren().remove(selected);
                         }
                     }
@@ -1408,6 +1410,12 @@ public class MainController {
                                 I18n.t("migration.confirm.delete_folder",
                                         "删除任务分类\"%s\"将删除该分类下【%d】个任务，确定要删除该分类吗？")
                                         .formatted(folder.getName(), selected.getChildren().size()))) {
+                            // 分类下任务的详情 tab 打开着则同步关闭
+                            for (TreeItem<TreeData> child : selected.getChildren()) {
+                                if (child.getValue() instanceof com.dbboys.model.MigrationTask childTask) {
+                                    com.dbboys.ui.util.TabpaneUtil.closeMigrationTaskTabIfOpen(childTask.getId());
+                                }
+                            }
                             com.dbboys.infra.db.LocalDbRepository.deleteMigrationTasksByParent(folder.getId());
                             if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationFolder(folder)) {
                                 selected.getParent().getChildren().remove(selected);

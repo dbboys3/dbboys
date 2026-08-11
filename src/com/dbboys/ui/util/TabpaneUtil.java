@@ -137,6 +137,14 @@ public class TabpaneUtil {
         }
     }
 
+    /** 任务被删除后关闭已打开的明细 tab（未打开则空操作；移除会触发 tab 的 onClosed 清理）。 */
+    public static void closeMigrationTaskTabIfOpen(int taskId) {
+        Tab existing = findTabByUserData(TAB_KEY_MIGRATION_TASK + taskId);
+        if (existing != null) {
+            tabPane().getTabs().remove(existing);
+        }
+    }
+
 
     private static void refreshSqlTabHeaderLayout() {
         TabPane sqlTabPane = tabPane();
