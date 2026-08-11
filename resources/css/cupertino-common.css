@@ -6741,6 +6741,8 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .list-view.picker-list:focused > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected {
   -color-cell-fg: -color-fg-default;
   -fx-background-color: -color-bg-default;
+  -fx-border-color: transparent;
+  -fx-border-width: 0 0 1 0;
 }
 .list-view.picker-list{
   -fx-border-width: 1px;
