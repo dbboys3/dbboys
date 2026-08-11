@@ -49,7 +49,7 @@ import java.util.Set;
  * 由 {@link MigrationTaskRunner} 在 FX 线程维护）；列宽不压缩、超出可横向滚动；
  * 成功/失败筛选按钮与表格父节点同层，悬浮于整个内容区右下角；双击错误单元格弹出出错 SQL + 具体错误。
  * <p>
- * 底部：总进度（ProgressBar + 已处理/总数）、开始/完成时间、当前对象。
+ * 底部：总进度（ProgressBar + 已处理/总数）、开始/完成时间。
  * <p>
  * 进度刷新：监听 runItems 列表变化 + 每行 statusProperty 变化；
  * tab 关闭（setOnClosed）时移除全部监听并解绑标题，防止任务对象长期持有 tab 引用。
@@ -61,7 +61,6 @@ public class CustomMigrationTaskTab extends CustomTab {
     private final ProgressBar progressBar = new ProgressBar(0);
     private final Label progressLabel = new Label();
     private final Label timeLabel = new Label();
-    private final Label currentObjectLabel = new Label();
     private final Label routeLabel = new Label();
     private final FilteredList<MigrationRunItem> filteredItems;
     private final TableView<MigrationRunItem> detailTable;
@@ -134,7 +133,7 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         // 编辑任务（头部右端图标按钮）：运行中禁用，与树右键菜单一致
         Button editButton = new Button();
-        editButton.setGraphic(IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7));
+        editButton.setGraphic(IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.63));
         editButton.getStyleClass().add("custom-button");
         editButton.setFocusTraversable(false);
         editButton.disableProperty().bind(
@@ -171,7 +170,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             return text.toString();
         }, task.runStateProperty(), task.lastStartTimeProperty(), task.lastEndTimeProperty(),
                 I18n.localeProperty()));
-        HBox bottomRow = new HBox(10, progressBar, progressLabel, timeLabel, currentObjectLabel);
+        HBox bottomRow = new HBox(10, progressBar, progressLabel, timeLabel);
         bottomRow.setAlignment(Pos.CENTER_LEFT);
         // 行高增加约 20%（上下各加 2px）
         bottomRow.setPadding(new Insets(2, 0, 2, 0));
@@ -458,7 +457,6 @@ public class CustomMigrationTaskTab extends CustomTab {
         int total = items.size();
         long success = 0;
         long failed = 0;
-        String currentObject = "";
         for (MigrationRunItem item : items) {
             if (item == null || item.getStatus() == null) {
                 continue;
@@ -466,13 +464,8 @@ public class CustomMigrationTaskTab extends CustomTab {
             switch (item.getStatus()) {
                 case SUCCESS -> success++;
                 case FAILED -> failed++;
-                case RUNNING -> {
-                    if (currentObject.isEmpty() && item.getName() != null) {
-                        currentObject = item.getName();
-                    }
-                }
-                case PENDING, CANCELLED -> {
-                    // 已取消不计入完成数（进度保持中断时的真实完成度）
+                case RUNNING, PENDING, CANCELLED -> {
+                    // 已取消/待执行/运行中均不计入完成数
                 }
             }
         }
@@ -480,7 +473,6 @@ public class CustomMigrationTaskTab extends CustomTab {
         progressBar.setProgress(total == 0 ? 0 : (double) done / total);
         progressLabel.setText(String.format(
                 I18n.t("migration.detail.progress", "%d / %d"), done, total));
-        currentObjectLabel.setText(currentObject);
         refreshFilterButtons(success, failed);
     }
 
