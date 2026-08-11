@@ -69,7 +69,7 @@ public  class LocalDbRepository {
                 + "c_last_end_time VARCHAR(20),"
                 + "c_run_counts TEXT)");
         
-        execIgnore("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_source_rows INTEGER,c_target_rows INTEGER,c_speed INTEGER,c_error varchar(3200),c_checksum varchar(100),c_info varchar(3200))");
+        execIgnore("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_source_rows INTEGER,c_target_rows INTEGER,c_speed INTEGER,c_error varchar(3200),c_error_sql varchar(3200),c_checksum varchar(100),c_info varchar(3200))");
 
         /*老版本升级后t_connect可能少了ssh相关字段，需要加上 */
         String[][] sshColumns = {
@@ -122,7 +122,7 @@ public  class LocalDbRepository {
             statement.executeUpdate("create table if not exists t_ssh(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_host varchar(100),c_port varchar(10),c_username varchar(100),c_password varchar(100),c_auth_type varchar(10),c_key_path varchar(500),c_key_passphrase varchar(100),c_charset varchar(20) DEFAULT 'UTF-8',c_info varchar(3200))");
             statement.executeUpdate("create table if not exists t_migration_folder(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_name varchar(100),c_expand int)");
             statement.executeUpdate("create table if not exists t_migration_task(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_parentid INTEGER DEFAULT 0,c_name varchar(100),c_source_id INTEGER,c_target_id INTEGER,c_target_database varchar(200),c_target_schema varchar(200),c_options TEXT,c_objects TEXT,c_mappings TEXT,c_info varchar(3200),c_last_start_time varchar(20),c_last_end_time varchar(20),c_run_counts TEXT)");
-            statement.executeUpdate("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_source_rows INTEGER,c_target_rows INTEGER,c_speed INTEGER,c_error varchar(3200),c_checksum varchar(100),c_info varchar(3200))");
+            statement.executeUpdate("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_source_rows INTEGER,c_target_rows INTEGER,c_speed INTEGER,c_error varchar(3200),c_error_sql varchar(3200),c_checksum varchar(100),c_info varchar(3200))");
             statement.executeUpdate("INSERT INTO t_connect_folder(c_name,c_expand) VALUES ('数据库连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_ssh_folder(c_name,c_expand) VALUES ('SSH连接分类[1级系统]',1)");
             statement.executeUpdate("INSERT INTO t_migration_folder(c_name,c_expand) VALUES ('迁移任务分类[1级系统]',1)");
@@ -1154,8 +1154,8 @@ public  class LocalDbRepository {
             return true;
         }
         String sql = "INSERT INTO t_migration_task_run_item (c_task_id, c_kind, c_name, c_status, "
-                + "c_start_time, c_end_time, c_source_rows, c_target_rows, c_speed, c_error, c_checksum, c_info) "
-                + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+                + "c_start_time, c_end_time, c_source_rows, c_target_rows, c_speed, c_error, c_error_sql, c_checksum, c_info) "
+                + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             for (MigrationTaskRunItem item : items) {
                 ps.setInt(1, item.getTaskId());
@@ -1168,8 +1168,9 @@ public  class LocalDbRepository {
                 ps.setLong(8, item.getTargetRows());
                 ps.setLong(9, item.getSpeed());
                 ps.setString(10, item.getError());
-                ps.setString(11, item.getChecksum());
-                ps.setString(12, item.getInfo());
+                ps.setString(11, item.getErrorSql());
+                ps.setString(12, item.getChecksum());
+                ps.setString(13, item.getInfo());
                 ps.addBatch();
             }
             ps.executeBatch();
@@ -1184,7 +1185,7 @@ public  class LocalDbRepository {
     public static List<MigrationTaskRunItem> getMigrationTaskRunItems(int taskId) {
         List<MigrationTaskRunItem> list = new ArrayList<>();
         String sql = "SELECT c_id, c_task_id, c_kind, c_name, c_status, c_start_time, c_end_time, "
-                + "c_source_rows, c_target_rows, c_speed, c_error, c_checksum, c_info "
+                + "c_source_rows, c_target_rows, c_speed, c_error, c_error_sql, c_checksum, c_info "
                 + "FROM t_migration_task_run_item WHERE c_task_id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, taskId);
@@ -1202,6 +1203,7 @@ public  class LocalDbRepository {
                     item.setTargetRows(rs.getLong("c_target_rows"));
                     item.setSpeed(rs.getLong("c_speed"));
                     item.setError(rs.getString("c_error") != null ? rs.getString("c_error") : "");
+                    item.setErrorSql(rs.getString("c_error_sql") != null ? rs.getString("c_error_sql") : "");
                     item.setChecksum(rs.getString("c_checksum") != null ? rs.getString("c_checksum") : "");
                     item.setInfo(rs.getString("c_info") != null ? rs.getString("c_info") : "");
                     list.add(item);

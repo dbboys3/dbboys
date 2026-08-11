@@ -678,51 +678,54 @@ public class TableMigrationService {
         }
         emitDataProgress(ctx, table, totalRows, 0);
 
-        // 出错 SQL 归因：查询打开前按 SELECT 计，打开后按 INSERT 计
+        // 出错 SQL 归因：SELECT 预编译/执行归 SELECT；INSERT 预编译/执行/批次提交归 INSERT
         String failingSql = selectSql;
         try {
             try (PreparedStatement selectStmt = ws.sourceConn.prepareStatement(
-                         selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-                 PreparedStatement insertStmt = ws.targetConn.prepareStatement(insertSql)) {
-                try {
-                    selectStmt.setFetchSize(BATCH_SIZE);
-                } catch (Exception e) {
-                    log.trace("setFetchSize not supported", e);
-                }
-                ctx.sessions.track(selectStmt);
-                ctx.backSqlTask.setStmt(selectStmt);
-                long rows = 0;
-                int batchCount = 0;
-                try (ResultSet rs = selectStmt.executeQuery()) {
-                    failingSql = insertSql;
-                    ctx.sessions.track(insertStmt);
-                    ctx.backSqlTask.setStmt(insertStmt);
-                    while (rs.next()) {
-                        checkCancelled(ctx.backSqlTask);
-                        for (int i = 0; i < columnCount; i++) {
-                            bindValue(rs, insertStmt, i + 1, types[i]);
+                         selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                failingSql = insertSql;
+                try (PreparedStatement insertStmt = ws.targetConn.prepareStatement(insertSql)) {
+                    try {
+                        selectStmt.setFetchSize(BATCH_SIZE);
+                    } catch (Exception e) {
+                        log.trace("setFetchSize not supported", e);
+                    }
+                    ctx.sessions.track(selectStmt);
+                    ctx.backSqlTask.setStmt(selectStmt);
+                    long rows = 0;
+                    int batchCount = 0;
+                    failingSql = selectSql;
+                    try (ResultSet rs = selectStmt.executeQuery()) {
+                        failingSql = insertSql;
+                        ctx.sessions.track(insertStmt);
+                        ctx.backSqlTask.setStmt(insertStmt);
+                        while (rs.next()) {
+                            checkCancelled(ctx.backSqlTask);
+                            for (int i = 0; i < columnCount; i++) {
+                                bindValue(rs, insertStmt, i + 1, types[i]);
+                            }
+                            insertStmt.addBatch();
+                            rows++;
+                            batchCount++;
+                            if (batchCount >= BATCH_SIZE) {
+                                insertStmt.executeBatch();
+                                commitTarget(ctx, ws);
+                                batchCount = 0;
+                                rowsCopied[0] = rows;
+                                emitDataProgress(ctx, table, totalRows, rows);
+                            }
                         }
-                        insertStmt.addBatch();
-                        rows++;
-                        batchCount++;
-                        if (batchCount >= BATCH_SIZE) {
+                        if (batchCount > 0) {
                             insertStmt.executeBatch();
                             commitTarget(ctx, ws);
-                            batchCount = 0;
-                            rowsCopied[0] = rows;
-                            emitDataProgress(ctx, table, totalRows, rows);
                         }
+                        rowsCopied[0] = rows;
+                        emitDataProgress(ctx, table, totalRows, rows);
+                    } finally {
+                        ctx.sessions.untrack(insertStmt);
+                        ctx.sessions.untrack(selectStmt);
+                        ctx.backSqlTask.setStmt(null);
                     }
-                    if (batchCount > 0) {
-                        insertStmt.executeBatch();
-                        commitTarget(ctx, ws);
-                    }
-                    rowsCopied[0] = rows;
-                    emitDataProgress(ctx, table, totalRows, rows);
-                } finally {
-                    ctx.sessions.untrack(insertStmt);
-                    ctx.sessions.untrack(selectStmt);
-                    ctx.backSqlTask.setStmt(null);
                 }
             }
         } catch (SQLException e) {

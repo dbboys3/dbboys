@@ -17,6 +17,7 @@ package com.dbboys.model;
  *   c_target_rows INTEGER                             -- 迁移行数（实际复制到目标，-1 未知）
  *   c_speed       INTEGER                             -- 复制速度（行/秒，-1 未知）
  *   c_error       VARCHAR(3200)                       -- 错误号及错误信息
+ *   c_error_sql   VARCHAR(3200)                       -- 出错时执行的 SQL（双击错误列展示）
  *   c_checksum    VARCHAR(100)                        -- 数据校验结果（预留）
  *   c_info        VARCHAR(3200)                       -- 备注
  * </pre>
@@ -34,6 +35,7 @@ public class MigrationTaskRunItem {
     private long targetRows = -1;
     private long speed = -1;
     private String error = "";
+    private String errorSql = "";
     private String checksum = "";
     private String info = "";
 
@@ -69,6 +71,9 @@ public class MigrationTaskRunItem {
 
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+
+    public String getErrorSql() { return errorSql; }
+    public void setErrorSql(String errorSql) { this.errorSql = errorSql; }
 
     public String getChecksum() { return checksum; }
     public void setChecksum(String checksum) { this.checksum = checksum; }

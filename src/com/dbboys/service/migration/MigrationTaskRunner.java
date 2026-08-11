@@ -139,6 +139,7 @@ public final class MigrationTaskRunner {
                 item.setMigratedRows(record.getTargetRows());
                 item.setSpeed(record.getSpeed());
                 item.setErrorMessage(record.getError());
+                item.setErrorSql(record.getErrorSql());
                 item.setChecksum(record.getChecksum());
                 restored.add(item);
             }
@@ -428,10 +429,11 @@ public final class MigrationTaskRunner {
             record.setSourceRows(item.getRows());
             record.setTargetRows(item.getMigratedRows());
             record.setSpeed(item.getSpeed());
-            // c_error 记录"错误号: 错误信息"（与错误列展示一致）
+            // c_error 记录"错误号: 错误信息"（与错误列展示一致）；c_error_sql 记录出错 SQL（双击错误列可回看）
             String itemError = item.getErrorMessage() == null ? "" : item.getErrorMessage();
             String itemCode = item.getErrorCode() == null ? "" : item.getErrorCode().trim();
             record.setError(itemCode.isEmpty() ? itemError : itemCode + ": " + itemError);
+            record.setErrorSql(item.getErrorSql() == null ? "" : item.getErrorSql());
             record.setChecksum(item.getChecksum() == null ? "" : item.getChecksum());
             runItems.add(record);
         }
