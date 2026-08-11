@@ -413,7 +413,12 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         TableColumn<MigrationRunItem, String> errorColumn = new TableColumn<>();
         errorColumn.textProperty().bind(I18n.bind("migration.detail.column.error", "Error"));
-        errorColumn.setCellValueFactory(cell -> cell.getValue().errorMessageProperty());
+        // 错误列显示"错误号: 错误信息"（无错误号时只显示错误信息）
+        errorColumn.setCellValueFactory(cell -> Bindings.createStringBinding(() -> {
+            String error = cell.getValue().getErrorMessage() == null ? "" : cell.getValue().getErrorMessage();
+            String code = cell.getValue().getErrorCode() == null ? "" : cell.getValue().getErrorCode().trim();
+            return code.isEmpty() ? error : code + ": " + error;
+        }, cell.getValue().errorMessageProperty(), cell.getValue().errorCodeProperty()));
         // 双击错误单元格：弹出出错 SQL + 具体错误
         errorColumn.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
             {
@@ -566,8 +571,11 @@ public class CustomMigrationTaskTab extends CustomTab {
     private static void showErrorDetail(MigrationRunItem item) {
         String sql = item.getErrorSql() == null ? "" : item.getErrorSql().trim();
         String error = item.getErrorMessage() == null ? "" : item.getErrorMessage();
-        String content = sql.isEmpty() ? error
-                : (error.isEmpty() ? sql : sql + "\n\n" + error);
+        String code = item.getErrorCode() == null ? "" : item.getErrorCode().trim();
+        // 错误号及错误信息（历史恢复的行错误号已并入错误文本，无需重复拼接）
+        String codeAndError = code.isEmpty() ? error : code + ": " + error;
+        String content = sql.isEmpty() ? codeAndError
+                : (codeAndError.isEmpty() ? sql : sql + "\n\n" + codeAndError);
         TextArea area = new TextArea(content);
         area.setEditable(false);
         area.setWrapText(true);

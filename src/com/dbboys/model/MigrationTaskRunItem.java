@@ -16,7 +16,7 @@ package com.dbboys.model;
  *   c_source_rows INTEGER                             -- 源表行数（-1 未知）
  *   c_target_rows INTEGER                             -- 迁移行数（实际复制到目标，-1 未知）
  *   c_speed       INTEGER                             -- 复制速度（行/秒，-1 未知）
- *   c_error       VARCHAR(3200)                       -- 错误信息
+ *   c_error       VARCHAR(3200)                       -- 错误号及错误信息
  *   c_checksum    VARCHAR(100)                        -- 数据校验结果（预留）
  *   c_info        VARCHAR(3200)                       -- 备注
  * </pre>

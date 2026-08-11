@@ -428,7 +428,10 @@ public final class MigrationTaskRunner {
             record.setSourceRows(item.getRows());
             record.setTargetRows(item.getMigratedRows());
             record.setSpeed(item.getSpeed());
-            record.setError(item.getErrorMessage() == null ? "" : item.getErrorMessage());
+            // c_error 记录"错误号: 错误信息"（与错误列展示一致）
+            String itemError = item.getErrorMessage() == null ? "" : item.getErrorMessage();
+            String itemCode = item.getErrorCode() == null ? "" : item.getErrorCode().trim();
+            record.setError(itemCode.isEmpty() ? itemError : itemCode + ": " + itemError);
             record.setChecksum(item.getChecksum() == null ? "" : item.getChecksum());
             runItems.add(record);
         }
@@ -490,6 +493,7 @@ public final class MigrationTaskRunner {
         target.setMigratedRows(result.rowsCopied());
         target.setErrorMessage(result.message() == null ? "" : result.message());
         target.setErrorSql(result.errorSql() == null ? "" : result.errorSql());
+        target.setErrorCode(result.errorCode() == null ? "" : result.errorCode());
         target.setSpeed(computeSpeed(result.rowsCopied(), target.getStartMillis(), target.getEndMillis()));
     }
 

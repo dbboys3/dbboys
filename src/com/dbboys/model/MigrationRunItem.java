@@ -93,6 +93,12 @@ public class MigrationRunItem {
     public StringProperty errorSqlProperty() { return errorSql; }
     public void setErrorSql(String errorSql) { this.errorSql.set(errorSql); }
 
+    // --- errorCode（数据库错误号：vendor code 或 SQLState，瞬时） ---
+    private final StringProperty errorCode = new SimpleStringProperty("");
+    public String getErrorCode() { return errorCode.get(); }
+    public StringProperty errorCodeProperty() { return errorCode; }
+    public void setErrorCode(String errorCode) { this.errorCode.set(errorCode); }
+
     // --- checksum（数据校验结果，持久化 c_checksum；预留，暂不做校验操作） ---
     private final StringProperty checksum = new SimpleStringProperty("");
     public String getChecksum() { return checksum.get(); }

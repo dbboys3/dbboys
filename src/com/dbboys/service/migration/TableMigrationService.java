@@ -106,8 +106,8 @@ public class TableMigrationService {
         }
     }
 
-    /** errorSql：出错时正在执行的 SQL（无则 null），明细 tab 双击错误列时展示。 */
-    public record ItemResult(MigrationObjectRef object, ItemStatus status, long rowsCopied, String message, String errorSql) {}
+    /** errorSql：出错时正在执行的 SQL；errorCode：数据库错误号（vendor code，无则 SQLState），无则 null。 */
+    public record ItemResult(MigrationObjectRef object, ItemStatus status, long rowsCopied, String message, String errorSql, String errorCode) {}
 
     public record MigrationSummary(java.util.List<ItemResult> results, boolean cancelled) {
         public long count(ItemStatus status) { return results.stream().filter(r -> r.status() == status).count(); }
@@ -294,7 +294,7 @@ public class TableMigrationService {
                     String reason = errorMessage(e);
                     log(ctx.listener, String.format(
                             I18n.t("migration.log.failed", "%s failed: %s"), object.displayName(), reason));
-                    result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null);
+                    result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
                 }
                 results.add(result);
                 if (ctx.listener != null) {
@@ -324,7 +324,7 @@ public class TableMigrationService {
                                 "Wildcard object %s was not expanded before migration"),
                         displayName);
                 log(ctx.listener, message);
-                return new ItemResult(object, ItemStatus.FAILED, 0, message, null);
+                return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
             }
             MigrationObjectRef.Kind kind = object.kind();
             // PACKAGE 需要源端能打印、目标端能执行
@@ -334,7 +334,7 @@ public class TableMigrationService {
                                 "%s object %s is not supported by source or target platform"),
                         kindLabel(kind), displayName);
                 log(ctx.listener, message);
-                return new ItemResult(object, ItemStatus.FAILED, 0, message, null);
+                return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
             }
 
             Set<String> existing = ctx.existingNames.get(kind);
@@ -344,12 +344,7 @@ public class TableMigrationService {
             synchronized (ddlLock) {
                 exists = existing != null && existing.contains(normalizeName(objectName));
 
-                if (!exists && !request.migrateDdl()) {
-                    String reason = "target object does not exist (DDL migration disabled)";
-                    log(ctx.listener, String.format(
-                            I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-                    return new ItemResult(object, ItemStatus.FAILED, 0, reason, null);
-                }
+                // 目标不存在且未勾选迁移结构时不做预检拦截：继续执行，由目标库返回原始错误号和报错
                 if (exists && request.overwrite() && request.migrateDdl()) {
                     String dropSql = buildDropSql(ctx, object);
                     if (dropSql == null) {
@@ -357,7 +352,7 @@ public class TableMigrationService {
                         String reason = "cannot resolve trigger's table for DROP";
                         log(ctx.listener, String.format(
                                 I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-                        return new ItemResult(object, ItemStatus.FAILED, 0, reason, null);
+                        return new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
                     }
                     executeTargetStatement(ctx, ws, dropSql);
                     commitTarget(ctx, ws);
@@ -395,12 +390,12 @@ public class TableMigrationService {
                         I18n.t("migration.log.data_ok", "%s data migrated, %d rows copied"),
                         displayName, rowsCopied[0]));
             }
-            return new ItemResult(object, ItemStatus.SUCCESS, rowsCopied[0], null, null);
+            return new ItemResult(object, ItemStatus.SUCCESS, rowsCopied[0], null, null, null);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             rollbackTargetQuietly(ctx, ws);
-            // SqlFailedException 解包：取原始错误信息 + 出错 SQL
+            // SqlFailedException 解包：取出错 SQL；驱动链式包装（如 BatchUpdateException）下钻到链尾真实错误
             String errorSql = null;
             if (e instanceof SqlFailedException sqlFailed) {
                 errorSql = sqlFailed.getSql();
@@ -408,10 +403,22 @@ public class TableMigrationService {
                     e = cause;
                 }
             }
+            while (e instanceof SQLException sqlEx && sqlEx.getNextException() != null) {
+                e = sqlEx.getNextException();
+            }
+            // 数据库错误号：vendor code 优先，无则 SQLState
+            String errorCode = null;
+            if (e instanceof SQLException sqlEx) {
+                if (sqlEx.getErrorCode() != 0) {
+                    errorCode = String.valueOf(sqlEx.getErrorCode());
+                } else if (sqlEx.getSQLState() != null && !sqlEx.getSQLState().isBlank()) {
+                    errorCode = sqlEx.getSQLState();
+                }
+            }
             String reason = errorMessage(e);
             log(ctx.listener, String.format(
                     I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-            return new ItemResult(object, ItemStatus.FAILED, rowsCopied[0], reason, errorSql);
+            return new ItemResult(object, ItemStatus.FAILED, rowsCopied[0], reason, errorSql, errorCode);
         }
     }
 
@@ -997,7 +1004,11 @@ public class TableMigrationService {
         return value == null || value.isBlank() ? null : value;
     }
 
+    /** 原始错误文本：驱动链式包装（如 BatchUpdateException）取链尾的真实 DB 错误，不再二次包装。 */
     private static String errorMessage(Exception e) {
+        while (e instanceof SQLException sqlEx && sqlEx.getNextException() != null) {
+            e = sqlEx.getNextException();
+        }
         String message = e.getMessage();
         return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
     }
