@@ -25,11 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   c_target_id       INTEGER                             -- 目标连接ID（t_connect.c_id）
  *   c_target_database VARCHAR(200)                        -- 目标库（按目标平台目录模型解释）
  *   c_target_schema   VARCHAR(200)                        -- 目标模式
- *   c_migrate_ddl     INT                                 -- 迁移结构 1/0
- *   c_migrate_data    INT                                 -- 迁移数据 1/0
- *   c_overwrite       INT                                 -- 覆盖目标已存在对象 1/0
- *   c_truncate_table  INT                                 -- 迁移数据前清空目标表 1/0
- *   c_thread_count    INT                                 -- 迁移线程数（>=1）
+ *   c_options         TEXT                                -- 配置参数 JSON：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"threads":4}
  *   c_objects         TEXT                                -- 迁移对象 JSON 数组（见 MigrationObjectRef）
  *   c_info            VARCHAR(3200)                       -- 备注
  * </pre>
@@ -130,6 +126,45 @@ public class MigrationTask extends TreeData {
     public int getThreadCount() { return threadCount.get(); }
     public IntegerProperty threadCountProperty() { return threadCount; }
     public void setThreadCount(int threadCount) { this.threadCount.set(Math.max(1, threadCount)); }
+
+    // --- 配置参数（迁移结构/迁移数据/覆盖/清空表/线程数，持久化为单列 c_options JSON） ---
+    /** 编码配置参数：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"threads":4}。 */
+    public String encodeOptions() {
+        org.json.JSONObject obj = new org.json.JSONObject();
+        obj.put("ddl", isMigrateDdl() ? 1 : 0);
+        obj.put("data", isMigrateData() ? 1 : 0);
+        obj.put("overwrite", isOverwrite() ? 1 : 0);
+        obj.put("truncate", isTruncateTable() ? 1 : 0);
+        obj.put("threads", getThreadCount());
+        return obj.toString();
+    }
+
+    /** 解码配置参数 JSON；字段缺失/损坏时保持当前值（默认结构+数据开、覆盖+清空关、单线程）。 */
+    public void decodeOptions(String json) {
+        if (json == null || json.isBlank()) {
+            return;
+        }
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject(json);
+            if (obj.has("ddl")) {
+                setMigrateDdl(obj.optInt("ddl", 1) != 0);
+            }
+            if (obj.has("data")) {
+                setMigrateData(obj.optInt("data", 1) != 0);
+            }
+            if (obj.has("overwrite")) {
+                setOverwrite(obj.optInt("overwrite", 0) != 0);
+            }
+            if (obj.has("truncate")) {
+                setTruncateTable(obj.optInt("truncate", 0) != 0);
+            }
+            if (obj.has("threads")) {
+                setThreadCount(obj.optInt("threads", 1));
+            }
+        } catch (Exception ignored) {
+            // 容忍损坏数据，保持默认值
+        }
+    }
 
     // --- objectsJson ---
     public String getObjectsJson() { return objectsJson.get(); }
