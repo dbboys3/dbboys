@@ -88,7 +88,10 @@ public class MigrationMappingDialogController {
                 cancelType);
         Button addButton = dialog.getButton(addType);
         addButton.getStyleClass().add("small");
-        addButton.setOnAction(e -> addRow("", "", ""));
+        addButton.setOnAction(e -> {
+            addRow("", "", "");
+            scrollToBottom();
+        });
         Button resetButton = dialog.getButton(resetType);
         resetButton.getStyleClass().add("small");
         resetButton.setOnAction(e -> resetRows());
@@ -159,6 +162,7 @@ public class MigrationMappingDialogController {
         return content;
     }
 
+    /** 全量重建仅在删除/重置行时调用（重新编号行）；新增行走追加，避免 O(n²) 重复布局抖动。 */
     private void rebuildGrid() {
         rowsGrid.getChildren().clear();
         int rowIndex = 0;
@@ -190,12 +194,13 @@ public class MigrationMappingDialogController {
         row.targetBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(row.targetType, Priority.ALWAYS);
         rows.add(row);
-        rebuildGrid();
-        scrollToBottom();
+        // 直接追加到网格尾部，不做全量重建
+        rowsGrid.addRow(rows.size() - 1, row.sourceType, row.targetBox);
     }
 
     private void resetRows() {
         rows.clear();
+        rowsGrid.getChildren().clear();
         if (sourceTypes.isEmpty()) {
             addRow("", "", "");
         } else {
