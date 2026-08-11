@@ -46,9 +46,9 @@ public class MigrationTask extends TreeData {
     private final StringProperty targetSchema = new SimpleStringProperty();
     private final BooleanProperty migrateDdl = new SimpleBooleanProperty(true);
     private final BooleanProperty migrateData = new SimpleBooleanProperty(true);
-    private final BooleanProperty overwrite = new SimpleBooleanProperty(false);
-    private final BooleanProperty truncateTable = new SimpleBooleanProperty(false);
-    private final IntegerProperty threadCount = new SimpleIntegerProperty(1);
+    private final BooleanProperty overwrite = new SimpleBooleanProperty(true);
+    private final BooleanProperty truncateTable = new SimpleBooleanProperty(true);
+    private final IntegerProperty threadCount = new SimpleIntegerProperty(10);
     private final StringProperty objectsJson = new SimpleStringProperty("[]");
     private final StringProperty mappingsJson = new SimpleStringProperty("{}");
     private final StringProperty info = new SimpleStringProperty();

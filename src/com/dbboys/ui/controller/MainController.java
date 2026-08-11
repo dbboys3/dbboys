@@ -1541,6 +1541,8 @@ public class MainController {
                 result.setParentId(task.getParentId());
             }
             com.dbboys.infra.db.LocalDbRepository.updateMigrationTask(result);
+            // 编辑后运行状态重置为与新建任务一致（未开始、无运行记录）
+            com.dbboys.service.migration.MigrationTaskRunner.resetRunState(result);
             migrationTreeView.refresh();
             if (dlg.isStartRequested()) {
                 com.dbboys.service.migration.MigrationTaskRunner.start(result);

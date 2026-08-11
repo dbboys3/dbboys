@@ -7,6 +7,7 @@ import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.MigrationRunItem;
 import com.dbboys.model.MigrationTask;
 import com.dbboys.service.migration.MigrationTaskRunner;
+import com.dbboys.ui.controller.MigrationDialogController;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
@@ -41,7 +42,8 @@ import java.util.Set;
  * <p>
  * 头部：启动/停止按钮（直接调 {@link MigrationTaskRunner}）、源→目标描述
  * （连接名/库·模式，连接名按 sourceId/targetId 从
- * {@link LocalDbRepository#getConnectLeafs()} 解析，解析失败显示 "?"）。
+ * {@link LocalDbRepository#getConnectLeafs()} 解析，解析失败显示 "?"）、
+ * 右端编辑按钮（打开任务编辑框，保存后同步路由与明细预览）。
  * <p>
  * 主体：明细 TableView，items 直接绑定 {@link MigrationTask#getRunItems()}（瞬时，
  * 由 {@link MigrationTaskRunner} 在 FX 线程维护）；列宽不压缩、超出可横向滚动；
@@ -60,11 +62,15 @@ public class CustomMigrationTaskTab extends CustomTab {
     private final Label progressLabel = new Label();
     private final Label timeLabel = new Label();
     private final Label currentObjectLabel = new Label();
+    private final Label routeLabel = new Label();
     private final FilteredList<MigrationRunItem> filteredItems;
     private final TableView<MigrationRunItem> detailTable;
     /** 每秒把实时进度（volatile 字段）搬进 FX 属性，驱动明细表刷新。 */
     private final javafx.animation.Timeline refreshTimeline = new javafx.animation.Timeline(
             new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> tickLiveProgress()));
+    /** 任务定义（源/目标/对象清单）被编辑时合并刷新路由与明细预览；dispose 时摘除。 */
+    private final ChangeListener<Object> taskDefListener = (obs, oldVal, newVal) -> scheduleEditSync();
+    private boolean editSyncPending;
     private Button successFilterButton;
     private Button failureFilterButton;
     private FilterMode filterMode = FilterMode.ALL;
@@ -97,7 +103,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         textProperty().bind(task.nameProperty());
 
         // ---- 头部信息区 ----
-        Label routeLabel = new Label(buildRouteText());
+        routeLabel.setText(buildRouteText());
 
         Button startButton = new Button();
         startButton.textProperty().bind(I18n.bind("migration.menu.start", "Start"));
@@ -129,7 +135,21 @@ public class CustomMigrationTaskTab extends CustomTab {
         successFilterButton = createFilterButton(true);
         failureFilterButton = createFilterButton(false);
 
-        HBox headerRow = new HBox(10, startButton, stopButton, routeLabel);
+        // 编辑任务（头部右端图标按钮）：运行中禁用，与树右键菜单一致
+        Button editButton = new Button();
+        editButton.setGraphic(IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7));
+        editButton.getStyleClass().add("custom-button");
+        editButton.setFocusTraversable(false);
+        editButton.disableProperty().bind(
+                task.runStateProperty().isEqualTo(MigrationTask.RunState.RUNNING));
+        Tooltip editTip = new Tooltip();
+        editTip.textProperty().bind(I18n.bind("migration.menu.edit", "Edit"));
+        editButton.setTooltip(editTip);
+        editButton.setOnAction(event -> editTask());
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        HBox headerRow = new HBox(10, startButton, stopButton, routeLabel, headerSpacer, editButton);
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         progressBar.setPrefWidth(220);
@@ -182,6 +202,12 @@ public class CustomMigrationTaskTab extends CustomTab {
             item.statusProperty().addListener(rowStatusListener);
         }
         task.getRunItems().addListener(runItemsListener);
+        // 任务定义被编辑（本 tab 或树右键入口）时同步路由与明细预览
+        task.objectsJsonProperty().addListener(taskDefListener);
+        task.targetDatabaseProperty().addListener(taskDefListener);
+        task.targetSchemaProperty().addListener(taskDefListener);
+        task.sourceIdProperty().addListener(taskDefListener);
+        task.targetIdProperty().addListener(taskDefListener);
         refreshProgress();
 
         // 每秒刷新一次明细表（实时行数/速度）
@@ -198,10 +224,52 @@ public class CustomMigrationTaskTab extends CustomTab {
     private void dispose() {
         refreshTimeline.stop();
         task.getRunItems().removeListener(runItemsListener);
+        task.objectsJsonProperty().removeListener(taskDefListener);
+        task.targetDatabaseProperty().removeListener(taskDefListener);
+        task.targetSchemaProperty().removeListener(taskDefListener);
+        task.sourceIdProperty().removeListener(taskDefListener);
+        task.targetIdProperty().removeListener(taskDefListener);
         for (MigrationRunItem item : task.getRunItems()) {
             item.statusProperty().removeListener(rowStatusListener);
         }
         textProperty().unbind();
+    }
+
+    /** 头部编辑按钮：打开任务编辑框；保存后落库并重置运行状态（路由/明细刷新由 taskDefListener 触发）。 */
+    private void editTask() {
+        if (task.isRunning()) {
+            AlertUtil.CustomAlert(I18n.t("common.hint", "Hint"),
+                    I18n.t("migration.error.task_running", "Task is running, stop it first"));
+            return;
+        }
+        MigrationDialogController dialog = new MigrationDialogController();
+        MigrationTask result = dialog.showAndWait(task, LocalDbRepository.getConnectLeafs());
+        if (result == null) {
+            return;
+        }
+        // 编辑框在同一任务对象上原地修改，直接落库；运行状态重置为与新建任务一致
+        LocalDbRepository.updateMigrationTask(result);
+        MigrationTaskRunner.resetRunState(task);
+        if (dialog.isStartRequested()) {
+            MigrationTaskRunner.start(task);
+        }
+    }
+
+    /** 合并到下一次 FX 脉冲刷新：一次保存会连改多个定义属性，避免重复展开对象清单。 */
+    private void scheduleEditSync() {
+        if (editSyncPending) {
+            return;
+        }
+        editSyncPending = true;
+        javafx.application.Platform.runLater(() -> {
+            editSyncPending = false;
+            if (task.isRunning()) {
+                return;
+            }
+            routeLabel.setText(buildRouteText());
+            task.getRunItems().clear();
+            MigrationTaskRunner.prepareRunItems(task, true);
+        });
     }
 
     // ==================================================================

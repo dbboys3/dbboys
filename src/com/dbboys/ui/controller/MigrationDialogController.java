@@ -5,6 +5,7 @@ import com.dbboys.app.AppState;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.PlatformResolvers;
+import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Database;
@@ -164,6 +165,11 @@ public class MigrationDialogController {
         return startRequested;
     }
 
+    /** 是否新建任务（未持久化过）：新建入口传入的是 id=0 的新对象，编辑入口为已持久化任务。 */
+    private boolean isNewTask() {
+        return editingTask == null || editingTask.getId() == 0;
+    }
+
     // ==================================================================
     // UI 构建
     // ==================================================================
@@ -223,10 +229,11 @@ public class MigrationDialogController {
         Label optionsLabel = boundLabel("migration.label.options", "Options");
         ddlCheckBox = boundCheckBox("migration.check.ddl", "Migrate table structure (DDL)", true);
         dataCheckBox = boundCheckBox("migration.check.data", "Migrate data", true);
-        truncateCheckBox = boundCheckBox("migration.check.truncate", "Clear table", false);
+        // 默认勾选：清空表、覆盖目标已存在的对象
+        truncateCheckBox = boundCheckBox("migration.check.truncate", "Clear table", true);
         // 不迁移数据时"清空表"无意义，禁用
         truncateCheckBox.disableProperty().bind(dataCheckBox.selectedProperty().not());
-        overwriteCheckBox = boundCheckBox("migration.check.overwrite", "Overwrite existing tables", false);
+        overwriteCheckBox = boundCheckBox("migration.check.overwrite", "Overwrite existing tables", true);
         editMappingButton = new Button();
         editMappingButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
         editMappingButton.getStyleClass().add("small");
@@ -792,6 +799,8 @@ public class MigrationDialogController {
         for (MigrationObjectRef.Kind kind : allKinds()) {
             TypeSelection ts = new TypeSelection(kind);
             ts.checkBox = new CheckBox();
+            // 新建任务默认勾选"表"类型；编辑已有任务时由 refs 回显覆盖
+            ts.checkBox.setSelected(kind == MigrationObjectRef.Kind.TABLE && isNewTask());
             ts.checkBox.textProperty().bind(I18n.bind(kindKey(kind), kindFallback(kind)));
             ts.checkBox.setFocusTraversable(false);
             ts.checkBox.selectedProperty().addListener(
@@ -1131,6 +1140,18 @@ public class MigrationDialogController {
         if (nameField.getText() == null || nameField.getText().isBlank()) {
             showError(I18n.t("migration.error.no_name", "Please enter a task name"));
             return false;
+        }
+        // 新建任务：任务名不能与现有任务重复（大小写不敏感）
+        if (isNewTask()) {
+            String newName = nameField.getText().trim();
+            for (MigrationTask existing : LocalDbRepository.getAllMigrationTasks()) {
+                if (existing != null && existing.getName() != null
+                        && existing.getName().equalsIgnoreCase(newName)) {
+                    showError(String.format(I18n.t("migration.error.name_exists",
+                            "Task name \"%s\" is already in use"), newName));
+                    return false;
+                }
+            }
         }
         Connect source = sourceChoiceBox.getValue();
         Connect target = targetChoiceBox.getValue();

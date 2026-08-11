@@ -101,11 +101,21 @@ public final class MigrationTaskRunner {
      * 用 PENDING 行预填 {@link MigrationTask#getRunItems()}（仅展示，不启动迁移）。
      */
     public static void prepareRunItems(MigrationTask task) {
+        prepareRunItems(task, false);
+    }
+
+    /**
+     * 同 {@link #prepareRunItems(MigrationTask)}；forcePreview=true 时跳过历史记录恢复，
+     * 直接按当前对象清单展开预填（任务定义刚被编辑过时用）。
+     */
+    public static void prepareRunItems(MigrationTask task, boolean forcePreview) {
         if (task == null || task.isRunning() || !task.getRunItems().isEmpty()) {
             return;
         }
         // 有历史运行记录时直接恢复上次逐对象结果
-        List<MigrationTaskRunItem> latestItems = LocalDbRepository.getMigrationTaskRunItems(task.getId());
+        List<MigrationTaskRunItem> latestItems = forcePreview
+                ? List.of()
+                : LocalDbRepository.getMigrationTaskRunItems(task.getId());
         if (!latestItems.isEmpty()) {
             List<MigrationRunItem> restored = new ArrayList<>(latestItems.size());
             for (MigrationTaskRunItem record : latestItems) {
@@ -423,6 +433,19 @@ public final class MigrationTaskRunner {
             runItems.add(record);
         }
         LocalDbRepository.createMigrationTaskRunItems(runItems);
+    }
+
+    /** 任务定义变更后重置运行状态：树/详情展示与新建任务一致（未开始、无运行记录）。 */
+    public static void resetRunState(MigrationTask task) {
+        if (task == null) {
+            return;
+        }
+        task.setLastRunResult(MigrationTask.RunResult.NONE);
+        task.setLastStartTime("");
+        task.setLastEndTime("");
+        task.setRunCountsJson("{}");
+        LocalDbRepository.updateMigrationTaskRunInfo(task.getId(), "", "", "{}");
+        LocalDbRepository.deleteMigrationTaskRunItemsByTask(task.getId());
     }
 
     // ==================================================================
