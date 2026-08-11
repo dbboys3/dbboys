@@ -93,6 +93,12 @@ public class MigrationRunItem {
     public StringProperty errorSqlProperty() { return errorSql; }
     public void setErrorSql(String errorSql) { this.errorSql.set(errorSql); }
 
+    // --- checksum（数据校验结果，持久化 c_checksum；预留，暂不做校验操作） ---
+    private final StringProperty checksum = new SimpleStringProperty("");
+    public String getChecksum() { return checksum.get(); }
+    public StringProperty checksumProperty() { return checksum; }
+    public void setChecksum(String checksum) { this.checksum.set(checksum); }
+
     // --- 起止时刻毫秒（瞬时不落库；速度计算用，0=未知） ---
     private transient long startMillis;
     private transient long endMillis;

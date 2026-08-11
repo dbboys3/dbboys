@@ -125,16 +125,11 @@ public final class MigrationTaskRunner {
                 item.setStatus(status);
                 item.setStartTime(record.getStartTime());
                 item.setEndTime(record.getEndTime());
-                // c_rows=已迁移行数；成功行的源表行数=迁移行数，其余源表行数未知（-1 显示空白）
-                item.setMigratedRows(record.getRows());
-                item.setRows(status == MigrationRunItem.Status.SUCCESS ? record.getRows() : -1);
+                item.setRows(record.getSourceRows());
+                item.setMigratedRows(record.getTargetRows());
+                item.setSpeed(record.getSpeed());
                 item.setErrorMessage(record.getError());
-                // 起止时间回算毫秒，能算则补速度列（旧格式 HH:mm:ss 解析失败则不显示）
-                long startMillis = parseRunItemTime(record.getStartTime());
-                long endMillis = parseRunItemTime(record.getEndTime());
-                item.setStartMillis(startMillis);
-                item.setEndMillis(endMillis);
-                item.setSpeed(computeSpeed(record.getRows(), startMillis, endMillis));
+                item.setChecksum(record.getChecksum());
                 restored.add(item);
             }
             task.getRunItems().setAll(restored);
@@ -420,9 +415,11 @@ public final class MigrationTaskRunner {
             record.setStatus(item.getStatus() == null ? "" : item.getStatus().name());
             record.setStartTime(item.getStartTime() == null ? "" : item.getStartTime());
             record.setEndTime(item.getEndTime() == null ? "" : item.getEndTime());
-            // c_rows 保持"已迁移行数"语义（源表行数不持久化）
-            record.setRows(item.getMigratedRows());
+            record.setSourceRows(item.getRows());
+            record.setTargetRows(item.getMigratedRows());
+            record.setSpeed(item.getSpeed());
             record.setError(item.getErrorMessage() == null ? "" : item.getErrorMessage());
+            record.setChecksum(item.getChecksum() == null ? "" : item.getChecksum());
             runItems.add(record);
         }
         LocalDbRepository.createMigrationTaskRunItems(runItems);
@@ -509,18 +506,5 @@ public final class MigrationTaskRunner {
             return -1;
         }
         return rows * 1000 / Math.max(1, endMillis - startMillis);
-    }
-
-    /** 解析明细行时间（yyyy-MM-dd HH:mm:ss）为 epoch 毫秒；空白/旧格式解析失败返回 0。 */
-    private static long parseRunItemTime(String text) {
-        if (text == null || text.isBlank()) {
-            return 0;
-        }
-        try {
-            return LocalDateTime.parse(text, RUN_ITEM_TIME_FORMAT)
-                    .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
-        } catch (Exception e) {
-            return 0;
-        }
     }
 }

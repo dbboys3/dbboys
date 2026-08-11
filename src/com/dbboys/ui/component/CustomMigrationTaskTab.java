@@ -389,9 +389,15 @@ public class CustomMigrationTaskTab extends CustomTab {
         // 错误信息列固定初始宽度：列总宽超出表格时允许横向滚动（CustomTableView 为 UNCONSTRAINED 策略）
         errorColumn.setPrefWidth(400);
 
+        TableColumn<MigrationRunItem, String> verifyColumn = new TableColumn<>();
+        verifyColumn.textProperty().bind(I18n.bind("migration.detail.column.verify", "Verify"));
+        // 数据校验列：展示持久化的校验结果（c_checksum），暂不做校验操作
+        verifyColumn.setCellValueFactory(cell -> cell.getValue().checksumProperty());
+        verifyColumn.setPrefWidth(90);
+
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
-                startColumn, endColumn, rowsColumn, migratedColumn, speedColumn, errorColumn));
+                startColumn, endColumn, rowsColumn, migratedColumn, speedColumn, errorColumn, verifyColumn));
         return table;
     }
 
