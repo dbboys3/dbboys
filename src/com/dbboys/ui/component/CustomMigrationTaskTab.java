@@ -413,15 +413,12 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         TableColumn<MigrationRunItem, String> errorColumn = new TableColumn<>();
         errorColumn.textProperty().bind(I18n.bind("migration.detail.column.error", "Error"));
-        // 错误列依次显示：错误号: 错误信息，错误SQL 放最后（无错误号/SQL 时省略对应部分）
+        // 错误列只显示"错误号: 错误信息"（SQL 不显示，双击查看）
         errorColumn.setCellValueFactory(cell -> Bindings.createStringBinding(() -> {
             String error = cell.getValue().getErrorMessage() == null ? "" : cell.getValue().getErrorMessage();
             String code = cell.getValue().getErrorCode() == null ? "" : cell.getValue().getErrorCode().trim();
-            String sql = cell.getValue().getErrorSql() == null ? "" : cell.getValue().getErrorSql().trim();
-            String codeAndError = code.isEmpty() ? error : code + ": " + error;
-            return sql.isEmpty() ? codeAndError : codeAndError + "\n" + sql;
-        }, cell.getValue().errorMessageProperty(), cell.getValue().errorCodeProperty(),
-                cell.getValue().errorSqlProperty()));
+            return code.isEmpty() ? error : code + ": " + error;
+        }, cell.getValue().errorMessageProperty(), cell.getValue().errorCodeProperty()));
         // 双击错误单元格：弹出出错 SQL + 具体错误
         errorColumn.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
             {

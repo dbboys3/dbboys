@@ -70,6 +70,8 @@ public  class LocalDbRepository {
                 + "c_run_counts TEXT)");
         
         execIgnore("create table if not exists t_migration_task_run_item(c_id INTEGER PRIMARY KEY AUTOINCREMENT,c_task_id INTEGER,c_kind varchar(20),c_name varchar(500),c_status varchar(20),c_start_time varchar(20),c_end_time varchar(20),c_source_rows INTEGER,c_target_rows INTEGER,c_speed INTEGER,c_error varchar(3200),c_error_sql varchar(3200),c_checksum varchar(100),c_info varchar(3200))");
+        // 老版本 t_migration_task_run_item 补列：出错 SQL（幂等，已存在则忽略）
+        execIgnore("ALTER TABLE t_migration_task_run_item ADD COLUMN c_error_sql varchar(3200)");
 
         /*老版本升级后t_connect可能少了ssh相关字段，需要加上 */
         String[][] sshColumns = {
