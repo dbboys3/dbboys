@@ -159,7 +159,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_USER_TABLES_COUNT = """
-            select count(*) from systables where tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION')  and tabtype='T'
+            select count(*) from systables where tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION')  and tabtype in ('T','E')
             """;
 
     private static final String SQL_USER_TABLES_SIZE = """

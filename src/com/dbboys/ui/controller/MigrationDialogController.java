@@ -36,9 +36,8 @@ import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.Spinner;
-import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -78,8 +77,8 @@ import java.util.Set;
  */
 public class MigrationDialogController {
     private static final Logger log = LogManager.getLogger(MigrationDialogController.class);
-    private static final double DIALOG_W = 555;
-    private static final double DIALOG_H = 478;
+    private static final double DIALOG_W = 680;
+    private static final double DIALOG_H = 500;
 
     private Stage dialogStage;
     private TextField nameField;
@@ -97,7 +96,7 @@ public class MigrationDialogController {
     private CheckBox dataCheckBox;
     private CheckBox truncateCheckBox;
     private CheckBox overwriteCheckBox;
-    private Spinner<Integer> threadCountSpinner;
+    private TextField threadCountField;
     private Button editMappingButton;
     private VBox typeRowsBox;
 
@@ -219,10 +218,6 @@ public class MigrationDialogController {
         Label objectsLabel = boundLabel("migration.label.objects", "Objects to Migrate");
         typeRowsBox = new VBox(6);
         typeRowsBox.setPadding(new Insets(4, 0, 0, 12));
-        Label scopeHint = new Label();
-        scopeHint.textProperty().bind(I18n.bind("migration.hint.scope",
-                "Note: migration runs within the selected catalogs/schemas."));
-        scopeHint.setWrapText(true);
 
         // ---- 选项（对象列表下方）----
         Label optionsLabel = boundLabel("migration.label.options", "Options");
@@ -240,16 +235,18 @@ public class MigrationDialogController {
         editMappingButton.setTooltip(mappingTip);
         editMappingButton.setOnAction(e -> openMappingDialog());
         Label threadCountLabel = boundLabel("migration.label.thread_count", "Threads");
-        threadCountSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 16, 1));
-        threadCountSpinner.setPrefWidth(80);
-        threadCountSpinner.setFocusTraversable(false);
-        HBox optionsRow = new HBox(14, overwriteCheckBox, threadCountLabel, threadCountSpinner);
+        // 线程数用普通输入框：默认 10，仅允许数字，保存时解析（非法输入回退 10）
+        threadCountField = new TextField("10");
+        threadCountField.setPrefWidth(80);
+        threadCountField.setTextFormatter(new TextFormatter<>(change ->
+                change.getControlNewText().matches("\\d*") ? change : null));
+        HBox optionsRow = new HBox(14, overwriteCheckBox, threadCountLabel, threadCountField);
         optionsRow.setPadding(new Insets(0, 0, 0, 12));
         optionsRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
         optionsBox.setPadding(new Insets(6, 0, 0, 0));
 
-        VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, optionsBox, scopeHint);
+        VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, optionsBox);
         VBox.setVgrow(middleBox, Priority.ALWAYS);
 
         // ---- 底部按钮：保存(accent) / 保存并启动 / 关闭 ----
@@ -337,7 +334,7 @@ public class MigrationDialogController {
             dataCheckBox.setSelected(editingTask.isMigrateData());
             truncateCheckBox.setSelected(editingTask.isTruncateTable());
             overwriteCheckBox.setSelected(editingTask.isOverwrite());
-            threadCountSpinner.getValueFactory().setValue(Math.max(1, editingTask.getThreadCount()));
+            threadCountField.setText(String.valueOf(Math.max(1, editingTask.getThreadCount())));
             selectConnectById(sourceChoiceBox, editingTask.getSourceId());
             selectConnectById(targetChoiceBox, editingTask.getTargetId());
             // 类型行已在源连接选择监听器里同步重建，这里按 refs 勾选/恢复自定义集
@@ -383,8 +380,10 @@ public class MigrationDialogController {
 
     private static ChoiceBox<Connect> connectChoiceBox() {
         ChoiceBox<Connect> choiceBox = new ChoiceBox<>();
-        choiceBox.setPrefWidth(260);
+        choiceBox.setPrefWidth(265);
         choiceBox.setFocusTraversable(false);
+        choiceBox.setStyle("-fx-pref-width: 265px;");   
+
         // 与 SQL 编辑面板连接选择器一致（SqlTab.fxml）
         choiceBox.getStyleClass().add("custom-connectname-choicebox");
         choiceBox.setConverter(new StringConverter<>() {
@@ -403,8 +402,8 @@ public class MigrationDialogController {
 
     private static ChoiceBox<String> stringChoiceBox() {
         ChoiceBox<String> choiceBox = new ChoiceBox<>();
-        choiceBox.setPrefWidth(200);
-        choiceBox.setStyle("-fx-pref-width: 200px;");
+        choiceBox.setPrefWidth(265);
+        choiceBox.setStyle("-fx-pref-width: 265px;");   
         choiceBox.setFocusTraversable(false);
         // 与 SQL 编辑面板库/模式选择器一致（SqlTab.fxml）
         choiceBox.getStyleClass().add("custom-dbname-choicebox");
@@ -1184,7 +1183,13 @@ public class MigrationDialogController {
         task.setMigrateData(dataCheckBox.isSelected());
         task.setTruncateTable(truncateCheckBox.isSelected());
         task.setOverwrite(overwriteCheckBox.isSelected());
-        task.setThreadCount(threadCountSpinner.getValue() == null ? 1 : threadCountSpinner.getValue());
+        // 线程数输入框：非法输入/小于 1 回退为默认值 10
+        int threadCount = 10;
+        try {
+            threadCount = Math.max(1, Integer.parseInt(threadCountField.getText().trim()));
+        } catch (NumberFormatException ignored) {
+        }
+        task.setThreadCount(threadCount);
         task.setObjectRefs(collectObjectRefs());
         task.setMappings(mappings);
         resultTask = task;
