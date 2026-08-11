@@ -129,6 +129,14 @@ public class TabpaneUtil {
         tabPane().getSelectionModel().select(tab);
     }
 
+    /** 任务被编辑保存后同步已打开的明细 tab（未打开则空操作）。 */
+    public static void refreshMigrationTaskTabIfOpen(int taskId) {
+        Tab existing = findTabByUserData(TAB_KEY_MIGRATION_TASK + taskId);
+        if (existing instanceof CustomMigrationTaskTab tab) {
+            tab.refreshAfterEdit();
+        }
+    }
+
 
     private static void refreshSqlTabHeaderLayout() {
         TabPane sqlTabPane = tabPane();

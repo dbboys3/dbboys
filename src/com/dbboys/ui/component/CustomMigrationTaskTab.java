@@ -68,9 +68,6 @@ public class CustomMigrationTaskTab extends CustomTab {
     /** 每秒把实时进度（volatile 字段）搬进 FX 属性，驱动明细表刷新。 */
     private final javafx.animation.Timeline refreshTimeline = new javafx.animation.Timeline(
             new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> tickLiveProgress()));
-    /** 任务定义（源/目标/对象清单）被编辑时合并刷新路由与明细预览；dispose 时摘除。 */
-    private final ChangeListener<Object> taskDefListener = (obs, oldVal, newVal) -> scheduleEditSync();
-    private boolean editSyncPending;
     private Button successFilterButton;
     private Button failureFilterButton;
     private FilterMode filterMode = FilterMode.ALL;
@@ -202,12 +199,6 @@ public class CustomMigrationTaskTab extends CustomTab {
             item.statusProperty().addListener(rowStatusListener);
         }
         task.getRunItems().addListener(runItemsListener);
-        // 任务定义被编辑（本 tab 或树右键入口）时同步路由与明细预览
-        task.objectsJsonProperty().addListener(taskDefListener);
-        task.targetDatabaseProperty().addListener(taskDefListener);
-        task.targetSchemaProperty().addListener(taskDefListener);
-        task.sourceIdProperty().addListener(taskDefListener);
-        task.targetIdProperty().addListener(taskDefListener);
         refreshProgress();
 
         // 每秒刷新一次明细表（实时行数/速度）
@@ -224,18 +215,13 @@ public class CustomMigrationTaskTab extends CustomTab {
     private void dispose() {
         refreshTimeline.stop();
         task.getRunItems().removeListener(runItemsListener);
-        task.objectsJsonProperty().removeListener(taskDefListener);
-        task.targetDatabaseProperty().removeListener(taskDefListener);
-        task.targetSchemaProperty().removeListener(taskDefListener);
-        task.sourceIdProperty().removeListener(taskDefListener);
-        task.targetIdProperty().removeListener(taskDefListener);
         for (MigrationRunItem item : task.getRunItems()) {
             item.statusProperty().removeListener(rowStatusListener);
         }
         textProperty().unbind();
     }
 
-    /** 头部编辑按钮：打开任务编辑框；保存后落库并重置运行状态（路由/明细刷新由 taskDefListener 触发）。 */
+    /** 头部编辑按钮：打开任务编辑框；保存后落库、重置运行状态并刷新本页。 */
     private void editTask() {
         if (task.isRunning()) {
             AlertUtil.CustomAlert(I18n.t("common.hint", "Hint"),
@@ -250,26 +236,20 @@ public class CustomMigrationTaskTab extends CustomTab {
         // 编辑框在同一任务对象上原地修改，直接落库；运行状态重置为与新建任务一致
         LocalDbRepository.updateMigrationTask(result);
         MigrationTaskRunner.resetRunState(task);
+        refreshAfterEdit();
         if (dialog.isStartRequested()) {
             MigrationTaskRunner.start(task);
         }
     }
 
-    /** 合并到下一次 FX 脉冲刷新：一次保存会连改多个定义属性，避免重复展开对象清单。 */
-    private void scheduleEditSync() {
-        if (editSyncPending) {
+    /** 任务编辑保存后同步本页：路由描述重建，明细行按新对象清单重新预填（跳过历史恢复）。 */
+    public void refreshAfterEdit() {
+        if (task.isRunning()) {
             return;
         }
-        editSyncPending = true;
-        javafx.application.Platform.runLater(() -> {
-            editSyncPending = false;
-            if (task.isRunning()) {
-                return;
-            }
-            routeLabel.setText(buildRouteText());
-            task.getRunItems().clear();
-            MigrationTaskRunner.prepareRunItems(task, true);
-        });
+        routeLabel.setText(buildRouteText());
+        task.getRunItems().clear();
+        MigrationTaskRunner.prepareRunItems(task, true);
     }
 
     // ==================================================================

@@ -1314,7 +1314,7 @@ public class MainController {
 
             javafx.scene.control.MenuItem editTaskItem = MenuItemUtil.createMenuItemI18n(
                     "migration.menu.edit",
-                    IconFactory.group(IconPaths.METADATA_MODIFY_CONNECT_ITEM, 0.7, 0.7));
+                    IconFactory.group(IconPaths.METADATA_RENAME_ITEM, 0.7, 0.7));
             editTaskItem.setOnAction(e -> editMigrationTask());
 
             javafx.scene.control.MenuItem copyTaskItem = MenuItemUtil.createMenuItemI18n(
@@ -1544,6 +1544,8 @@ public class MainController {
             // 编辑后运行状态重置为与新建任务一致（未开始、无运行记录）
             com.dbboys.service.migration.MigrationTaskRunner.resetRunState(result);
             migrationTreeView.refresh();
+            // 明细 tab 已打开则同步刷新
+            com.dbboys.ui.util.TabpaneUtil.refreshMigrationTaskTabIfOpen(result.getId());
             if (dlg.isStartRequested()) {
                 com.dbboys.service.migration.MigrationTaskRunner.start(result);
             }
