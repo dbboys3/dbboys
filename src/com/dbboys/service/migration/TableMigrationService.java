@@ -380,18 +380,14 @@ public class TableMigrationService {
             }
             if (request.migrateData() && kind == MigrationObjectRef.Kind.TABLE) {
                 boolean recreated = exists && request.overwrite() && request.migrateDdl();
-                if (!recreated) {
-                    if (request.truncateTable()) {
-                        // 勾选“清空表”：优先方言 TRUNCATE，方言不支持时退化为 DELETE FROM
-                        String truncateSql = ctx.targetPlatform.truncateTableSql(objectName);
-                        executeTargetStatement(ctx, ws, truncateSql != null && !truncateSql.isBlank()
-                                ? truncateSql : "DELETE FROM " + objectName);
-                        log(ctx.listener, String.format(
-                                I18n.t("migration.log.truncate_ok", "%s target table cleared"), displayName));
-                    } else if (exists && request.overwrite() && !request.migrateDdl()) {
-                        // 不重建表时的覆盖语义：先清空目标表
-                        executeTargetStatement(ctx, ws, "DELETE FROM " + objectName);
-                    }
+                if (!recreated && request.truncateTable()) {
+                    // 勾选"清空表"才先清目标表：优先方言 TRUNCATE，方言不支持时退化为 DELETE FROM；
+                    // 未勾选时直接追加复制，不再先 DELETE
+                    String truncateSql = ctx.targetPlatform.truncateTableSql(objectName);
+                    executeTargetStatement(ctx, ws, truncateSql != null && !truncateSql.isBlank()
+                            ? truncateSql : "DELETE FROM " + objectName);
+                    log(ctx.listener, String.format(
+                            I18n.t("migration.log.truncate_ok", "%s target table cleared"), displayName));
                 }
                 copyData(ctx, ws, object, rowsCopied);
                 commitTarget(ctx, ws);
