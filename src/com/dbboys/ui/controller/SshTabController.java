@@ -674,8 +674,9 @@ public class SshTabController {
             if (cb.hasString()) {
                 String text = cb.getString();
                 if (text != null && !text.isEmpty()) {
-                    // Replace \n with \r as terminals expect \r for Enter
-                    text = text.replace("\n", "\r");
+                    // Normalize line endings to a single \r (terminals expect \r for Enter);
+                    // Windows clipboard text uses \r\n, which would otherwise become \r\r
+                    text = text.replace("\r\n", "\r").replace("\n", "\r");
                     clearSelection(); // pasting invalidates the stale selection
                     try {
                         OutputStream os = shellChannel.getInvertedIn();
@@ -812,7 +813,11 @@ public class SshTabController {
                 Clipboard cb = Clipboard.getSystemClipboard();
                 if (cb.hasString()) {
                     String t = cb.getString();
-                    if (t != null && !t.isEmpty()) return t.getBytes(StandardCharsets.UTF_8);
+                    if (t != null && !t.isEmpty()) {
+                        // Normalize line endings so Windows CRLF doesn't paste as two Enters per line
+                        t = t.replace("\r\n", "\r").replace("\n", "\r");
+                        return t.getBytes(StandardCharsets.UTF_8);
+                    }
                 }
                 return null;
             }
