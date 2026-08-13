@@ -89,6 +89,20 @@ public class SshTabController {
     });
     private boolean selecting;
     private Thread readThread;
+    // ---- ZModem beacon carry (reader thread + flush timer share it) ----
+    // Only trailing fragments that already contain the CAN byte (at least
+    // "**\x18") are held back: a bare '*' or "**" is ordinary text (shell
+    // glob echo) and must render immediately like any other character. The
+    // flush deadline is a safety net for the (practically impossible) case
+    // of a CAN-containing fragment with no continuation.
+    private static final long CARRY_FLUSH_MS = 200;
+    private final Object carryLock = new Object();
+    private byte[] carry = new byte[0];
+    private long carryGen; // bumped on every carry change; invalidates stale flush tasks
+    private java.util.concurrent.ScheduledExecutorService carryFlushExec;
+    /** Serializes feedTerminal: the flush timer and the reader thread can both
+     *  end up decoding, and streamDecoder is stateful. */
+    private final Object decodeLock = new Object();
     private volatile boolean connecting;
     private volatile boolean transferCancelFlag; // Ctrl+C/Ctrl+U aborts the active file transfer
     private volatile boolean transferCancelledByUser; // file-picker dialog was cancelled
@@ -397,39 +411,56 @@ public class SshTabController {
     private void start() {
         if (shellChannel == null || !shellChannel.isOpen()) return;
         streamDecoder = null; // drop any partial char left over from a previous session
+        synchronized (carryLock) { carry = new byte[0]; carryGen++; }
+        if (carryFlushExec == null || carryFlushExec.isShutdown()) {
+            carryFlushExec = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "term-carry-flush");
+                t.setDaemon(true);
+                return t;
+            });
+        }
         readThread = new Thread(() -> {
             try {
                 InputStream in = shellChannel.getInvertedOut();
                 byte[] buf = new byte[8192];
-                byte[] carry = new byte[0]; // unscanned tail: the beacon signature may span two reads
                 int len;
                 while (shellChannel.isOpen() && (len = in.read(buf, 0, buf.length)) != -1) {
                     // Scan for a ZModem ZRQINIT/ZRINIT hex header; on a hit the raw stream is
                     // handed to the ZModem engine until the file transfer session ends.
                     byte[] data = buf;
                     int dlen = len;
-                    if (carry.length > 0) {
-                        data = new byte[carry.length + len];
-                        System.arraycopy(carry, 0, data, 0, carry.length);
-                        System.arraycopy(buf, 0, data, carry.length, len);
-                        dlen = data.length;
-                        carry = new byte[0];
+                    synchronized (carryLock) {
+                        if (carry.length > 0) {
+                            data = new byte[carry.length + len];
+                            System.arraycopy(carry, 0, data, 0, carry.length);
+                            System.arraycopy(buf, 0, data, carry.length, len);
+                            dlen = data.length;
+                            carry = new byte[0];
+                            carryGen++; // disambiguated by new data: pending flush is stale
+                        }
                     }
                     int sig = indexOfZmodemBeacon(data, dlen);
                     if (sig < 0) {
                         // hold back only a trailing fragment that actually starts the
-                        // signature (e.g. "**\x18B0"); everything else renders at once,
-                        // otherwise an idle prompt would lose its last bytes
+                        // signature AND includes the CAN byte (e.g. "**\x18B0"); a bare
+                        // '*' / "**" renders at once like any other character. The
+                        // flush timer guarantees a held fragment is shown even when no
+                        // further bytes arrive.
                         int keep = zmodemBeaconTail(data, dlen);
                         feedTerminal(data, 0, dlen - keep);
-                        carry = new byte[keep];
-                        System.arraycopy(data, dlen - keep, carry, 0, keep);
+                        if (keep > 0) {
+                            synchronized (carryLock) {
+                                byte[] c = new byte[keep];
+                                System.arraycopy(data, dlen - keep, c, 0, keep);
+                                carry = c;
+                                scheduleCarryFlush(++carryGen);
+                            }
+                        }
                         continue;
                     }
                     feedTerminal(data, 0, sig);
                     byte[] prefix = new byte[dlen - sig];
                     System.arraycopy(data, sig, prefix, 0, prefix.length);
-                    carry = new byte[0];
                     // the beacon's type digit decides the role: '0'=ZRQINIT from sz
                     // (we download), '1'=ZRINIT from rz (we upload)
                     int dir = data[sig + ZMODEM_BEACON_SIG.length] == '0' ? 2 : 1;
@@ -450,6 +481,11 @@ public class SshTabController {
     }
     private void stop() {
         renderer.stopBlink();
+        if (carryFlushExec != null) {
+            carryFlushExec.shutdownNow();
+            carryFlushExec = null;
+        }
+        synchronized (carryLock) { carry = new byte[0]; carryGen++; }
         if (readThread != null) {
             readThread.interrupt();
             readThread = null;
@@ -884,10 +920,16 @@ public class SshTabController {
         return -1;
     }
 
-    /** Length of the trailing bytes that form a proper prefix of the beacon signature (0..5). */
+    /** Length of the trailing bytes that form a proper prefix of the beacon
+     *  signature, counting only fragments long enough to include the CAN byte
+     *  (k &gt;= 3, i.e. at least "**\x18"). A bare '*' or "**" tail is ordinary
+     *  text (shell glob echo) and is never held back; the CAN control byte is
+     *  the first byte that cannot appear in normal terminal output. Trade-off:
+     *  a beacon split within its first two bytes is no longer detected — the
+     *  sender's ZRQINIT/ZRINIT retry then re-triggers the transfer. */
     private static int zmodemBeaconTail(byte[] d, int len) {
         int max = Math.min(ZMODEM_BEACON_SIG.length, len);
-        for (int k = max; k > 0; k--) {
+        for (int k = max; k >= 3; k--) {
             boolean match = true;
             for (int j = 0; j < k; j++) {
                 if (d[len - k + j] != ZMODEM_BEACON_SIG[j]) { match = false; break; }
@@ -897,12 +939,39 @@ public class SshTabController {
         return 0;
     }
 
-    /** Log + decode + render terminal output (called on the reader thread). */
+    /** Flush the held-back beacon candidate after CARRY_FLUSH_MS unless newer
+     *  input has already disambiguated it (generation mismatch => no-op).
+     *  Runs on the flush timer thread. */
+    private void scheduleCarryFlush(long gen) {
+        java.util.concurrent.ScheduledExecutorService exec = carryFlushExec;
+        if (exec == null) return;
+        try {
+            exec.schedule(() -> {
+                byte[] pending;
+                synchronized (carryLock) {
+                    if (gen != carryGen || carry.length == 0) return;
+                    pending = carry;
+                    carry = new byte[0];
+                    carryGen++;
+                }
+                feedTerminal(pending, 0, pending.length);
+            }, CARRY_FLUSH_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+            // session was torn down between the null check and schedule()
+        }
+    }
+
+    /** Log + decode + render terminal output (called on the reader thread and,
+     *  for timed carry flushes, on the flush timer thread). */
     private void feedTerminal(byte[] data, int off, int len) {
         if (len <= 0) return;
         // Session logging happens on the FX thread, from the rendered screen
         // buffer (see sessionLogFinalize), not from this raw byte stream.
-        String out = decodeStream(data, off, len);
+        // decodeLock: streamDecoder is stateful and shared with the flush timer.
+        String out;
+        synchronized (decodeLock) {
+            out = decodeStream(data, off, len);
+        }
         if (out.isEmpty()) return; // chunk ended inside a split multi-byte char
         Platform.runLater(() -> emulator.write(out));
     }
