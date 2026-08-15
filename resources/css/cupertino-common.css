@@ -1056,6 +1056,7 @@ Text {
 }
 
 .list-view {
+  -fx-background-color: -color-bg-default;
   -color-cell-bg: -color-bg-default;
   -color-cell-fg: -color-fg-default;
   -color-cell-bg-selected: -color-selection-bg;
@@ -6768,6 +6769,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-border-width: 0 0 1 0;
 }
 .list-view.picker-list{
+  -fx-background-color: -color-bg-default;
   -fx-border-width: 1px;
   -fx-border-color: -color-border-default;
   -fx-padding: 0;

@@ -404,6 +404,17 @@ public class CustomMigrationTaskTab extends CustomTab {
                     getStyleClass().remove("migration-row-failed");
                 }
             }
+
+            {
+                setOnMouseClicked(event -> {
+                    if (event.getClickCount() == 2) {
+                        MigrationRunItem item = getItem();
+                        if (item != null && item.getStatus() == MigrationRunItem.Status.FAILED) {
+                            showErrorDetail(item);
+                        }
+                    }
+                });
+            }
         });
 
         TableColumn<MigrationRunItem, String> kindColumn = new TableColumn<>();
@@ -632,25 +643,14 @@ public class CustomMigrationTaskTab extends CustomTab {
         TextArea area = new TextArea(content);
         area.setEditable(false);
         area.setWrapText(true);
-        // 右键菜单样式与单行输入框（CustomUserTextField）一致：复制/剪切/粘贴 + 图标 + 快捷键提示
+        // 错误详情只读：右键菜单仅保留复制
         CustomShortcutMenuItem copyMenuItem = MenuItemUtil.createMenuItemI18n(
                 "menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
-        CustomShortcutMenuItem cutMenuItem = MenuItemUtil.createMenuItemI18n(
-                "menu.cut", "Ctrl+X", IconFactory.group(IconPaths.CUT, 0.65));
-        CustomShortcutMenuItem pasteMenuItem = MenuItemUtil.createMenuItemI18n(
-                "menu.paste", "Ctrl+V", IconFactory.group(IconPaths.PASTE, 0.65));
         copyMenuItem.setOnAction(event -> area.copy());
-        cutMenuItem.setOnAction(event -> area.cut());
-        pasteMenuItem.setOnAction(event -> area.paste());
         javafx.scene.control.ContextMenu contextMenu =
-                new CustomContextMenu(copyMenuItem, cutMenuItem, pasteMenuItem);
+                new CustomContextMenu(copyMenuItem);
         contextMenu.setOnShowing(event -> {
-            boolean hasSelection = !area.getSelectedText().isEmpty();
-            boolean clipboardHasText = javafx.scene.input.Clipboard.getSystemClipboard().hasString();
-            boolean editable = area.isEditable();
-            copyMenuItem.setDisable(!hasSelection);
-            cutMenuItem.setDisable(!editable || !hasSelection);
-            pasteMenuItem.setDisable(!editable || !clipboardHasText);
+            copyMenuItem.setDisable(area.getSelectedText().isEmpty());
         });
         area.setContextMenu(contextMenu);
 

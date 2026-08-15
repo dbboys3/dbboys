@@ -831,8 +831,11 @@ public class MigrationDialogController {
         for (MigrationObjectRef.Kind kind : allKinds()) {
             TypeSelection ts = new TypeSelection(kind);
             ts.checkBox = new CheckBox();
-            // 新建任务默认勾选"表"类型；编辑已有任务时由 refs 回显覆盖
-            ts.checkBox.setSelected(kind == MigrationObjectRef.Kind.TABLE && isNewTask());
+            // 新建任务默认勾选"表/索引/外键"；编辑已有任务时由 refs 回显覆盖
+            boolean defaultSelected = isNewTask() && (kind == MigrationObjectRef.Kind.TABLE
+                    || kind == MigrationObjectRef.Kind.INDEX
+                    || kind == MigrationObjectRef.Kind.FOREIGN_KEY);
+            ts.checkBox.setSelected(defaultSelected);
             ts.checkBox.textProperty().bind(I18n.bind(kindKey(kind), kindFallback(kind)));
             ts.checkBox.setFocusTraversable(false);
             ts.checkBox.selectedProperty().addListener(
