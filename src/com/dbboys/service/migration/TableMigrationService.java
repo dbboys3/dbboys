@@ -1694,20 +1694,27 @@ public class TableMigrationService {
         }
 
         void interrupt() {
-            for (Statement stmt : statements) {
+            for (Statement stmt : new ArrayList<>(statements)) {
                 try {
                     stmt.cancel();
                 } catch (Exception ignored) {
                 }
             }
-            for (Connection conn : connections) {
+            for (Connection conn : new ArrayList<>(connections)) {
                 abortQuietly(conn);
             }
         }
 
         void closeAll() {
-            for (Connection conn : connections) {
-                closeQuietly(conn);
+            // 快照遍历 + 重试，避免并发 untrack/close 时弱一致性迭代器跳过连接
+            for (int attempt = 0; attempt < 3 && !connections.isEmpty(); attempt++) {
+                for (Connection conn : new ArrayList<>(connections)) {
+                    abortQuietly(conn);
+                    connections.remove(conn);
+                }
+            }
+            for (Connection conn : new ArrayList<>(connections)) {
+                abortQuietly(conn);
             }
             connections.clear();
         }
