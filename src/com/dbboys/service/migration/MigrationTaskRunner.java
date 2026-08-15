@@ -439,6 +439,11 @@ public final class MigrationTaskRunner {
             }
         }
         counts.put("TOTAL", new long[]{successTotal, failedTotal});
+        if (task.getLastRunResult() == MigrationTask.RunResult.CANCELLED) {
+            counts.put("CANCELLED", new long[]{1, 0});
+        } else if (task.getLastRunResult() == MigrationTask.RunResult.FAILED) {
+            counts.put("FAILED", new long[]{1, 0});
+        }
         String countsJson = MigrationTask.encodeRunCounts(counts);
         String endTime = RUN_TIME_FORMAT.format(System.currentTimeMillis());
         LocalDbRepository.updateMigrationTaskRunInfo(task.getId(), startTime, endTime, countsJson);

@@ -621,6 +621,21 @@ public class MigrationDialogController {
         return blankToNull(sourceSchemaChoiceBox.getValue());
     }
 
+    /** 源/目标库与模式是否都一致（N/A 视为空，忽略大小写）。 */
+    private boolean sameSourceTargetScope() {
+        return sameScopeValue(sourceDbChoiceBox.getValue(), targetDbChoiceBox.getValue())
+                && sameScopeValue(sourceSchemaChoiceBox.getValue(), targetSchemaChoiceBox.getValue());
+    }
+
+    private static boolean sameScopeValue(String left, String right) {
+        left = blankToNull(left);
+        right = blankToNull(right);
+        if (left == null || right == null) {
+            return left == null && right == null;
+        }
+        return left.equalsIgnoreCase(right);
+    }
+
     /** 源范围是否已选完整（DATABASE_SCHEMA 需库+模式，其余只需库/模式一项）。 */
     private boolean sourceScopeComplete() {
         if (currentSourceCatalog() == null) {
@@ -1310,7 +1325,8 @@ public class MigrationDialogController {
         }
         Connect source = sourceChoiceBox.getValue();
         Connect target = targetChoiceBox.getValue();
-        if (source == null || target == null || source.getId() == target.getId()) {
+        if (source == null || target == null
+                || (source.getId() == target.getId() && sameSourceTargetScope())) {
             showError(I18n.t("migration.error.same_connection",
                     "Source and target connections must be different"));
             return false;

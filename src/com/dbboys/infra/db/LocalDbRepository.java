@@ -1020,7 +1020,12 @@ public  class LocalDbRepository {
                 task.setRunCountsJson(rs.getString("c_run_counts") != null ? rs.getString("c_run_counts") : "{}");
                 // 从最近运行结果恢复任务状态着色：有失败→FAILED，跑过且无失败→SUCCESS
                 long[] runTotals = MigrationTask.totalRunCounts(task.getRunCountsJson());
-                if (runTotals[1] > 0) {
+                String runCounts = task.getRunCountsJson();
+                if (runCounts.contains("\"CANCELLED\"")) {
+                    task.setLastRunResult(MigrationTask.RunResult.CANCELLED);
+                } else if (runCounts.contains("\"FAILED\"")) {
+                    task.setLastRunResult(MigrationTask.RunResult.FAILED);
+                } else if (runTotals[1] > 0) {
                     task.setLastRunResult(MigrationTask.RunResult.FAILED);
                 } else if (!task.getLastStartTime().isBlank()) {
                     task.setLastRunResult(MigrationTask.RunResult.SUCCESS);
