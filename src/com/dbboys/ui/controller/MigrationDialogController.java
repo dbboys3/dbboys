@@ -103,6 +103,7 @@ public class MigrationDialogController {
     private CheckBox dataCheckBox;
     private CheckBox truncateCheckBox;
     private CheckBox overwriteCheckBox;
+    private CheckBox tableCheckBox;
     private TextField readThreadCountField;
     private TextField writeThreadCountField;
     private Button editMappingButton;
@@ -251,8 +252,6 @@ public class MigrationDialogController {
         dataCheckBox = boundCheckBox("migration.check.data", "Migrate data", true);
         // 默认勾选：清空表、覆盖目标已存在的对象
         truncateCheckBox = boundCheckBox("migration.check.truncate", "Clear table", true);
-        // 不迁移数据时"清空表"无意义，禁用
-        truncateCheckBox.disableProperty().bind(dataCheckBox.selectedProperty().not());
         overwriteCheckBox = boundCheckBox("migration.check.overwrite", "Overwrite existing tables", true);
         editMappingButton = new Button();
         editMappingButton.setGraphic(IconFactory.group(IconPaths.RESULTSET_EDITABLE, 0.7));
@@ -856,6 +855,13 @@ public class MigrationDialogController {
             HBox.setHgrow(spacer, Priority.ALWAYS);
             HBox row = new HBox(10, ts.checkBox, ts.countLabel, ts.selectedLabel, spacer, ts.editButton);
             if (kind == MigrationObjectRef.Kind.TABLE) {
+                tableCheckBox = ts.checkBox;
+                ts.editButton.disableProperty().bind(tableCheckBox.selectedProperty().not());
+                ddlCheckBox.disableProperty().bind(tableCheckBox.selectedProperty().not());
+                dataCheckBox.disableProperty().bind(tableCheckBox.selectedProperty().not());
+                // 表未勾选或未迁移数据时，"清空表"都无意义
+                truncateCheckBox.disableProperty().bind(
+                        tableCheckBox.selectedProperty().not().or(dataCheckBox.selectedProperty().not()));
                 row.getChildren().addAll(ddlCheckBox, dataCheckBox, truncateCheckBox, editMappingButton);
             }
             row.setAlignment(Pos.CENTER_LEFT);
@@ -1043,7 +1049,8 @@ public class MigrationDialogController {
         }
         boolean enabled = sourceChoiceBox != null && sourceChoiceBox.getValue() != null
                 && targetChoiceBox != null && targetChoiceBox.getValue() != null;
-        editMappingButton.setDisable(!enabled);
+        boolean tableSelected = tableCheckBox == null || tableCheckBox.isSelected();
+        editMappingButton.setDisable(!enabled || !tableSelected);
     }
 
     /** 源数据库类型显示：dbtype 即时上屏；支持 sqlmode 的平台后台探测后补齐显示。 */
