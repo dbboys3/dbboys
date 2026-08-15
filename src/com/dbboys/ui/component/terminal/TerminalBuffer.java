@@ -146,6 +146,23 @@ public class TerminalBuffer {
         }
     }
 
+    /** Drop the selection when the content of buffer row r is about to change
+     *  under it (overwrite or erase). Row-level granularity: full-screen apps
+     *  (top, nmon) repaint whole lines on every refresh, so a hit on the row
+     *  is enough to know the highlight would go stale. */
+    private void dropSelectionIfRowHit(int r) {
+        if (selStartRow < 0) return;
+        if (r >= Math.min(selStartRow, selEndRow) && r <= Math.max(selStartRow, selEndRow))
+            selStartCol = selEndCol = selStartRow = selEndRow = -1;
+    }
+
+    /** Drop the selection when any buffer row in [lo, hi] is about to change. */
+    private void dropSelectionIfRangeHit(int lo, int hi) {
+        if (selStartRow < 0) return;
+        if (Math.min(selStartRow, selEndRow) <= hi && Math.max(selStartRow, selEndRow) >= lo)
+            selStartCol = selEndCol = selStartRow = selEndRow = -1;
+    }
+
     void put(char c) {
         if (pendingWrap) {
             // Deferred wrap (xterm semantics): the previous character filled the
@@ -179,6 +196,7 @@ public class TerminalBuffer {
         } else {
             wrapPendingEraseSuppress = false;
         }
+        dropSelectionIfRowHit(curRow); // overwriting a selected cell stale the highlight
         List<Cell> ln = ensureBuf(curRow);
         // Extend row to accommodate curCol
         if ((g0Charset == '0' && !useG1) || (g1Charset == '0' && useG1)) { c = mapDecSpecial(c); }
@@ -492,6 +510,7 @@ public class TerminalBuffer {
 
     /** Erase the visible page (the last {@code rows} lines), preserving scrollback history. */
     void eraseVisiblePage() {
+        dropSelectionIfRangeHit(pageTop(), buffer.size() - 1);
         for (int r = pageTop(); r < buffer.size(); r++) buffer.get(r).clear();
         pendingWrap = false;
     }
@@ -499,12 +518,14 @@ public class TerminalBuffer {
     void eraseEOL() {
         if (wrapPendingEraseSuppress && curCol == 0) { wrapPendingEraseSuppress = false; return; }
         if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        dropSelectionIfRowHit(curRow);
         List<Cell> ln = buffer.get(curRow);
         for (int i = curCol; i < ln.size(); i++) ln.get(i).reset();
     }
 
     void eraseBOL() {
         if (curRow >= buffer.size()) return; // nothing to erase beyond the buffer (never grow it here)
+        dropSelectionIfRowHit(curRow);
         List<Cell> ln = buffer.get(curRow);
         // Blank the cells in place: removing them would shift the rest of the line left
         int end = Math.min(curCol, ln.size() - 1);
@@ -512,15 +533,20 @@ public class TerminalBuffer {
     }
 
     void eraseLine() {
-        if (curRow < buffer.size()) buffer.get(curRow).clear();
+        if (curRow < buffer.size()) {
+            dropSelectionIfRowHit(curRow);
+            buffer.get(curRow).clear();
+        }
     }
 
     void eraseEOD() {
+        dropSelectionIfRangeHit(curRow, buffer.size() - 1);
         eraseEOL();
         for (int r = curRow + 1; r < buffer.size(); r++) buffer.get(r).clear();
     }
 
     void eraseDOS() {
+        dropSelectionIfRangeHit(0, curRow);
         for (int r = 0; r < curRow && r < buffer.size(); r++) buffer.get(r).clear();
         eraseBOL();
     }
