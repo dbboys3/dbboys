@@ -231,7 +231,7 @@ public final class MigrationTaskRunner {
         boolean all = kind == MigrationObjectRef.Kind.ALL;
         List<MigrationObjectRef> result = new ArrayList<>();
         try (Connection conn = BackgroundSqlService.getConnectionService()
-                .createConnection(sessionConnect)) {
+                .getConnectionWithSessionInit(sessionConnect)) {
             MetadataRepository meta = PlatformResolvers.get().metadata(sessionConnect);
             if (all || kind == MigrationObjectRef.Kind.TABLE) {
                 addObjects(result, meta.getUserTables(conn, dbName), catalog, schema,

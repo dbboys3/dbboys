@@ -920,7 +920,7 @@ public class MigrationDialogController {
                 Connect sessionConnect = buildSessionConnect(source, catalog, schema);
                 String dbName = schema != null && !schema.isBlank() ? schema : catalog;
                 try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .createConnection(sessionConnect)) {
+                        .getConnectionWithSessionInit(sessionConnect)) {
                     MetadataRepository meta = PlatformResolvers.get().metadata(sessionConnect);
                     for (MigrationObjectRef.Kind kind : kinds) {
                         counts.put(kind, countObjects(meta, conn, dbName, kind));
@@ -1156,7 +1156,7 @@ public class MigrationDialogController {
         Connect sessionConnect = buildSessionConnect(source, catalog, schema);
         String dbName = schema != null && !schema.isBlank() ? schema : catalog;
         try (Connection conn = BackgroundSqlService.getConnectionService()
-                .createConnection(sessionConnect)) {
+                .getConnectionWithSessionInit(sessionConnect)) {
             List<? extends TreeData> objects = fetchObjects(
                     PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
             List<String> names = new ArrayList<>();
@@ -1178,7 +1178,7 @@ public class MigrationDialogController {
         Connect sessionConnect = buildSessionConnect(source, catalog, schema);
         String dbName = schema != null && !schema.isBlank() ? schema : catalog;
         try (Connection conn = BackgroundSqlService.getConnectionService()
-                .createConnection(sessionConnect)) {
+                .getConnectionWithSessionInit(sessionConnect)) {
             List<? extends TreeData> objects = fetchObjects(
                     PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
             java.util.Map<String, String> parents = new LinkedHashMap<>();
