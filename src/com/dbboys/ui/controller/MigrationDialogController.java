@@ -536,8 +536,7 @@ public class MigrationDialogController {
         }
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
-            try (Connection conn = BackgroundSqlService.getConnectionService()
-                    .getConnectionWithSessionInit(new Connect(source))) {
+            try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(new Connect(source))) {
                 // SCHEMA 模型：一层模式经 getDatabases 适配返回
                 for (Database db : PlatformResolvers.get().metadata(source).getDatabases(conn)) {
                     if (!platform.isSystemDatabase(db.getName())) {
@@ -577,8 +576,7 @@ public class MigrationDialogController {
                 Connect sessionConnect = new Connect(source);
                 sessionConnect.setCatalog(dbName);
                 sessionConnect.setSessionCatalog("");
-                try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .createConnection(sessionConnect)) {
+                try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(sessionConnect)) {
                     for (Schema schema : PlatformResolvers.get().metadata(sessionConnect).getSchemas(conn)) {
                         names.add(schema.getName());
                     }
@@ -689,8 +687,7 @@ public class MigrationDialogController {
         String preferredSchema = firstNonBlank(echoTargetSchema, preferredCatalogName());
         AppExecutor.runAsync(() -> {
             List<String> names = new ArrayList<>();
-            try (Connection conn = BackgroundSqlService.getConnectionService()
-                    .getConnectionWithSessionInit(new Connect(target))) {
+            try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(new Connect(target))) {
                 MetadataRepository meta = PlatformResolvers.get().metadata(target);
                 for (Database db : meta.getDatabases(conn)) {
                     if (!platform.isSystemDatabase(db.getName())) {
@@ -734,8 +731,7 @@ public class MigrationDialogController {
                 Connect sessionConnect = new Connect(target);
                 sessionConnect.setCatalog(dbName);
                 sessionConnect.setSessionCatalog("");
-                try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .createConnection(sessionConnect)) {
+                try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(sessionConnect)) {
                     for (Schema schema : PlatformResolvers.get().metadata(sessionConnect).getSchemas(conn)) {
                         names.add(schema.getName());
                     }
@@ -928,8 +924,7 @@ public class MigrationDialogController {
             try {
                 Connect sessionConnect = buildSessionConnect(source, catalog, schema);
                 String dbName = schema != null && !schema.isBlank() ? schema : catalog;
-                try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
+                try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(sessionConnect)) {
                     MetadataRepository meta = PlatformResolvers.get().metadata(sessionConnect);
                     for (MigrationObjectRef.Kind kind : kinds) {
                         counts.put(kind, countObjects(meta, conn, dbName, kind));
@@ -1165,8 +1160,7 @@ public class MigrationDialogController {
                                                 MigrationObjectRef.Kind kind) throws Exception {
         Connect sessionConnect = buildSessionConnect(source, catalog, schema);
         String dbName = schema != null && !schema.isBlank() ? schema : catalog;
-        try (Connection conn = BackgroundSqlService.getConnectionService()
-                .getConnectionWithSessionInit(sessionConnect)) {
+        try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(sessionConnect)) {
             List<? extends TreeData> objects = fetchObjects(
                     PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
             List<String> names = new ArrayList<>();
@@ -1187,8 +1181,7 @@ public class MigrationDialogController {
                                                                    MigrationObjectRef.Kind kind) throws Exception {
         Connect sessionConnect = buildSessionConnect(source, catalog, schema);
         String dbName = schema != null && !schema.isBlank() ? schema : catalog;
-        try (Connection conn = BackgroundSqlService.getConnectionService()
-                .getConnectionWithSessionInit(sessionConnect)) {
+        try (Connection conn = BackgroundSqlService.getConnectionService().getConnectionWithSessionInit(sessionConnect)) {
             List<? extends TreeData> objects = fetchObjects(
                     PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
             java.util.Map<String, String> parents = new LinkedHashMap<>();

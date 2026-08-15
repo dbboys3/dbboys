@@ -193,20 +193,19 @@ public class TableMigrationService {
         BackgroundSqlService.updateBackSqlUIOnStart();
 
         try {
-            // 2. 目标端主会话：仅用于后台任务展示与目标端类型探测；DDL/数据在各工作线程独立连接上执行
-            //    迁移连接不做方言会话初始化（createConnection），避免会话级设置影响 DDL/类型映射判定
+            // 2. 目标端主会话：仅用于目标端类型探测（轻量 init：仅库/模式选择），用完即关——
+            //    运行期目标端连接数 = 写线程数（DDL/数据都在写线程连接上执行）
             Connect targetSessionConnect = buildTargetSessionConnect(request, ctx.resolver);
-            Connection targetConn = BackgroundSqlService.getConnectionService()
-                    .createConnection(targetSessionConnect);
+            Connection targetConn = MigrationConnections.create(targetSessionConnect);
             if (targetConn == null) {
                 throw new SQLException("cannot open target connection");
             }
-            sessions.track(targetConn);
-            backSqlTask.setConnection(targetConn);
             ctx.targetPlatform = ctx.resolver.requirePlatform(targetSessionConnect);
             ctx.targetParser = ctx.targetPlatform.parser();
             // 目标端类型映射基准：支持 sqlmode 的平台（GBase 8S）以探测到的 sqlmode 为准
             ctx.targetMappingType = resolveTargetMappingType(ctx, targetSessionConnect, targetConn);
+            // 主目标连接用完即关（不参与展示/取消；工作线程连接均在 SessionHolder 跟踪中）
+            SessionHolder.closeQuietly(targetConn);
 
             Map<GroupKey, List<MigrationObjectRef>> groups = groupObjects(request.objects());
             List<GroupKey> flatGroups = new ArrayList<>(total);
@@ -218,8 +217,9 @@ public class TableMigrationService {
                 }
             }
 
-            // 5. 生产者-消费者并行迁移，分两个阶段：先全部表（结构+数据），
-            //    所有表数据迁移完成后才开始表以外的对象（索引/外键后建也避免拖慢数据装载）
+            // 5. 生产者-消费者并行迁移，连接数与线程数一致：
+            //    读线程只持源连接（产批），写线程只持目标连接（先做全部表结构 DDL → 消费数据队列
+            //    → 全部表数据完成后再做非表对象 DDL）
             ctx.total = total;
             List<GroupKey> tableGroups = new ArrayList<>();
             List<MigrationObjectRef> tableObjects = new ArrayList<>();
@@ -234,9 +234,7 @@ public class TableMigrationService {
                     otherObjects.add(flatObjects.get(i));
                 }
             }
-            // 阶段一：表（读线程产批 → 有界队列 → 写线程消费）；阶段二：非表对象（仅读线程做 DDL）
-            runPhase(ctx, tableGroups, tableObjects, 0, true, results);
-            runPhase(ctx, otherGroups, otherObjects, tableObjects.size(), false, results);
+            runMigration(ctx, tableGroups, tableObjects, otherGroups, otherObjects, results);
             return new MigrationSummary(new ArrayList<>(results), false);
         } catch (CancellationException e) {
             log(listener, I18n.t("migration.log.cancelled", "Migration cancelled"));
@@ -255,23 +253,29 @@ public class TableMigrationService {
     }
 
     /**
-     * 单阶段执行：读线程经共享游标处理 objects；withWriters 时另起写线程消费行批次。
-     * indexOffset 为阶段首个对象在整任务清单中的下标（listener 进度按全任务计数）。
+     * 单池执行全部迁移，连接数与线程数一致：
+     * 写线程（各 1 目标连接）先并行做完全部表结构 DDL（阶段 A），读线程（各 1 源连接，不持目标连接）
+     * 等 DDL 完成后产批（阶段 B），写线程消费队列；全部表数据写完（读线程尽、队列空、无在写批次）
+     * 后写线程再并行做非表对象 DDL（阶段 C）。
      * 对象结果缺失且工作线程发生过致命错误（如目标连接打不开）时抛出，整体失败。
      */
-    private void runPhase(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
-                          int indexOffset, boolean withWriters, List<ItemResult> results) throws Exception {
-        int phaseTotal = objects.size();
-        if (phaseTotal == 0) {
-            return;
-        }
-        int baseline = results.size();
-        int readers = Math.max(1, Math.min(ctx.request.readThreadCount(), phaseTotal));
-        int writers = withWriters ? Math.max(1, ctx.request.writeThreadCount()) : 0;
+    private void runMigration(MigrationContext ctx,
+                              List<GroupKey> tableGroups, List<MigrationObjectRef> tableObjects,
+                              List<GroupKey> otherGroups, List<MigrationObjectRef> otherObjects,
+                              List<ItemResult> results) throws Exception {
+        int tableCount = tableObjects.size();
+        int readers = tableCount == 0 ? 0
+                : Math.max(1, Math.min(ctx.request.readThreadCount(), tableCount));
+        int writers = Math.max(1, ctx.request.writeThreadCount());
         // 有界队列形成反压：读快写慢时读线程在 offer 上等待，不会无限攒行
-        BlockingQueue<RowBatch> dataQueue = new ArrayBlockingQueue<>(Math.max(16, Math.max(writers, 1) * 4));
-        AtomicInteger cursor = new AtomicInteger();
+        BlockingQueue<RowBatch> dataQueue = new ArrayBlockingQueue<>(Math.max(16, writers * 4));
+        AtomicInteger ddlCursor = new AtomicInteger();      // 阶段 A：表结构 DDL 游标（写线程）
+        AtomicInteger ddlInFlight = new AtomicInteger();    // 阶段 A：在执行的 DDL 数（读线程放行判定）
+        AtomicInteger dataCursor = new AtomicInteger();     // 阶段 B：读线程取表游标
+        AtomicInteger otherCursor = new AtomicInteger();    // 阶段 C：非表对象游标（写线程）
         AtomicInteger readersRunning = new AtomicInteger(readers);
+        AtomicInteger activeWriters = new AtomicInteger();  // 正在写批次的写线程数（阶段 C 屏障）
+        Set<Integer> ddlFailed = ConcurrentHashMap.newKeySet(); // 表结构 DDL 失败的表下标
         AtomicReference<Exception> workerFatal = new AtomicReference<>();
         ExecutorService pool = Executors.newFixedThreadPool(readers + writers, new ThreadFactory() {
             private final AtomicInteger seq = new AtomicInteger();
@@ -284,12 +288,14 @@ public class TableMigrationService {
             }
         });
         try {
-            for (int w = 0; w < readers; w++) {
-                pool.submit(() -> runReader(ctx, groups, objects, cursor, dataQueue,
-                        results, readersRunning, workerFatal, indexOffset));
-            }
             for (int w = 0; w < writers; w++) {
-                pool.submit(() -> runWriter(ctx, dataQueue, results, readersRunning, workerFatal));
+                pool.submit(() -> runWriter(ctx, tableGroups, tableObjects, ddlCursor, ddlInFlight, ddlFailed,
+                        dataQueue, readersRunning, activeWriters, otherGroups, otherObjects, otherCursor,
+                        results, workerFatal));
+            }
+            for (int r = 0; r < readers; r++) {
+                pool.submit(() -> runReader(ctx, tableGroups, tableObjects, dataCursor, dataQueue,
+                        results, readersRunning, workerFatal, ddlCursor, ddlInFlight, ddlFailed));
             }
             pool.shutdown();
             while (!pool.awaitTermination(500, TimeUnit.MILLISECONDS)) {
@@ -302,37 +308,37 @@ public class TableMigrationService {
         } finally {
             pool.shutdownNow();
         }
-        if (results.size() < baseline + phaseTotal && workerFatal.get() != null) {
+        if (results.size() < ctx.total && workerFatal.get() != null) {
             throw workerFatal.get();
         }
     }
 
     /**
-     * 读线程（生产者）主循环：共享游标取对象下标，逐对象做 DDL 并产出行批次
-     * （每线程独立 {@link WorkerSession}）。目标连接打开失败等致命错误记入 {@code workerFatal} 后退出，
-     * 剩余对象由其他读线程继续拾取；单对象失败由 {@link #produceObject} 兜住记 FAILED；取消时安静退出。
+     * 读线程（生产者）主循环：等全部表结构 DDL 完成（阶段 A，写线程执行）后，共享游标取表、
+     * 流式拉数产批——纯源端会话，不持目标连接（目标端连接数=写线程数）。
+     * DDL 失败的表跳过（结果已在阶段 A 产出）；取消时安静退出。
      */
-    private void runReader(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
-                           AtomicInteger cursor, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
+    private void runReader(MigrationContext ctx, List<GroupKey> tableGroups, List<MigrationObjectRef> tableObjects,
+                           AtomicInteger dataCursor, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
                            AtomicInteger readersRunning, AtomicReference<Exception> workerFatal,
-                           int indexOffset) {
-        int total = objects.size();
-        try (WorkerSession ws = new WorkerSession(ctx)) {
-            for (int local = cursor.getAndIncrement(); local < total; local = cursor.getAndIncrement()) {
+                           AtomicInteger ddlCursor, AtomicInteger ddlInFlight, Set<Integer> ddlFailed) {
+        int total = tableObjects.size();
+        try (WorkerSession ws = new WorkerSession(ctx, false)) {
+            awaitTableDdl(ctx, ddlCursor, ddlInFlight, total, workerFatal);
+            for (int local = dataCursor.getAndIncrement(); local < total; local = dataCursor.getAndIncrement()) {
                 checkCancelled(ctx.backSqlTask);
-                int index = indexOffset + local;
-                MigrationObjectRef object = objects.get(local);
-                if (ctx.listener != null) {
-                    ctx.listener.onItemStart(index, ctx.total, object.name());
+                if (ddlFailed.contains(local)) {
+                    continue; // 结构 DDL 已失败，结果已在阶段 A 产出
                 }
+                MigrationObjectRef object = tableObjects.get(local);
                 try {
-                    ws.ensureSource(groups.get(local));
-                    ItemResult immediate = produceObject(ctx, ws, object, index, dataQueue, results, workerFatal);
+                    ws.ensureSource(tableGroups.get(local));
+                    ItemResult immediate = produceTableData(ctx, ws, object, local, dataQueue, results, workerFatal);
                     if (immediate != null) {
-                        // 非数据表/提前失败：读线程当场出结果；数据表由管道完成时异步出结果
+                        // 无列信息/产批前失败：当场出结果；其余由管道完成时异步出结果
                         results.add(immediate);
                         if (ctx.listener != null) {
-                            ctx.listener.onItemDone(index, ctx.total, immediate);
+                            ctx.listener.onItemDone(local, ctx.total, immediate);
                         }
                     }
                 } catch (CancellationException e) {
@@ -345,7 +351,7 @@ public class TableMigrationService {
                     ItemResult result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
                     results.add(result);
                     if (ctx.listener != null) {
-                        ctx.listener.onItemDone(index, ctx.total, result);
+                        ctx.listener.onItemDone(local, ctx.total, result);
                     }
                 }
             }
@@ -360,26 +366,128 @@ public class TableMigrationService {
         }
     }
 
+    /** 等全部表结构 DDL 完成（游标耗尽且无在执行）；写线程全灭或取消时放行（入队会感知致命错误）。 */
+    private static void awaitTableDdl(MigrationContext ctx, AtomicInteger ddlCursor, AtomicInteger ddlInFlight,
+                                      int tableCount, AtomicReference<Exception> workerFatal) {
+        while (ddlCursor.get() < tableCount || ddlInFlight.get() > 0) {
+            checkCancelled(ctx.backSqlTask);
+            if (workerFatal.get() != null) {
+                return;
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new CancellationException("table migration cancelled");
+            }
+        }
+    }
+
     /**
-     * 读线程处理单对象：DDL（冲突判定/DROP/建表，kind 临界区内串行）后，数据表建管道并
-     * 把行批次投进队列——结果不由本方法返回，管道完成时经 {@link #maybeCompletePipe} 异步出；
-     * 非数据表/提前失败沿用原语义当场返回 ItemResult。
+     * 读线程拉数产批（无 DDL，阶段 A 已建好结构）：物化行 → 批次入队，写线程消费写入目标。
+     * 返回非 null 表示当场出结果（无列信息按 0 行成功）；其余经 {@link #maybeCompletePipe} 异步出。
      */
-    private ItemResult produceObject(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object,
-                                     int index, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
-                                     AtomicReference<Exception> workerFatal) {
+    private ItemResult produceTableData(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object,
+                                        int index, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
+                                        AtomicReference<Exception> workerFatal) throws Exception {
+        TablePipe pipe = null;
+        try {
+            pipe = preparePipe(ctx, ws, object, index);
+            if (pipe == null) {
+                // 无列信息：沿用旧 copyData 的早退语义，按 0 行成功处理
+                return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
+            }
+            streamProduce(ctx, ws, pipe, dataQueue, workerFatal);
+            pipe.produceDone = true;
+        } catch (CancellationException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("table migration cancelled");
+        } catch (Exception e) {
+            if (pipe == null) {
+                throw e; // 管道未建立（取列元数据等失败）：走对象级失败
+            }
+            pipe.failure = e;
+            pipe.produceDone = true;
+        }
+        maybeCompletePipe(ctx, pipe, results);
+        return null;
+    }
+
+    /**
+     * 阶段 A（写线程）：表结构 DDL——勾选覆盖时 DROP、勾选 DDL 时建表、需迁数据且未重建时清空，全部提交。
+     * 返回 null = 结构就绪、待读线程产数（结果由管道出）；非 null = 当场出结果（失败/无需迁数据）。
+     */
+    private ItemResult migrateTableDdl(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object) {
         MigrationRequest request = ctx.request;
         String displayName = object.displayName();
         String objectName = object.name();
         try {
-            // 通配防御：正常情况下 runner 已把通配（整节点 kind=ALL 或类型级 name=null）展开，服务不展开
-            if (object.needsExpansion()) {
-                String message = String.format(
-                        I18n.t("migration.log.failed_wildcard",
-                                "Wildcard object %s was not expanded before migration"),
-                        displayName);
-                log(ctx.listener, message);
-                return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
+            ItemResult wildcard = wildcardFailure(ctx, object);
+            if (wildcard != null) {
+                return wildcard;
+            }
+            // 同 kind 对象的 DROP/DDL 串行执行；数据复制在锁外并行
+            synchronized (object.kind()) {
+                if (request.overwrite() && request.migrateDdl()) {
+                    String dropSql = buildDropSql(ctx, object);
+                    if (dropSql == null) {
+                        log.debug("drop skipped for {}: no host table", displayName);
+                    } else {
+                        try {
+                            executeTargetStatement(ctx, ws, dropSql);
+                            commitTarget(ctx, ws);
+                            log(ctx.listener, String.format(
+                                    I18n.t("migration.log.drop", "%s dropped in target"), displayName));
+                        } catch (Exception e) {
+                            rollbackTargetQuietly(ctx, ws);
+                            log.debug("drop ignored for {}: {}", displayName, errorMessage(e));
+                        }
+                    }
+                }
+                if (request.migrateDdl()) {
+                    String script = buildDdlScript(ctx, ws, object);
+                    executeScript(ctx, ws, script);
+                    commitTarget(ctx, ws);
+                    log(ctx.listener, String.format(
+                            I18n.t("migration.log.ddl_ok", "%s structure created"), displayName));
+                }
+            }
+            if (!request.migrateData()) {
+                return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
+            }
+            boolean recreated = request.overwrite() && request.migrateDdl();
+            if (!recreated && request.truncateTable()) {
+                // 勾选"清空表"才先清目标表：优先方言 TRUNCATE，方言不支持时退化为 DELETE FROM；
+                // 未勾选时直接追加复制，不再先 DELETE
+                String truncateSql = ctx.targetPlatform.truncateTableSql(objectName);
+                executeTargetStatement(ctx, ws, truncateSql != null && !truncateSql.isBlank()
+                        ? truncateSql : "DELETE FROM " + objectName);
+                // 清空在写线程连接上提交，且阶段 A 全部完成后读线程才放行——数据写入一定在清空之后
+                commitTarget(ctx, ws);
+                log(ctx.listener, String.format(
+                        I18n.t("migration.log.truncate_ok", "%s target table cleared"), displayName));
+            }
+            return null;
+        } catch (CancellationException e) {
+            throw e;
+        } catch (Exception e) {
+            return failureResult(ctx, ws, object, e);
+        }
+    }
+
+    /**
+     * 阶段 C（写线程）：非表对象 DDL 回放（通配/平台守卫 + 覆盖 DROP + 建表），当场出 ItemResult。
+     * 调用前提：全部表数据迁移已完成（阶段屏障在写线程主循环里判定）。
+     */
+    private ItemResult produceObjectDdlOnly(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object) {
+        MigrationRequest request = ctx.request;
+        String displayName = object.displayName();
+        try {
+            ItemResult wildcard = wildcardFailure(ctx, object);
+            if (wildcard != null) {
+                return wildcard;
             }
             MigrationObjectRef.Kind kind = object.kind();
             // PACKAGE 需要源端能打印、目标端能执行
@@ -391,8 +499,7 @@ public class TableMigrationService {
                 log(ctx.listener, message);
                 return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
             }
-
-            // 同 kind 对象的 DROP/DDL 串行执行；数据复制在锁外并行
+            // 同 kind 对象的 DROP/DDL 串行执行
             synchronized (kind) {
                 if (request.overwrite() && request.migrateDdl()) {
                     String dropSql = buildDropSql(ctx, object);
@@ -418,84 +525,106 @@ public class TableMigrationService {
                             I18n.t("migration.log.ddl_ok", "%s structure created"), displayName));
                 }
             }
-            if (request.migrateData() && kind == MigrationObjectRef.Kind.TABLE) {
-                boolean recreated = request.overwrite() && request.migrateDdl();
-                if (!recreated && request.truncateTable()) {
-                    // 勾选"清空表"才先清目标表：优先方言 TRUNCATE，方言不支持时退化为 DELETE FROM；
-                    // 未勾选时直接追加复制，不再先 DELETE
-                    String truncateSql = ctx.targetPlatform.truncateTableSql(objectName);
-                    executeTargetStatement(ctx, ws, truncateSql != null && !truncateSql.isBlank()
-                            ? truncateSql : "DELETE FROM " + objectName);
-                    // 清空必须在读线程自己的连接上先提交：写线程用各自连接插入，看不到未提交的 DELETE
-                    commitTarget(ctx, ws);
-                    log(ctx.listener, String.format(
-                            I18n.t("migration.log.truncate_ok", "%s target table cleared"), displayName));
-                }
-                // 生产者-消费者：物化行 → 批次入队，写线程消费写入目标；ItemResult 由管道完成时异步出
-                TablePipe pipe = null;
-                try {
-                    pipe = preparePipe(ctx, ws, object, index);
-                    if (pipe == null) {
-                        // 无列信息：沿用旧 copyData 的早退语义，按 0 行成功处理
-                        return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
-                    }
-                    streamProduce(ctx, ws, pipe, dataQueue, workerFatal);
-                    pipe.produceDone = true;
-                } catch (CancellationException e) {
-                    throw e;
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new CancellationException("table migration cancelled");
-                } catch (Exception e) {
-                    if (pipe == null) {
-                        throw e; // 管道未建立（取列元数据等失败）：走对象级失败
-                    }
-                    pipe.failure = e;
-                    pipe.produceDone = true;
-                }
-                maybeCompletePipe(ctx, pipe, results);
-                return null;
-            }
             return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
-            rollbackTargetQuietly(ctx, ws);
-            // SqlFailedException 解包：取出错 SQL；驱动链式包装（如 BatchUpdateException）下钻到链尾真实错误
-            String errorSql = null;
-            if (e instanceof SqlFailedException sqlFailed) {
-                errorSql = sqlFailed.getSql();
-                if (sqlFailed.getCause() instanceof Exception cause) {
-                    e = cause;
-                }
-            }
-            while (e instanceof SQLException sqlEx && sqlEx.getNextException() != null) {
-                e = sqlEx.getNextException();
-            }
-            // 数据库错误号：vendor code 优先，无则 SQLState
-            String errorCode = null;
-            if (e instanceof SQLException sqlEx) {
-                if (sqlEx.getErrorCode() != 0) {
-                    errorCode = String.valueOf(sqlEx.getErrorCode());
-                } else if (sqlEx.getSQLState() != null && !sqlEx.getSQLState().isBlank()) {
-                    errorCode = sqlEx.getSQLState();
-                }
-            }
-            String reason = errorMessage(e);
-            log(ctx.listener, String.format(
-                    I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-            return new ItemResult(object, ItemStatus.FAILED, 0, reason, errorSql, errorCode);
+            return failureResult(ctx, ws, object, e);
         }
     }
 
+    /** 通配防御：未展开的通配条目记 FAILED 并返回结果；可正常处理返回 null。 */
+    private ItemResult wildcardFailure(MigrationContext ctx, MigrationObjectRef object) {
+        if (!object.needsExpansion()) {
+            return null;
+        }
+        String message = String.format(
+                I18n.t("migration.log.failed_wildcard",
+                        "Wildcard object %s was not expanded before migration"),
+                object.displayName());
+        log(ctx.listener, message);
+        return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
+    }
+
+    /** 对象级失败收尾：回滚 + 解包 SqlFailedException/链式 SQLException，生成 FAILED ItemResult 并打日志。 */
+    private ItemResult failureResult(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object, Exception e) {
+        rollbackTargetQuietly(ctx, ws);
+        String errorSql = null;
+        if (e instanceof SqlFailedException sqlFailed) {
+            errorSql = sqlFailed.getSql();
+            if (sqlFailed.getCause() instanceof Exception cause) {
+                e = cause;
+            }
+        }
+        while (e instanceof SQLException sqlEx && sqlEx.getNextException() != null) {
+            e = sqlEx.getNextException();
+        }
+        // 数据库错误号：vendor code 优先，无则 SQLState
+        String errorCode = null;
+        if (e instanceof SQLException sqlEx) {
+            if (sqlEx.getErrorCode() != 0) {
+                errorCode = String.valueOf(sqlEx.getErrorCode());
+            } else if (sqlEx.getSQLState() != null && !sqlEx.getSQLState().isBlank()) {
+                errorCode = sqlEx.getSQLState();
+            }
+        }
+        String reason = errorMessage(e);
+        log(ctx.listener, String.format(
+                I18n.t("migration.log.failed", "%s failed: %s"), object.displayName(), reason));
+        return new ItemResult(object, ItemStatus.FAILED, 0, reason, errorSql, errorCode);
+    }
+
     /**
-     * 写线程（消费者）主循环：从队列取行批次写入目标库（每线程独立目标连接，按管道缓存
-     * {@link PreparedStatement}）。管道已失败（读/写首错）的批次直接丢弃；
-     * 全部读线程退出且队列清空后结束（批入队先于 readersRunning 归零，不会漏批）。
+     * 写线程主循环（每线程独立目标连接 + 按分组缓存的源连接）：阶段 A 并行做全部表结构 DDL →
+     * 阶段 B 消费数据队列 → 阶段 C（全部表数据完成后）并行做非表对象 DDL。
+     * 管道已失败（读/写首错）的批次直接丢弃；全部工作完成后退出。
      */
-    private void runWriter(MigrationContext ctx, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
-                           AtomicInteger readersRunning, AtomicReference<Exception> workerFatal) {
+    private void runWriter(MigrationContext ctx, List<GroupKey> tableGroups, List<MigrationObjectRef> tableObjects,
+                           AtomicInteger ddlCursor, AtomicInteger ddlInFlight, Set<Integer> ddlFailed,
+                           BlockingQueue<RowBatch> dataQueue, AtomicInteger readersRunning,
+                           AtomicInteger activeWriters,
+                           List<GroupKey> otherGroups, List<MigrationObjectRef> otherObjects,
+                           AtomicInteger otherCursor,
+                           List<ItemResult> results, AtomicReference<Exception> workerFatal) {
         try (WorkerSession ws = new WorkerSession(ctx)) {
+            // —— 阶段 A：并行做全部表结构 DDL；读线程等游标耗尽且无在执行后放行 ——
+            int tableCount = tableObjects.size();
+            for (int i = ddlCursor.getAndIncrement(); i < tableCount; i = ddlCursor.getAndIncrement()) {
+                checkCancelled(ctx.backSqlTask);
+                ddlInFlight.incrementAndGet();
+                try {
+                    MigrationObjectRef object = tableObjects.get(i);
+                    if (ctx.listener != null) {
+                        ctx.listener.onItemStart(i, ctx.total, object.name());
+                    }
+                    ItemResult ddlResult;
+                    try {
+                        ws.ensureSource(tableGroups.get(i));
+                        ddlResult = migrateTableDdl(ctx, ws, object);
+                    } catch (CancellationException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        // 对象级错误：记 FAILED 后继续下一对象
+                        String reason = errorMessage(e);
+                        log(ctx.listener, String.format(
+                                I18n.t("migration.log.failed", "%s failed: %s"), object.displayName(), reason));
+                        ddlResult = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
+                    }
+                    if (ddlResult != null) {
+                        if (ddlResult.status() == ItemStatus.FAILED) {
+                            ddlFailed.add(i); // 读线程跳过该表的数据生产
+                        }
+                        results.add(ddlResult);
+                        if (ctx.listener != null) {
+                            ctx.listener.onItemDone(i, ctx.total, ddlResult);
+                        }
+                    }
+                } finally {
+                    ddlInFlight.decrementAndGet();
+                }
+            }
+
+            // —— 阶段 B/C：消费数据队列；全部表数据完成后转非表对象 DDL ——
             Map<TablePipe, PreparedStatement> stmtCache = new java.util.HashMap<>();
             try {
                 while (true) {
@@ -507,16 +636,45 @@ public class TableMigrationService {
                         throw new CancellationException("table migration cancelled");
                     }
                     if (batch == null) {
-                        if (readersRunning.get() == 0 && dataQueue.isEmpty()) {
+                        // 表数据未全部完成（读线程未尽/队列未空/有在写批次）：继续等
+                        if (readersRunning.get() != 0 || !dataQueue.isEmpty() || activeWriters.get() != 0) {
+                            checkCancelled(ctx.backSqlTask);
+                            if (workerFatal.get() != null) {
+                                return; // 目标连接打不开等致命错误：主流程汇总后整体失败
+                            }
+                            continue;
+                        }
+                        // —— 阶段 C：全部表数据已完成，并行做非表对象 DDL；游标取尽即全部完成 ——
+                        checkCancelled(ctx.backSqlTask);
+                        int oi = otherCursor.getAndIncrement();
+                        if (oi >= otherObjects.size()) {
                             return;
                         }
-                        checkCancelled(ctx.backSqlTask);
-                        if (workerFatal.get() != null) {
-                            return; // 目标连接打不开等致命错误：主流程汇总后整体失败
+                        MigrationObjectRef object = otherObjects.get(oi);
+                        int index = tableObjects.size() + oi; // 全任务清单下标（阶段拆分保持了先后顺序）
+                        if (ctx.listener != null) {
+                            ctx.listener.onItemStart(index, ctx.total, object.name());
+                        }
+                        ItemResult result;
+                        try {
+                            ws.ensureSource(otherGroups.get(oi));
+                            result = produceObjectDdlOnly(ctx, ws, object);
+                        } catch (CancellationException e) {
+                            throw e;
+                        } catch (Exception e) {
+                            String reason = errorMessage(e);
+                            log(ctx.listener, String.format(
+                                    I18n.t("migration.log.failed", "%s failed: %s"), object.displayName(), reason));
+                            result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
+                        }
+                        results.add(result);
+                        if (ctx.listener != null) {
+                            ctx.listener.onItemDone(index, ctx.total, result);
                         }
                         continue;
                     }
                     TablePipe pipe = batch.pipe;
+                    activeWriters.incrementAndGet();
                     try {
                         if (pipe.failure == null) {
                             PreparedStatement ps = stmtCache.get(pipe);
@@ -556,6 +714,7 @@ public class TableMigrationService {
                             }
                         }
                     } finally {
+                        activeWriters.decrementAndGet();
                         pipe.pending.decrementAndGet();
                         maybeCompletePipe(ctx, pipe, results);
                     }
@@ -1442,17 +1601,30 @@ public class TableMigrationService {
         private GroupKey sourceGroup;
         private boolean closed;
 
+        /** 写线程会话：目标连接 + 按分组缓存的源连接。 */
         WorkerSession(MigrationContext ctx) throws Exception {
+            this(ctx, true);
+        }
+
+        /**
+         * @param openTarget false 为纯读线程会话：不持目标连接（保证目标端连接数=写线程数），
+         *                   源连接按需 ensureSource 打开
+         */
+        WorkerSession(MigrationContext ctx, boolean openTarget) throws Exception {
             this.ctx = ctx;
-            Connect targetSessionConnect = buildTargetSessionConnect(ctx.request, ctx.resolver);
-            // 迁移连接不做方言会话初始化（createConnection），避免会话级设置影响 DDL/类型映射判定
-            targetConn = BackgroundSqlService.getConnectionService()
-                    .createConnection(targetSessionConnect);
-            if (targetConn == null) {
-                throw new SQLException("cannot open target connection");
+            if (openTarget) {
+                Connect targetSessionConnect = buildTargetSessionConnect(ctx.request, ctx.resolver);
+                // 迁移连接只做库/模式选择的轻量 init（MigrationConnections），不做 sqlmode 等会话级强制
+                targetConn = MigrationConnections.create(targetSessionConnect);
+                if (targetConn == null) {
+                    throw new SQLException("cannot open target connection");
+                }
+                ctx.sessions.track(targetConn);
+                targetTransactional = tryDisableAutoCommit(targetConn);
+            } else {
+                targetConn = null;
+                targetTransactional = false;
             }
-            ctx.sessions.track(targetConn);
-            targetTransactional = tryDisableAutoCommit(targetConn);
         }
 
         /** 确保源连接对应给定分组：同组复用，跨组关闭重建。 */
@@ -1462,8 +1634,7 @@ public class TableMigrationService {
             }
             closeSource();
             Connect sessionConnect = buildSourceSessionConnect(ctx.request.source(), group, ctx.resolver);
-            sourceConn = BackgroundSqlService.getConnectionService()
-                    .createConnection(sessionConnect);
+            sourceConn = MigrationConnections.create(sessionConnect);
             if (sourceConn == null) {
                 throw new SQLException("cannot open source connection");
             }
@@ -1490,8 +1661,10 @@ public class TableMigrationService {
             }
             closed = true;
             closeSource();
-            ctx.sessions.untrack(targetConn);
-            SessionHolder.closeQuietly(targetConn);
+            if (targetConn != null) {
+                ctx.sessions.untrack(targetConn);
+                SessionHolder.closeQuietly(targetConn);
+            }
         }
     }
 

@@ -42,7 +42,7 @@ public class BackgroundSqlService {
     @Deprecated
     public static final ConnectionService connectionService = new ConnectionServiceImpl();
     public static void updateBackSqlUIOnStart() {
-        Platform.runLater(() -> {
+        runOnFx(() -> {
             AppState.getStatusBackSqlStopButton().setDisable(false);
             setBackSqlCountLabelText(
                     I18n.t("backsql.status.running_count", "有%d个后台任务正在运行").formatted(backSqlTaskList.size())
@@ -67,7 +67,7 @@ public class BackgroundSqlService {
         if (backSqlTask != null && backSqlTask.isCancelled()) {
             return;
         }
-        Platform.runLater(() -> {
+        runOnFx(() -> {
             if (e instanceof SQLException se) {
                 if (se.getErrorCode() != -213) {
                     AppErrorHandler.showErrorAlert(
@@ -91,7 +91,7 @@ public class BackgroundSqlService {
     }
 
     public static void updateBackSqlUIOnFinish() {
-        Platform.runLater(() -> {
+        runOnFx(() -> {
             if (backSqlTaskList.size() == 0) {
                 AppState.getStatusBackSqlStopButton().setDisable(true);
                 bindBackSqlCountLabel(
@@ -114,7 +114,7 @@ public class BackgroundSqlService {
         if (backSqlTask == null) {
             return;
         }
-        Platform.runLater(() -> {
+        runOnFx(() -> {
             backSqlTask.setProgress(progress);
         });
     }
@@ -127,6 +127,15 @@ public class BackgroundSqlService {
             AppState.getStatusBackSqlCountLabel().textProperty().unbind();
         }
         AppState.getStatusBackSqlCountLabel().textProperty().bind(I18n.bind(key, fallback));
+    }
+
+    /** TEMP/headless 兜底：无 FX 工具包时静默跳过 UI 更新。 */
+    private static void runOnFx(Runnable runnable) {
+        try {
+            Platform.runLater(runnable);
+        } catch (IllegalStateException toolkitNotReady) {
+            // no JavaFX toolkit (headless/test environment)
+        }
     }
 }
 
