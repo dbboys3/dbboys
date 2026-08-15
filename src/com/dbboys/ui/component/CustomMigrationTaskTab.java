@@ -6,11 +6,13 @@ import com.dbboys.model.Connect;
 import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.MigrationRunItem;
 import com.dbboys.model.MigrationTask;
+import com.dbboys.service.migration.MigrationConnectInfo;
 import com.dbboys.service.migration.MigrationTaskRunner;
 import com.dbboys.ui.controller.MigrationDialogController;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
+import com.dbboys.ui.util.MenuItemUtil;
 import javafx.beans.binding.Bindings;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
@@ -62,6 +64,9 @@ public class CustomMigrationTaskTab extends CustomTab {
     private final Label progressLabel = new Label();
     private final Label timeLabel = new Label();
     private final Label routeLabel = new Label();
+    /** 标题行类型标签：源/目标数据库类型（+sqlmode，后台探测补齐）。 */
+    private final Label typeLabel = new Label();
+    private int typeProbeGeneration;
     private final FilteredList<MigrationRunItem> filteredItems;
     private final TableView<MigrationRunItem> detailTable;
     /** 每秒把实时进度（volatile 字段）搬进 FX 属性，驱动明细表刷新。 */
@@ -100,6 +105,7 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         // ---- 头部信息区 ----
         routeLabel.setText(buildRouteText());
+        refreshTypeLabel();
 
         Button startButton = new Button();
         startButton.textProperty().bind(I18n.bind("migration.menu.start", "Start"));
@@ -145,7 +151,7 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-        HBox headerRow = new HBox(10, startButton, stopButton, routeLabel, headerSpacer, editButton);
+        HBox headerRow = new HBox(10, startButton, stopButton, routeLabel, typeLabel, headerSpacer, editButton);
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         progressBar.setPrefWidth(220);
@@ -247,6 +253,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             return;
         }
         routeLabel.setText(buildRouteText());
+        refreshTypeLabel();
         task.getRunItems().clear();
         MigrationTaskRunner.prepareRunItems(task, true);
     }
@@ -254,6 +261,52 @@ public class CustomMigrationTaskTab extends CustomTab {
     // ==================================================================
     // 头部
     // ==================================================================
+
+    /** 标题行类型标签：源/目标数据库类型（dbtype 即时上屏）+ sqlmode（支持的平台后台探测补齐）。 */
+    private void refreshTypeLabel() {
+        Connect source = findConnect(task.getSourceId());
+        Connect target = findConnect(task.getTargetId());
+        int generation = ++typeProbeGeneration;
+        typeLabel.setText(buildTypeText(
+                source == null ? "" : nullToEmpty(source.getDbtype()),
+                target == null ? "" : nullToEmpty(target.getDbtype())));
+        if (source == null && target == null) {
+            return;
+        }
+        com.dbboys.app.AppExecutor.runAsync(() -> {
+            String sourceText = source == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(source);
+            String targetText = target == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(target);
+            javafx.application.Platform.runLater(() -> {
+                if (generation != typeProbeGeneration) {
+                    return;
+                }
+                typeLabel.setText(buildTypeText(sourceText, targetText));
+            });
+        });
+    }
+
+    /** "源类型（sqlmode）  →  目标类型（sqlmode）"；两侧皆空返回空串。 */
+    private static String buildTypeText(String sourceText, String targetText) {
+        String source = sourceText == null ? "" : sourceText;
+        String target = targetText == null ? "" : targetText;
+        if (source.isBlank() && target.isBlank()) {
+            return "";
+        }
+        return source + "  →  " + target;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private static Connect findConnect(int connectId) {
+        for (Connect connect : LocalDbRepository.getConnectLeafs()) {
+            if (connect != null && connect.getId() == connectId) {
+                return connect;
+            }
+        }
+        return null;
+    }
 
     /** 源连接名/库·模式 → 目标连接名/库·模式。 */
     private String buildRouteText() {
@@ -579,6 +632,27 @@ public class CustomMigrationTaskTab extends CustomTab {
         TextArea area = new TextArea(content);
         area.setEditable(false);
         area.setWrapText(true);
+        // 右键菜单样式与单行输入框（CustomUserTextField）一致：复制/剪切/粘贴 + 图标 + 快捷键提示
+        CustomShortcutMenuItem copyMenuItem = MenuItemUtil.createMenuItemI18n(
+                "menu.copy", "Ctrl+C", IconFactory.group(IconPaths.COPY, 0.7));
+        CustomShortcutMenuItem cutMenuItem = MenuItemUtil.createMenuItemI18n(
+                "menu.cut", "Ctrl+X", IconFactory.group(IconPaths.CUT, 0.65));
+        CustomShortcutMenuItem pasteMenuItem = MenuItemUtil.createMenuItemI18n(
+                "menu.paste", "Ctrl+V", IconFactory.group(IconPaths.PASTE, 0.65));
+        copyMenuItem.setOnAction(event -> area.copy());
+        cutMenuItem.setOnAction(event -> area.cut());
+        pasteMenuItem.setOnAction(event -> area.paste());
+        javafx.scene.control.ContextMenu contextMenu =
+                new CustomContextMenu(copyMenuItem, cutMenuItem, pasteMenuItem);
+        contextMenu.setOnShowing(event -> {
+            boolean hasSelection = !area.getSelectedText().isEmpty();
+            boolean clipboardHasText = javafx.scene.input.Clipboard.getSystemClipboard().hasString();
+            boolean editable = area.isEditable();
+            copyMenuItem.setDisable(!hasSelection);
+            cutMenuItem.setDisable(!editable || !hasSelection);
+            pasteMenuItem.setDisable(!editable || !clipboardHasText);
+        });
+        area.setContextMenu(contextMenu);
 
         ButtonType closeButton = new ButtonType(
                 I18n.t("migration.button.close", "Close"), ButtonBar.ButtonData.OK_DONE);
@@ -604,6 +678,8 @@ public class CustomMigrationTaskTab extends CustomTab {
             case FUNCTION -> I18n.t("migration.kind.function", "Function");
             case PROCEDURE -> I18n.t("migration.kind.procedure", "Procedure");
             case PACKAGE -> I18n.t("migration.kind.package", "Package");
+            case INDEX -> I18n.t("migration.kind.index", "Index");
+            case FOREIGN_KEY -> I18n.t("migration.kind.foreign_key", "Foreign Key");
             case ALL -> I18n.t("migration.kind.all", "All");
         };
     }

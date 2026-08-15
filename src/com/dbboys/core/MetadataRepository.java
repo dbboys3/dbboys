@@ -8,9 +8,11 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TreeMap;
 
 public interface MetadataRepository {
@@ -144,6 +146,104 @@ public interface MetadataRepository {
         DatabaseMetaData metaData = conn.getMetaData();
         QualifiedName qualifiedName = parseQualifiedName(tableName);
         return lookupPrimaryKeyColumns(metaData, conn, qualifiedName);
+    }
+
+    /** 表级 sqlmode（仅 Informix 族有，"Oracle"/"MySQL"/"GBase"；其余平台返回 null）。
+     *  迁移的类型映射以它优先，再看连接的数据库类型。 */
+    default String getTableSqlMode(Connection conn, String tableName) throws SQLException {
+        return null;
+    }
+
+    // ---- 外键（数据迁移用：通用 JDBC 元数据实现，方言可覆盖提速） ----
+
+    /** 单表外键清单：列按 KEY_SEQ 有序；库/模式按当前会话候选值探测（同主键读取）。无名外键跳过。 */
+    default List<ForeignKey> getTableForeignKeys(Connection conn, String tableName) throws SQLException {
+        if (conn == null || tableName == null || tableName.isBlank()) {
+            return List.of();
+        }
+        DatabaseMetaData metaData = conn.getMetaData();
+        QualifiedName qualifiedName = parseQualifiedName(tableName);
+        for (String catalog : candidateValues(conn.getCatalog())) {
+            for (String schema : candidateValues(qualifiedName.schema(), conn.getSchema())) {
+                List<ForeignKey> foreignKeys = readForeignKeys(metaData, catalog, schema, qualifiedName.table());
+                if (!foreignKeys.isEmpty()) {
+                    return foreignKeys;
+                }
+            }
+        }
+        return List.of();
+    }
+
+    /** 指定库/模式下全部表的外键（逐表读 JDBC 元数据，表多时偏慢——仅迁移展开/挑选用）。 */
+    default List<ForeignKey> getForeignKeys(Connection conn, String databaseName) throws SQLException {
+        List<Table> tables = getUserTables(conn, databaseName);
+        if (tables == null || tables.isEmpty()) {
+            return List.of();
+        }
+        List<ForeignKey> result = new ArrayList<>();
+        for (Table table : tables) {
+            if (table != null && table.getName() != null && !table.getName().isBlank()) {
+                result.addAll(getTableForeignKeys(conn, table.getName()));
+            }
+        }
+        return result;
+    }
+
+    private static List<ForeignKey> readForeignKeys(DatabaseMetaData metaData,
+                                                    String catalog,
+                                                    String schema,
+                                                    String tableName) throws SQLException {
+        Map<String, ForeignKey> byName = new LinkedHashMap<>();
+        Map<String, TreeMap<Short, String>> fkColumnsByName = new LinkedHashMap<>();
+        Map<String, TreeMap<Short, String>> pkColumnsByName = new LinkedHashMap<>();
+        try (ResultSet rs = metaData.getExportedKeys(catalog, schema, tableName)) {
+            while (rs.next()) {
+                String fkName = rs.getString("FK_NAME");
+                String fkTable = rs.getString("FKTABLE_NAME");
+                String pkTable = rs.getString("PKTABLE_NAME");
+                String fkColumn = rs.getString("FKCOLUMN_NAME");
+                String pkColumn = rs.getString("PKCOLUMN_NAME");
+                if (fkName == null || fkName.isBlank() || fkTable == null || fkTable.isBlank()
+                        || pkTable == null || pkTable.isBlank() || fkColumn == null || pkColumn == null) {
+                    continue;
+                }
+                ForeignKey fk = byName.computeIfAbsent(fkName, n -> {
+                    ForeignKey created = new ForeignKey(n);
+                    created.setTableName(fkTable);
+                    created.setRefTableName(pkTable);
+                    created.setDeleteRule(ruleName(rsGetShortQuiet(rs, "DELETE_RULE")));
+                    created.setUpdateRule(ruleName(rsGetShortQuiet(rs, "UPDATE_RULE")));
+                    return created;
+                });
+                short keySeq = rs.getShort("KEY_SEQ");
+                fkColumnsByName.computeIfAbsent(fkName, n -> new TreeMap<>()).putIfAbsent(keySeq, fkColumn);
+                pkColumnsByName.computeIfAbsent(fkName, n -> new TreeMap<>()).putIfAbsent(keySeq, pkColumn);
+            }
+        }
+        for (Map.Entry<String, ForeignKey> entry : byName.entrySet()) {
+            entry.getValue().setColumns(String.join(", ", fkColumnsByName.get(entry.getKey()).values()));
+            entry.getValue().setRefColumns(String.join(", ", pkColumnsByName.get(entry.getKey()).values()));
+        }
+        return new ArrayList<>(byName.values());
+    }
+
+    private static short rsGetShortQuiet(ResultSet rs, String column) {
+        try {
+            return rs.getShort(column);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** JDBC 规则码（importedKeyXxx）→ SQL 字面值；未知/NO ACTION 返回 null（生成 DDL 时不附加）。 */
+    private static String ruleName(short rule) {
+        return switch (rule) {
+            case DatabaseMetaData.importedKeyCascade -> "CASCADE";
+            case DatabaseMetaData.importedKeyRestrict -> "RESTRICT";
+            case DatabaseMetaData.importedKeySetNull -> "SET NULL";
+            case DatabaseMetaData.importedKeySetDefault -> "SET DEFAULT";
+            default -> null;
+        };
     }
 
     default List<String> getTableColumnNames(Connection conn, String tableName) throws SQLException {

@@ -10,25 +10,34 @@ import java.util.List;
  * 迁移对象引用：定位源端一个待迁移对象，或某个库/模式节点下的全部对象（通配）。
  *
  * <p>持久化为 JSON 数组存于 t_migration_task.c_objects，单个对象格式：
- * <pre>{"catalog":"...","schema":"...","kind":"TABLE","name":"..."}</pre>
+ * <pre>{"catalog":"...","schema":"...","kind":"TABLE","name":"...","where":"...","parent":"..."}</pre>
  * {@code kind=ALL} 时 name 为空，表示该 catalog(/schema) 节点下全部支持的对象，
  * 运行时展开（能捡到保存后新建的表）；{@code kind != ALL && name == null} 表示
- * 类型级通配（该节点下此类型的全部对象），同样运行时展开。</p>
+ * 类型级通配（该节点下此类型的全部对象），同样运行时展开。
+ * {@code where} 仅 TABLE 用（数据过滤条件）；{@code parent} 仅 INDEX/FOREIGN_KEY 用（宿主表名，
+ * DROP/DDL 生成需要，MySQL 的 DROP INDEX 与外键的 ALTER TABLE 都离不开宿主表）。</p>
  */
-public record MigrationObjectRef(String catalog, String schema, Kind kind, String name, String where) {
+public record MigrationObjectRef(String catalog, String schema, Kind kind, String name, String where,
+                                 String parent) {
 
-    public enum Kind { TABLE, VIEW, SEQUENCE, SYNONYM, TRIGGER, FUNCTION, PROCEDURE, PACKAGE, ALL }
+    public enum Kind { TABLE, VIEW, SEQUENCE, SYNONYM, TRIGGER, FUNCTION, PROCEDURE, PACKAGE, INDEX, FOREIGN_KEY, ALL }
 
     public MigrationObjectRef {
         catalog = normalize(catalog);
         schema = normalize(schema);
         name = normalize(name);
         where = normalize(where);
+        parent = normalize(parent);
     }
 
-    /** 兼容旧调用：无 WHERE 条件。 */
+    /** 兼容旧调用：无 WHERE 条件、无宿主表。 */
     public MigrationObjectRef(String catalog, String schema, Kind kind, String name) {
-        this(catalog, schema, kind, name, null);
+        this(catalog, schema, kind, name, null, null);
+    }
+
+    /** 兼容旧调用：无宿主表。 */
+    public MigrationObjectRef(String catalog, String schema, Kind kind, String name, String where) {
+        this(catalog, schema, kind, name, where, null);
     }
 
     /** 整节点通配：catalog(/schema) 下全部支持的对象。 */
@@ -89,6 +98,9 @@ public record MigrationObjectRef(String catalog, String schema, Kind kind, Strin
         if (where != null) {
             obj.put("where", where);
         }
+        if (parent != null) {
+            obj.put("parent", parent);
+        }
         return obj;
     }
 
@@ -107,7 +119,8 @@ public record MigrationObjectRef(String catalog, String schema, Kind kind, Strin
                 obj.has("schema") ? obj.optString("schema", null) : null,
                 kind,
                 obj.has("name") ? obj.optString("name", null) : null,
-                obj.has("where") ? obj.optString("where", null) : null);
+                obj.has("where") ? obj.optString("where", null) : null,
+                obj.has("parent") ? obj.optString("parent", null) : null);
     }
 
     public static String toJsonArray(List<MigrationObjectRef> refs) {

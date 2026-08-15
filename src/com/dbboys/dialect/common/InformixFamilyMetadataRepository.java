@@ -9,8 +9,10 @@ import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -864,6 +866,130 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
                 """;
         SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
         return runner.query(fetchSql, List.of(tableName), rs -> rs.getString(1));        
+    }
+
+    /**
+     * 外键清单：复用方言 DDL 打印同款的 sysconstraints/sysreferences 查询
+     * （GBase/Informix 的 JDBC 元数据对外键支持不全，所以走系统目录现有查询）。
+     * 列名由 indexkeys 的 1 基列序号解码（与 DDL 打印的 getIdxCols 同一编码）。
+     */
+    @Override
+    public List<ForeignKey> getTableForeignKeys(Connection conn, String tableName) throws SQLException {
+        if (conn == null || tableName == null || tableName.isBlank()) {
+            return List.of();
+        }
+        String fkSql = """
+                SELECT fk_c.constrname, fk_t.tabname AS fktabname,
+                       cast(fk_i.indexkeys as lvarchar) AS fk_keys,
+                       pk_t.tabname AS pktabname, cast(pk_i.indexkeys as lvarchar) AS pk_keys
+                FROM sysconstraints fk_c, systables fk_t, sysindices fk_i, sysreferences fk_r,
+                     sysconstraints pk_c, systables pk_t, sysindices pk_i, sysobjstate obj
+                WHERE fk_c.tabid = fk_t.tabid
+                  AND fk_c.constrname = obj.name
+                  AND obj.objtype = 'C'
+                  AND fk_t.tabname = ?
+                  AND fk_c.constrtype = 'R'
+                  AND fk_c.idxname = fk_i.idxname
+                  AND fk_c.constrid = fk_r.constrid
+                  AND fk_r.PRIMARY = pk_c.constrid
+                  AND pk_c.tabid = pk_t.tabid
+                  AND pk_c.idxname = pk_i.idxname
+                """;
+        SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+        List<String[]> rows = runner.query(fkSql, List.of(normalizeTableLookupName(tableName)),
+                rs -> new String[]{
+                        rs.getString("constrname"), rs.getString("fktabname"), rs.getString("fk_keys"),
+                        rs.getString("pktabname"), rs.getString("pk_keys")});
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<String>> columnsCache = new HashMap<>();
+        List<ForeignKey> result = new ArrayList<>();
+        for (String[] row : rows) {
+            String fkName = row[0] == null ? "" : row[0].trim();
+            String fkTable = row[1] == null ? "" : row[1].trim();
+            String pkTable = row[3] == null ? "" : row[3].trim();
+            if (fkName.isEmpty() || fkTable.isEmpty() || pkTable.isEmpty()) {
+                continue;
+            }
+            List<String> fkColumns = columnsCache.computeIfAbsent(fkTable,
+                    t -> tableColumnNamesQuiet(conn, t));
+            List<String> pkColumns = columnsCache.computeIfAbsent(pkTable,
+                    t -> tableColumnNamesQuiet(conn, t));
+            ForeignKey foreignKey = new ForeignKey(fkName);
+            foreignKey.setTableName(fkTable);
+            foreignKey.setRefTableName(pkTable);
+            foreignKey.setColumns(decodeIndexKeys(row[2], fkColumns));
+            foreignKey.setRefColumns(decodeIndexKeys(row[4], pkColumns));
+            // 现有查询不带 ON DELETE/UPDATE 规则（与方言 DDL 打印一致），规则留空
+            result.add(foreignKey);
+        }
+        return result;
+    }
+
+    /** 表的列名清单（按 colno 有序，供 indexkeys 解码）；读取失败返回空清单。 */
+    private static List<String> tableColumnNamesQuiet(Connection conn, String tableName) {
+        try {
+            SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+            return runner.query("""
+                    SELECT trim(c.colname) FROM syscolumns c, systables t
+                    WHERE c.tabid = t.tabid AND t.tabname = ?
+                    ORDER BY c.colno
+                    """, List.of(tableName), rs -> rs.getString(1));
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** indexkeys 文本（如 "1 [1], -3 [1]"）解码为列名清单：逗号分隔、空格前整数的绝对值为 1 基列序号（负值=DESC，外键无需排序）。 */
+    private static String decodeIndexKeys(String indexKeys, List<String> columnNames) {
+        if (indexKeys == null || columnNames == null || columnNames.isEmpty()) {
+            return "";
+        }
+        StringBuilder columns = new StringBuilder();
+        for (String part : indexKeys.trim().split(",(?![^()]*+\\))")) {
+            String token = part.trim();
+            if (token.isEmpty() || token.startsWith("<")) {
+                continue; // 函数索引键不会出现在外键上，防御跳过
+            }
+            int space = token.indexOf(' ');
+            int colno;
+            try {
+                colno = Integer.parseInt(space > 0 ? token.substring(0, space) : token);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            int position = Math.abs(colno) - 1;
+            if (position < 0 || position >= columnNames.size()) {
+                continue;
+            }
+            if (columns.length() > 0) {
+                columns.append(", ");
+            }
+            columns.append(columnNames.get(position));
+        }
+        return columns.toString();
+    }
+
+    /** 表级 sqlmode：取 systables.flags 的 16384（Oracle）/65536（MySQL）位，其余为 "GBase"。 */
+    @Override
+    public String getTableSqlMode(Connection conn, String tableName) throws SQLException {
+        if (conn == null || tableName == null || tableName.isBlank()) {
+            return null;
+        }
+        SqlRunner runner = new SqlRunner(conn, DEFAULT_QUERY_TIMEOUT_SECONDS);
+        Integer flags = runner.queryOne("SELECT t.flags FROM systables t WHERE t.tabname = ?",
+                List.of(normalizeTableLookupName(tableName)), rs -> rs.getInt(1));
+        if (flags == null) {
+            return null;
+        }
+        if ((flags & 16384) == 16384) {
+            return "Oracle";
+        }
+        if ((flags & 65536) == 65536) {
+            return "MySQL";
+        }
+        return "GBase";
     }
 
     private static String normalizeTableLookupName(String tableName) {

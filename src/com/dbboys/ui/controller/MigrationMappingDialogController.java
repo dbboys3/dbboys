@@ -3,7 +3,6 @@ package com.dbboys.ui.controller;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.PlatformResolvers;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.model.Connect;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.service.migration.TableMapping;
 import com.dbboys.service.migration.TypeMapper;
@@ -42,13 +41,14 @@ import java.util.Set;
 public class MigrationMappingDialogController {
     private static final Logger log = LogManager.getLogger(MigrationMappingDialogController.class);
     private static final double DIALOG_W = 456;
-    private static final double DIALOG_H = 500;
+    private static final double DIALOG_H = 490;
 
     private GridPane rowsGrid;
     private GridPane headerGrid;
     private ScrollPane scroll;
-    private Connect source;
-    private Connect target;
+    // sqlmode 修正后的源/目标平台类型（有 sqlmode 以 sqlmode 为准）
+    private String sourceDbType;
+    private String targetDbType;
     private final ObservableList<MappingRow> rows = FXCollections.observableArrayList();
     private List<String> sourceTypes = List.of();
     private List<String> targetTypes = List.of();
@@ -57,14 +57,15 @@ public class MigrationMappingDialogController {
     /**
      * 打开全局数据映射对话框。
      * {@code initial} 中 {@code "*"} 条目的 typeOverrides 为源类型 → 目标类型。
+     * {@code sourceDbType}/{@code targetDbType} 为 sqlmode 修正后的平台类型（由调用方探测传入）。
      */
     public Map<String, TableMapping> showAndWait(Window owner, String taskName,
-                                                 Connect source, Connect target,
+                                                 String sourceDbType, String targetDbType,
                                                  Map<String, TableMapping> initial) {
-        this.source = source;
-        this.target = target;
-        this.sourceTypes = columnTypes(source);
-        this.targetTypes = columnTypes(target);
+        this.sourceDbType = sourceDbType;
+        this.targetDbType = targetDbType;
+        this.sourceTypes = columnTypes(sourceDbType);
+        this.targetTypes = columnTypes(targetDbType);
         this.result = null;
 
         VBox content = buildContent(initial == null ? Map.of() : initial);
@@ -241,16 +242,16 @@ public class MigrationMappingDialogController {
                 new TableMapping(Set.of(), overrides));
     }
 
-    private static List<String> columnTypes(Connect connect) {
-        if (connect == null) {
+    private static List<String> columnTypes(String dbtype) {
+        if (dbtype == null || dbtype.isBlank()) {
             return List.of();
         }
         try {
-            DatabasePlatform platform = PlatformResolvers.get().requirePlatform(connect);
+            DatabasePlatform platform = PlatformResolvers.get().requirePlatform(dbtype);
             List<String> types = platform.getColumnTypes();
             return types == null ? List.of() : new ArrayList<>(types);
         } catch (Exception e) {
-            log.debug("load column types failed for {}", connect.getDbtype(), e);
+            log.debug("load column types failed for {}", dbtype, e);
             return List.of();
         }
     }
@@ -260,8 +261,8 @@ public class MigrationMappingDialogController {
             ColumnsInfo column = new ColumnsInfo();
             column.setColName("c");
             column.setColType(sourceType);
-            TypeMapper.GenericType generic = TypeMapper.normalize(source.getDbtype(), column);
-            return TypeMapper.toTargetType(target.getDbtype(), generic, column, new ArrayList<>());
+            TypeMapper.GenericType generic = TypeMapper.normalize(sourceDbType, column);
+            return TypeMapper.toTargetType(targetDbType, generic, column, new ArrayList<>());
         } catch (Exception e) {
             log.debug("default target type failed for {}", sourceType, e);
             return "";

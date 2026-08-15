@@ -900,6 +900,16 @@ public final class InformixDdlRepository implements DdlRepository {
      */
     @Override
     public String printTable(Connection connection,String tablename) throws SQLException, ClassNotFoundException {
+        return printTable(connection, tablename, false);
+    }
+
+    /** 迁移用建表 DDL：不带索引和约束（索引/外键作为独立迁移对象，在全部表数据迁移完成后才创建）。 */
+    @Override
+    public String printTableForMigration(Connection connection, String tablename) throws SQLException, ClassNotFoundException {
+        return printTable(connection, tablename, true);
+    }
+
+    private String printTable(Connection connection, String tablename, boolean skipIndexesAndConstraints) throws SQLException, ClassNotFoundException {
         String patternConstraint = "^[cur]\\d+_\\d+";              // u=unique,r=reference,c=check
         Table tableInfo = getTableInfo(connection,tablename);
         String sqlmode = tableInfo.getTableSqlMode();
@@ -930,13 +940,14 @@ public final class InformixDdlRepository implements DdlRepository {
         }
         ddl.append(getName(tableInfo.getName(),sqlmode)).append(" (\n");
 
-        ArrayList<CheckInfo> checks = getCheck(connection,tablename);
+        // 迁移建表不带索引和约束：跳过对应元数据查询，后续 append 遇空清单自然不产出
+        ArrayList<CheckInfo> checks = skipIndexesAndConstraints ? new ArrayList<>() : getCheck(connection,tablename);
         ArrayList<ColumnsInfo> columns = getColInfo(connection,tableInfo);
-        ArrayList<PrimaryKeyInfo> primaryKeys = getPrimaryKey(connection,columns,tablename,sqlmode);
-        ArrayList<Index> indexes = getIndexesInfo(connection,columns,tablename,sqlmode);
+        ArrayList<PrimaryKeyInfo> primaryKeys = skipIndexesAndConstraints ? new ArrayList<>() : getPrimaryKey(connection,columns,tablename,sqlmode);
+        ArrayList<Index> indexes = skipIndexesAndConstraints ? new ArrayList<>() : getIndexesInfo(connection,columns,tablename,sqlmode);
         ArrayList<FragmentInfo> tableFragments = getTableFragmentInfo(connection,tablename);
         ArrayList<String> triggers = getTriggerList(connection,tablename);
-        ArrayList<ForeignKeyInfo> foreignKeys = getForeignKeyInfo(connection,tablename);
+        ArrayList<ForeignKeyInfo> foreignKeys = skipIndexesAndConstraints ? new ArrayList<>() : getForeignKeyInfo(connection,tablename);
 
         appendColumnsDefinition(ddl, columns, sqlmode);
         appendCheckConstraints(ddl, checks, sqlmode, patternConstraint);

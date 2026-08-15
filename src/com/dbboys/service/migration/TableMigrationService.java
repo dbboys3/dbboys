@@ -11,6 +11,8 @@ import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.BackgroundSqlTask;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Connect;
+import com.dbboys.model.ForeignKey;
+import com.dbboys.model.Index;
 import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.Sql;
 import com.dbboys.model.TreeData;
@@ -197,9 +199,10 @@ public class TableMigrationService {
 
         try {
             // 2. 目标端主会话：仅用于预取冲突检测与后台任务展示；DDL/数据在各工作线程独立连接上执行
+            //    迁移连接不做方言会话初始化（createConnection），避免会话级设置影响 DDL/类型映射判定
             Connect targetSessionConnect = buildTargetSessionConnect(request, ctx.resolver);
             Connection targetConn = BackgroundSqlService.getConnectionService()
-                    .getConnectionWithSessionInit(targetSessionConnect);
+                    .createConnection(targetSessionConnect);
             if (targetConn == null) {
                 throw new SQLException("cannot open target connection");
             }
@@ -207,6 +210,8 @@ public class TableMigrationService {
             backSqlTask.setConnection(targetConn);
             ctx.targetPlatform = ctx.resolver.requirePlatform(targetSessionConnect);
             ctx.targetParser = ctx.targetPlatform.parser();
+            // 目标端类型映射基准：支持 sqlmode 的平台（GBase 8S）以探测到的 sqlmode 为准
+            ctx.targetMappingType = resolveTargetMappingType(ctx, targetSessionConnect, targetConn);
 
             // 3. 按请求中的 kind 预取目标已存在对象名集合（冲突检测；触发器额外记录宿主表）
             prefetchTargetNames(ctx, targetConn, targetSessionConnect);
@@ -222,48 +227,25 @@ public class TableMigrationService {
                 }
             }
 
-            // 5. 生产者-消费者并行迁移：读线程逐对象 DDL + 拉数产批 → 有界队列 → 写线程消费写入目标
-            int readers = Math.max(1, Math.min(request.readThreadCount(), Math.max(total, 1)));
-            int writers = Math.max(1, request.writeThreadCount());
+            // 5. 生产者-消费者并行迁移，分两个阶段：先全部表（结构+数据），
+            //    所有表数据迁移完成后才开始表以外的对象（索引/外键后建也避免拖慢数据装载）
             ctx.total = total;
-            // 有界队列形成反压：读快写慢时读线程在 offer 上等待，不会无限攒行
-            BlockingQueue<RowBatch> dataQueue = new ArrayBlockingQueue<>(Math.max(16, writers * 4));
-            AtomicInteger cursor = new AtomicInteger();
-            AtomicInteger readersRunning = new AtomicInteger(readers);
-            AtomicReference<Exception> workerFatal = new AtomicReference<>();
-            ExecutorService pool = Executors.newFixedThreadPool(readers + writers, new ThreadFactory() {
-                private final AtomicInteger seq = new AtomicInteger();
-
-                @Override
-                public Thread newThread(Runnable runnable) {
-                    Thread thread = new Thread(runnable, "migration-worker-" + seq.incrementAndGet());
-                    thread.setDaemon(true);
-                    return thread;
+            List<GroupKey> tableGroups = new ArrayList<>();
+            List<MigrationObjectRef> tableObjects = new ArrayList<>();
+            List<GroupKey> otherGroups = new ArrayList<>();
+            List<MigrationObjectRef> otherObjects = new ArrayList<>();
+            for (int i = 0; i < flatObjects.size(); i++) {
+                if (flatObjects.get(i).kind() == MigrationObjectRef.Kind.TABLE) {
+                    tableGroups.add(flatGroups.get(i));
+                    tableObjects.add(flatObjects.get(i));
+                } else {
+                    otherGroups.add(flatGroups.get(i));
+                    otherObjects.add(flatObjects.get(i));
                 }
-            });
-            try {
-                for (int w = 0; w < readers; w++) {
-                    pool.submit(() -> runReader(ctx, flatGroups, flatObjects, cursor, dataQueue,
-                            results, readersRunning, workerFatal));
-                }
-                for (int w = 0; w < writers; w++) {
-                    pool.submit(() -> runWriter(ctx, dataQueue, results, readersRunning, workerFatal));
-                }
-                pool.shutdown();
-                while (!pool.awaitTermination(500, TimeUnit.MILLISECONDS)) {
-                    checkCancelled(backSqlTask);
-                }
-                checkCancelled(backSqlTask);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new CancellationException("table migration cancelled");
-            } finally {
-                pool.shutdownNow();
             }
-            // 有对象未出结果且工作线程发生过致命错误（如目标连接打不开）→ 整体失败
-            if (results.size() < total && workerFatal.get() != null) {
-                throw workerFatal.get();
-            }
+            // 阶段一：表（读线程产批 → 有界队列 → 写线程消费）；阶段二：非表对象（仅读线程做 DDL）
+            runPhase(ctx, tableGroups, tableObjects, 0, true, results);
+            runPhase(ctx, otherGroups, otherObjects, tableObjects.size(), false, results);
             return new MigrationSummary(new ArrayList<>(results), false);
         } catch (CancellationException e) {
             log(listener, I18n.t("migration.log.cancelled", "Migration cancelled"));
@@ -282,29 +264,84 @@ public class TableMigrationService {
     }
 
     /**
+     * 单阶段执行：读线程经共享游标处理 objects；withWriters 时另起写线程消费行批次。
+     * indexOffset 为阶段首个对象在整任务清单中的下标（listener 进度按全任务计数）。
+     * 对象结果缺失且工作线程发生过致命错误（如目标连接打不开）时抛出，整体失败。
+     */
+    private void runPhase(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
+                          int indexOffset, boolean withWriters, List<ItemResult> results) throws Exception {
+        int phaseTotal = objects.size();
+        if (phaseTotal == 0) {
+            return;
+        }
+        int baseline = results.size();
+        int readers = Math.max(1, Math.min(ctx.request.readThreadCount(), phaseTotal));
+        int writers = withWriters ? Math.max(1, ctx.request.writeThreadCount()) : 0;
+        // 有界队列形成反压：读快写慢时读线程在 offer 上等待，不会无限攒行
+        BlockingQueue<RowBatch> dataQueue = new ArrayBlockingQueue<>(Math.max(16, Math.max(writers, 1) * 4));
+        AtomicInteger cursor = new AtomicInteger();
+        AtomicInteger readersRunning = new AtomicInteger(readers);
+        AtomicReference<Exception> workerFatal = new AtomicReference<>();
+        ExecutorService pool = Executors.newFixedThreadPool(readers + writers, new ThreadFactory() {
+            private final AtomicInteger seq = new AtomicInteger();
+
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "migration-worker-" + seq.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
+        try {
+            for (int w = 0; w < readers; w++) {
+                pool.submit(() -> runReader(ctx, groups, objects, cursor, dataQueue,
+                        results, readersRunning, workerFatal, indexOffset));
+            }
+            for (int w = 0; w < writers; w++) {
+                pool.submit(() -> runWriter(ctx, dataQueue, results, readersRunning, workerFatal));
+            }
+            pool.shutdown();
+            while (!pool.awaitTermination(500, TimeUnit.MILLISECONDS)) {
+                checkCancelled(ctx.backSqlTask);
+            }
+            checkCancelled(ctx.backSqlTask);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("table migration cancelled");
+        } finally {
+            pool.shutdownNow();
+        }
+        if (results.size() < baseline + phaseTotal && workerFatal.get() != null) {
+            throw workerFatal.get();
+        }
+    }
+
+    /**
      * 读线程（生产者）主循环：共享游标取对象下标，逐对象做 DDL 并产出行批次
      * （每线程独立 {@link WorkerSession}）。目标连接打开失败等致命错误记入 {@code workerFatal} 后退出，
      * 剩余对象由其他读线程继续拾取；单对象失败由 {@link #produceObject} 兜住记 FAILED；取消时安静退出。
      */
     private void runReader(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
                            AtomicInteger cursor, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
-                           AtomicInteger readersRunning, AtomicReference<Exception> workerFatal) {
+                           AtomicInteger readersRunning, AtomicReference<Exception> workerFatal,
+                           int indexOffset) {
         int total = objects.size();
         try (WorkerSession ws = new WorkerSession(ctx)) {
-            for (int index = cursor.getAndIncrement(); index < total; index = cursor.getAndIncrement()) {
+            for (int local = cursor.getAndIncrement(); local < total; local = cursor.getAndIncrement()) {
                 checkCancelled(ctx.backSqlTask);
-                MigrationObjectRef object = objects.get(index);
+                int index = indexOffset + local;
+                MigrationObjectRef object = objects.get(local);
                 if (ctx.listener != null) {
-                    ctx.listener.onItemStart(index, total, object.name());
+                    ctx.listener.onItemStart(index, ctx.total, object.name());
                 }
                 try {
-                    ws.ensureSource(groups.get(index));
+                    ws.ensureSource(groups.get(local));
                     ItemResult immediate = produceObject(ctx, ws, object, index, dataQueue, results, workerFatal);
                     if (immediate != null) {
                         // 非数据表/提前失败：读线程当场出结果；数据表由管道完成时异步出结果
                         results.add(immediate);
                         if (ctx.listener != null) {
-                            ctx.listener.onItemDone(index, total, immediate);
+                            ctx.listener.onItemDone(index, ctx.total, immediate);
                         }
                     }
                 } catch (CancellationException e) {
@@ -317,7 +354,7 @@ public class TableMigrationService {
                     ItemResult result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
                     results.add(result);
                     if (ctx.listener != null) {
-                        ctx.listener.onItemDone(index, total, result);
+                        ctx.listener.onItemDone(index, ctx.total, result);
                     }
                 }
             }
@@ -634,7 +671,7 @@ public class TableMigrationService {
             // 原生 DDL 按 kind 分派回放：同族全保真；跨族非表对象尽力回放（不兼容由目标库报错记 FAILED）
             DdlRepository ddl = ctx.resolver.ddl(ws.sourceSessionConnect);
             return switch (object.kind()) {
-                case TABLE -> ddl.printTable(ws.sourceConn, objectName);
+                case TABLE -> ddl.printTableForMigration(ws.sourceConn, objectName);
                 case VIEW -> ddl.printView(ws.sourceConn, objectName);
                 case SEQUENCE -> ddl.printSequence(ws.sourceConn, objectName);
                 case SYNONYM -> ddl.printSynonym(ws.sourceConn, objectName);
@@ -642,6 +679,8 @@ public class TableMigrationService {
                 case FUNCTION -> ddl.printFunction(ws.sourceConn, objectName);
                 case PROCEDURE -> ddl.printProcedure(ws.sourceConn, objectName);
                 case PACKAGE -> ddl.printPackage(ws.sourceConn, objectName);
+                case INDEX -> ddl.printIndex(ws.sourceConn, objectName);
+                case FOREIGN_KEY -> buildForeignKeyDdl(ctx, ws, object);
                 case ALL -> throw new SQLException("wildcard object has no DDL");
             };
         }
@@ -652,7 +691,7 @@ public class TableMigrationService {
                             "Custom mapping applied for table %s, DDL generated from structure"),
                     objectName));
         }
-        // 跨族或应用自定义映射（逐表/全局）的表：TypeMapper 类型映射建表
+        // 跨族或应用自定义映射（逐表/全局）的表：TypeMapper 类型映射建表（源类型 sqlmode 优先）
         ArrayList<ColumnsInfo> columns = ctx.sourceMeta.getColumns(ws.sourceConn, objectName);
         List<String> primaryKeyColumns = ctx.sourceMeta.getPrimaryKeyColumns(ws.sourceConn, objectName);
         String tableComment = null;
@@ -663,7 +702,8 @@ public class TableMigrationService {
         }
         List<String> warnings = new ArrayList<>();
         String script = TypeMapper.buildCreateTableScript(
-                ctx.request.source().getDbtype(), ctx.request.target().getDbtype(),
+                sourceTypeForMapping(ctx, ws, objectName),
+                ctx.targetMappingType == null ? ctx.request.target().getDbtype() : ctx.targetMappingType,
                 objectName, columns, primaryKeyColumns, tableComment, warnings,
                 mapping, globalTypes);
         for (String warning : warnings) {
@@ -675,7 +715,9 @@ public class TableMigrationService {
 
     /**
      * 覆盖重建时的 DROP 语句。触发器走 {@link DatabasePlatform#dropTriggerSql}
-     * （PostgreSQL 需要 ON &lt;table&gt;，表名来自目标端预取映射；查不到返回 null，由调用方记 FAILED）。
+     * （PostgreSQL 需要 ON &lt;table&gt;）、索引走 {@link DatabasePlatform#dropIndexSql}
+     * （MySQL 需要 ON &lt;table&gt;）、外键走 ALTER TABLE ... DROP CONSTRAINT（MySQL 系 DROP FOREIGN KEY）
+     * ——表名都来自目标端预取映射；查不到返回 null，由调用方记 FAILED。
      */
     private String buildDropSql(MigrationContext ctx, MigrationObjectRef object) {
         if (object.kind() == MigrationObjectRef.Kind.TRIGGER) {
@@ -684,6 +726,23 @@ public class TableMigrationService {
                 return null;
             }
             return ctx.targetPlatform.dropTriggerSql(object.name(), tableName);
+        }
+        if (object.kind() == MigrationObjectRef.Kind.INDEX) {
+            String tableName = ctx.existingIndexTables.get(normalizeName(object.name()));
+            if (tableName == null || tableName.isBlank()) {
+                return null;
+            }
+            return ctx.targetPlatform.dropIndexSql(object.name(), tableName);
+        }
+        if (object.kind() == MigrationObjectRef.Kind.FOREIGN_KEY) {
+            String tableName = ctx.existingForeignKeyTables.get(normalizeName(object.name()));
+            if (tableName == null || tableName.isBlank()) {
+                return null;
+            }
+            // MySQL 系外键删除用 DROP FOREIGN KEY，其余按标准 DROP CONSTRAINT（跨族尽力而为）
+            boolean mysqlFamily = ddlFamilyOf(ctx.resolver, ctx.request.target()) == DdlFamily.MYSQL;
+            return "ALTER TABLE " + tableName
+                    + (mysqlFamily ? " DROP FOREIGN KEY " : " DROP CONSTRAINT ") + object.name();
         }
         return ctx.targetPlatform.dropObjectSql(dropObjectType(object.kind()), object.name());
     }
@@ -699,8 +758,91 @@ public class TableMigrationService {
             case FUNCTION -> "function";
             case PROCEDURE -> "procedure";
             case PACKAGE -> "package";
+            case INDEX, FOREIGN_KEY ->
+                    throw new IllegalArgumentException("index/foreign key drop needs host table");
             case ALL -> throw new IllegalArgumentException("wildcard object has no drop type");
         };
+    }
+
+    /** 外键 DDL：按 ref.parent（宿主表）从源端 JDBC 元数据取定义，生成标准 ALTER TABLE ADD CONSTRAINT。 */
+    private String buildForeignKeyDdl(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object) throws Exception {
+        String hostTable = object.parent();
+        if (hostTable == null || hostTable.isBlank()) {
+            throw new SQLException("foreign key " + object.name() + " has no host table (parent)");
+        }
+        for (ForeignKey fk : ctx.sourceMeta.getTableForeignKeys(ws.sourceConn, hostTable)) {
+            if (fk.getName() != null && fk.getName().equalsIgnoreCase(object.name())) {
+                return buildAddForeignKeySql(fk);
+            }
+        }
+        throw new SQLException("foreign key " + object.name() + " not found on table " + hostTable);
+    }
+
+    /** 类型映射用的源平台类型：表级 sqlmode 优先——有 sqlmode 时以其数据类型为准
+     *  （Oracle→ORACLE、MySQL→MYSQL、GBase→GBASE 8S），取不到 sqlmode 再看连接的数据库类型。 */
+    private static String sourceTypeForMapping(MigrationContext ctx, WorkerSession ws, String tableName) {
+        String dbtype = ctx.request.source().getDbtype();
+        try {
+            String sqlmode = ctx.sourceMeta.getTableSqlMode(ws.sourceConn, tableName);
+            if ("Oracle".equalsIgnoreCase(sqlmode)) {
+                return "ORACLE";
+            }
+            if ("MySQL".equalsIgnoreCase(sqlmode)) {
+                return "MYSQL";
+            }
+            if ("GBase".equalsIgnoreCase(sqlmode)) {
+                return "GBASE 8S";
+            }
+        } catch (Exception e) {
+            log.trace("getTableSqlMode failed for {}", tableName, e);
+        }
+        return dbtype;
+    }
+
+    /** 目标端类型映射基准：目标库支持 sqlmode 时以探测到的当前 sqlmode 为准
+     *  （mysql→MYSQL、oracle→ORACLE、gbase→GBASE 8S），探测不到/失败用连接的数据库类型。 */
+    private static String resolveTargetMappingType(MigrationContext ctx, Connect targetSessionConnect,
+                                                   Connection targetConn) {
+        String dbtype = ctx.request.target().getDbtype();
+        try {
+            var repo = ctx.resolver.sqlexe(targetSessionConnect);
+            if (repo instanceof com.dbboys.core.SqlModeCapability capability) {
+                List<String> modes = capability.getSqlModes(targetConn);
+                if (modes != null && !modes.isEmpty()) {
+                    // "sqlmode=mysql" 形式，取首项（与 SQL 页当前模式同口径）
+                    String mode = modes.get(0) == null ? "" : modes.get(0).replace("sqlmode=", "").trim();
+                    if ("mysql".equalsIgnoreCase(mode)) {
+                        return "MYSQL";
+                    }
+                    if ("oracle".equalsIgnoreCase(mode)) {
+                        return "ORACLE";
+                    }
+                    if ("gbase".equalsIgnoreCase(mode)) {
+                        return "GBASE 8S";
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.trace("probe target sqlmode failed", e);
+        }
+        return dbtype;
+    }
+
+    /** 标准外键 DDL（跨族尽力而为；目标库不兼容由执行报错记 FAILED）。规则仅在有显式动作时附加。 */
+    private static String buildAddForeignKeySql(ForeignKey fk) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ALTER TABLE ").append(fk.getTableName())
+                .append(" ADD CONSTRAINT ").append(fk.getName())
+                .append(" FOREIGN KEY (").append(fk.getColumns()).append(")")
+                .append(" REFERENCES ").append(fk.getRefTableName())
+                .append(" (").append(fk.getRefColumns()).append(")");
+        if (fk.getDeleteRule() != null) {
+            sb.append(" ON DELETE ").append(fk.getDeleteRule());
+        }
+        if (fk.getUpdateRule() != null) {
+            sb.append(" ON UPDATE ").append(fk.getUpdateRule());
+        }
+        return sb.toString();
     }
 
     /** PACKAGE 仅在源端可打印且目标端可执行时才支持。 */
@@ -725,6 +867,8 @@ public class TableMigrationService {
             case FUNCTION -> I18n.t("migration.kind.function", "function");
             case PROCEDURE -> I18n.t("migration.kind.procedure", "procedure");
             case PACKAGE -> I18n.t("migration.kind.package", "package");
+            case INDEX -> I18n.t("migration.kind.index", "index");
+            case FOREIGN_KEY -> I18n.t("migration.kind.foreign_key", "foreign key");
             case ALL -> I18n.t("migration.kind.all", "all");
         };
     }
@@ -840,11 +984,13 @@ public class TableMigrationService {
         }
         int columnCount = columns.size();
         TypeMapper.GenericType[] types = new TypeMapper.GenericType[columnCount];
+        // 类型映射以表级 sqlmode 优先，再看连接数据库类型
+        String sourceType = sourceTypeForMapping(ctx, ws, tableName);
         StringBuilder columnList = new StringBuilder();
         StringBuilder placeholders = new StringBuilder();
         for (int i = 0; i < columnCount; i++) {
             ColumnsInfo column = columns.get(i);
-            types[i] = TypeMapper.normalize(ctx.request.source().getDbtype(), column);
+            types[i] = TypeMapper.normalize(sourceType, column);
             if (i > 0) {
                 columnList.append(", ");
                 placeholders.append(", ");
@@ -1069,6 +1215,40 @@ public class TableMigrationService {
                             nameSet(ctx.targetMeta.getProcedures(targetConn, dbName, false)));
                     case PACKAGE -> ctx.existingNames.put(kind,
                             nameSet(ctx.targetMeta.getPackages(targetConn, dbName)));
+                    case INDEX -> {
+                        Set<String> names = ConcurrentHashMap.newKeySet();
+                        List<Index> indexes = ctx.targetMeta.getIndexes(targetConn, dbName);
+                        if (indexes != null) {
+                            for (Index index : indexes) {
+                                if (index == null) {
+                                    continue;
+                                }
+                                String normalized = normalizeName(index.getName());
+                                names.add(normalized);
+                                if (index.getTableName() != null && !index.getTableName().isBlank()) {
+                                    ctx.existingIndexTables.put(normalized, index.getTableName());
+                                }
+                            }
+                        }
+                        ctx.existingNames.put(kind, names);
+                    }
+                    case FOREIGN_KEY -> {
+                        Set<String> names = ConcurrentHashMap.newKeySet();
+                        List<ForeignKey> foreignKeys = ctx.targetMeta.getForeignKeys(targetConn, dbName);
+                        if (foreignKeys != null) {
+                            for (ForeignKey foreignKey : foreignKeys) {
+                                if (foreignKey == null) {
+                                    continue;
+                                }
+                                String normalized = normalizeName(foreignKey.getName());
+                                names.add(normalized);
+                                if (foreignKey.getTableName() != null && !foreignKey.getTableName().isBlank()) {
+                                    ctx.existingForeignKeyTables.put(normalized, foreignKey.getTableName());
+                                }
+                            }
+                        }
+                        ctx.existingNames.put(kind, names);
+                    }
                     case ALL -> {
                         // 通配不预取（服务不展开通配）
                     }
@@ -1306,11 +1486,17 @@ public class TableMigrationService {
         boolean sameFamily;
         DatabasePlatform targetPlatform;
         SqlParser targetParser;
+        /** 目标端类型映射基准：支持 sqlmode 的平台以探测到的 sqlmode 为准，否则=目标连接 dbtype。 */
+        String targetMappingType;
         int total;
         /** kind → 目标端已存在对象名集合（normalizeName 后，并发集）。 */
         Map<MigrationObjectRef.Kind, Set<String>> existingNames = new EnumMap<>(MigrationObjectRef.Kind.class);
         /** 目标端触发器名（normalizeName 后）→ 宿主表名，供 DROP TRIGGER ... ON table 用。 */
         Map<String, String> existingTriggerTables = new ConcurrentHashMap<>();
+        /** 目标端索引名（normalizeName 后）→ 宿主表名，供 DROP INDEX ... ON table（MySQL 系）用。 */
+        Map<String, String> existingIndexTables = new ConcurrentHashMap<>();
+        /** 目标端外键名（normalizeName 后）→ 宿主表名，供 ALTER TABLE ... DROP CONSTRAINT 用。 */
+        Map<String, String> existingForeignKeyTables = new ConcurrentHashMap<>();
     }
 
     /**
@@ -1329,8 +1515,9 @@ public class TableMigrationService {
         WorkerSession(MigrationContext ctx) throws Exception {
             this.ctx = ctx;
             Connect targetSessionConnect = buildTargetSessionConnect(ctx.request, ctx.resolver);
+            // 迁移连接不做方言会话初始化（createConnection），避免会话级设置影响 DDL/类型映射判定
             targetConn = BackgroundSqlService.getConnectionService()
-                    .getConnectionWithSessionInit(targetSessionConnect);
+                    .createConnection(targetSessionConnect);
             if (targetConn == null) {
                 throw new SQLException("cannot open target connection");
             }
@@ -1346,7 +1533,7 @@ public class TableMigrationService {
             closeSource();
             Connect sessionConnect = buildSourceSessionConnect(ctx.request.source(), group, ctx.resolver);
             sourceConn = BackgroundSqlService.getConnectionService()
-                    .getConnectionWithSessionInit(sessionConnect);
+                    .createConnection(sessionConnect);
             if (sourceConn == null) {
                 throw new SQLException("cannot open source connection");
             }

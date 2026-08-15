@@ -46,6 +46,12 @@ public interface DdlRepository {
 
     String printTable(Connection conn, String objectName) throws Exception;
 
+    /** 迁移用建表 DDL：默认同 {@link #printTable}；Informix 族覆盖为不带索引和约束的版本
+     *  （索引/外键作为独立迁移对象，在全部表数据迁移完成后才创建）。 */
+    default String printTableForMigration(Connection conn, String objectName) throws Exception {
+        return printTable(conn, objectName);
+    }
+
     String printView(Connection conn, String objectName) throws Exception;
 
     String printIndex(Connection conn, String objectName) throws Exception;

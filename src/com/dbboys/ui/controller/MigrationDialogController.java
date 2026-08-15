@@ -14,6 +14,7 @@ import com.dbboys.model.MigrationTask;
 import com.dbboys.model.Schema;
 import com.dbboys.model.TreeData;
 import com.dbboys.service.BackgroundSqlService;
+import com.dbboys.service.migration.MigrationConnectInfo;
 import com.dbboys.service.migration.TableMapping;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.dialog.CustomWindowFrameUtil;
@@ -79,7 +80,7 @@ import java.util.Set;
 public class MigrationDialogController {
     private static final Logger log = LogManager.getLogger(MigrationDialogController.class);
     private static final double DIALOG_W = 680;
-    private static final double DIALOG_H = 500;
+    private static final double DIALOG_H = 535;
 
     private Stage dialogStage;
     private TextField nameField;
@@ -93,6 +94,10 @@ public class MigrationDialogController {
     private Label sourceSchemaLabel;
     private Label targetDbLabel;
     private Label targetSchemaLabel;
+    // 源/目标数据库类型（+sqlmode）显示：dbtype 即时上屏，sqlmode 后台探测补齐
+    private Label sourceDbTypeValue;
+    private Label targetDbTypeValue;
+    private int dbTypeProbeGeneration;
     private CheckBox ddlCheckBox;
     private CheckBox dataCheckBox;
     private CheckBox truncateCheckBox;
@@ -201,6 +206,9 @@ public class MigrationDialogController {
         Label nameLabel = boundLabel("migration.task.name", "Task Name");
         Label sourceLabel = boundLabel("migration.label.source_connection", "Source Connection");
         Label targetLabel = boundLabel("migration.label.target_connection", "Target Connection");
+        // 源连接/目标连接的说明 label 加宽 10px（输入框相应收窄 10px，见 connectChoiceBox）
+        sourceLabel.setPadding(new Insets(0, 10, 0, 0));
+        targetLabel.setPadding(new Insets(0, 10, 0, 0));
         sourceDbLabel = boundLabel("migration.label.source_database", "Source Database");
         sourceSchemaLabel = boundLabel("migration.label.source_schema", "Source Schema");
         targetDbLabel = boundLabel("migration.label.target_database", "Target Database");
@@ -220,6 +228,16 @@ public class MigrationDialogController {
         form.add(sourceSchemaChoiceBox, 1, 3);
         form.add(targetSchemaLabel, 2, 3);
         form.add(targetSchemaChoiceBox, 3, 3);
+
+        // ---- 源/目标数据库类型（模式行下方；有 sqlmode 的平台探测后一并显示）----
+        Label sourceDbTypeLabel = boundLabel("migration.label.source_dbtype", "Source DB Type");
+        Label targetDbTypeLabel = boundLabel("migration.label.target_dbtype", "Target DB Type");
+        sourceDbTypeValue = new Label();
+        targetDbTypeValue = new Label();
+        form.add(sourceDbTypeLabel, 0, 4);
+        form.add(sourceDbTypeValue, 1, 4);
+        form.add(targetDbTypeLabel, 2, 4);
+        form.add(targetDbTypeValue, 3, 4);
 
         // ---- 中部：对象类型选择 ----
         Label objectsLabel = boundLabel("migration.label.objects", "Objects to Migrate");
@@ -262,6 +280,8 @@ public class MigrationDialogController {
 
         VBox middleBox = new VBox(6, objectsLabel, typeRowsBox, optionsBox);
         VBox.setVgrow(middleBox, Priority.ALWAYS);
+        // 类型行与"迁移对象"之间多加 5px 间距
+        VBox.setMargin(middleBox, new Insets(5, 0, 0, 0));
 
         // ---- 底部按钮：保存(accent) / 保存并启动 / 关闭 ----
         content.getChildren().addAll(form, middleBox);
@@ -299,6 +319,10 @@ public class MigrationDialogController {
             }
         });
         dataCheckBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
+        sourceChoiceBox.getSelectionModel().selectedItemProperty().addListener(
+                (obs, o, n) -> refreshDbTypeLabels());
+        targetChoiceBox.getSelectionModel().selectedItemProperty().addListener(
+                (obs, o, n) -> refreshDbTypeLabels());
 
         rebuildTypeRows(null);
         applyInitialState(connects);
@@ -376,7 +400,7 @@ public class MigrationDialogController {
                     ts.customObjects.clear();
                 } else {
                     ts.custom = true;
-                    ts.customObjects.put(ref.name(), ref.where() == null ? "" : ref.where());
+                    ts.customObjects.put(ref.name(), slotValue(ref));
                 }
             }
         } finally {
@@ -395,9 +419,9 @@ public class MigrationDialogController {
 
     private static ChoiceBox<Connect> connectChoiceBox() {
         ChoiceBox<Connect> choiceBox = new ChoiceBox<>();
-        choiceBox.setPrefWidth(265);
+        choiceBox.setPrefWidth(255);
         choiceBox.setFocusTraversable(false);
-        choiceBox.setStyle("-fx-pref-width: 265px;");   
+        choiceBox.setStyle("-fx-pref-width: 255px;");   
 
         // 与 SQL 编辑面板连接选择器一致（SqlTab.fxml）
         choiceBox.getStyleClass().add("custom-connectname-choicebox");
@@ -417,8 +441,8 @@ public class MigrationDialogController {
 
     private static ChoiceBox<String> stringChoiceBox() {
         ChoiceBox<String> choiceBox = new ChoiceBox<>();
-        choiceBox.setPrefWidth(265);
-        choiceBox.setStyle("-fx-pref-width: 265px;");   
+        choiceBox.setPrefWidth(255);
+        choiceBox.setStyle("-fx-pref-width: 255px;");   
         choiceBox.setFocusTraversable(false);
         // 与 SQL 编辑面板库/模式选择器一致（SqlTab.fxml）
         choiceBox.getStyleClass().add("custom-dbname-choicebox");
@@ -554,7 +578,7 @@ public class MigrationDialogController {
                 sessionConnect.setCatalog(dbName);
                 sessionConnect.setSessionCatalog("");
                 try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
+                        .createConnection(sessionConnect)) {
                     for (Schema schema : PlatformResolvers.get().metadata(sessionConnect).getSchemas(conn)) {
                         names.add(schema.getName());
                     }
@@ -711,7 +735,7 @@ public class MigrationDialogController {
                 sessionConnect.setCatalog(dbName);
                 sessionConnect.setSessionCatalog("");
                 try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
+                        .createConnection(sessionConnect)) {
                     for (Schema schema : PlatformResolvers.get().metadata(sessionConnect).getSchemas(conn)) {
                         names.add(schema.getName());
                     }
@@ -895,7 +919,7 @@ public class MigrationDialogController {
                 Connect sessionConnect = buildSessionConnect(source, catalog, schema);
                 String dbName = schema != null && !schema.isBlank() ? schema : catalog;
                 try (Connection conn = BackgroundSqlService.getConnectionService()
-                        .getConnectionWithSessionInit(sessionConnect)) {
+                        .createConnection(sessionConnect)) {
                     MetadataRepository meta = PlatformResolvers.get().metadata(sessionConnect);
                     for (MigrationObjectRef.Kind kind : kinds) {
                         counts.put(kind, countObjects(meta, conn, dbName, kind));
@@ -931,6 +955,12 @@ public class MigrationDialogController {
                 case FUNCTION -> meta.getFunctionCount(conn, false);
                 case PROCEDURE -> meta.getProcedureCount(conn, false);
                 case PACKAGE -> meta.getPackageCount(conn);
+                case INDEX -> meta.getIndexCount(conn);
+                case FOREIGN_KEY -> {
+                    // 无外键计数方法：直接按清单大小（逐表读 JDBC 元数据，表多时偏慢）
+                    List<? extends TreeData> fks = fetchObjects(meta, conn, dbName, kind);
+                    yield fks == null ? 0 : fks.size();
+                }
                 case ALL -> 0;
             };
         } catch (Exception e) {
@@ -958,7 +988,7 @@ public class MigrationDialogController {
         }
         ts.customObjects.clear();
         for (MigrationObjectRef ref : picked) {
-            ts.customObjects.put(ref.name(), ref.where() == null ? "" : ref.where());
+            ts.customObjects.put(ref.name(), slotValue(ref));
         }
         ts.custom = true;
         if (!picked.isEmpty()) {
@@ -990,13 +1020,19 @@ public class MigrationDialogController {
         if (source == null || target == null) {
             return;
         }
-        Map<String, TableMapping> result = new MigrationMappingDialogController().showAndWait(
-                dialogStage,
-                nameField.getText() == null ? "" : nameField.getText().trim(),
-                source, target, mappings);
-        if (result != null) {
-            mappings = result;
-        }
+        String taskName = nameField.getText() == null ? "" : nameField.getText().trim();
+        // 类型列表/默认映射以 sqlmode 修正后的平台类型为准；探测可能建临时连接，放后台，完后再开面板
+        AppExecutor.runAsync(() -> {
+            String sourceDbType = MigrationConnectInfo.effectiveDbType(source);
+            String targetDbType = MigrationConnectInfo.effectiveDbType(target);
+            Platform.runLater(() -> {
+                Map<String, TableMapping> result = new MigrationMappingDialogController().showAndWait(
+                        dialogStage, taskName, sourceDbType, targetDbType, mappings);
+                if (result != null) {
+                    mappings = result;
+                }
+            });
+        });
     }
 
     /** "编辑"映射按钮在源/目标连接已选时可用（全局映射不再要求表类型勾选/源范围）。 */
@@ -1009,14 +1045,39 @@ public class MigrationDialogController {
         editMappingButton.setDisable(!enabled);
     }
 
+    /** 源/目标数据库类型显示：dbtype 即时上屏；支持 sqlmode 的平台后台探测后补齐显示。 */
+    private void refreshDbTypeLabels() {
+        Connect source = sourceChoiceBox.getValue();
+        Connect target = targetChoiceBox.getValue();
+        int generation = ++dbTypeProbeGeneration;
+        sourceDbTypeValue.setText(source == null || source.getDbtype() == null ? "" : source.getDbtype());
+        targetDbTypeValue.setText(target == null || target.getDbtype() == null ? "" : target.getDbtype());
+        if (source == null && target == null) {
+            return;
+        }
+        AppExecutor.runAsync(() -> {
+            String sourceText = source == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(source);
+            String targetText = target == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(target);
+            Platform.runLater(() -> {
+                if (generation != dbTypeProbeGeneration) {
+                    return;
+                }
+                sourceDbTypeValue.setText(sourceText);
+                targetDbTypeValue.setText(targetText);
+            });
+        });
+    }
+
     // ==================================================================
     // 元数据读取（独立复制 Connect 会话，不用主树连接）
     // ==================================================================
 
-    /** 各平台支持的对象类型：表/视图/触发器恒有，其余看平台能力。 */
+    /** 各平台支持的对象类型：表/视图/触发器恒有，其余看平台能力；索引/外键恒有（JDBC 通用元数据读取）。 */
     private static List<MigrationObjectRef.Kind> allKinds() {
         return List.of(
                 MigrationObjectRef.Kind.TABLE,
+                MigrationObjectRef.Kind.INDEX,
+                MigrationObjectRef.Kind.FOREIGN_KEY,
                 MigrationObjectRef.Kind.VIEW,
                 MigrationObjectRef.Kind.SEQUENCE,
                 MigrationObjectRef.Kind.SYNONYM,
@@ -1032,6 +1093,7 @@ public class MigrationDialogController {
         }
         return switch (kind) {
             case TABLE, VIEW, TRIGGER -> true;
+            case INDEX, FOREIGN_KEY -> true;
             case SEQUENCE -> platform.supportsSequencesFolder();
             case SYNONYM -> platform.supportsSynonymsFolder();
             case FUNCTION -> platform.supportsFunctionsFolder();
@@ -1066,6 +1128,8 @@ public class MigrationDialogController {
             case FUNCTION -> meta.getFunctions(conn, dbName, false);
             case PROCEDURE -> meta.getProcedures(conn, dbName, false);
             case PACKAGE -> meta.getPackages(conn, dbName);
+            case INDEX -> meta.getIndexes(conn, dbName);
+            case FOREIGN_KEY -> meta.getForeignKeys(conn, dbName);
             case ALL -> List.of();
         };
     }
@@ -1076,7 +1140,7 @@ public class MigrationDialogController {
         Connect sessionConnect = buildSessionConnect(source, catalog, schema);
         String dbName = schema != null && !schema.isBlank() ? schema : catalog;
         try (Connection conn = BackgroundSqlService.getConnectionService()
-                .getConnectionWithSessionInit(sessionConnect)) {
+                .createConnection(sessionConnect)) {
             List<? extends TreeData> objects = fetchObjects(
                     PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
             List<String> names = new ArrayList<>();
@@ -1088,6 +1152,33 @@ public class MigrationDialogController {
                 }
             }
             return names;
+        }
+    }
+
+    /** 后台线程用：索引/外键的 对象名→宿主表 映射（一次元数据读取同时得到清单与宿主表）。 */
+    private static java.util.Map<String, String> loadObjectParents(Connect source, String catalog,
+                                                                   String schema,
+                                                                   MigrationObjectRef.Kind kind) throws Exception {
+        Connect sessionConnect = buildSessionConnect(source, catalog, schema);
+        String dbName = schema != null && !schema.isBlank() ? schema : catalog;
+        try (Connection conn = BackgroundSqlService.getConnectionService()
+                .createConnection(sessionConnect)) {
+            List<? extends TreeData> objects = fetchObjects(
+                    PlatformResolvers.get().metadata(sessionConnect), conn, dbName, kind);
+            java.util.Map<String, String> parents = new LinkedHashMap<>();
+            if (objects != null) {
+                for (TreeData object : objects) {
+                    if (object == null || object.getName() == null || object.getName().isBlank()) {
+                        continue;
+                    }
+                    if (object instanceof com.dbboys.model.Index index) {
+                        parents.put(object.getName(), index.getTableName());
+                    } else if (object instanceof com.dbboys.model.ForeignKey foreignKey) {
+                        parents.put(object.getName(), foreignKey.getTableName());
+                    }
+                }
+            }
+            return parents;
         }
     }
 
@@ -1105,8 +1196,23 @@ public class MigrationDialogController {
             case FUNCTION -> "Functions";
             case PROCEDURE -> "Procedures";
             case PACKAGE -> "Packages";
+            case INDEX -> "Indexes";
+            case FOREIGN_KEY -> "Foreign Keys";
             case ALL -> "All";
         };
+    }
+
+    /** 索引/外键没有 WHERE 条件，refs/自定义挑选的 value 槽借存宿主表名（parent）。 */
+    private static boolean isParentedKind(MigrationObjectRef.Kind kind) {
+        return kind == MigrationObjectRef.Kind.INDEX || kind == MigrationObjectRef.Kind.FOREIGN_KEY;
+    }
+
+    /** ref → customObjects 的 value：索引/外键取宿主表名，其余取 WHERE 条件。 */
+    private static String slotValue(MigrationObjectRef ref) {
+        if (isParentedKind(ref.kind())) {
+            return ref.parent() == null ? "" : ref.parent();
+        }
+        return ref.where() == null ? "" : ref.where();
     }
 
     // ==================================================================
@@ -1130,8 +1236,14 @@ public class MigrationDialogController {
             }
             if (ts.custom) {
                 for (java.util.Map.Entry<String, String> entry : ts.customObjects.entrySet()) {
-                    refs.add(new MigrationObjectRef(catalog, schema, ts.kind,
-                            entry.getKey(), entry.getValue()));
+                    if (isParentedKind(ts.kind)) {
+                        // value 槽存的是宿主表名
+                        refs.add(new MigrationObjectRef(catalog, schema, ts.kind,
+                                entry.getKey(), null, entry.getValue()));
+                    } else {
+                        refs.add(new MigrationObjectRef(catalog, schema, ts.kind,
+                                entry.getKey(), entry.getValue()));
+                    }
                 }
             } else {
                 refs.add(MigrationObjectRef.kindWildcard(catalog, schema, ts.kind));
@@ -1256,12 +1368,15 @@ public class MigrationDialogController {
             final String name;
             final BooleanProperty selected;
             final javafx.beans.property.StringProperty where;
+            /** 索引/外键的宿主表名（其余类型为 null）。 */
+            final String parent;
 
-            PickItem(String name, boolean selected, String where) {
+            PickItem(String name, boolean selected, String where, String parent) {
                 this.name = name;
                 this.selected = new SimpleBooleanProperty(selected);
                 this.where = new javafx.beans.property.SimpleStringProperty(
                         where == null ? "" : where);
+                this.parent = parent;
             }
         }
 
@@ -1313,12 +1428,18 @@ public class MigrationDialogController {
 
             List<MigrationObjectRef> result = new ArrayList<>();
 
-            // 后台加载对象清单
+            // 后台加载对象清单（索引/外键顺带加载宿主表映射）
             AppExecutor.runAsync(() -> {
                 List<String> names;
+                java.util.Map<String, String> parents = java.util.Map.of();
                 String error = null;
                 try {
-                    names = loadObjectNames(source, catalog, schema, kind);
+                    if (isParentedKind(kind)) {
+                        parents = loadObjectParents(source, catalog, schema, kind);
+                        names = new ArrayList<>(parents.keySet());
+                    } else {
+                        names = loadObjectNames(source, catalog, schema, kind);
+                    }
                 } catch (Exception e) {
                     log.warn("load picker objects failed", e);
                     names = List.of();
@@ -1327,10 +1448,14 @@ public class MigrationDialogController {
                 String loadError = error;
                 List<PickItem> items = new ArrayList<>();
                 for (String name : names) {
-                    String where = initialWhereByName == null ? null : initialWhereByName.get(name);
+                    String slot = initialWhereByName == null ? null : initialWhereByName.get(name);
+                    // 索引/外键：slot 槽与新鲜元数据都是宿主表名，优先用新鲜的
+                    String parent = isParentedKind(kind)
+                            ? parents.getOrDefault(name, slot == null ? "" : slot)
+                            : null;
                     items.add(new PickItem(name,
                             initialWhereByName != null && initialWhereByName.containsKey(name),
-                            where));
+                            slot, parent));
                 }
                 Platform.runLater(() -> {
                     master.setAll(items);
@@ -1360,8 +1485,10 @@ public class MigrationDialogController {
             okButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
                 for (PickItem item : master) {
                     if (item.selected.get()) {
-                        result.add(new MigrationObjectRef(catalog, schema, kind,
-                                item.name, item.where.get()));
+                        result.add(isParentedKind(kind)
+                                ? new MigrationObjectRef(catalog, schema, kind, item.name, null, item.parent)
+                                : new MigrationObjectRef(catalog, schema, kind,
+                                        item.name, item.where.get()));
                     }
                 }
             });

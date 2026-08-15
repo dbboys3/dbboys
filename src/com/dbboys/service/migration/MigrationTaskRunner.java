@@ -231,7 +231,7 @@ public final class MigrationTaskRunner {
         boolean all = kind == MigrationObjectRef.Kind.ALL;
         List<MigrationObjectRef> result = new ArrayList<>();
         try (Connection conn = BackgroundSqlService.getConnectionService()
-                .getConnectionWithSessionInit(sessionConnect)) {
+                .createConnection(sessionConnect)) {
             MetadataRepository meta = PlatformResolvers.get().metadata(sessionConnect);
             if (all || kind == MigrationObjectRef.Kind.TABLE) {
                 addObjects(result, meta.getUserTables(conn, dbName), catalog, schema,
@@ -265,6 +265,14 @@ public final class MigrationTaskRunner {
                 addObjects(result, meta.getPackages(conn, dbName), catalog, schema,
                         MigrationObjectRef.Kind.PACKAGE);
             }
+            if (all || kind == MigrationObjectRef.Kind.INDEX) {
+                addObjectsWithParent(result, meta.getIndexes(conn, dbName), catalog, schema,
+                        MigrationObjectRef.Kind.INDEX);
+            }
+            if (all || kind == MigrationObjectRef.Kind.FOREIGN_KEY) {
+                addObjectsWithParent(result, meta.getForeignKeys(conn, dbName), catalog, schema,
+                        MigrationObjectRef.Kind.FOREIGN_KEY);
+            }
         }
         return result;
     }
@@ -280,6 +288,28 @@ public final class MigrationTaskRunner {
             if (object != null && object.getName() != null && !object.getName().isBlank()) {
                 out.add(new MigrationObjectRef(catalog, schema, kind, object.getName()));
             }
+        }
+    }
+
+    /** 索引/外键展开：refs 需带宿主表名（parent），供目标端 DROP/DDL 生成用。 */
+    private static void addObjectsWithParent(List<MigrationObjectRef> out,
+                                             List<? extends TreeData> objects,
+                                             String catalog, String schema,
+                                             MigrationObjectRef.Kind kind) {
+        if (objects == null) {
+            return;
+        }
+        for (TreeData object : objects) {
+            if (object == null || object.getName() == null || object.getName().isBlank()) {
+                continue;
+            }
+            String parent = null;
+            if (object instanceof com.dbboys.model.Index index) {
+                parent = index.getTableName();
+            } else if (object instanceof com.dbboys.model.ForeignKey foreignKey) {
+                parent = foreignKey.getTableName();
+            }
+            out.add(new MigrationObjectRef(catalog, schema, kind, object.getName(), null, parent));
         }
     }
 
