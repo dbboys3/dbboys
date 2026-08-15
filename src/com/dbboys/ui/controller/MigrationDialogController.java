@@ -97,7 +97,8 @@ public class MigrationDialogController {
     // 源/目标数据库类型（+sqlmode）显示：dbtype 即时上屏，sqlmode 后台探测补齐
     private Label sourceDbTypeValue;
     private Label targetDbTypeValue;
-    private int dbTypeProbeGeneration;
+    private int sourceDbTypeProbeGeneration;
+    private int targetDbTypeProbeGeneration;
     private CheckBox ddlCheckBox;
     private CheckBox dataCheckBox;
     private CheckBox truncateCheckBox;
@@ -320,9 +321,9 @@ public class MigrationDialogController {
         });
         dataCheckBox.selectedProperty().addListener((obs, o, n) -> refreshMappingEditButton());
         sourceChoiceBox.getSelectionModel().selectedItemProperty().addListener(
-                (obs, o, n) -> refreshDbTypeLabels());
+                (obs, o, n) -> refreshSourceDbTypeLabel());
         targetChoiceBox.getSelectionModel().selectedItemProperty().addListener(
-                (obs, o, n) -> refreshDbTypeLabels());
+                (obs, o, n) -> refreshTargetDbTypeLabel());
 
         rebuildTypeRows(null);
         applyInitialState(connects);
@@ -1045,25 +1046,40 @@ public class MigrationDialogController {
         editMappingButton.setDisable(!enabled);
     }
 
-    /** 源/目标数据库类型显示：dbtype 即时上屏；支持 sqlmode 的平台后台探测后补齐显示。 */
-    private void refreshDbTypeLabels() {
+    /** 源数据库类型显示：dbtype 即时上屏；支持 sqlmode 的平台后台探测后补齐显示。 */
+    private void refreshSourceDbTypeLabel() {
         Connect source = sourceChoiceBox.getValue();
-        Connect target = targetChoiceBox.getValue();
-        int generation = ++dbTypeProbeGeneration;
         sourceDbTypeValue.setText(source == null || source.getDbtype() == null ? "" : source.getDbtype());
-        targetDbTypeValue.setText(target == null || target.getDbtype() == null ? "" : target.getDbtype());
-        if (source == null && target == null) {
+        if (source == null) {
             return;
         }
+        int generation = ++sourceDbTypeProbeGeneration;
         AppExecutor.runAsync(() -> {
-            String sourceText = source == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(source);
-            String targetText = target == null ? "" : MigrationConnectInfo.dbTypeWithSqlMode(target);
+            String text = MigrationConnectInfo.dbTypeWithSqlMode(source);
             Platform.runLater(() -> {
-                if (generation != dbTypeProbeGeneration) {
+                if (generation != sourceDbTypeProbeGeneration) {
                     return;
                 }
-                sourceDbTypeValue.setText(sourceText);
-                targetDbTypeValue.setText(targetText);
+                sourceDbTypeValue.setText(text);
+            });
+        });
+    }
+
+    /** 目标数据库类型显示：dbtype 即时上屏；支持 sqlmode 的平台后台探测后补齐显示。 */
+    private void refreshTargetDbTypeLabel() {
+        Connect target = targetChoiceBox.getValue();
+        targetDbTypeValue.setText(target == null || target.getDbtype() == null ? "" : target.getDbtype());
+        if (target == null) {
+            return;
+        }
+        int generation = ++targetDbTypeProbeGeneration;
+        AppExecutor.runAsync(() -> {
+            String text = MigrationConnectInfo.dbTypeWithSqlMode(target);
+            Platform.runLater(() -> {
+                if (generation != targetDbTypeProbeGeneration) {
+                    return;
+                }
+                targetDbTypeValue.setText(text);
             });
         });
     }
