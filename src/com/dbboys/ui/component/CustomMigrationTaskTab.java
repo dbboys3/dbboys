@@ -373,7 +373,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         // CustomTableView 自带行号列、多选/单元格选择、复制菜单
         CustomTableView<MigrationRunItem> table = new CustomTableView<>();
         table.setItems(filteredItems);
-        // 移除与本场景无关的“生成SQL”菜单及分隔符，保留复制
+        // 移除与本场景无关的"生成SQL"菜单及分隔符，保留复制
         table.getContextMenu().getItems().removeIf(
                 mi -> mi == table.generateSqlMenu || mi instanceof javafx.scene.control.SeparatorMenuItem);
         // 失败行红色文字（CSS 类，运行中状态变化时同步刷新）
@@ -423,11 +423,13 @@ public class CustomMigrationTaskTab extends CustomTab {
         kindColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
                 () -> kindLabel(cell.getValue().getKind()),
                 I18n.localeProperty()));
+        kindColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         kindColumn.setPrefWidth(80);
 
         TableColumn<MigrationRunItem, String> nameColumn = new TableColumn<>();
         nameColumn.textProperty().bind(I18n.bind("migration.detail.column.name", "Object"));
         nameColumn.setCellValueFactory(cell -> cell.getValue().nameProperty());
+        nameColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         nameColumn.setPrefWidth(240);
 
         TableColumn<MigrationRunItem, String> statusColumn = new TableColumn<>();
@@ -435,16 +437,19 @@ public class CustomMigrationTaskTab extends CustomTab {
         statusColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
                 () -> statusLabel(cell.getValue().getStatus()),
                 cell.getValue().statusProperty(), I18n.localeProperty()));
+        statusColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         statusColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> startColumn = new TableColumn<>();
         startColumn.textProperty().bind(I18n.bind("migration.detail.column.start", "Start"));
         startColumn.setCellValueFactory(cell -> cell.getValue().startTimeProperty());
+        startColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         startColumn.setPrefWidth(150);
 
         TableColumn<MigrationRunItem, String> endColumn = new TableColumn<>();
         endColumn.textProperty().bind(I18n.bind("migration.detail.column.end", "End"));
         endColumn.setCellValueFactory(cell -> cell.getValue().endTimeProperty());
+        endColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         endColumn.setPrefWidth(150);
 
         TableColumn<MigrationRunItem, String> speedColumn = new TableColumn<>();
@@ -457,6 +462,7 @@ public class CustomMigrationTaskTab extends CustomTab {
                             String.format("%,d", speed));
                 },
                 cell.getValue().speedProperty(), I18n.localeProperty()));
+        speedColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         speedColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> rowsColumn = new TableColumn<>();
@@ -465,6 +471,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         rowsColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
                 () -> cell.getValue().getRows() < 0 ? "" : String.valueOf(cell.getValue().getRows()),
                 cell.getValue().rowsProperty()));
+        rowsColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         rowsColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> migratedColumn = new TableColumn<>();
@@ -473,6 +480,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         migratedColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
                 () -> cell.getValue().getMigratedRows() < 0 ? "" : String.valueOf(cell.getValue().getMigratedRows()),
                 cell.getValue().migratedRowsProperty()));
+        migratedColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         migratedColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> errorColumn = new TableColumn<>();
@@ -484,7 +492,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             return code.isEmpty() ? error : code + ": " + error;
         }, cell.getValue().errorMessageProperty(), cell.getValue().errorCodeProperty()));
         // 双击错误单元格：弹出出错 SQL + 具体错误
-        errorColumn.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
+        errorColumn.setCellFactory(column -> new CustomTableCell<MigrationRunItem, String>() {
             {
                 setOnMouseClicked(event -> {
                     if (event.getClickCount() == 2 && !isEmpty()) {
@@ -495,12 +503,6 @@ public class CustomMigrationTaskTab extends CustomTab {
                     }
                 });
             }
-
-            @Override
-            protected void updateItem(String text, boolean empty) {
-                super.updateItem(text, empty);
-                setText(empty ? null : text);
-            }
         });
         // 错误信息列固定初始宽度：列总宽超出表格时允许横向滚动（CustomTableView 为 UNCONSTRAINED 策略）
         errorColumn.setPrefWidth(400);
@@ -509,11 +511,15 @@ public class CustomMigrationTaskTab extends CustomTab {
         verifyColumn.textProperty().bind(I18n.bind("migration.detail.column.verify", "Verify"));
         // 数据校验列：展示持久化的校验结果（c_checksum），暂不做校验操作
         verifyColumn.setCellValueFactory(cell -> cell.getValue().checksumProperty());
+        verifyColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         verifyColumn.setPrefWidth(90);
 
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
                 startColumn, endColumn, rowsColumn, migratedColumn, speedColumn, errorColumn, verifyColumn));
+        // 详情表不需要排序，也不允许拖动列
+        table.setSortPolicy(param -> false);
+        table.getColumns().forEach(column -> column.setReorderable(false));
         return table;
     }
 

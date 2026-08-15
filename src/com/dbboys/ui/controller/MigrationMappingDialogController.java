@@ -155,6 +155,9 @@ public class MigrationMappingDialogController {
         });
 
         mappingTable.getColumns().addAll(sourceCol, targetCol, removeCol);
+        // 映射表不需要排序，也不允许拖动列
+        mappingTable.setSortPolicy(param -> false);
+        mappingTable.getColumns().forEach(column -> column.setReorderable(false));
         VBox.setVgrow(mappingTable, Priority.ALWAYS);
         VBox content = new VBox(8, mappingTable);
 

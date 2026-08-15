@@ -33,6 +33,7 @@ public class CustomTableView<S> extends TableView<S> {
                         super.updateItem(item, empty);
                         if (empty) {
                             setText(null); // 空行不显示行号
+                            setOnMouseClicked(null);
                         } else {
                             setText(String.valueOf(getIndex() + 1)); // 行号从 1 开始
                             setOnMouseClicked(event -> {
