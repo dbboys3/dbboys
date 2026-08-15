@@ -1021,10 +1021,10 @@ public class MigrationDialogController {
             return;
         }
         String taskName = nameField.getText() == null ? "" : nameField.getText().trim();
-        // 类型列表/默认映射以 sqlmode 修正后的平台类型为准；探测可能建临时连接，放后台，完后再开面板
+        // 类型列表/默认映射直接使用源/目标连接自身的数据库类型
         AppExecutor.runAsync(() -> {
-            String sourceDbType = MigrationConnectInfo.effectiveDbType(source);
-            String targetDbType = MigrationConnectInfo.effectiveDbType(target);
+            String sourceDbType = source.getDbtype();
+            String targetDbType = target.getDbtype();
             Platform.runLater(() -> {
                 Map<String, TableMapping> result = new MigrationMappingDialogController().showAndWait(
                         dialogStage, taskName, sourceDbType, targetDbType, mappings);

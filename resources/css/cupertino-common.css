@@ -999,6 +999,29 @@ Text {
   -fx-background-insets: 0;
   -fx-background-radius: 0;
 }
+.combo-box.mapping-type-combo {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.combo-box.mapping-type-combo > .text-field {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.combo-box.mapping-type-combo > .arrow-button {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.combo-box.mapping-type-combo .combo-box-popup > .list-view {
+  -fx-effect: none;
+}
 .table-view{
   -fx-background-color: -color-bg-default;
 }
