@@ -1443,6 +1443,8 @@ public class MigrationDialogController {
             placeholder.textProperty().bind(I18n.bind("migration.status.loading", "Loading..."));
             ObservableList<PickItem> master = FXCollections.observableArrayList();
             FilteredList<PickItem> filtered = new FilteredList<>(master, item -> true);
+            java.util.concurrent.atomic.AtomicBoolean itemsLoaded =
+                    new java.util.concurrent.atomic.AtomicBoolean(false);
             ListView<PickItem> listView = new ListView<>(filtered);
             // picker-list：行高比默认少 20%，点击选中不改变行底色（样式见 cupertino-common.css 末尾）
             listView.getStyleClass().add("picker-list");
@@ -1453,7 +1455,13 @@ public class MigrationDialogController {
             searchField.textProperty().addListener((obs, o, n) -> {
                 String needle = n == null ? "" : n.trim().toLowerCase(Locale.ROOT);
                 filtered.setPredicate(item -> needle.isEmpty()
-                        || item.name.toLowerCase(Locale.ROOT).contains(needle));
+                        || item.name.toLowerCase(Locale.ROOT).contains(needle)
+                        || (item.parent != null
+                                && item.parent.toLowerCase(Locale.ROOT).contains(needle)));
+                if (itemsLoaded.get() && filtered.isEmpty()) {
+                    placeholder.textProperty().unbind();
+                    placeholder.setText("");
+                }
             });
             selectAllButton.setOnAction(e -> {
                 for (PickItem item : filtered) {
@@ -1501,12 +1509,14 @@ public class MigrationDialogController {
                 }
                 Platform.runLater(() -> {
                     master.setAll(items);
+                    itemsLoaded.set(true);
+                    placeholder.textProperty().unbind();
                     if (loadError != null) {
-                        placeholder.textProperty().unbind();
                         placeholder.setText(loadError);
                     } else if (items.isEmpty()) {
-                        placeholder.textProperty().unbind();
                         placeholder.setText("(0)");
+                    } else if (filtered.isEmpty()) {
+                        placeholder.setText("");
                     }
                 });
             });
@@ -1569,7 +1579,11 @@ public class MigrationDialogController {
                     setGraphic(null);
                     return;
                 }
-                checkBox.setText(item.name);
+                if (item.parent != null && !item.parent.isBlank()) {
+                    checkBox.setText(item.name + "  (" + item.parent + ")");
+                } else {
+                    checkBox.setText(item.name);
+                }
                 checkBox.selectedProperty().bindBidirectional(item.selected);
                 rowBox.getChildren().setAll(checkBox);
                 if (showWhere) {
