@@ -530,7 +530,8 @@ public class TerminalBuffer {
         int sr = Math.min(selStartRow, selEndRow), er = Math.max(selStartRow, selEndRow);
         int sc = selStartCol, ec = selEndCol;
         if (selStartRow > selEndRow || (selStartRow == selEndRow && selStartCol > selEndCol)) { sc = selEndCol; ec = selStartCol; }
-        if (sc > ec) { int t = sc; sc = ec; ec = t; }
+        // Multi-row: sc is the column on row sr, ec the column on row er —
+        // columns on different rows are independent, do NOT order them.
         if (sr == er) {
             String l = stripContinuationChars(line(sr));
             sc = Math.min(sc, l.length()); ec = Math.min(ec, l.length());

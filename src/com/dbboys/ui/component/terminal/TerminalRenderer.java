@@ -182,9 +182,10 @@ public class TerminalRenderer {
                 sl = Math.min(buf.selStartCol, buf.selEndCol);
                 sr2 = Math.max(buf.selStartCol, buf.selEndCol);
             } else {
+                // sl/sr2 are columns on different rows (top/bottom of the
+                // selection) — they are independent and must NOT be ordered.
                 sl = mr == buf.selStartRow ? buf.selStartCol : buf.selEndCol;
                 sr2 = Mr == buf.selEndRow ? buf.selEndCol : buf.selStartCol;
-                if (sl > sr2) { int t = sl; sl = sr2; sr2 = t; }
             }
         }
         for (int r = sr; r < er && r < buf.buffer.size(); r++) {
