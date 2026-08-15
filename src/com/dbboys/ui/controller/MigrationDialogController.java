@@ -97,7 +97,8 @@ public class MigrationDialogController {
     private CheckBox dataCheckBox;
     private CheckBox truncateCheckBox;
     private CheckBox overwriteCheckBox;
-    private TextField threadCountField;
+    private TextField readThreadCountField;
+    private TextField writeThreadCountField;
     private Button editMappingButton;
     private VBox typeRowsBox;
 
@@ -241,13 +242,19 @@ public class MigrationDialogController {
         mappingTip.textProperty().bind(I18n.bind("migration.mapping.edit", "Edit"));
         editMappingButton.setTooltip(mappingTip);
         editMappingButton.setOnAction(e -> openMappingDialog());
-        Label threadCountLabel = boundLabel("migration.label.thread_count", "Threads");
-        // 线程数用普通输入框：默认 10，仅允许数字，保存时解析（非法输入回退 10）
-        threadCountField = new TextField("10");
-        threadCountField.setPrefWidth(80);
-        threadCountField.setTextFormatter(new TextFormatter<>(change ->
+        Label readThreadCountLabel = boundLabel("migration.label.read_threads", "Read threads");
+        Label writeThreadCountLabel = boundLabel("migration.label.write_threads", "Write threads");
+        // 读/写线程数用普通输入框：默认 10，仅允许数字，保存时解析（非法输入回退 10）
+        readThreadCountField = new TextField("10");
+        readThreadCountField.setPrefWidth(80);
+        readThreadCountField.setTextFormatter(new TextFormatter<>(change ->
                 change.getControlNewText().matches("\\d*") ? change : null));
-        HBox optionsRow = new HBox(14, overwriteCheckBox, threadCountLabel, threadCountField);
+        writeThreadCountField = new TextField("10");
+        writeThreadCountField.setPrefWidth(80);
+        writeThreadCountField.setTextFormatter(new TextFormatter<>(change ->
+                change.getControlNewText().matches("\\d*") ? change : null));
+        HBox optionsRow = new HBox(14, overwriteCheckBox, readThreadCountLabel, readThreadCountField,
+                writeThreadCountLabel, writeThreadCountField);
         optionsRow.setPadding(new Insets(0, 0, 0, 12));
         optionsRow.setAlignment(Pos.CENTER_LEFT);
         VBox optionsBox = new VBox(6, optionsLabel, optionsRow);
@@ -341,7 +348,8 @@ public class MigrationDialogController {
             dataCheckBox.setSelected(editingTask.isMigrateData());
             truncateCheckBox.setSelected(editingTask.isTruncateTable());
             overwriteCheckBox.setSelected(editingTask.isOverwrite());
-            threadCountField.setText(String.valueOf(Math.max(1, editingTask.getThreadCount())));
+            readThreadCountField.setText(String.valueOf(Math.max(1, editingTask.getReadThreadCount())));
+            writeThreadCountField.setText(String.valueOf(Math.max(1, editingTask.getWriteThreadCount())));
             selectConnectById(sourceChoiceBox, editingTask.getSourceId());
             selectConnectById(targetChoiceBox, editingTask.getTargetId());
             // 类型行已在源连接选择监听器里同步重建，这里按 refs 勾选/恢复自定义集
@@ -1204,13 +1212,9 @@ public class MigrationDialogController {
         task.setMigrateData(dataCheckBox.isSelected());
         task.setTruncateTable(truncateCheckBox.isSelected());
         task.setOverwrite(overwriteCheckBox.isSelected());
-        // 线程数输入框：非法输入/小于 1 回退为默认值 10
-        int threadCount = 10;
-        try {
-            threadCount = Math.max(1, Integer.parseInt(threadCountField.getText().trim()));
-        } catch (NumberFormatException ignored) {
-        }
-        task.setThreadCount(threadCount);
+        // 读/写线程数输入框：非法输入/小于 1 回退为默认值 10
+        task.setReadThreadCount(parseThreadCount(readThreadCountField));
+        task.setWriteThreadCount(parseThreadCount(writeThreadCountField));
         task.setObjectRefs(collectObjectRefs());
         task.setMappings(mappings);
         resultTask = task;
@@ -1220,6 +1224,15 @@ public class MigrationDialogController {
 
     private void showError(String message) {
         AlertUtil.CustomAlert(I18n.t("common.error", "Error"), message);
+    }
+
+    /** 解析线程数输入框：空白/非数字/小于 1 一律回退默认值 10（输入框已用 TextFormatter 限数字）。 */
+    private static int parseThreadCount(TextField field) {
+        try {
+            return Math.max(1, Integer.parseInt(field.getText().trim()));
+        } catch (NumberFormatException ignored) {
+            return 10;
+        }
     }
 
     private static boolean isBlank(String value) {

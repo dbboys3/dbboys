@@ -37,6 +37,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,6 +47,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -60,8 +63,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * 源端按 catalog(+schema) 分组，每组复制 Connect 并设置 catalog/sessionCatalog 后开一个独立后台会话；
  * 目标端按目标平台 catalogModel 设置后开一个独立会话。全程不使用主树连接。
  * <p>
- * 并行：{@code threadCount} 个工作线程（{@code WorkerSession}，每线程独立目标连接 + 按分组缓存的源连接）
- * 经共享游标瓜分对象列表；对象级 DDL（冲突判定/DROP/建表）按 kind 临界区串行，数据复制并行。
+ * 并行（生产者-消费者）：{@code readThreadCount} 个读线程（{@code WorkerSession}，每线程独立目标连接 +
+ * 按分组缓存的源连接）经共享游标瓜分对象列表，完成对象级 DDL（冲突判定/DROP/建表，按 kind 临界区串行）
+ * 并把表数据按批物化投进有界队列；{@code writeThreadCount} 个写线程从队列取批写入目标库，读写互相重叠。
  * 主线程持有的目标连接仅用于启动前的目标对象预取与后台任务展示。
  * <p>
  * 取消：返回的 Task 监听自身 stateProperty（CANCELLED），取消时中断活动 Statement 并 abort 全部活动连接；
@@ -79,30 +83,31 @@ public class TableMigrationService {
                                    String targetDatabase, String targetSchema,
                                    List<MigrationObjectRef> objects,
                                    boolean migrateDdl, boolean migrateData, boolean overwrite,
-                                   boolean truncateTable, int threadCount,
+                                   boolean truncateTable, int readThreadCount, int writeThreadCount,
                                    java.util.Map<String, TableMapping> mappings) {
-        /** 线程数下限 1（=串行语义）。 */
+        /** 读/写线程数下限 1。 */
         public MigrationRequest {
-            threadCount = Math.max(1, threadCount);
+            readThreadCount = Math.max(1, readThreadCount);
+            writeThreadCount = Math.max(1, writeThreadCount);
         }
 
-        /** 兼容旧调用：无清空表/线程数/自定义数据映射。 */
+        /** 兼容旧调用：无清空表/读写线程数/自定义数据映射。 */
         public MigrationRequest(Connect source, Connect target,
                                 String targetDatabase, String targetSchema,
                                 List<MigrationObjectRef> objects,
                                 boolean migrateDdl, boolean migrateData, boolean overwrite) {
             this(source, target, targetDatabase, targetSchema, objects,
-                    migrateDdl, migrateData, overwrite, false, 1, java.util.Map.of());
+                    migrateDdl, migrateData, overwrite, false, 1, 1, java.util.Map.of());
         }
 
-        /** 兼容旧调用：无清空表/线程数。 */
+        /** 兼容旧调用：无清空表/读写线程数。 */
         public MigrationRequest(Connect source, Connect target,
                                 String targetDatabase, String targetSchema,
                                 List<MigrationObjectRef> objects,
                                 boolean migrateDdl, boolean migrateData, boolean overwrite,
                                 java.util.Map<String, TableMapping> mappings) {
             this(source, target, targetDatabase, targetSchema, objects,
-                    migrateDdl, migrateData, overwrite, false, 1, mappings);
+                    migrateDdl, migrateData, overwrite, false, 1, 1, mappings);
         }
     }
 
@@ -217,11 +222,16 @@ public class TableMigrationService {
                 }
             }
 
-            // 5. 按配置线程数并行迁移（threadCount=1 时单工作线程，语义同串行）
-            int workers = Math.max(1, Math.min(request.threadCount(), Math.max(total, 1)));
+            // 5. 生产者-消费者并行迁移：读线程逐对象 DDL + 拉数产批 → 有界队列 → 写线程消费写入目标
+            int readers = Math.max(1, Math.min(request.readThreadCount(), Math.max(total, 1)));
+            int writers = Math.max(1, request.writeThreadCount());
+            ctx.total = total;
+            // 有界队列形成反压：读快写慢时读线程在 offer 上等待，不会无限攒行
+            BlockingQueue<RowBatch> dataQueue = new ArrayBlockingQueue<>(Math.max(16, writers * 4));
             AtomicInteger cursor = new AtomicInteger();
+            AtomicInteger readersRunning = new AtomicInteger(readers);
             AtomicReference<Exception> workerFatal = new AtomicReference<>();
-            ExecutorService pool = Executors.newFixedThreadPool(workers, new ThreadFactory() {
+            ExecutorService pool = Executors.newFixedThreadPool(readers + writers, new ThreadFactory() {
                 private final AtomicInteger seq = new AtomicInteger();
 
                 @Override
@@ -232,8 +242,12 @@ public class TableMigrationService {
                 }
             });
             try {
-                for (int w = 0; w < workers; w++) {
-                    pool.submit(() -> runWorker(ctx, flatGroups, flatObjects, cursor, results, workerFatal));
+                for (int w = 0; w < readers; w++) {
+                    pool.submit(() -> runReader(ctx, flatGroups, flatObjects, cursor, dataQueue,
+                            results, readersRunning, workerFatal));
+                }
+                for (int w = 0; w < writers; w++) {
+                    pool.submit(() -> runWriter(ctx, dataQueue, results, readersRunning, workerFatal));
                 }
                 pool.shutdown();
                 while (!pool.awaitTermination(500, TimeUnit.MILLISECONDS)) {
@@ -268,13 +282,13 @@ public class TableMigrationService {
     }
 
     /**
-     * 工作线程主循环：共享游标取对象下标，逐对象迁移（每线程独立 {@link WorkerSession}）。
-     * 目标连接打开失败等致命错误记入 {@code workerFatal} 后退出，剩余对象由其他工作线程继续拾取；
-     * 单对象失败由 {@link #migrateOne} 兜住记 FAILED；取消时安静退出。
+     * 读线程（生产者）主循环：共享游标取对象下标，逐对象做 DDL 并产出行批次
+     * （每线程独立 {@link WorkerSession}）。目标连接打开失败等致命错误记入 {@code workerFatal} 后退出，
+     * 剩余对象由其他读线程继续拾取；单对象失败由 {@link #produceObject} 兜住记 FAILED；取消时安静退出。
      */
-    private void runWorker(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
-                           AtomicInteger cursor, List<ItemResult> results,
-                           AtomicReference<Exception> workerFatal) {
+    private void runReader(MigrationContext ctx, List<GroupKey> groups, List<MigrationObjectRef> objects,
+                           AtomicInteger cursor, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
+                           AtomicInteger readersRunning, AtomicReference<Exception> workerFatal) {
         int total = objects.size();
         try (WorkerSession ws = new WorkerSession(ctx)) {
             for (int index = cursor.getAndIncrement(); index < total; index = cursor.getAndIncrement()) {
@@ -283,10 +297,16 @@ public class TableMigrationService {
                 if (ctx.listener != null) {
                     ctx.listener.onItemStart(index, total, object.name());
                 }
-                ItemResult result;
                 try {
                     ws.ensureSource(groups.get(index));
-                    result = migrateOne(ctx, ws, object);
+                    ItemResult immediate = produceObject(ctx, ws, object, index, dataQueue, results, workerFatal);
+                    if (immediate != null) {
+                        // 非数据表/提前失败：读线程当场出结果；数据表由管道完成时异步出结果
+                        results.add(immediate);
+                        if (ctx.listener != null) {
+                            ctx.listener.onItemDone(index, total, immediate);
+                        }
+                    }
                 } catch (CancellationException e) {
                     throw e;
                 } catch (Exception e) {
@@ -294,11 +314,11 @@ public class TableMigrationService {
                     String reason = errorMessage(e);
                     log(ctx.listener, String.format(
                             I18n.t("migration.log.failed", "%s failed: %s"), object.displayName(), reason));
-                    result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
-                }
-                results.add(result);
-                if (ctx.listener != null) {
-                    ctx.listener.onItemDone(index, total, result);
+                    ItemResult result = new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
+                    results.add(result);
+                    if (ctx.listener != null) {
+                        ctx.listener.onItemDone(index, total, result);
+                    }
                 }
             }
         } catch (CancellationException e) {
@@ -307,15 +327,22 @@ public class TableMigrationService {
             workerFatal.compareAndSet(null, e);
             log(ctx.listener, String.format(
                     I18n.t("migration.log.failed", "%s failed: %s"), "-", errorMessage(e)));
+        } finally {
+            readersRunning.decrementAndGet();
         }
     }
 
-    /** 单对象迁移；失败记录后由调用方继续下一对象，不中断整体。 */
-    private ItemResult migrateOne(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object) {
+    /**
+     * 读线程处理单对象：DDL（冲突判定/DROP/建表，kind 临界区内串行）后，数据表建管道并
+     * 把行批次投进队列——结果不由本方法返回，管道完成时经 {@link #maybeCompletePipe} 异步出；
+     * 非数据表/提前失败沿用原语义当场返回 ItemResult。
+     */
+    private ItemResult produceObject(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object,
+                                     int index, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
+                                     AtomicReference<Exception> workerFatal) {
         MigrationRequest request = ctx.request;
         String displayName = object.displayName();
         String objectName = object.name();
-        long[] rowsCopied = {0};
         try {
             // 通配防御：正常情况下 runner 已把通配（整节点 kind=ALL 或类型级 name=null）展开，服务不展开
             if (object.needsExpansion()) {
@@ -381,16 +408,37 @@ public class TableMigrationService {
                     String truncateSql = ctx.targetPlatform.truncateTableSql(objectName);
                     executeTargetStatement(ctx, ws, truncateSql != null && !truncateSql.isBlank()
                             ? truncateSql : "DELETE FROM " + objectName);
+                    // 清空必须在读线程自己的连接上先提交：写线程用各自连接插入，看不到未提交的 DELETE
+                    commitTarget(ctx, ws);
                     log(ctx.listener, String.format(
                             I18n.t("migration.log.truncate_ok", "%s target table cleared"), displayName));
                 }
-                copyData(ctx, ws, object, rowsCopied);
-                commitTarget(ctx, ws);
-                log(ctx.listener, String.format(
-                        I18n.t("migration.log.data_ok", "%s data migrated, %d rows copied"),
-                        displayName, rowsCopied[0]));
+                // 生产者-消费者：物化行 → 批次入队，写线程消费写入目标；ItemResult 由管道完成时异步出
+                TablePipe pipe = null;
+                try {
+                    pipe = preparePipe(ctx, ws, object, index);
+                    if (pipe == null) {
+                        // 无列信息：沿用旧 copyData 的早退语义，按 0 行成功处理
+                        return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
+                    }
+                    streamProduce(ctx, ws, pipe, dataQueue, workerFatal);
+                    pipe.produceDone = true;
+                } catch (CancellationException e) {
+                    throw e;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new CancellationException("table migration cancelled");
+                } catch (Exception e) {
+                    if (pipe == null) {
+                        throw e; // 管道未建立（取列元数据等失败）：走对象级失败
+                    }
+                    pipe.failure = e;
+                    pipe.produceDone = true;
+                }
+                maybeCompletePipe(ctx, pipe, results);
+                return null;
             }
-            return new ItemResult(object, ItemStatus.SUCCESS, rowsCopied[0], null, null, null);
+            return new ItemResult(object, ItemStatus.SUCCESS, 0, null, null, null);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -418,8 +466,151 @@ public class TableMigrationService {
             String reason = errorMessage(e);
             log(ctx.listener, String.format(
                     I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-            return new ItemResult(object, ItemStatus.FAILED, rowsCopied[0], reason, errorSql, errorCode);
+            return new ItemResult(object, ItemStatus.FAILED, 0, reason, errorSql, errorCode);
         }
+    }
+
+    /**
+     * 写线程（消费者）主循环：从队列取行批次写入目标库（每线程独立目标连接，按管道缓存
+     * {@link PreparedStatement}）。管道已失败（读/写首错）的批次直接丢弃；
+     * 全部读线程退出且队列清空后结束（批入队先于 readersRunning 归零，不会漏批）。
+     */
+    private void runWriter(MigrationContext ctx, BlockingQueue<RowBatch> dataQueue, List<ItemResult> results,
+                           AtomicInteger readersRunning, AtomicReference<Exception> workerFatal) {
+        try (WorkerSession ws = new WorkerSession(ctx)) {
+            Map<TablePipe, PreparedStatement> stmtCache = new java.util.HashMap<>();
+            try {
+                while (true) {
+                    RowBatch batch;
+                    try {
+                        batch = dataQueue.poll(100, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new CancellationException("table migration cancelled");
+                    }
+                    if (batch == null) {
+                        if (readersRunning.get() == 0 && dataQueue.isEmpty()) {
+                            return;
+                        }
+                        checkCancelled(ctx.backSqlTask);
+                        if (workerFatal.get() != null) {
+                            return; // 目标连接打不开等致命错误：主流程汇总后整体失败
+                        }
+                        continue;
+                    }
+                    TablePipe pipe = batch.pipe;
+                    try {
+                        if (pipe.failure == null) {
+                            PreparedStatement ps = stmtCache.get(pipe);
+                            if (ps == null) {
+                                ps = ws.targetConn.prepareStatement(pipe.insertSql);
+                                ctx.sessions.track(ps);
+                                stmtCache.put(pipe, ps);
+                            }
+                            ctx.backSqlTask.setStmt(ps);
+                            for (Object[] row : batch.rows) {
+                                checkCancelled(ctx.backSqlTask);
+                                for (int i = 0; i < row.length; i++) {
+                                    bindObject(ps, i + 1, row[i]);
+                                }
+                                ps.addBatch();
+                            }
+                            ps.executeBatch();
+                            commitTarget(ctx, ws);
+                            long copied = pipe.copied.addAndGet(batch.rows.size());
+                            emitDataProgress(ctx, pipe.table, pipe.totalRows, copied);
+                        }
+                    } catch (CancellationException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        // 首错定格后该表后续批次全部丢弃；出错语句从缓存移除
+                        if (pipe.failure == null) {
+                            pipe.failure = e;
+                            pipe.failureSql = pipe.insertSql;
+                        }
+                        rollbackTargetQuietly(ctx, ws);
+                        PreparedStatement broken = stmtCache.remove(pipe);
+                        if (broken != null) {
+                            ctx.sessions.untrack(broken);
+                            try {
+                                broken.close();
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    } finally {
+                        pipe.pending.decrementAndGet();
+                        maybeCompletePipe(ctx, pipe, results);
+                    }
+                }
+            } finally {
+                ctx.backSqlTask.setStmt(null);
+                for (PreparedStatement ps : stmtCache.values()) {
+                    ctx.sessions.untrack(ps);
+                    try {
+                        ps.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        } catch (CancellationException e) {
+            // 取消：安静退出
+        } catch (Exception e) {
+            workerFatal.compareAndSet(null, e);
+            log(ctx.listener, String.format(
+                    I18n.t("migration.log.failed", "%s failed: %s"), "-", errorMessage(e)));
+        }
+    }
+
+    /** 管道完成判定（读产完 + 产出批次全部出结果），恰好出一次 ItemResult；读写线程都会调用。 */
+    private void maybeCompletePipe(MigrationContext ctx, TablePipe pipe, List<ItemResult> results) {
+        synchronized (pipe) {
+            if (pipe.completed || !pipe.produceDone || pipe.pending.get() != 0) {
+                return;
+            }
+            pipe.completed = true;
+        }
+        ItemResult result = buildPipeResult(ctx, pipe);
+        results.add(result);
+        if (ctx.listener != null) {
+            ctx.listener.onItemDone(pipe.index, ctx.total, result);
+        }
+    }
+
+    /** 管道收尾：按首错（有则 FAILED）与已写入行数生成 ItemResult，并打完成日志。 */
+    private ItemResult buildPipeResult(MigrationContext ctx, TablePipe pipe) {
+        String displayName = pipe.table.displayName();
+        long copiedRows = pipe.copied.get();
+        if (pipe.failure == null) {
+            log(ctx.listener, String.format(
+                    I18n.t("migration.log.data_ok", "%s data migrated, %d rows copied"),
+                    displayName, copiedRows));
+            return new ItemResult(pipe.table, ItemStatus.SUCCESS, copiedRows, null, null, null);
+        }
+        // SqlFailedException 解包：取出错 SQL；驱动链式包装（如 BatchUpdateException）下钻到链尾真实错误
+        Exception e = pipe.failure;
+        String errorSql = pipe.failureSql;
+        if (e instanceof SqlFailedException sqlFailed) {
+            errorSql = sqlFailed.getSql();
+            if (sqlFailed.getCause() instanceof Exception cause) {
+                e = cause;
+            }
+        }
+        while (e instanceof SQLException sqlEx && sqlEx.getNextException() != null) {
+            e = sqlEx.getNextException();
+        }
+        // 数据库错误号：vendor code 优先，无则 SQLState
+        String errorCode = null;
+        if (e instanceof SQLException sqlEx) {
+            if (sqlEx.getErrorCode() != 0) {
+                errorCode = String.valueOf(sqlEx.getErrorCode());
+            } else if (sqlEx.getSQLState() != null && !sqlEx.getSQLState().isBlank()) {
+                errorCode = sqlEx.getSQLState();
+            }
+        }
+        String reason = errorMessage(e);
+        log(ctx.listener, String.format(
+                I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
+        return new ItemResult(pipe.table, ItemStatus.FAILED, copiedRows, reason, errorSql, errorCode);
     }
 
     // ==================================================================
@@ -622,11 +813,16 @@ public class TableMigrationService {
     // 数据复制
     // ==================================================================
 
-    private void copyData(MigrationContext ctx, WorkerSession ws, MigrationObjectRef table, long[] rowsCopied) throws Exception {
+    /**
+     * 建单表数据管道：取列元数据（剔排除列）、算 SELECT/INSERT、统计源表行数并发初始进度。
+     * 失败（元数据取不到等）抛给对象级 catch 记 FAILED，此时尚无批次入队。
+     */
+    private TablePipe preparePipe(MigrationContext ctx, WorkerSession ws, MigrationObjectRef table,
+                                  int index) throws Exception {
         String tableName = table.name();
         ArrayList<ColumnsInfo> columns = ctx.sourceMeta.getColumns(ws.sourceConn, tableName);
         if (columns == null || columns.isEmpty()) {
-            return;
+            return null;
         }
         // 自定义数据映射：剔除排除列（绑值数组同步缩小）
         TableMapping mapping = TableMapping.forTable(ctx.request.mappings(), tableName);
@@ -676,109 +872,110 @@ public class TableMigrationService {
         } catch (Exception e) {
             log.trace("count source rows failed for {}", tableName, e);
         }
+        TablePipe pipe = new TablePipe(table, index, selectSql, insertSql, types, totalRows);
         emitDataProgress(ctx, table, totalRows, 0);
+        return pipe;
+    }
 
-        // 出错 SQL 归因：SELECT 预编译/执行归 SELECT；INSERT 预编译/执行/批次提交归 INSERT
-        String failingSql = selectSql;
-        try {
-            try (PreparedStatement selectStmt = ws.sourceConn.prepareStatement(
-                         selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
-                failingSql = insertSql;
-                try (PreparedStatement insertStmt = ws.targetConn.prepareStatement(insertSql)) {
-                    try {
-                        selectStmt.setFetchSize(BATCH_SIZE);
-                    } catch (Exception e) {
-                        log.trace("setFetchSize not supported", e);
+    /**
+     * 读线程流式拉数：每 {@link #BATCH_SIZE} 行物化为一批投入有界队列
+     * （先 pending 计数再入队——写线程的完成判定依赖该计数，顺序不能反）。
+     * 出错归 SELECT：抛 {@link SqlFailedException}（携带 selectSql）。
+     */
+    private void streamProduce(MigrationContext ctx, WorkerSession ws, TablePipe pipe,
+                               BlockingQueue<RowBatch> dataQueue,
+                               AtomicReference<Exception> workerFatal) throws Exception {
+        try (PreparedStatement selectStmt = ws.sourceConn.prepareStatement(
+                pipe.selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+            try {
+                selectStmt.setFetchSize(BATCH_SIZE);
+            } catch (Exception e) {
+                log.trace("setFetchSize not supported", e);
+            }
+            ctx.sessions.track(selectStmt);
+            ctx.backSqlTask.setStmt(selectStmt);
+            try (ResultSet rs = selectStmt.executeQuery()) {
+                List<Object[]> rows = new ArrayList<>(BATCH_SIZE);
+                while (rs.next()) {
+                    checkCancelled(ctx.backSqlTask);
+                    if (pipe.failure != null) {
+                        return; // 写线程已报错（如目标表不存在）：剩余行不再拉取，直接走失败收尾
                     }
-                    ctx.sessions.track(selectStmt);
-                    ctx.backSqlTask.setStmt(selectStmt);
-                    long rows = 0;
-                    int batchCount = 0;
-                    failingSql = selectSql;
-                    try (ResultSet rs = selectStmt.executeQuery()) {
-                        failingSql = insertSql;
-                        ctx.sessions.track(insertStmt);
-                        ctx.backSqlTask.setStmt(insertStmt);
-                        while (rs.next()) {
-                            checkCancelled(ctx.backSqlTask);
-                            for (int i = 0; i < columnCount; i++) {
-                                bindValue(rs, insertStmt, i + 1, types[i]);
-                            }
-                            insertStmt.addBatch();
-                            rows++;
-                            batchCount++;
-                            if (batchCount >= BATCH_SIZE) {
-                                insertStmt.executeBatch();
-                                commitTarget(ctx, ws);
-                                batchCount = 0;
-                                rowsCopied[0] = rows;
-                                emitDataProgress(ctx, table, totalRows, rows);
-                            }
-                        }
-                        if (batchCount > 0) {
-                            insertStmt.executeBatch();
-                            commitTarget(ctx, ws);
-                        }
-                        rowsCopied[0] = rows;
-                        emitDataProgress(ctx, table, totalRows, rows);
-                    } finally {
-                        ctx.sessions.untrack(insertStmt);
-                        ctx.sessions.untrack(selectStmt);
-                        ctx.backSqlTask.setStmt(null);
+                    Object[] row = new Object[pipe.types.length];
+                    for (int i = 0; i < row.length; i++) {
+                        row[i] = readValue(rs, i + 1, pipe.types[i]);
+                    }
+                    rows.add(row);
+                    if (rows.size() >= BATCH_SIZE) {
+                        pipe.pending.incrementAndGet();
+                        enqueue(ctx, dataQueue, new RowBatch(pipe, rows), workerFatal);
+                        rows = new ArrayList<>(BATCH_SIZE);
                     }
                 }
+                if (!rows.isEmpty()) {
+                    pipe.pending.incrementAndGet();
+                    enqueue(ctx, dataQueue, new RowBatch(pipe, rows), workerFatal);
+                }
+            } finally {
+                ctx.sessions.untrack(selectStmt);
+                ctx.backSqlTask.setStmt(null);
             }
         } catch (SQLException e) {
-            throw new SqlFailedException(failingSql, e);
+            throw new SqlFailedException(pipe.selectSql, e);
         }
     }
 
-    /** 按 TypeMapper.normalize 的 GenericType 绑值；NULL（rs.wasNull）→ setNull(Types.OTHER)。 */
-    private static void bindValue(ResultSet rs,
-                                  PreparedStatement ps,
-                                  int index,
-                                  TypeMapper.GenericType type) throws SQLException {
+    /** 有界队列反压入队：写线程全灭（workerFatal）或任务取消时退出等待，避免死锁。 */
+    private static void enqueue(MigrationContext ctx, BlockingQueue<RowBatch> dataQueue, RowBatch batch,
+                                AtomicReference<Exception> workerFatal) throws InterruptedException {
+        while (!dataQueue.offer(batch, 100, TimeUnit.MILLISECONDS)) {
+            checkCancelled(ctx.backSqlTask);
+            if (workerFatal.get() != null) {
+                throw new CancellationException("migration writers are gone");
+            }
+        }
+    }
+
+    /** 按 TypeMapper.normalize 的 GenericType 从 ResultSet 物化一列值；SQL NULL → null。 */
+    private static Object readValue(ResultSet rs, int index, TypeMapper.GenericType type) throws SQLException {
         switch (type == null ? TypeMapper.GenericType.OTHER : type) {
             case TINYINT, SMALLINT, INTEGER, BIGINT, DECIMAL -> {
                 java.math.BigDecimal value = rs.getBigDecimal(index);
-                if (rs.wasNull()) {
-                    ps.setNull(index, Types.OTHER);
-                } else {
-                    ps.setBigDecimal(index, value);
-                }
+                return rs.wasNull() ? null : value;
             }
             case FLOAT, DOUBLE -> {
                 double value = rs.getDouble(index);
-                if (rs.wasNull()) {
-                    ps.setNull(index, Types.OTHER);
-                } else {
-                    ps.setDouble(index, value);
-                }
+                return rs.wasNull() ? null : value;
             }
             case BINARY, BLOB -> {
                 byte[] value = rs.getBytes(index);
-                if (rs.wasNull()) {
-                    ps.setNull(index, Types.OTHER);
-                } else {
-                    ps.setBytes(index, value);
-                }
+                return rs.wasNull() ? null : value;
             }
             case DATE, TIME, DATETIME, TIMESTAMP -> {
                 Timestamp value = rs.getTimestamp(index);
-                if (rs.wasNull()) {
-                    ps.setNull(index, Types.OTHER);
-                } else {
-                    ps.setTimestamp(index, value);
-                }
+                return rs.wasNull() ? null : value;
             }
             default -> {
                 String value = rs.getString(index);
-                if (rs.wasNull()) {
-                    ps.setNull(index, Types.OTHER);
-                } else {
-                    ps.setString(index, value);
-                }
+                return rs.wasNull() ? null : value;
             }
+        }
+    }
+
+    /** 绑定物化值：null → setNull(Types.OTHER)，其余按运行时类型绑定（与 readValue 的物化类型一一对应）。 */
+    private static void bindObject(PreparedStatement ps, int index, Object value) throws SQLException {
+        if (value == null) {
+            ps.setNull(index, Types.OTHER);
+        } else if (value instanceof java.math.BigDecimal decimal) {
+            ps.setBigDecimal(index, decimal);
+        } else if (value instanceof Double doubleValue) {
+            ps.setDouble(index, doubleValue);
+        } else if (value instanceof byte[] bytes) {
+            ps.setBytes(index, bytes);
+        } else if (value instanceof Timestamp timestamp) {
+            ps.setTimestamp(index, timestamp);
+        } else {
+            ps.setString(index, String.valueOf(value));
         }
     }
 
@@ -1016,7 +1213,7 @@ public class TableMigrationService {
         return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
     }
 
-    /** 携带出错 SQL 的包装异常：{@link #migrateOne} 解包后把 SQL 附到 {@link ItemResult#errorSql}。 */
+    /** 携带出错 SQL 的包装异常：{@link #produceObject}/{@link #buildPipeResult} 解包后把 SQL 附到 {@link ItemResult#errorSql}。 */
     private static final class SqlFailedException extends SQLException {
         private final String sql;
 
@@ -1057,6 +1254,46 @@ public class TableMigrationService {
         }
     }
 
+    /** 一批已物化的行数据：读线程产出、写线程消费。 */
+    private static final class RowBatch {
+        final TablePipe pipe;
+        final List<Object[]> rows;
+
+        RowBatch(TablePipe pipe, List<Object[]> rows) {
+            this.pipe = pipe;
+            this.rows = rows;
+        }
+    }
+
+    /**
+     * 单表数据管道：读线程建一次，写线程共享。完成 = 读线程产完（{@code produceDone}）且
+     * 产出批次全部出结果（{@code pending} 归零），恰好出一次 ItemResult（见 maybeCompletePipe）。
+     */
+    private static final class TablePipe {
+        final MigrationObjectRef table;
+        final int index;
+        final String selectSql;
+        final String insertSql;
+        final TypeMapper.GenericType[] types;
+        final long totalRows;
+        final AtomicLong copied = new AtomicLong();
+        final AtomicInteger pending = new AtomicInteger();
+        volatile boolean produceDone;
+        boolean completed;              // guarded by this pipe's monitor
+        volatile Exception failure;     // 读/写首错，非空即 FAILED
+        volatile String failureSql;     // 写失败时归因的 INSERT（读失败经 SqlFailedException 携带 selectSql）
+
+        TablePipe(MigrationObjectRef table, int index, String selectSql, String insertSql,
+                  TypeMapper.GenericType[] types, long totalRows) {
+            this.table = table;
+            this.index = index;
+            this.selectSql = selectSql;
+            this.insertSql = insertSql;
+            this.types = types;
+            this.totalRows = totalRows;
+        }
+    }
+
     /** 迁移上下文：跨方法共享的执行期状态（字段均只读或并发安全；连接在各 {@link WorkerSession} 上）。 */
     private static final class MigrationContext {
         MigrationRequest request;
@@ -1069,6 +1306,7 @@ public class TableMigrationService {
         boolean sameFamily;
         DatabasePlatform targetPlatform;
         SqlParser targetParser;
+        int total;
         /** kind → 目标端已存在对象名集合（normalizeName 后，并发集）。 */
         Map<MigrationObjectRef.Kind, Set<String>> existingNames = new EnumMap<>(MigrationObjectRef.Kind.class);
         /** 目标端触发器名（normalizeName 后）→ 宿主表名，供 DROP TRIGGER ... ON table 用。 */

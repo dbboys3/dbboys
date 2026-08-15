@@ -25,7 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   c_target_id       INTEGER                             -- 目标连接ID（t_connect.c_id）
  *   c_target_database VARCHAR(200)                        -- 目标库（按目标平台目录模型解释）
  *   c_target_schema   VARCHAR(200)                        -- 目标模式
- *   c_options         TEXT                                -- 配置参数 JSON：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"threads":4}
+ *   c_options         TEXT                                -- 配置参数 JSON：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"readThreads":10,"writeThreads":10}
  *   c_objects         TEXT                                -- 迁移对象 JSON 数组（见 MigrationObjectRef）
  *   c_info            VARCHAR(3200)                       -- 备注
  * </pre>
@@ -48,7 +48,8 @@ public class MigrationTask extends TreeData {
     private final BooleanProperty migrateData = new SimpleBooleanProperty(true);
     private final BooleanProperty overwrite = new SimpleBooleanProperty(true);
     private final BooleanProperty truncateTable = new SimpleBooleanProperty(true);
-    private final IntegerProperty threadCount = new SimpleIntegerProperty(10);
+    private final IntegerProperty readThreadCount = new SimpleIntegerProperty(10);
+    private final IntegerProperty writeThreadCount = new SimpleIntegerProperty(10);
     private final StringProperty objectsJson = new SimpleStringProperty("[]");
     private final StringProperty mappingsJson = new SimpleStringProperty("{}");
     private final StringProperty info = new SimpleStringProperty();
@@ -122,24 +123,30 @@ public class MigrationTask extends TreeData {
     public BooleanProperty truncateTableProperty() { return truncateTable; }
     public void setTruncateTable(boolean truncateTable) { this.truncateTable.set(truncateTable); }
 
-    // --- threadCount ---
-    public int getThreadCount() { return threadCount.get(); }
-    public IntegerProperty threadCountProperty() { return threadCount; }
-    public void setThreadCount(int threadCount) { this.threadCount.set(Math.max(1, threadCount)); }
+    // --- readThreadCount / writeThreadCount（生产者-消费者：读线程产出行批次，写线程消费写入目标） ---
+    public int getReadThreadCount() { return readThreadCount.get(); }
+    public IntegerProperty readThreadCountProperty() { return readThreadCount; }
+    public void setReadThreadCount(int readThreadCount) { this.readThreadCount.set(Math.max(1, readThreadCount)); }
 
-    // --- 配置参数（迁移结构/迁移数据/覆盖/清空表/线程数，持久化为单列 c_options JSON） ---
-    /** 编码配置参数：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"threads":4}。 */
+    public int getWriteThreadCount() { return writeThreadCount.get(); }
+    public IntegerProperty writeThreadCountProperty() { return writeThreadCount; }
+    public void setWriteThreadCount(int writeThreadCount) { this.writeThreadCount.set(Math.max(1, writeThreadCount)); }
+
+    // --- 配置参数（迁移结构/迁移数据/覆盖/清空表/读写线程数，持久化为单列 c_options JSON） ---
+    /** 编码配置参数：{"ddl":1,"data":1,"overwrite":0,"truncate":0,"readThreads":10,"writeThreads":10}。 */
     public String encodeOptions() {
         org.json.JSONObject obj = new org.json.JSONObject();
         obj.put("ddl", isMigrateDdl() ? 1 : 0);
         obj.put("data", isMigrateData() ? 1 : 0);
         obj.put("overwrite", isOverwrite() ? 1 : 0);
         obj.put("truncate", isTruncateTable() ? 1 : 0);
-        obj.put("threads", getThreadCount());
+        obj.put("readThreads", getReadThreadCount());
+        obj.put("writeThreads", getWriteThreadCount());
         return obj.toString();
     }
 
-    /** 解码配置参数 JSON；字段缺失/损坏时保持当前值（默认结构+数据开、覆盖+清空关、单线程）。 */
+    /** 解码配置参数 JSON；字段缺失/损坏时保持当前值（默认结构+数据开、覆盖+清空关、读写各 10 线程）。
+     *  兼容旧版 "threads" 键：同时回填读/写线程数。 */
     public void decodeOptions(String json) {
         if (json == null || json.isBlank()) {
             return;
@@ -158,8 +165,16 @@ public class MigrationTask extends TreeData {
             if (obj.has("truncate")) {
                 setTruncateTable(obj.optInt("truncate", 0) != 0);
             }
-            if (obj.has("threads")) {
-                setThreadCount(obj.optInt("threads", 1));
+            if (obj.has("readThreads")) {
+                setReadThreadCount(obj.optInt("readThreads", 10));
+            }
+            if (obj.has("writeThreads")) {
+                setWriteThreadCount(obj.optInt("writeThreads", 10));
+            }
+            if (!obj.has("readThreads") && !obj.has("writeThreads") && obj.has("threads")) {
+                int legacy = obj.optInt("threads", 10);
+                setReadThreadCount(legacy);
+                setWriteThreadCount(legacy);
             }
         } catch (Exception ignored) {
             // 容忍损坏数据，保持默认值

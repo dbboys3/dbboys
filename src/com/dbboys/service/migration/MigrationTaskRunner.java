@@ -298,7 +298,7 @@ public final class MigrationTaskRunner {
                 task.getTargetDatabase(), task.getTargetSchema(),
                 objects,
                 task.isMigrateDdl(), task.isMigrateData(), task.isOverwrite(),
-                task.isTruncateTable(), task.getThreadCount(),
+                task.isTruncateTable(), task.getReadThreadCount(), task.getWriteThreadCount(),
                 task.getMappings());
 
         // 明细行：按展开后对象生成 PENDING 行（明细中央 tab 的 TableView 直接绑定；只显示对象名）
