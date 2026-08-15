@@ -946,7 +946,7 @@ public final class InformixDdlRepository implements DdlRepository {
         ArrayList<PrimaryKeyInfo> primaryKeys = skipIndexesAndConstraints ? new ArrayList<>() : getPrimaryKey(connection,columns,tablename,sqlmode);
         ArrayList<Index> indexes = skipIndexesAndConstraints ? new ArrayList<>() : getIndexesInfo(connection,columns,tablename,sqlmode);
         ArrayList<FragmentInfo> tableFragments = getTableFragmentInfo(connection,tablename);
-        ArrayList<String> triggers = getTriggerList(connection,tablename);
+        ArrayList<String> triggers = skipIndexesAndConstraints ? new ArrayList<>() : getTriggerList(connection,tablename);
         ArrayList<ForeignKeyInfo> foreignKeys = skipIndexesAndConstraints ? new ArrayList<>() : getForeignKeyInfo(connection,tablename);
 
         appendColumnsDefinition(ddl, columns, sqlmode);

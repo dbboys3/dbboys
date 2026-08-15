@@ -1252,6 +1252,18 @@ public class MigrationDialogController {
         return refs;
     }
 
+    /** 勾选类型下实际可迁移对象数量：自定义按已选对象数，全量按已加载数量。 */
+    private int selectedObjectCount() {
+        int total = 0;
+        for (TypeSelection ts : typeSelections) {
+            if (!ts.checkBox.isSelected()) {
+                continue;
+            }
+            total += ts.custom ? ts.customObjects.size() : Math.max(0, ts.count);
+        }
+        return total;
+    }
+
     // ==================================================================
     // 校验与保存
     // ==================================================================
@@ -1280,7 +1292,7 @@ public class MigrationDialogController {
                     "Source and target connections must be different"));
             return false;
         }
-        if (collectObjectRefs().isEmpty()) {
+        if (collectObjectRefs().isEmpty() || selectedObjectCount() < 1) {
             showError(I18n.t("migration.error.no_objects",
                     "Please select at least one object"));
             return false;

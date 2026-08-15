@@ -666,8 +666,11 @@ public class TableMigrationService {
                 : Map.of();
         boolean applyMapping = mapping != null && !mapping.isEmpty();
         boolean applyGlobal = !globalTypes.isEmpty();
-        if (object.kind() != MigrationObjectRef.Kind.TABLE
-                || (ctx.sameFamily && !applyMapping && !applyGlobal)) {
+        boolean useNativeTableDdl = object.kind() == MigrationObjectRef.Kind.TABLE
+                && ctx.sameFamily && !applyMapping && !applyGlobal
+                && Objects.equals(sourceTypeForMapping(ctx, ws, objectName), ctx.targetMappingType);
+        if (object.kind() != MigrationObjectRef.Kind.TABLE || useNativeTableDdl) {
+            // 同族且无自定义映射时，还要源/目标 sqlmode 一致才回放原生建表 DDL；否则走 TypeMapper 转换
             // 原生 DDL 按 kind 分派回放：同族全保真；跨族非表对象尽力回放（不兼容由目标库报错记 FAILED）
             DdlRepository ddl = ctx.resolver.ddl(ws.sourceSessionConnect);
             return switch (object.kind()) {
