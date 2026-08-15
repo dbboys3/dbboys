@@ -116,6 +116,8 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuFileAddSshFolder;
     @FXML
+    private CustomShortcutMenuItem menuFileAddMigrationFolder;
+    @FXML
     private CustomShortcutMenuItem menuFileNewConnection;
     @FXML
     private CustomShortcutMenuItem menuFileDisconnectAll;
@@ -293,6 +295,7 @@ public class MainController {
         appLogoLabel.setGraphic(IconFactory.imageView(IconPaths.MAIN_LOGO, 18, 18, false));
         menuFileAddFolder.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
         menuFileAddSshFolder.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
+        menuFileAddMigrationFolder.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_ADD_FOLDER, 0.65));
         menuFileNewConnection.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_NEW_CONNECTION, 0.65));
         menuFileDisconnectAll.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_DISCONNECT_ALL, 0.6));
         newSqlFileMenuItem.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_NEW_SQL, 0.55));
@@ -772,6 +775,7 @@ public class MainController {
         bindText(menuFile, "main.menu.file");
         bindText(menuFileAddFolder, "main.menu.file.add_database_folder");
         bindText(menuFileAddSshFolder, "main.menu.file.add_ssh_folder");
+        bindText(menuFileAddMigrationFolder, "main.menu.file.add_migration_folder");
         bindText(menuFileNewConnection, "main.menu.file.new_connection");
         bindText(menuFileDisconnectAll, "main.menu.file.disconnect_all");
         bindText(newSqlFileMenuItem, "main.menu.file.new_sql");
@@ -1694,7 +1698,8 @@ public class MainController {
         migrationTreeView.getSelectionModel().select(newItem);
     }
 
-    private void createMigrationFolder() {
+    /** 新建迁移任务分类（文件菜单 / 迁移任务树右键菜单共用）。 */
+    public void createMigrationFolder() {
         HBox hbox = new HBox();
         hbox.getChildren().add(new Label(I18n.t("metadata.dialog.create_folder.name", "Enter folder name")));
         hbox.setAlignment(Pos.CENTER_LEFT);
