@@ -15,8 +15,6 @@ import com.dbboys.model.ForeignKey;
 import com.dbboys.model.Index;
 import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.Sql;
-import com.dbboys.model.TreeData;
-import com.dbboys.model.Trigger;
 import com.dbboys.service.BackgroundSqlService;
 import javafx.concurrent.Task;
 import org.apache.logging.log4j.LogManager;
@@ -31,8 +29,6 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -178,7 +174,6 @@ public class TableMigrationService {
         ctx.backSqlTask = backSqlTask;
         ctx.sessions = sessions;
         ctx.sourceMeta = ctx.resolver.metadata(request.source());
-        ctx.targetMeta = ctx.resolver.metadata(request.target());
         // 同构 = 两端 DDL 方言族相同（oracle/dameng 同族、informix/gbase8s 同族等）
         DdlFamily sourceFamily = ddlFamilyOf(ctx.resolver, request.source());
         DdlFamily targetFamily = ddlFamilyOf(ctx.resolver, request.target());
@@ -198,7 +193,7 @@ public class TableMigrationService {
         BackgroundSqlService.updateBackSqlUIOnStart();
 
         try {
-            // 2. 目标端主会话：仅用于预取冲突检测与后台任务展示；DDL/数据在各工作线程独立连接上执行
+            // 2. 目标端主会话：仅用于后台任务展示与目标端类型探测；DDL/数据在各工作线程独立连接上执行
             //    迁移连接不做方言会话初始化（createConnection），避免会话级设置影响 DDL/类型映射判定
             Connect targetSessionConnect = buildTargetSessionConnect(request, ctx.resolver);
             Connection targetConn = BackgroundSqlService.getConnectionService()
@@ -213,10 +208,6 @@ public class TableMigrationService {
             // 目标端类型映射基准：支持 sqlmode 的平台（GBase 8S）以探测到的 sqlmode 为准
             ctx.targetMappingType = resolveTargetMappingType(ctx, targetSessionConnect, targetConn);
 
-            // 3. 按请求中的 kind 预取目标已存在对象名集合（冲突检测；触发器额外记录宿主表）
-            prefetchTargetNames(ctx, targetConn, targetSessionConnect);
-
-            // 4. 源端按 catalog(+schema) 分组后扁平化（保持首次出现顺序），供游标按序分发
             Map<GroupKey, List<MigrationObjectRef>> groups = groupObjects(request.objects());
             List<GroupKey> flatGroups = new ArrayList<>(total);
             List<MigrationObjectRef> flatObjects = new ArrayList<>(total);
@@ -401,44 +392,34 @@ public class TableMigrationService {
                 return new ItemResult(object, ItemStatus.FAILED, 0, message, null, null);
             }
 
-            Set<String> existing = ctx.existingNames.get(kind);
-            // 并行下同 kind 对象（可能同名不同 catalog/schema）的冲突判定 + DROP/DDL 必须串行；数据复制在锁外并行
-            Object ddlLock = existing != null ? existing : kind;
-            boolean exists;
-            synchronized (ddlLock) {
-                exists = existing != null && existing.contains(normalizeName(objectName));
-
-                // 目标不存在且未勾选迁移结构时不做预检拦截：继续执行，由目标库返回原始错误号和报错
-                if (exists && request.overwrite() && request.migrateDdl()) {
+            // 同 kind 对象的 DROP/DDL 串行执行；数据复制在锁外并行
+            synchronized (kind) {
+                if (request.overwrite() && request.migrateDdl()) {
                     String dropSql = buildDropSql(ctx, object);
                     if (dropSql == null) {
-                        // PostgreSQL 等 DROP TRIGGER 需要 ON <table>，预取不到宿主表则无法安全 DROP
-                        String reason = "cannot resolve trigger's table for DROP";
-                        log(ctx.listener, String.format(
-                                I18n.t("migration.log.failed", "%s failed: %s"), displayName, reason));
-                        return new ItemResult(object, ItemStatus.FAILED, 0, reason, null, null);
+                        log.debug("drop skipped for {}: no host table", displayName);
+                    } else {
+                        try {
+                            executeTargetStatement(ctx, ws, dropSql);
+                            commitTarget(ctx, ws);
+                            log(ctx.listener, String.format(
+                                    I18n.t("migration.log.drop", "%s dropped in target"), displayName));
+                        } catch (Exception e) {
+                            rollbackTargetQuietly(ctx, ws);
+                            log.debug("drop ignored for {}: {}", displayName, errorMessage(e));
+                        }
                     }
-                    executeTargetStatement(ctx, ws, dropSql);
-                    commitTarget(ctx, ws);
-                    if (existing != null) {
-                        existing.remove(normalizeName(objectName));
-                    }
-                    log(ctx.listener, String.format(
-                            I18n.t("migration.log.drop", "%s dropped in target"), displayName));
                 }
                 if (request.migrateDdl()) {
                     String script = buildDdlScript(ctx, ws, object);
                     executeScript(ctx, ws, script);
                     commitTarget(ctx, ws);
-                    if (existing != null) {
-                        existing.add(normalizeName(objectName));
-                    }
                     log(ctx.listener, String.format(
                             I18n.t("migration.log.ddl_ok", "%s structure created"), displayName));
                 }
             }
             if (request.migrateData() && kind == MigrationObjectRef.Kind.TABLE) {
-                boolean recreated = exists && request.overwrite() && request.migrateDdl();
+                boolean recreated = request.overwrite() && request.migrateDdl();
                 if (!recreated && request.truncateTable()) {
                     // 勾选"清空表"才先清目标表：优先方言 TRUNCATE，方言不支持时退化为 DELETE FROM；
                     // 未勾选时直接追加复制，不再先 DELETE
@@ -682,7 +663,7 @@ public class TableMigrationService {
                 case FUNCTION -> ddl.printFunction(ws.sourceConn, objectName);
                 case PROCEDURE -> ddl.printProcedure(ws.sourceConn, objectName);
                 case PACKAGE -> ddl.printPackage(ws.sourceConn, objectName);
-                case INDEX -> ddl.printIndex(ws.sourceConn, objectName);
+                case INDEX -> buildIndexDdl(ctx, ws, object);
                 case FOREIGN_KEY -> buildForeignKeyDdl(ctx, ws, object);
                 case ALL -> throw new SQLException("wildcard object has no DDL");
             };
@@ -720,34 +701,42 @@ public class TableMigrationService {
      * 覆盖重建时的 DROP 语句。触发器走 {@link DatabasePlatform#dropTriggerSql}
      * （PostgreSQL 需要 ON &lt;table&gt;）、索引走 {@link DatabasePlatform#dropIndexSql}
      * （MySQL 需要 ON &lt;table&gt;）、外键走 ALTER TABLE ... DROP CONSTRAINT（MySQL 系 DROP FOREIGN KEY）
-     * ——表名都来自目标端预取映射；查不到返回 null，由调用方记 FAILED。
+     * ——宿主表来自源端对象引用；统一去掉 IF EXISTS，DROP 失败由调用方忽略。
      */
     private String buildDropSql(MigrationContext ctx, MigrationObjectRef object) {
         if (object.kind() == MigrationObjectRef.Kind.TRIGGER) {
-            String tableName = ctx.existingTriggerTables.get(normalizeName(object.name()));
+            String tableName = object.parent();
             if (tableName == null || tableName.isBlank()) {
                 return null;
             }
-            return ctx.targetPlatform.dropTriggerSql(object.name(), tableName);
+            return withoutDropIfExists(ctx.targetPlatform.dropTriggerSql(object.name(), tableName));
         }
         if (object.kind() == MigrationObjectRef.Kind.INDEX) {
-            String tableName = ctx.existingIndexTables.get(normalizeName(object.name()));
+            String tableName = object.parent();
             if (tableName == null || tableName.isBlank()) {
                 return null;
             }
-            return ctx.targetPlatform.dropIndexSql(object.name(), tableName);
+            return withoutDropIfExists(ctx.targetPlatform.dropIndexSql(object.name(), tableName));
         }
         if (object.kind() == MigrationObjectRef.Kind.FOREIGN_KEY) {
-            String tableName = ctx.existingForeignKeyTables.get(normalizeName(object.name()));
+            String tableName = object.parent();
             if (tableName == null || tableName.isBlank()) {
                 return null;
             }
             // MySQL 系外键删除用 DROP FOREIGN KEY，其余按标准 DROP CONSTRAINT（跨族尽力而为）
             boolean mysqlFamily = ddlFamilyOf(ctx.resolver, ctx.request.target()) == DdlFamily.MYSQL;
-            return "ALTER TABLE " + tableName
-                    + (mysqlFamily ? " DROP FOREIGN KEY " : " DROP CONSTRAINT ") + object.name();
+            return withoutDropIfExists("ALTER TABLE " + tableName
+                    + (mysqlFamily ? " DROP FOREIGN KEY " : " DROP CONSTRAINT ") + object.name());
         }
-        return ctx.targetPlatform.dropObjectSql(dropObjectType(object.kind()), object.name());
+        return withoutDropIfExists(
+                ctx.targetPlatform.dropObjectSql(dropObjectType(object.kind()), object.name()));
+    }
+
+    private static String withoutDropIfExists(String dropSql) {
+        if (dropSql == null || dropSql.isBlank()) {
+            return dropSql;
+        }
+        return dropSql.replaceAll("(?i)\\s+IF EXISTS\\s+", " ").trim();
     }
 
     /** kind → {@link DatabasePlatform#dropObjectSql} 的 objectType 字面值（与树删除菜单一致）。 */
@@ -775,10 +764,73 @@ public class TableMigrationService {
         }
         for (ForeignKey fk : ctx.sourceMeta.getTableForeignKeys(ws.sourceConn, hostTable)) {
             if (fk.getName() != null && fk.getName().equalsIgnoreCase(object.name())) {
-                return buildAddForeignKeySql(fk);
+                return buildAddForeignKeySql(fk, targetTypeForDdl(ctx));
             }
         }
         throw new SQLException("foreign key " + object.name() + " not found on table " + hostTable);
+    }
+
+    /** 按目标 sqlmode/dbtype 生成 CREATE INDEX；源端索引元数据读取失败时回退原生 printIndex。 */
+    private String buildIndexDdl(MigrationContext ctx, WorkerSession ws, MigrationObjectRef object) throws Exception {
+        String dbName = object.schema() != null && !object.schema().isBlank()
+                ? object.schema()
+                : object.catalog();
+        try {
+            Index index = ctx.sourceMeta.getIndex(ws.sourceConn, dbName, object.name());
+            if (index != null && index.getName() != null) {
+                String targetType = targetTypeForDdl(ctx);
+                String indexName = indexNameForTarget(index.getName(), targetType);
+                String tableName = index.getTableName() != null && !index.getTableName().isBlank()
+                        ? index.getTableName()
+                        : object.parent();
+                String columns = index.getCols() != null && !index.getCols().isBlank()
+                        ? index.getCols()
+                        : (index.getIndexCols() == null ? "" : index.getIndexCols());
+                if (tableName == null || tableName.isBlank() || columns.isBlank()) {
+                    throw new SQLException("index " + object.name() + " has no table or columns");
+                }
+
+                if ("MYSQL".equalsIgnoreCase(targetType) && "PRIMARY".equalsIgnoreCase(indexName)) {
+                    return "ALTER TABLE " + tableName + " ADD PRIMARY KEY (" + columns + ");";
+                }
+
+                String type = index.getIdxtype();
+                String cluster = index.getIndexCluster();
+                String prefix;
+                if ("U".equalsIgnoreCase(type) || "UNIQUE".equalsIgnoreCase(type)) {
+                    prefix = "UNIQUE ";
+                } else if ("C".equalsIgnoreCase(cluster)) {
+                    prefix = "CLUSTER ";
+                } else {
+                    prefix = "";
+                }
+                return "CREATE " + prefix + "INDEX " + indexName
+                        + " ON " + tableName + " (" + columns + ");";
+            }
+        } catch (Exception e) {
+            log.debug("build index ddl failed for {}, fallback to native", object.name(), e);
+        }
+        return ctx.resolver.ddl(ws.sourceSessionConnect).printIndex(ws.sourceConn, object.name());
+    }
+
+    private static String targetTypeForDdl(MigrationContext ctx) {
+        return ctx.targetMappingType == null || ctx.targetMappingType.isBlank()
+                ? ctx.request.target().getDbtype()
+                : ctx.targetMappingType;
+    }
+
+    private static String indexNameForTarget(String indexName, String targetType) {
+        if ("MYSQL".equalsIgnoreCase(targetType) && indexName != null) {
+            int separator = indexName.lastIndexOf("$$");
+            if (separator >= 0 && separator + 2 < indexName.length()) {
+                return indexName.substring(separator + 2);
+            }
+        }
+        return indexName;
+    }
+
+    private static boolean isGbaseConstraintSyntax(String targetType) {
+        return "GBASE 8S".equalsIgnoreCase(targetType) || "INFORMIX".equalsIgnoreCase(targetType);
     }
 
     /** 类型映射用的源平台类型：表级 sqlmode 优先——有 sqlmode 时以其数据类型为准
@@ -832,13 +884,24 @@ public class TableMigrationService {
     }
 
     /** 标准外键 DDL（跨族尽力而为；目标库不兼容由执行报错记 FAILED）。规则仅在有显式动作时附加。 */
-    private static String buildAddForeignKeySql(ForeignKey fk) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("ALTER TABLE ").append(fk.getTableName())
-                .append(" ADD CONSTRAINT ").append(fk.getName())
-                .append(" FOREIGN KEY (").append(fk.getColumns()).append(")")
-                .append(" REFERENCES ").append(fk.getRefTableName())
-                .append(" (").append(fk.getRefColumns()).append(")");
+    private static String buildAddForeignKeySql(ForeignKey fk, String targetType) {
+        StringBuilder sb = new StringBuilder("ALTER TABLE ").append(fk.getTableName());
+        String name = fk.getName();
+        if (isGbaseConstraintSyntax(targetType)) {
+            sb.append(" ADD CONSTRAINT FOREIGN KEY (").append(fk.getColumns()).append(")")
+                    .append(" REFERENCES ").append(fk.getRefTableName())
+                    .append(" (").append(fk.getRefColumns()).append(")");
+            if (name != null && !name.isBlank()) {
+                sb.append(" CONSTRAINT ").append(name);
+            }
+        } else {
+            if (name != null && !name.isBlank()) {
+                sb.append(" ADD CONSTRAINT ").append(name);
+            }
+            sb.append(" FOREIGN KEY (").append(fk.getColumns()).append(")")
+                    .append(" REFERENCES ").append(fk.getRefTableName())
+                    .append(" (").append(fk.getRefColumns()).append(")");
+        }
         if (fk.getDeleteRule() != null) {
             sb.append(" ON DELETE ").append(fk.getDeleteRule());
         }
@@ -1174,120 +1237,6 @@ public class TableMigrationService {
         return sessionConnect;
     }
 
-    /**
-     * 按请求中出现的 kind 预取目标端对象名集合（冲突检测），单个 kind 失败只降级该 kind。
-     * TRIGGER 额外维护 name→tableName 映射，供 DROP TRIGGER ... ON &lt;table&gt; 用。
-     */
-    private void prefetchTargetNames(MigrationContext ctx, Connection targetConn, Connect targetSessionConnect) {
-        String dbName = ctx.request.targetDatabase() != null && !ctx.request.targetDatabase().isBlank()
-                ? ctx.request.targetDatabase()
-                : (ctx.request.targetSchema() != null && !ctx.request.targetSchema().isBlank()
-                        ? ctx.request.targetSchema()
-                        : targetSessionConnect.getEffectiveCatalog());
-        for (MigrationObjectRef.Kind kind : requestedKinds(ctx.request)) {
-            try {
-                switch (kind) {
-                    case TABLE -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getUserTables(targetConn, dbName)));
-                    case VIEW -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getViews(targetConn, dbName)));
-                    case SEQUENCE -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getSequences(targetConn, dbName)));
-                    case SYNONYM -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getSynonyms(targetConn, dbName)));
-                    case TRIGGER -> {
-                        Set<String> names = ConcurrentHashMap.newKeySet();
-                        List<Trigger> triggers = ctx.targetMeta.getTriggers(targetConn, dbName);
-                        if (triggers != null) {
-                            for (Trigger trigger : triggers) {
-                                if (trigger == null) {
-                                    continue;
-                                }
-                                String normalized = normalizeName(trigger.getName());
-                                names.add(normalized);
-                                if (trigger.getTableName() != null && !trigger.getTableName().isBlank()) {
-                                    ctx.existingTriggerTables.put(normalized, trigger.getTableName());
-                                }
-                            }
-                        }
-                        ctx.existingNames.put(kind, names);
-                    }
-                    case FUNCTION -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getFunctions(targetConn, dbName, false)));
-                    case PROCEDURE -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getProcedures(targetConn, dbName, false)));
-                    case PACKAGE -> ctx.existingNames.put(kind,
-                            nameSet(ctx.targetMeta.getPackages(targetConn, dbName)));
-                    case INDEX -> {
-                        Set<String> names = ConcurrentHashMap.newKeySet();
-                        List<Index> indexes = ctx.targetMeta.getIndexes(targetConn, dbName);
-                        if (indexes != null) {
-                            for (Index index : indexes) {
-                                if (index == null) {
-                                    continue;
-                                }
-                                String normalized = normalizeName(index.getName());
-                                names.add(normalized);
-                                if (index.getTableName() != null && !index.getTableName().isBlank()) {
-                                    ctx.existingIndexTables.put(normalized, index.getTableName());
-                                }
-                            }
-                        }
-                        ctx.existingNames.put(kind, names);
-                    }
-                    case FOREIGN_KEY -> {
-                        Set<String> names = ConcurrentHashMap.newKeySet();
-                        List<ForeignKey> foreignKeys = ctx.targetMeta.getForeignKeys(targetConn, dbName);
-                        if (foreignKeys != null) {
-                            for (ForeignKey foreignKey : foreignKeys) {
-                                if (foreignKey == null) {
-                                    continue;
-                                }
-                                String normalized = normalizeName(foreignKey.getName());
-                                names.add(normalized);
-                                if (foreignKey.getTableName() != null && !foreignKey.getTableName().isBlank()) {
-                                    ctx.existingForeignKeyTables.put(normalized, foreignKey.getTableName());
-                                }
-                            }
-                        }
-                        ctx.existingNames.put(kind, names);
-                    }
-                    case ALL -> {
-                        // 通配不预取（服务不展开通配）
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("prefetch target {} names failed, conflict detection degraded for this kind", kind, e);
-            }
-        }
-    }
-
-    /** 请求中出现的非通配 kind 集合。 */
-    private static Set<MigrationObjectRef.Kind> requestedKinds(MigrationRequest request) {
-        Set<MigrationObjectRef.Kind> kinds = EnumSet.noneOf(MigrationObjectRef.Kind.class);
-        if (request.objects() != null) {
-            for (MigrationObjectRef object : request.objects()) {
-                if (object != null && !object.isWildcard()) {
-                    kinds.add(object.kind());
-                }
-            }
-        }
-        return kinds;
-    }
-
-    /** 目标端已存在对象名集合：工作线程并发读写（冲突判定 + DROP/建表后增删），用并发集。 */
-    private static Set<String> nameSet(List<? extends TreeData> objects) {
-        Set<String> names = ConcurrentHashMap.newKeySet();
-        if (objects != null) {
-            for (TreeData object : objects) {
-                if (object != null) {
-                    names.add(normalizeName(object.getName()));
-                }
-            }
-        }
-        return names;
-    }
-
     // ==================================================================
     // 小工具
     // ==================================================================
@@ -1368,19 +1317,6 @@ public class TableMigrationService {
         return connect != null
                 && connect.getDbtype() != null
                 && GENERAL_JDBC.equalsIgnoreCase(connect.getDbtype().trim());
-    }
-
-    private static String normalizeName(String name) {
-        if (name == null) {
-            return "";
-        }
-        String normalized = name.trim();
-        if (normalized.length() >= 2
-                && ((normalized.startsWith("\"") && normalized.endsWith("\""))
-                || (normalized.startsWith("`") && normalized.endsWith("`")))) {
-            normalized = normalized.substring(1, normalized.length() - 1);
-        }
-        return normalized.toLowerCase(Locale.ROOT);
     }
 
     private static String blankToNull(String value) {
@@ -1485,21 +1421,12 @@ public class TableMigrationService {
         BackgroundSqlTask backSqlTask;
         SessionHolder sessions;
         MetadataRepository sourceMeta;
-        MetadataRepository targetMeta;
         boolean sameFamily;
         DatabasePlatform targetPlatform;
         SqlParser targetParser;
         /** 目标端类型映射基准：支持 sqlmode 的平台以探测到的 sqlmode 为准，否则=目标连接 dbtype。 */
         String targetMappingType;
         int total;
-        /** kind → 目标端已存在对象名集合（normalizeName 后，并发集）。 */
-        Map<MigrationObjectRef.Kind, Set<String>> existingNames = new EnumMap<>(MigrationObjectRef.Kind.class);
-        /** 目标端触发器名（normalizeName 后）→ 宿主表名，供 DROP TRIGGER ... ON table 用。 */
-        Map<String, String> existingTriggerTables = new ConcurrentHashMap<>();
-        /** 目标端索引名（normalizeName 后）→ 宿主表名，供 DROP INDEX ... ON table（MySQL 系）用。 */
-        Map<String, String> existingIndexTables = new ConcurrentHashMap<>();
-        /** 目标端外键名（normalizeName 后）→ 宿主表名，供 ALTER TABLE ... DROP CONSTRAINT 用。 */
-        Map<String, String> existingForeignKeyTables = new ConcurrentHashMap<>();
     }
 
     /**

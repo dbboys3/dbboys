@@ -1155,7 +1155,7 @@ public class MigrationDialogController {
         }
     }
 
-    /** 后台线程用：索引/外键的 对象名→宿主表 映射（一次元数据读取同时得到清单与宿主表）。 */
+    /** 后台线程用：索引/外键/触发器的 对象名→宿主表 映射（一次元数据读取同时得到清单与宿主表）。 */
     private static java.util.Map<String, String> loadObjectParents(Connect source, String catalog,
                                                                    String schema,
                                                                    MigrationObjectRef.Kind kind) throws Exception {
@@ -1175,6 +1175,8 @@ public class MigrationDialogController {
                         parents.put(object.getName(), index.getTableName());
                     } else if (object instanceof com.dbboys.model.ForeignKey foreignKey) {
                         parents.put(object.getName(), foreignKey.getTableName());
+                    } else if (object instanceof com.dbboys.model.Trigger trigger) {
+                        parents.put(object.getName(), trigger.getTableName());
                     }
                 }
             }
@@ -1202,12 +1204,14 @@ public class MigrationDialogController {
         };
     }
 
-    /** 索引/外键没有 WHERE 条件，refs/自定义挑选的 value 槽借存宿主表名（parent）。 */
+    /** 索引/外键/触发器没有 WHERE 条件，refs/自定义挑选的 value 槽借存宿主表名（parent）。 */
     private static boolean isParentedKind(MigrationObjectRef.Kind kind) {
-        return kind == MigrationObjectRef.Kind.INDEX || kind == MigrationObjectRef.Kind.FOREIGN_KEY;
+        return kind == MigrationObjectRef.Kind.INDEX
+                || kind == MigrationObjectRef.Kind.FOREIGN_KEY
+                || kind == MigrationObjectRef.Kind.TRIGGER;
     }
 
-    /** ref → customObjects 的 value：索引/外键取宿主表名，其余取 WHERE 条件。 */
+    /** ref → customObjects 的 value：索引/外键/触发器取宿主表名，其余取 WHERE 条件。 */
     private static String slotValue(MigrationObjectRef ref) {
         if (isParentedKind(ref.kind())) {
             return ref.parent() == null ? "" : ref.parent();
@@ -1461,7 +1465,7 @@ public class MigrationDialogController {
                 List<PickItem> items = new ArrayList<>();
                 for (String name : names) {
                     String slot = initialWhereByName == null ? null : initialWhereByName.get(name);
-                    // 索引/外键：slot 槽与新鲜元数据都是宿主表名，优先用新鲜的
+                    // 索引/外键/触发器：slot 槽与新鲜元数据都是宿主表名，优先用新鲜的
                     String parent = isParentedKind(kind)
                             ? parents.getOrDefault(name, slot == null ? "" : slot)
                             : null;

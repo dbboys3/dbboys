@@ -250,7 +250,7 @@ public final class MigrationTaskRunner {
                         MigrationObjectRef.Kind.SYNONYM);
             }
             if (all || kind == MigrationObjectRef.Kind.TRIGGER) {
-                addObjects(result, meta.getTriggers(conn, dbName), catalog, schema,
+                addObjectsWithParent(result, meta.getTriggers(conn, dbName), catalog, schema,
                         MigrationObjectRef.Kind.TRIGGER);
             }
             if ((all || kind == MigrationObjectRef.Kind.FUNCTION) && platform.supportsFunctionsFolder()) {
@@ -291,7 +291,7 @@ public final class MigrationTaskRunner {
         }
     }
 
-    /** 索引/外键展开：refs 需带宿主表名（parent），供目标端 DROP/DDL 生成用。 */
+    /** 索引/外键/触发器展开：refs 需带宿主表名（parent），供目标端 DROP/DDL 生成用。 */
     private static void addObjectsWithParent(List<MigrationObjectRef> out,
                                              List<? extends TreeData> objects,
                                              String catalog, String schema,
@@ -308,6 +308,8 @@ public final class MigrationTaskRunner {
                 parent = index.getTableName();
             } else if (object instanceof com.dbboys.model.ForeignKey foreignKey) {
                 parent = foreignKey.getTableName();
+            } else if (object instanceof com.dbboys.model.Trigger trigger) {
+                parent = trigger.getTableName();
             }
             out.add(new MigrationObjectRef(catalog, schema, kind, object.getName(), null, parent));
         }
