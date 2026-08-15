@@ -1082,15 +1082,32 @@ public class MainController {
                     "metadata.menu.delete",
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteSshItem.setOnAction(e -> {
-                TreeItem<TreeData> selected = sshTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.SshConnect sshConnect) {
-                    if (AlertUtil.CustomAlertConfirm(
-                            I18n.t("metadata.alert.delete_connection.title", "删除连接"),
-                            I18n.t("metadata.alert.delete_connection.content", "确定要删除连接\"%s\"吗？")
-                                    .formatted(sshConnect.getName()))) {
-                        if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(sshConnect)) {
-                            selected.getParent().getChildren().remove(selected);
-                        }
+                // 单选/多选统一：收集所有选中的连接节点，一次确认后全部删除
+                java.util.List<TreeItem<TreeData>> targets = new java.util.ArrayList<>();
+                for (TreeItem<TreeData> item : sshTreeView.getSelectionModel().getSelectedItems()) {
+                    if (item != null && item.getValue() instanceof com.dbboys.model.SshConnect) {
+                        targets.add(item);
+                    }
+                }
+                if (targets.isEmpty()) {
+                    return;
+                }
+                boolean confirm = targets.size() == 1
+                        ? AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.alert.delete_connection.title", "删除连接"),
+                                I18n.t("metadata.alert.delete_connection.content", "确定要删除连接\"%s\"吗？")
+                                        .formatted(targets.get(0).getValue().getName()))
+                        : AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.alert.delete_connection.title", "删除连接"),
+                                I18n.t("metadata.alert.delete_connections.content", "确定要删除选中的【%d】个连接吗？")
+                                        .formatted(targets.size()));
+                if (!confirm) {
+                    return;
+                }
+                for (TreeItem<TreeData> item : targets) {
+                    if (com.dbboys.infra.db.LocalDbRepository.deleteSsh(
+                            (com.dbboys.model.SshConnect) item.getValue()) && item.getParent() != null) {
+                        item.getParent().getChildren().remove(item);
                     }
                 }
             });
@@ -1186,21 +1203,59 @@ public class MainController {
                     }
                     current = current.getParent();
                 }
-                // If we found a TreeCell, extract its TreeItem and select it
+                // If we found a TreeCell, extract its TreeItem and select it;
+                // 已在多选集合里的节点不重置选择，保留多选状态
                 if (current instanceof javafx.scene.control.TreeCell) {
                     javafx.scene.control.TreeCell<?> cell = (javafx.scene.control.TreeCell<?>) current;
                     Object treeItemObj = cell.getTreeItem();
-                    if (treeItemObj != null) {
+                    if (treeItemObj != null
+                            && !sshTreeView.getSelectionModel().getSelectedItems().contains(treeItemObj)) {
                         sshTreeView.getSelectionModel().clearSelection();
                         sshTreeView.getSelectionModel().select((TreeItem<TreeData>) treeItemObj);
                     }
                 }
 
-                // Build menu based on the (now selected) item
+                // Build menu based on the current selection
                 sshCtxMenu.getItems().clear();
+                javafx.collections.ObservableList<TreeItem<TreeData>> selectedItems =
+                        sshTreeView.getSelectionModel().getSelectedItems();
+
+                // 多选：只有全是连接节点才弹菜单，且除"删除"外全部禁用；跨类型多选不弹
+                if (selectedItems.size() > 1) {
+                    boolean allConnections = true;
+                    for (TreeItem<TreeData> item : selectedItems) {
+                        if (item == null || !(item.getValue() instanceof com.dbboys.model.SshConnect)) {
+                            allConnections = false;
+                            break;
+                        }
+                    }
+                    if (!allConnections) {
+                        return;
+                    }
+                    openSshItem.setDisable(true);
+                    editSshItem.setDisable(true);
+                    copySshItem.setDisable(true);
+                    moveSshItem.setDisable(true);
+                    renameSshItem.setDisable(true);
+                    deleteSshItem.setDisable(false);
+                    sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem,
+                            moveSshItem, renameSshItem,
+                            new javafx.scene.control.SeparatorMenuItem(),
+                            deleteSshItem);
+                    sshCtxMenu.show(sshTreeView, event.getScreenX(), event.getScreenY());
+                    return;
+                }
+
                 TreeItem<TreeData> sel = sshTreeView.getSelectionModel().getSelectedItem();
                 boolean isConnection = sel != null && sel.getValue() instanceof com.dbboys.model.SshConnect;
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.ui.treemodel.SshFolder;
+
+                // 单选：重置多选分支可能留下的禁用状态
+                openSshItem.setDisable(false);
+                editSshItem.setDisable(false);
+                copySshItem.setDisable(false);
+                renameSshItem.setDisable(false);
+                deleteSshItem.setDisable(false);
 
                 if (isConnection) {
                     sshCtxMenu.getItems().addAll(openSshItem, editSshItem, copySshItem,
@@ -1336,21 +1391,44 @@ public class MainController {
                     "metadata.menu.delete",
                     IconFactory.group(IconPaths.METADATA_DELETE_ITEM, 0.7, 0.7, IconFactory.dangerColor()));
             deleteTaskItem.setOnAction(e -> {
-                TreeItem<TreeData> selected = migrationTreeView.getSelectionModel().getSelectedItem();
-                if (selected != null && selected.getValue() instanceof com.dbboys.model.MigrationTask task) {
-                    if (task.isRunning()) {
-                        AlertUtil.CustomAlert(I18n.t("common.hint"),
-                                I18n.t("migration.error.task_running", "Task is running, stop it first"));
-                        return;
+                // 单选/多选统一：收集所有选中的任务节点，一次确认后全部删除
+                java.util.List<TreeItem<TreeData>> targets = new java.util.ArrayList<>();
+                boolean anyRunning = false;
+                for (TreeItem<TreeData> item : migrationTreeView.getSelectionModel().getSelectedItems()) {
+                    if (item != null && item.getValue() instanceof com.dbboys.model.MigrationTask t) {
+                        targets.add(item);
+                        if (t.isRunning()) {
+                            anyRunning = true;
+                        }
                     }
-                    if (AlertUtil.CustomAlertConfirm(
-                            I18n.t("metadata.menu.delete", "删除"),
-                            I18n.t("migration.confirm.delete_task", "确定要删除任务\"%s\"吗？")
-                                    .formatted(task.getName()))) {
-                        if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationTask(task)) {
-                            // 详情 tab 打开着则同步关闭
-                            com.dbboys.ui.util.TabpaneUtil.closeMigrationTaskTabIfOpen(task.getId());
-                            selected.getParent().getChildren().remove(selected);
+                }
+                if (targets.isEmpty()) {
+                    return;
+                }
+                if (anyRunning) {
+                    AlertUtil.CustomAlert(I18n.t("common.hint"),
+                            I18n.t("migration.error.task_running", "Task is running, stop it first"));
+                    return;
+                }
+                boolean confirm = targets.size() == 1
+                        ? AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.menu.delete", "删除"),
+                                I18n.t("migration.confirm.delete_task", "确定要删除任务\"%s\"吗？")
+                                        .formatted(targets.get(0).getValue().getName()))
+                        : AlertUtil.CustomAlertConfirm(
+                                I18n.t("metadata.menu.delete", "删除"),
+                                I18n.t("migration.confirm.delete_tasks", "确定要删除选中的【%d】个任务吗？")
+                                        .formatted(targets.size()));
+                if (!confirm) {
+                    return;
+                }
+                for (TreeItem<TreeData> item : targets) {
+                    com.dbboys.model.MigrationTask task = (com.dbboys.model.MigrationTask) item.getValue();
+                    if (com.dbboys.infra.db.LocalDbRepository.deleteMigrationTask(task)) {
+                        // 详情 tab 打开着则同步关闭
+                        com.dbboys.ui.util.TabpaneUtil.closeMigrationTaskTabIfOpen(task.getId());
+                        if (item.getParent() != null) {
+                            item.getParent().getChildren().remove(item);
                         }
                     }
                 }
@@ -1445,15 +1523,49 @@ public class MainController {
                 if (current instanceof javafx.scene.control.TreeCell) {
                     javafx.scene.control.TreeCell<?> cell = (javafx.scene.control.TreeCell<?>) current;
                     Object treeItemObj = cell.getTreeItem();
-                    // 已选中的节点不再重复 clear+select，避免单元格重渲染导致文字闪烁
+                    // 已在多选集合里的节点不再 clear+select，保留多选状态（也避免单元格重渲染闪烁）
                     if (treeItemObj != null
-                            && migrationTreeView.getSelectionModel().getSelectedItem() != treeItemObj) {
+                            && !migrationTreeView.getSelectionModel().getSelectedItems().contains(treeItemObj)) {
                         migrationTreeView.getSelectionModel().clearSelection();
                         migrationTreeView.getSelectionModel().select((TreeItem<TreeData>) treeItemObj);
                     }
                 }
 
                 migrationCtxMenu.getItems().clear();
+                javafx.collections.ObservableList<TreeItem<TreeData>> selectedItems =
+                        migrationTreeView.getSelectionModel().getSelectedItems();
+
+                // 多选：只有全是任务节点才弹菜单，且除"删除"外全部禁用；跨类型多选不弹
+                if (selectedItems.size() > 1) {
+                    boolean allTasks = true;
+                    boolean anyRunning = false;
+                    for (TreeItem<TreeData> item : selectedItems) {
+                        if (item == null || !(item.getValue() instanceof com.dbboys.model.MigrationTask t)) {
+                            allTasks = false;
+                            break;
+                        }
+                        if (t.isRunning()) {
+                            anyRunning = true;
+                        }
+                    }
+                    if (!allTasks) {
+                        return;
+                    }
+                    startTaskItem.setDisable(true);
+                    stopTaskItem.setDisable(true);
+                    editTaskItem.setDisable(true);
+                    copyTaskItem.setDisable(true);
+                    moveTaskItem.setDisable(true);
+                    renameTaskItem.setDisable(true);
+                    // 有任务在运行时不允许删（与单选语义一致）
+                    deleteTaskItem.setDisable(anyRunning);
+                    migrationCtxMenu.getItems().addAll(startTaskItem, stopTaskItem, editTaskItem,
+                            copyTaskItem, moveTaskItem, renameTaskItem,
+                            new javafx.scene.control.SeparatorMenuItem(), deleteTaskItem);
+                    migrationCtxMenu.show(migrationTreeView, event.getScreenX(), event.getScreenY());
+                    return;
+                }
+
                 TreeItem<TreeData> sel = migrationTreeView.getSelectionModel().getSelectedItem();
                 boolean isTask = sel != null && sel.getValue() instanceof com.dbboys.model.MigrationTask;
                 boolean isFolder = sel != null && sel.getValue() instanceof com.dbboys.ui.treemodel.MigrationFolder;
