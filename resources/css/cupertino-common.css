@@ -54,11 +54,10 @@
   -color-button-bg-hover: -color-hover-bg;
   -color-custom-button-hover-bg: -color-button-bg-hover;
   -color-menu-bar-hover-bg: -color-base-7;
-  -color-resultset-delete-icon-fg: -color-danger-fg;
   -color-accent-pill-success-bg: -color-success-fg;
-  -color-accent-pill-failure-bg: -color-resultset-delete-icon-fg;
+  -color-accent-pill-failure-bg: -color-danger-fg;
   -color-action-success-hover-bg: -color-success-emphasis;
-  -color-action-danger-hover-bg: -color-resultset-delete-icon-fg;
+  -color-action-danger-hover-bg: -color-danger-fg;
   -color-markdown-search-title: #5f6672;
   -color-markdown-search-snippet: #8a8f98;
   -fx-background-color: -color-bg-default;
@@ -6234,10 +6233,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 
 .icon-danger {
   -fx-fill: -color-danger-fg;
-}
-
-.icon-resultset-delete {
-  -fx-fill: -color-resultset-delete-icon-fg;
 }
 
 .tree-cell-description {

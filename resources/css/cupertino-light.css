@@ -81,7 +81,7 @@
   -color-success-emphasis: rgb(30, 195, 55);
   -color-success-muted: rgb(165, 231, 175);
   -color-success-subtle: rgb(233, 249, 235);
-  -color-danger-fg: -color-danger-6;
+  -color-danger-fg: -color-danger-emphasis;
   -color-danger-emphasis: rgb(255, 59, 48);
   -color-danger-muted: rgb(255, 177, 172);
   -color-danger-subtle: rgb(255, 226, 224);
@@ -137,7 +137,6 @@
   -color-resultset-pending-success-bg-strong: rgba(30, 195, 55, 0.28);
   -color-resultset-pending-danger-bg: rgba(255, 59, 48, 0.16);
   -color-resultset-pending-danger-bg-strong: rgba(255, 59, 48, 0.26);
-  -color-resultset-delete-icon-fg: -color-danger-5;
   -color-modal-pane-overlay-bg: rgba(0, 0, 0, 0.08);
   -color-modal-progress-overlay: rgba(0, 0, 0, 0.18);
   -color-modal-progress-overlay-strong: rgba(0, 0, 0, 0.24);
