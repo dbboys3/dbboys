@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import com.dbboys.infra.config.ConfigManager;
 import java.nio.file.StandardOpenOption;
 import com.dbboys.infra.config.ConfigManager;
+import java.util.List;
 
 /**
  * AI API 配置工具。
@@ -29,7 +30,14 @@ public final class AiAuthClient {
     private static final String QWEN_BASE_URL =
             "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1";
     // 默认模型与下拉框候选保持一致，避免配置缺失时出现额外模型项
-    private static final String DEFAULT_MODEL = "deepseek-v4-pro";
+    private static final String DEFAULT_MODEL = "deepseek-v4-flash";
+    private static final String DEEPSEEK_V4_PRO_MODEL = "deepseek-v4-pro";
+    private static final String DEEPSEEK_V4_FLASH_MODEL = "deepseek-v4-flash";
+    private static final String DEEPSEEK_SHARED_TOKEN_FILE = "deepseek";
+    private static final List<String> DEEPSEEK_MODELS = List.of(
+            DEEPSEEK_V4_FLASH_MODEL,
+            DEEPSEEK_V4_PRO_MODEL
+    );
     private static final String KIMI_DEFAULT_MODEL = "kimi-k2.5";
     private static final String KIMI_LEGACY_MODEL = "kimi-latest";
     private static final String API_TOKEN_DIR_NAME = "dbboys";
@@ -78,7 +86,11 @@ public final class AiAuthClient {
     }
 
     public static boolean isDeepSeekModel() {
-        return PROVIDER_DEEPSEEK.equals(getCurrentProviderKey());
+        return isDeepSeekModel(getModel());
+    }
+
+    private static boolean isDeepSeekModel(String model) {
+        return PROVIDER_DEEPSEEK.equals(detectProvider(model));
     }
 
     public static boolean isQwenModel() {
@@ -122,6 +134,9 @@ public final class AiAuthClient {
             } else {
                 writeApiToken(model, safeToken);
             }
+            if (isDeepSeekModel(model)) {
+                cleanupLegacyDeepSeekTokenFiles();
+            }
             deleteLegacyApiToken();
         } catch (IOException e) {
             throw new IllegalStateException("保存 API Key 失败: " + e.getMessage(), e);
@@ -129,7 +144,7 @@ public final class AiAuthClient {
     }
 
     public static Path getApiTokenStoragePath() {
-        return resolveApiTokenPath(getModel());
+        return resolveProviderApiTokenPath(getModel());
     }
 
     /**
@@ -148,6 +163,17 @@ public final class AiAuthClient {
                 API_TOKEN_DIR_NAME,
                 safeModel
         );
+    }
+
+    private static Path resolveProviderApiTokenPath(String model) {
+        if (isDeepSeekModel(model)) {
+            return Path.of(
+                    System.getProperty("java.io.tmpdir"),
+                    API_TOKEN_DIR_NAME,
+                    DEEPSEEK_SHARED_TOKEN_FILE
+            );
+        }
+        return resolveApiTokenPath(model);
     }
 
     private static Path resolveLegacyApiTokenPath() {
@@ -186,10 +212,15 @@ public final class AiAuthClient {
     }
 
     private static String readApiToken(String model) {
-        Path tokenPath = resolveApiTokenPath(model);
+        Path tokenPath = resolveProviderApiTokenPath(model);
         String token = readTokenFile(tokenPath);
         if (!token.isEmpty()) {
             return token;
+        }
+
+        String migratedDeepSeekToken = migrateLegacyDeepSeekToken(model);
+        if (!migratedDeepSeekToken.isEmpty()) {
+            return migratedDeepSeekToken;
         }
 
         String migratedKimiToken = migrateLegacyKimiToken(model);
@@ -210,6 +241,30 @@ public final class AiAuthClient {
             log.warn("Migrate AI API token failed: {} -> {}", legacyTokenPath, tokenPath, e);
         }
         return legacyToken;
+    }
+
+    private static String migrateLegacyDeepSeekToken(String model) {
+        if (!isDeepSeekModel(model)) {
+            return "";
+        }
+
+        Path sharedTokenPath = resolveProviderApiTokenPath(model);
+        for (String legacyModel : DEEPSEEK_MODELS) {
+            Path legacyTokenPath = resolveApiTokenPath(legacyModel);
+            String legacyToken = readTokenFile(legacyTokenPath);
+            if (legacyToken.isEmpty()) {
+                continue;
+            }
+            try {
+                writeTokenFile(sharedTokenPath, legacyToken);
+                cleanupLegacyDeepSeekTokenFiles();
+            } catch (IOException e) {
+                log.warn("Migrate DeepSeek API token failed: {} -> {}",
+                        legacyTokenPath, sharedTokenPath, e);
+            }
+            return legacyToken;
+        }
+        return "";
     }
 
     private static String migrateLegacyKimiToken(String model) {
@@ -250,7 +305,10 @@ public final class AiAuthClient {
     }
 
     private static void writeApiToken(String model, String token) throws IOException {
-        Path tokenPath = resolveApiTokenPath(model);
+        writeTokenFile(resolveProviderApiTokenPath(model), token);
+    }
+
+    private static void writeTokenFile(Path tokenPath, String token) throws IOException {
         Path parent = tokenPath.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
@@ -266,7 +324,13 @@ public final class AiAuthClient {
     }
 
     private static void deleteApiToken(String model) throws IOException {
-        Files.deleteIfExists(resolveApiTokenPath(model));
+        Files.deleteIfExists(resolveProviderApiTokenPath(model));
+    }
+
+    private static void cleanupLegacyDeepSeekTokenFiles() throws IOException {
+        for (String legacyModel : DEEPSEEK_MODELS) {
+            Files.deleteIfExists(resolveApiTokenPath(legacyModel));
+        }
     }
 
     private static void deleteLegacyApiToken() throws IOException {

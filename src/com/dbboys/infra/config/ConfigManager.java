@@ -12,7 +12,7 @@ public class ConfigManager {
     private static Properties properties = new Properties();
     private static String filePath="etc/config.properties";
     private static final Map<String, String> DEFAULTS = Map.ofEntries(
-        Map.entry("AI_MODEL", "deepseek-v4-pro"),
+        Map.entry("AI_MODEL", "deepseek-v4-flash"),
 
         Map.entry("CONNECT_KEEPALIVE_SECONDS", "180"),
         Map.entry("DEFAULT_LISTVIEW_TAB", "0"),

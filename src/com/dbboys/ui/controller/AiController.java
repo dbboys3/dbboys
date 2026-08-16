@@ -53,8 +53,9 @@ public class AiController {
     private static final String AI_MEMORY_BTN_STYLE_OFF = "ai-memory-toggle-off";
     private static final String AI_MEMORY_BTN_STYLE_ON = "ai-memory-toggle-on";
     private static final List<String> AI_AVAILABLE_MODELS = List.of(
-            "doubao-seed-2-0-mini-260215",
+            "deepseek-v4-flash",
             "deepseek-v4-pro",
+            "doubao-seed-2-0-mini-260215",
             "qwen3.6-plus"
     );
 
