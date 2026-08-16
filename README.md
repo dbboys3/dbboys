@@ -34,13 +34,13 @@
 
 ## 📸 界面预览
 
-<a href="docs/dbboys/images/img1.png"><img src="docs/dbboys/images/img1.png" width="400" /></a>
-<a href="docs/dbboys/images/img2.png"><img src="docs/dbboys/images/img2.png" width="400" /></a>
-<a href="docs/dbboys/images/img3.png"><img src="docs/dbboys/images/img3.png" width="400" /></a>
-<a href="docs/dbboys/images/img4.png"><img src="docs/dbboys/images/img4.png" width="400" /></a>
-<a href="docs/dbboys/images/img5.png"><img src="docs/dbboys/images/img5.png" width="400" /></a>
-<a href="docs/dbboys/images/img6.png"><img src="docs/dbboys/images/img6.png" width="400" /></a>
-<a href="docs/dbboys/images/img7.png"><img src="docs/dbboys/images/img7.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img1.png"><img src="docs/DBBOYS/images/img1.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img2.png"><img src="docs/DBBOYS/images/img2.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img3.png"><img src="docs/DBBOYS/images/img3.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img4.png"><img src="docs/DBBOYS/images/img4.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img5.png"><img src="docs/DBBOYS/images/img5.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img6.png"><img src="docs/DBBOYS/images/img6.png" width="400" /></a>
+<a href="docs/DBBOYS/images/img7.png"><img src="docs/DBBOYS/images/img7.png" width="400" /></a>
 
 ---
 
