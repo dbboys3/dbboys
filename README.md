@@ -21,23 +21,26 @@
 
 ## ✨ 功能特性
 
-- **数据库远程安装 / 卸载** — 向导式远程部署 GBase 8S、Informix、MySQL、Oracle、达梦
-- **对象浏览与管理** — 树形浏览模式/表/视图/索引/存储过程，支持 DDL 查看与编辑
-- **SQL 工作台** — 语法高亮、智能补全、执行计划、批量执行、结果集编辑与导出
+- **数据库远程安装 / 卸载** — 向导式一键远程安装 GBase 8S、Informix、MySQL、Oracle、达梦
+- **对象浏览与管理** — 支持统计更新、锁表处理等常用操作直接右键执行
+- **SQL 工作台** — 智能识别SQL类型，一键执行所有SQL脚本
 - **实例管理** — 一键巡检、运行日志、容量图表、参数管理、实例启停
-- **SSH 终端** — 内置 SSH 连接与 SFTP 文件传输
-- **知识库** — Markdown 文档管理，Lucene + IK 分词全文检索
-- **AI 助手** — 支持 OpenAI、豆包、DeepSeek、Kimi、Qwen 等模型
+- **SSH 终端** — 内置 SSH 连接与 SFTP 文件传输，支持sz、rz文件传输
+- **数据迁移** — 异构DDL自动转换，自定义选择所有迁移对象，数据支持where过滤
+- **知识库** — Markdown 文档管理，支持图片直接粘贴，AI基于本地md回答及参考文档链接
+- **AI 助手** — 支持 豆包、DeepSeek、Qwen 等模型
 
 ---
 
 ## 📸 界面预览
 
-<a href="docs/DBBOYS/images/img1.png"><img src="docs/DBBOYS/images/img1.png" width="400" alt="主界面"/></a>
-<a href="docs/DBBOYS/images/img2.png"><img src="docs/DBBOYS/images/img2.png" width="400" alt="容量管理"/></a>
-<a href="docs/DBBOYS/images/img3.png"><img src="docs/DBBOYS/images/img3.png" width="400" alt="一键巡检"/></a>
-<a href="docs/DBBOYS/images/img4.png"><img src="docs/DBBOYS/images/img4.png" width="400" alt="ssh连接"/></a>
-<a href="docs/DBBOYS/images/img5.png"><img src="docs/DBBOYS/images/img5.png" width="400" alt="markdown管理"/></a>
+<a href="docs/dbboys/images/img1.png"><img src="docs/dbboys/images/img1.png" width="400" /></a>
+<a href="docs/dbboys/images/img2.png"><img src="docs/dbboys/images/img2.png" width="400" /></a>
+<a href="docs/dbboys/images/img3.png"><img src="docs/dbboys/images/img3.png" width="400" /></a>
+<a href="docs/dbboys/images/img4.png"><img src="docs/dbboys/images/img4.png" width="400" /></a>
+<a href="docs/dbboys/images/img5.png"><img src="docs/dbboys/images/img5.png" width="400" /></a>
+<a href="docs/dbboys/images/img6.png"><img src="docs/dbboys/images/img6.png" width="400" /></a>
+<a href="docs/dbboys/images/img7.png"><img src="docs/dbboys/images/img7.png" width="400" /></a>
 
 ---
 

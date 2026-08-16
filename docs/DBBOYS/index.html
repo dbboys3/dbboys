@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DBboys</title>
+<link rel="icon" type="image/png" href="images/logo.png">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080a;
+  --bg-card:#141416;
+  --border:#26262a;
+  --fg:#e5e5ea;
+  --fg-muted:#8e8e93;
+  --accent:#0A84FF;
+  --accent-hover:#2f96ff;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+  --mono:"SF Mono","Cascadia Code","Consolas",monospace;
+  --mw:840px
+}
+html,body{height:100%}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--fg);
+  display:flex;flex-direction:column;align-items:center;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--fg-muted);text-decoration:none;transition:color .2s}
+a:hover{color:var(--fg)}
+
+/* Wrapper constrains all content */
+.wrap{width:100%;max-width:var(--mw);display:flex;flex-direction:column;flex:1;padding:0 20px}
+
+/* Top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0 0}
+.top .logo{display:flex;align-items:center;gap:8px}
+.top .logo img{width:30px;height:30px;border-radius:6px}
+.top .logo span{font-weight:700;font-size:.9rem}
+.top .gh{display:flex;align-items:center;gap:5px;font-size:.8rem;color:var(--fg-muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border);transition:border-color .2s}
+.top .gh:hover{color:var(--fg);border-color:var(--fg-muted)}
+
+/* Carousel - intrinsic size, constrained by wrap */
+.carousel-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;margin-top:28px}
+.carousel{display:grid;width:100%}
+.carousel > *{grid-area:1/1;width:100%;height:auto;opacity:0;transition:opacity .8s ease-in-out}
+.carousel > .active{opacity:1;z-index:1}
+.carousel img{background:var(--bg-card);border-radius:8px;border:1px solid var(--border)}
+
+/* Dots */
+.dots{display:flex;gap:8px;justify-content:center;margin-top:14px}
+.dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.18);transition:all .4s;cursor:pointer}
+.dots span.active{background:var(--accent);width:18px;border-radius:3px}
+
+/* Download - single row */
+.ftbl{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0 auto;padding:24px 16px 0}.ftbl span{font-size:.72rem;padding:3px 10px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border);color:var(--fg-muted)}
+
+.dwl{display:flex;justify-content:center;gap:10px;padding:24px 0 32px;flex-wrap:wrap}
+.dwl a{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px;border-radius:8px;
+  background:var(--bg-card);border:1px solid var(--border);
+  font-size:.82rem;font-weight:600;color:var(--fg);
+  transition:border-color .2s;white-space:nowrap
+}
+.dwl a:hover{border-color:var(--fg-muted)}
+.dwl a .os{font-size:1.1rem}
+.dwl a .note{font-weight:400;font-size:.72rem;color:var(--fg-muted)}
+
+@media(max-width:520px){
+  .wrap{padding:0 12px}
+  .top{padding:14px 0 0}
+  .top .logo img{width:24px;height:24px}
+  .top .logo span{font-size:.82rem}
+  .dwl{gap:8px;padding:16px 0 24px}
+  .dwl a{padding:6px 10px;font-size:.76rem}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<div class="top">
+<a href="#" class="logo"><img src="images/logo.png" alt=""><span>DBboys</span></a>
+<a href="https://github.com/dbboys3/dbboys" class="gh" target="_blank" rel="noopener">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z"/></svg>
+GitHub
+</a>
+</div>
+
+<div class="carousel-wrap">
+<div class="carousel" id="carousel">
+<img src="images/img1.png" alt="screenshot" class="active" onerror="this.style.display='none'">
+<img src="images/img2.png" alt="screenshot" onerror="this.style.display='none'">
+<img src="images/img3.png" alt="screenshot" onerror="this.style.display='none'">
+<img src="images/img4.png" alt="screenshot" onerror="this.style.display='none'">
+<img src="images/img5.png" alt="screenshot" onerror="this.style.display='none'">
+<img src="images/img6.png" alt="screenshot" onerror="this.style.display='none'">
+<img src="images/img7.png" alt="screenshot" onerror="this.style.display='none'">
+</div>
+<div class="dots" id="dots">
+<span class="active"></span><span></span><span></span><span></span><span></span>
+</div>
+</div>
+
+<div class="dwl">
+<a href="https://www.dbboys.com/dl/dbboys/windows/latest.zip"><span class="os">🖥️</span> Windows <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/linux_x86_64/latest.zip"><span class="os">🐧</span> Linux x64 <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/linux_aarch64/latest.zip"><span class="os">🧩</span> Linux ARM64 <span class="note">.zip</span></a>
+<a href="https://www.dbboys.com/dl/dbboys/src/latest.zip"><span class="os">📦</span> 源码 <span class="note">.zip</span></a>
+</div>
+
+<div class="ftbl"><span>数据库管理</span><span>SSH终端</span><span>数据迁移</span><span>Markdown 知识库</span><span>AI助手</span><span>全文搜索</span><span>断线重连</span><span>长连接保活</span><span>语法高亮</span><span>智能补全</span><span>结果集编辑</span><span>SQL 格式化</span><span>AI优化SQL</span><span>AI转换SQL</span><span>AI修正SQL</span><span>绑定变量</span><span>执行计划</span><span>结果集生成 SQL</span><span>导入导出 (CSV/JSON/SQL)</span><span>一键巡检</span><span>空间管理</span><span>参数管理</span><span>锁表处理</span><span>远程安装卸载</span><span>DeepSeek</span><span>Qwen</span><span>深色主题</span><span>浅色主题</span><span>国际化多语言</span><span>GBase 8s</span><span>Informix</span><span>MySQL</span><span>Oracle</span><span>PostgreSQL</span><span>SQLite</span><span>达梦</span><span>通用 JDBC</span><span>Windows</span><span>Linux x64</span><span>Linux ARM64</span><span>开源免费</span></div>
+
+<script>
+(function(){
+  const imgs = document.querySelectorAll('#carousel img');
+  const dots = document.querySelectorAll('#dots span');
+  if(imgs.length<2) return;
+  let idx = 0, timer;
+  function show(i){
+    imgs.forEach((img,j)=>{img.classList.toggle('active',j===i)});
+    dots.forEach((d,j)=>{d.classList.toggle('active',j===i)});
+    idx = i;
+  }
+  function next(){show((idx+1)%imgs.length)}
+  dots.forEach((d,i)=>{d.addEventListener('click',()=>{clearInterval(timer);show(i);timer=setInterval(next,4000)})});
+  timer = setInterval(next, 4000);
+})();
+</script>
+
+<div style="text-align:center;font-size:.72rem;color:var(--fg-muted);opacity:.5;padding:0 16px 24px">© 2026 DBboys · Powered by OpenJFX · GNU General Public License v3.0</div>
+</body>
+</html>
+
