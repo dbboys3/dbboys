@@ -138,6 +138,8 @@ public final class MigrationTaskRunner {
                 item.setRows(record.getSourceRows());
                 item.setMigratedRows(record.getTargetRows());
                 item.setSpeed(record.getSpeed());
+                item.setDurationMillis(record.getElapsed());
+                item.setProgress(record.getProgress());
                 item.setErrorMessage(record.getError());
                 item.setErrorSql(record.getErrorSql());
                 item.setChecksum(record.getChecksum());
@@ -466,6 +468,8 @@ public final class MigrationTaskRunner {
             record.setSourceRows(item.getRows());
             record.setTargetRows(item.getMigratedRows());
             record.setSpeed(item.getSpeed());
+            record.setElapsed(item.getDurationMillis());
+            record.setProgress(item.getProgress());
             // c_error 记录"错误号: 错误信息"（与错误列展示一致）；c_error_sql 记录出错 SQL（双击错误列可回看）
             String itemError = item.getErrorMessage() == null ? "" : item.getErrorMessage();
             String itemCode = item.getErrorCode() == null ? "" : item.getErrorCode().trim();
@@ -525,6 +529,7 @@ public final class MigrationTaskRunner {
         }
         target.setEndTime(LocalDateTime.now().format(RUN_ITEM_TIME_FORMAT));
         target.setEndMillis(System.currentTimeMillis());
+        target.setDurationMillis(target.getEndMillis() - target.getStartMillis());
         target.setCopiedRowsLive(result.rowsCopied());
         if (target.getSourceRowsLive() >= 0) {
             target.setRows(target.getSourceRowsLive());
@@ -534,6 +539,14 @@ public final class MigrationTaskRunner {
         target.setErrorSql(result.errorSql() == null ? "" : result.errorSql());
         target.setErrorCode(result.errorCode() == null ? "" : result.errorCode());
         target.setSpeed(computeSpeed(result.rowsCopied(), target.getStartMillis(), target.getEndMillis()));
+        long totalRows = target.getRows();
+        if (totalRows > 0) {
+            target.setProgress(Math.min(100.0, result.rowsCopied() * 100.0 / totalRows));
+        } else if (result.status() == TableMigrationService.ItemStatus.SUCCESS) {
+            target.setProgress(100.0);
+        } else {
+            target.setProgress(0.0);
+        }
     }
 
     /** 按对象名 + kind 匹配明细行：优先 RUNNING 行，无则退回首个 PENDING 行。 */

@@ -430,7 +430,7 @@ public class CustomMigrationTaskTab extends CustomTab {
         nameColumn.textProperty().bind(I18n.bind("migration.detail.column.name", "Object"));
         nameColumn.setCellValueFactory(cell -> cell.getValue().nameProperty());
         nameColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
-        nameColumn.setPrefWidth(240);
+        nameColumn.setPrefWidth(180);
 
         TableColumn<MigrationRunItem, String> statusColumn = new TableColumn<>();
         statusColumn.textProperty().bind(I18n.bind("migration.detail.column.status", "Status"));
@@ -452,6 +452,14 @@ public class CustomMigrationTaskTab extends CustomTab {
         endColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         endColumn.setPrefWidth(150);
 
+        TableColumn<MigrationRunItem, String> durationColumn = new TableColumn<>();
+        durationColumn.textProperty().bind(I18n.bind("migration.detail.column.duration", "Duration"));
+        durationColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
+                () -> formatDuration(cell.getValue().getDurationMillis()),
+                cell.getValue().durationMillisProperty()));
+        durationColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
+        durationColumn.setPrefWidth(90);
+
         TableColumn<MigrationRunItem, String> speedColumn = new TableColumn<>();
         speedColumn.textProperty().bind(I18n.bind("migration.detail.column.speed", "Speed"));
         // 速度存数值（行/秒，-1 未知），单元格按当前语言格式化，语言切换即时刷新
@@ -464,6 +472,20 @@ public class CustomMigrationTaskTab extends CustomTab {
                 cell.getValue().speedProperty(), I18n.localeProperty()));
         speedColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
         speedColumn.setPrefWidth(90);
+
+        TableColumn<MigrationRunItem, String> progressColumn = new TableColumn<>();
+        progressColumn.textProperty().bind(I18n.bind("migration.detail.column.progress", "Progress"));
+        progressColumn.setCellValueFactory(cell -> Bindings.createStringBinding(
+                () -> {
+                    double progress = cell.getValue().getProgress();
+                    if (progress < 0 && cell.getValue().getStatus() == MigrationRunItem.Status.SUCCESS) {
+                        progress = 100;
+                    }
+                    return progress < 0 ? "" : String.format("%.1f%%", progress);
+                },
+                cell.getValue().progressProperty(), cell.getValue().statusProperty()));
+        progressColumn.setCellFactory(col -> new CustomTableCell<MigrationRunItem, String>());
+        progressColumn.setPrefWidth(90);
 
         TableColumn<MigrationRunItem, String> rowsColumn = new TableColumn<>();
         rowsColumn.textProperty().bind(I18n.bind("migration.detail.column.rows", "Rows"));
@@ -505,7 +527,7 @@ public class CustomMigrationTaskTab extends CustomTab {
             }
         });
         // 错误信息列固定初始宽度：列总宽超出表格时允许横向滚动（CustomTableView 为 UNCONSTRAINED 策略）
-        errorColumn.setPrefWidth(400);
+        errorColumn.setPrefWidth(300);
 
         TableColumn<MigrationRunItem, String> verifyColumn = new TableColumn<>();
         verifyColumn.textProperty().bind(I18n.bind("migration.detail.column.verify", "Verify"));
@@ -516,11 +538,30 @@ public class CustomMigrationTaskTab extends CustomTab {
 
         table.getColumns().addAll(java.util.List.<TableColumn<MigrationRunItem, ?>>of(
                 kindColumn, nameColumn, statusColumn,
-                startColumn, endColumn, rowsColumn, migratedColumn, speedColumn, errorColumn, verifyColumn));
+                startColumn, endColumn, durationColumn,
+                rowsColumn, migratedColumn, speedColumn, progressColumn,
+                errorColumn, verifyColumn));
         // 详情表不需要排序，也不允许拖动列
         table.setSortPolicy(param -> false);
         table.getColumns().forEach(column -> column.setReorderable(false));
         return table;
+    }
+
+    private static String formatDuration(long millis) {
+        if (millis < 0) {
+            return "";
+        }
+        long totalSeconds = millis / 1000;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return String.format("%d:%02d:%02d", hours, minutes, seconds);
+        }
+        if (minutes > 0) {
+            return String.format("%d:%02d", minutes, seconds);
+        }
+        return seconds + "s";
     }
 
     // ==================================================================
@@ -565,6 +606,17 @@ public class CustomMigrationTaskTab extends CustomTab {
             long copiedRows = item.getCopiedRowsLive();
             if (copiedRows >= 0 && item.getMigratedRows() != copiedRows) {
                 item.setMigratedRows(copiedRows);
+            }
+            // 运行中的行实时耗时：当前时间 - 开始时间
+            if (item.getStatus() == MigrationRunItem.Status.RUNNING && item.getStartMillis() > 0) {
+                item.setDurationMillis(now - item.getStartMillis());
+            }
+            // 运行中的行实时进度：已复制行数 / 源表行数
+            if (item.getStatus() == MigrationRunItem.Status.RUNNING && sourceRows > 0 && copiedRows >= 0) {
+                double currentProgress = Math.min(100.0, copiedRows * 100.0 / sourceRows);
+                if (item.getProgress() != currentProgress) {
+                    item.setProgress(currentProgress);
+                }
             }
             // 运行中的行实时速度：已迁移行数 / 已耗时
             if (item.getStatus() == MigrationRunItem.Status.RUNNING

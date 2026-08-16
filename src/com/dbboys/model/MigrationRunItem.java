@@ -1,7 +1,9 @@
 package com.dbboys.model;
 
 import javafx.beans.property.LongProperty;
+import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleLongProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -20,6 +22,10 @@ public class MigrationRunItem {
     private final ObjectProperty<Status> status = new SimpleObjectProperty<>(Status.PENDING);
     private final StringProperty startTime = new SimpleStringProperty("");
     private final StringProperty endTime = new SimpleStringProperty("");
+    /** 耗时（毫秒，-1 未知/未开始）。 */
+    private final LongProperty durationMillis = new SimpleLongProperty(-1);
+    /** 进度（百分比 0-100，-1 未知）。 */
+    private final DoubleProperty progress = new SimpleDoubleProperty(-1);
     /** 行数=源表行数（-1 未知，复制开始时统计）；由 runner/明细 tab 在 FX 线程维护。 */
     private final LongProperty rows = new SimpleLongProperty(-1);
     /** 迁移行数=实际复制行数（-1 未知/未复制）；运行中每秒刷新，完成时写终值。 */
@@ -59,6 +65,16 @@ public class MigrationRunItem {
     public String getEndTime() { return endTime.get(); }
     public StringProperty endTimeProperty() { return endTime; }
     public void setEndTime(String endTime) { this.endTime.set(endTime); }
+
+    // --- durationMillis ---
+    public long getDurationMillis() { return durationMillis.get(); }
+    public LongProperty durationMillisProperty() { return durationMillis; }
+    public void setDurationMillis(long durationMillis) { this.durationMillis.set(durationMillis); }
+
+    // --- progress ---
+    public double getProgress() { return progress.get(); }
+    public DoubleProperty progressProperty() { return progress; }
+    public void setProgress(double progress) { this.progress.set(progress); }
 
     // --- rows ---
     public long getRows() { return rows.get(); }

@@ -16,6 +16,8 @@ package com.dbboys.model;
  *   c_source_rows INTEGER                             -- 源表行数（-1 未知）
  *   c_target_rows INTEGER                             -- 迁移行数（实际复制到目标，-1 未知）
  *   c_speed       INTEGER                             -- 复制速度（行/秒，-1 未知）
+ *   c_elapsed     INTEGER                             -- 耗时（毫秒，-1 未知）
+ *   c_progress    REAL                                -- 进度（百分比 0-100，-1 未知）
  *   c_error       VARCHAR(3200)                       -- 错误号及错误信息
  *   c_error_sql   VARCHAR(3200)                       -- 出错时执行的 SQL（双击错误列展示）
  *   c_checksum    VARCHAR(100)                        -- 数据校验结果（预留）
@@ -34,6 +36,8 @@ public class MigrationTaskRunItem {
     private long sourceRows = -1;
     private long targetRows = -1;
     private long speed = -1;
+    private long elapsed = -1;
+    private double progress = -1;
     private String error = "";
     private String errorSql = "";
     private String checksum = "";
@@ -68,6 +72,12 @@ public class MigrationTaskRunItem {
 
     public long getSpeed() { return speed; }
     public void setSpeed(long speed) { this.speed = speed; }
+
+    public long getElapsed() { return elapsed; }
+    public void setElapsed(long elapsed) { this.elapsed = elapsed; }
+
+    public double getProgress() { return progress; }
+    public void setProgress(double progress) { this.progress = progress; }
 
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
