@@ -23,10 +23,29 @@ public final class PostgresqlRemoteProvider implements RemoteDatabaseProvider {
     }
 
     @Override
+    public boolean supportsPackageDownload() {
+        return true;
+    }
+
+    @Override
+    public String resolveDownloadUrl(String systemInfoText) {
+        if (systemInfoText == null) {
+            return null;
+        }
+        if (systemInfoText.contains("x86_64")) {
+            return "https://www.dbboys.com/dl/postgresql/server/x86/latest.tar";
+        }
+        if (systemInfoText.contains("aarch64")) {
+            return "https://www.dbboys.com/dl/postgresql/server/arm/latest.tar";
+        }
+        return null;
+    }
+
+    @Override
     public List<String> installWizardDescriptionLines() {
         return List.of(
                 I18n.t("remote.install.postgresql.desc.item1", "1. Remote install supports Linux/Unix only, not Windows."),
-                I18n.t("remote.install.postgresql.desc.item2", "2. Prepare PostgreSQL 14 PGDG rpm/deb packages (or a tar.gz bundle containing them), upload from local or fill in existing remote paths."),
+                I18n.t("remote.install.postgresql.desc.item2", "2. Prepare PostgreSQL 14 PGDG rpm/deb packages (or a tar.gz bundle containing them); upload from local, fill in existing remote paths, or click the button to download the package matching the CPU automatically."),
                 I18n.t("remote.install.postgresql.desc.item3", "3. The wizard installs the packages, initializes the data directory (initdb), configures postgresql.conf/pg_hba.conf, starts PostgreSQL, and sets the postgres password."),
                 I18n.t("remote.install.postgresql.desc.item4", "4. Existing PostgreSQL 14 installed by this wizard will be removed before installation.")
         );
