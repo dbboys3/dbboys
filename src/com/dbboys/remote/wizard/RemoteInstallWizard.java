@@ -20,7 +20,9 @@ import com.dbboys.ui.dialog.CustomWindowFrameUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import com.dbboys.ui.dialog.SqlExportManager;
 import com.dbboys.ui.util.MenuItemUtil;
+import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.model.Connect;
+import com.dbboys.model.SshConnect;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.DoubleProperty;
@@ -111,6 +113,10 @@ public class RemoteInstallWizard {
     private static CustomUserTextField hostField;
     private static CustomUserTextField portField;
     private static CustomPasswordField passField;
+    /** "Use existing SSH connection" dropdown; index 0 is manual entry. */
+    private static ChoiceBox<String> sshConnectionChoiceBox;
+    /** Maps dropdown index -> ssh connection id (index 0 = manual entry). */
+    private static final List<Integer> sshConnectionIds = new ArrayList<>();
     private static CustomUserTextField remotePathField;
     private static CustomUserTextField installFilePathField;
     private static CustomInlineCssTextArea systemInfoArea;
@@ -654,6 +660,31 @@ public class RemoteInstallWizard {
 
         passField = new CustomPasswordField();
 
+        // 已有SSH连接下拉框（参考新建连接面板的SSH区域）：选中后填充主机/端口/密码
+        sshConnectionChoiceBox = new ChoiceBox<>();
+        sshConnectionChoiceBox.setPrefWidth(420);
+        populateSshConnectionDropdown();
+        sshConnectionChoiceBox.getSelectionModel().selectedIndexProperty()
+                .addListener((obs, o, n) -> {
+                    int idx = n.intValue();
+                    if (idx > 0 && idx < sshConnectionIds.size()) {
+                        SshConnect sel = getSshConnectionById(sshConnectionIds.get(idx));
+                        if (sel != null) {
+                            hostField.setText(sel.getHost());
+                            portField.setText(sel.getPort());
+                            // 向导仅支持密码认证：密钥连接留空密码，由用户填写root密码
+                            passField.setText(sel.isAuthPassword() ? sel.getPassword() : "");
+                        }
+                    }
+                });
+
+        Label sshConnLabel = new Label();
+        sshConnLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_connection", "已有连接"));
+        sshConnLabel.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.54, 0.54));
+        sshConnLabel.setAlignment(Pos.CENTER_LEFT);
+        sshConnLabel.setContentDisplay(ContentDisplay.LEFT);
+        sshConnLabel.setGraphicTextGap(6);
+
         Label ipLabel = new Label();
         ipLabel.textProperty().bind(I18n.bind("remote.install.field.host", "主机名/IP"));
         ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
@@ -678,12 +709,14 @@ public class RemoteInstallWizard {
 
 
         // 布局
-        grid.add(ipLabel, 0, 0);
-        grid.add(hostField, 1, 0);
-        grid.add(portLabel, 0, 1);
-        grid.add(portField, 1, 1);
-        grid.add(passwdLabel, 0, 2);
-        grid.add(passField, 1, 2);
+        grid.add(sshConnLabel, 0, 0);
+        grid.add(sshConnectionChoiceBox, 1, 0);
+        grid.add(ipLabel, 0, 1);
+        grid.add(hostField, 1, 1);
+        grid.add(portLabel, 0, 2);
+        grid.add(portField, 1, 2);
+        grid.add(passwdLabel, 0, 3);
+        grid.add(passField, 1, 3);
         Label descbefore = new Label();
         descbefore.textProperty().bind(I18n.bind("remote.install.desc.fill_server_info", "请填写需要远程安装数据库的服务器信息："));
         Label desc = new Label();
@@ -711,6 +744,27 @@ public class RemoteInstallWizard {
         //step1ConnectTask = connectTask;
 
         return stackPane;
+    }
+
+    /** Populate the "use existing SSH connection" dropdown with saved SSH connections. */
+    private static void populateSshConnectionDropdown() {
+        sshConnectionIds.clear();
+        sshConnectionChoiceBox.getItems().clear();
+        sshConnectionChoiceBox.getItems().add(I18n.t("ssh.prompt.manual_ssh", "-- Manual --"));
+        sshConnectionIds.add(0);
+        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
+            sshConnectionChoiceBox.getItems().add(sc.getName());
+            sshConnectionIds.add(sc.getId());
+        }
+        sshConnectionChoiceBox.getSelectionModel().select(0);
+    }
+
+    /** Get an SshConnect by its database ID. */
+    private static SshConnect getSshConnectionById(int id) {
+        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
+            if (sc.getId() == id) return sc;
+        }
+        return null;
     }
 
 
