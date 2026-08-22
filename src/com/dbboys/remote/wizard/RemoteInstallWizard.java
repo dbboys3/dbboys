@@ -113,6 +113,11 @@ public class RemoteInstallWizard {
     private static CustomUserTextField hostField;
     private static CustomUserTextField portField;
     private static CustomPasswordField passField;
+    private static CustomUserTextField userField;
+    /** Auth type dropdown: index 0 = password, 1 = key. */
+    private static ChoiceBox<String> authTypeChoiceBox;
+    private static CustomUserTextField keyPathField;
+    private static CustomPasswordField keyPassphraseField;
     /** "Use existing SSH connection" dropdown; index 0 is manual entry. */
     private static ChoiceBox<String> sshConnectionChoiceBox;
     /** Maps dropdown index -> ssh connection id (index 0 = manual entry). */
@@ -283,12 +288,23 @@ public class RemoteInstallWizard {
                         event.consume();
                         portField.requestFocus();
                     }
-                    else if(passField.getText().trim().isEmpty()){
+                    else if(userField.getText().trim().isEmpty()){
+                        event.consume();
+                        userField.requestFocus();
+                    }
+                    else if(authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 0
+                            && passField.getText().trim().isEmpty()){
                         event.consume();
                         passField.requestFocus();
+                    }
+                    else if(authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1
+                            && keyPathField.getText().trim().isEmpty()){
+                        event.consume();
+                        keyPathField.requestFocus();
                     }else {
                         backgroundHBox.setVisible(true);
                         hostname = hostField.getText().trim();
+                        username = userField.getText().trim();
                         try {
                             port = Integer.parseInt(portField.getText().trim());
                         } catch (NumberFormatException e) {
@@ -301,7 +317,9 @@ public class RemoteInstallWizard {
                             @Override
                             protected Void call() throws Exception {
                                 try {
-                                    remoteClient.connect(username, hostname, port, password, 5000);
+                                    remoteClient.connect(username, hostname, port, password,
+                                            authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1,
+                                            keyPathField.getText().trim(), keyPassphraseField.getText(), 5000);
                                     return null;
                                 } catch (Exception e) {
                                     throw new Exception(I18n.t("remote.install.error.connect_failed", "连接失败: %s").formatted(e.getMessage()));
@@ -651,18 +669,55 @@ public class RemoteInstallWizard {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
 
-        // 输入组件（保存引用）
+        // 输入组件（保存引用）——布局参考新建连接面板的SSH区域（主机和端口同一行，支持密钥认证）
         hostField = new CustomUserTextField();
-        hostField.setPrefWidth(420);
+        hostField.setPrefWidth(280);
 
         portField = new CustomUserTextField();
         portField.setText("22");
+        portField.setPrefWidth(65);
+
+        userField = new CustomUserTextField();
+        userField.setText("root");
+        userField.setPrefWidth(280);
 
         passField = new CustomPasswordField();
+        passField.setPrefWidth(280);
 
-        // 已有SSH连接下拉框（参考新建连接面板的SSH区域）：选中后填充主机/端口/密码
+        // 认证方式：密码 / 密钥
+        authTypeChoiceBox = new ChoiceBox<>();
+        authTypeChoiceBox.getItems().addAll(
+                I18n.t("ssh.label.auth_password", "密码认证"),
+                I18n.t("ssh.label.auth_key", "密钥认证"));
+        authTypeChoiceBox.getSelectionModel().select(0);
+        authTypeChoiceBox.setPrefWidth(280);
+
+        keyPathField = new CustomUserTextField();
+        keyPathField.setPrefWidth(190);
+        keyPassphraseField = new CustomPasswordField();
+        keyPassphraseField.setPrefWidth(130);
+        Button keyBrowseButton = new Button();
+        keyBrowseButton.setGraphic(IconFactory.group(IconPaths.MAIN_SEARCH, 0.65));
+        keyBrowseButton.setFocusTraversable(false);
+        keyBrowseButton.getStyleClass().addAll("custom-button-with-radius", "small");
+        keyBrowseButton.setMaxSize(14, 14);
+        keyBrowseButton.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle(I18n.t("ssh.prompt.key_path", "选择 SSH 私钥文件"));
+            java.io.File homeDir = new java.io.File(System.getProperty("user.home"));
+            if (homeDir.isDirectory()) {
+                java.io.File sshDir = new java.io.File(homeDir, ".ssh");
+                chooser.setInitialDirectory(sshDir.isDirectory() ? sshDir : homeDir);
+            }
+            java.io.File selected = chooser.showOpenDialog(parent);
+            if (selected != null) {
+                keyPathField.setText(selected.getAbsolutePath());
+            }
+        });
+
+        // 已有SSH连接下拉框：选中后填充主机/端口/用户名/认证信息
         sshConnectionChoiceBox = new ChoiceBox<>();
-        sshConnectionChoiceBox.setPrefWidth(420);
+        sshConnectionChoiceBox.setPrefWidth(280);
         populateSshConnectionDropdown();
         sshConnectionChoiceBox.getSelectionModel().selectedIndexProperty()
                 .addListener((obs, o, n) -> {
@@ -672,51 +727,83 @@ public class RemoteInstallWizard {
                         if (sel != null) {
                             hostField.setText(sel.getHost());
                             portField.setText(sel.getPort());
-                            // 向导仅支持密码认证：密钥连接留空密码，由用户填写root密码
-                            passField.setText(sel.isAuthPassword() ? sel.getPassword() : "");
+                            userField.setText(sel.getUsername());
+                            if (sel.isAuthKey()) {
+                                authTypeChoiceBox.getSelectionModel().select(1);
+                                keyPathField.setText(sel.getKeyPath());
+                                keyPassphraseField.setText(sel.getKeyPassphrase());
+                                passField.setText("");
+                            } else {
+                                authTypeChoiceBox.getSelectionModel().select(0);
+                                passField.setText(sel.getPassword());
+                                keyPathField.setText("");
+                                keyPassphraseField.setText("");
+                            }
                         }
                     }
                 });
 
         Label sshConnLabel = new Label();
         sshConnLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_connection", "已有连接"));
-        sshConnLabel.setGraphic(IconFactory.group(IconPaths.SSH_CONNECT, 0.54, 0.54));
-        sshConnLabel.setAlignment(Pos.CENTER_LEFT);
-        sshConnLabel.setContentDisplay(ContentDisplay.LEFT);
-        sshConnLabel.setGraphicTextGap(6);
 
         Label ipLabel = new Label();
         ipLabel.textProperty().bind(I18n.bind("remote.install.field.host", "主机名/IP"));
-        ipLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_IP, 0.6, 0.6));
-        ipLabel.setAlignment(Pos.CENTER_LEFT);
-        ipLabel.setContentDisplay(ContentDisplay.LEFT);
-        ipLabel.setGraphicTextGap(6);
 
         Label portLabel = new Label();
         portLabel.textProperty().bind(I18n.bind("remote.install.field.port", "端口"));
-        portLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PORT, 0.45, 0.45));
-        portLabel.setAlignment(Pos.CENTER_LEFT);
-        portLabel.setContentDisplay(ContentDisplay.LEFT);
-        portLabel.setGraphicTextGap(6);
+
+        Label userLabel = new Label();
+        userLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_user", "SSH 用户名"));
+
+        Label authTypeLabel = new Label();
+        authTypeLabel.textProperty().bind(I18n.bind("ssh.label.auth_type", "认证方式"));
 
         Label passwdLabel = new Label();
-        passwdLabel.textProperty().bind(I18n.bind("remote.install.field.root_password", "root密码"));
-        passwdLabel.setGraphic(IconFactory.group(IconPaths.CREATE_CONNECT_PASSWORD, 0.5, 0.5));
-        passwdLabel.setAlignment(Pos.CENTER_LEFT);
-        passwdLabel.setContentDisplay(ContentDisplay.LEFT);
-        passwdLabel.setGraphicTextGap(6);
+        passwdLabel.textProperty().bind(I18n.bind("createconnect.label.ssh_password", "SSH 密码"));
 
+        Label keyLabel = new Label();
+        keyLabel.textProperty().bind(I18n.bind("ssh.label.key_path", "密钥路径"));
 
+        // 密钥行：路径 + 浏览 + 私钥密码（同一行）
+        HBox keyFieldsBox = new HBox(6);
+        keyFieldsBox.setAlignment(Pos.CENTER_LEFT);
+        keyPassphraseField.setPromptText(I18n.t("ssh.prompt.key_passphrase", "私钥密码（可选）"));
+        keyFieldsBox.getChildren().addAll(keyPathField, keyBrowseButton, keyPassphraseField);
 
-        // 布局
+        // 密码行 / 密钥行按认证方式切换显示
+        Runnable updateAuthRows = () -> {
+            boolean keyAuth = authTypeChoiceBox.getSelectionModel().getSelectedIndex() == 1;
+            passwdLabel.setVisible(!keyAuth);
+            passwdLabel.setManaged(!keyAuth);
+            passField.setVisible(!keyAuth);
+            passField.setManaged(!keyAuth);
+            keyLabel.setVisible(keyAuth);
+            keyLabel.setManaged(keyAuth);
+            keyFieldsBox.setVisible(keyAuth);
+            keyFieldsBox.setManaged(keyAuth);
+        };
+        authTypeChoiceBox.getSelectionModel().selectedIndexProperty()
+                .addListener((obs, o, n) -> updateAuthRows.run());
+        updateAuthRows.run();
+
+        // 主机 + 端口同一行
+        HBox hostPortBox = new HBox(10);
+        hostPortBox.setAlignment(Pos.CENTER_LEFT);
+        hostPortBox.getChildren().addAll(hostField, portLabel, portField);
+
+        // 布局（密码行与密钥行共用同一网格行：切换认证方式时行距不变，避免隐藏行产生双倍行距）
         grid.add(sshConnLabel, 0, 0);
         grid.add(sshConnectionChoiceBox, 1, 0);
         grid.add(ipLabel, 0, 1);
-        grid.add(hostField, 1, 1);
-        grid.add(portLabel, 0, 2);
-        grid.add(portField, 1, 2);
-        grid.add(passwdLabel, 0, 3);
-        grid.add(passField, 1, 3);
+        grid.add(hostPortBox, 1, 1);
+        grid.add(userLabel, 0, 2);
+        grid.add(userField, 1, 2);
+        grid.add(authTypeLabel, 0, 3);
+        grid.add(authTypeChoiceBox, 1, 3);
+        grid.add(passwdLabel, 0, 4);
+        grid.add(passField, 1, 4);
+        grid.add(keyLabel, 0, 4);
+        grid.add(keyFieldsBox, 1, 4);
         Label descbefore = new Label();
         descbefore.textProperty().bind(I18n.bind("remote.install.desc.fill_server_info", "请填写需要远程安装数据库的服务器信息："));
         Label desc = new Label();

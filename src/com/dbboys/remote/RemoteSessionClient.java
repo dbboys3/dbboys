@@ -14,6 +14,15 @@ public final class RemoteSessionClient {
         session = SshUtil.getPasswordSession(username, host, port, password, timeoutMs);
     }
 
+    /** Connect with password or public-key auth, mirroring the SSH section of the create-connection dialog. */
+    public synchronized void connect(String username, String host, int port, String password,
+                                     boolean keyAuth, String keyPath, String keyPassphrase, int timeoutMs) throws Exception {
+        disconnect();
+        session = keyAuth
+                ? SshUtil.getKeySession(username, host, port, keyPath, keyPassphrase, timeoutMs)
+                : SshUtil.getPasswordSession(username, host, port, password, timeoutMs);
+    }
+
     public synchronized boolean isConnected() {
         return session != null && session.isOpen();
     }
