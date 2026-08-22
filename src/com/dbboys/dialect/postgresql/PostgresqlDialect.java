@@ -10,13 +10,10 @@ import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
-import com.dbboys.infra.i18n.I18n;
-import com.dbboys.infra.ssh.SshUtil;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Database;
 import com.dbboys.model.HealthCheck;
-import org.apache.sshd.client.session.ClientSession;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -633,10 +630,10 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
                 "",
                 "instance.space.postgresql.chart.tablespace",
                 "Tablespace Usage(GB)",
-                "instance.space.chart.database",
-                "数据库使用空间情况图(GB)",
-                "instance.space.postgresql.chart.schema",
-                "Schema Usage(GB)",
+                "instance.space.chart.chunk",
+                "数据文件使用情况图(GB)",
+                "instance.space.postgresql.chart.database",
+                "库空间使用情况图(GB)",
                 "instance.space.chart.table",
                 "表/索引空间使用情况图TOP20(GB)",
                 "",
@@ -715,50 +712,11 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
-    public boolean supportsStartStopTab(Connect connect) {
-        return connect != null;
-    }
-
-    @Override
     public boolean isInstanceOnline(Connect connect) throws Exception {
         try (Connection conn = new com.dbboys.core.ConnectionServiceImpl().getConnectionWithSessionInit(new Connect(connect));
              var stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT 1")) {
             return rs.next();
-        }
-    }
-
-    @Override
-    public void startInstance(Connect connect) throws Exception {
-        runPostgresqlServiceCommand(connect, "start");
-    }
-
-    @Override
-    public void stopInstance(Connect connect) throws Exception {
-        runPostgresqlServiceCommand(connect, "stop");
-    }
-
-    /** Start/stop via systemd over SSH: prefer the PGDG postgresql-14 unit, then the
-     *  generic postgresql meta unit, then any other postgresql* service (templates excluded). */
-    private static void runPostgresqlServiceCommand(Connect connect, String action) throws Exception {
-        String script = "pgunit=\"\";"
-                + "for u in postgresql-14.service postgresql.service; do"
-                + " systemctl cat \"$u\" >/dev/null 2>&1 && pgunit=\"$u\" && break;"
-                + " done;"
-                + "[ -n \"$pgunit\" ] || pgunit=$(systemctl list-unit-files --type=service 2>/dev/null"
-                + " | awk '$1 ~ /^postgresql.*\\.service$/ && $1 !~ /@\\.service$/ {print $1; exit}');"
-                + "[ -n \"$pgunit\" ] || { echo 'no postgresql systemd unit found' >&2; exit 1; };"
-                + "systemctl " + action + " \"$pgunit\"";
-        ClientSession session = SshUtil.getConnect(connect);
-        try {
-            int result = SshUtil.executeCommandWithExitStatus(session, script);
-            if (result != 0) {
-                throw new Exception(I18n.t(
-                        "start".equals(action) ? "instance.error.start_failed" : "instance.error.stop_failed",
-                        "start".equals(action) ? "启动数据库失败，请检查日志错误！" : "关闭数据库失败，请检查日志错误！"));
-            }
-        } finally {
-            SshUtil.disConnect(session);
         }
     }
 

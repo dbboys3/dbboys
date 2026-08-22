@@ -203,7 +203,7 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
         });
         result.add(tablespaceList);
 
-        // Level 1: databases
+        // Level 1: databases (each database's on-disk files under base/<oid>/)
         List<SpaceUsage> dbSpaceList = new ArrayList<>();
         String dbSql = """
                 SELECT
@@ -225,30 +225,9 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
         });
         result.add(dbSpaceList);
 
-        // Level 2: schemas of the current database
-        List<SpaceUsage> schemaList = new ArrayList<>();
-        String schemaSql = """
-                SELECT
-                    ROW_NUMBER() OVER (ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC)::int AS no,
-                    n.nspname AS label,
-                    n.nspname AS name,
-                    SUM(pg_catalog.pg_total_relation_size(c.oid)) AS size_bytes
-                FROM pg_catalog.pg_class c
-                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                WHERE c.relkind IN ('r', 'i', 'm')
-                  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-                  AND n.nspname NOT LIKE 'pg_toast%'
-                GROUP BY n.nspname
-                ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC
-                """;
-        runner.query(schemaSql, null, rs -> {
-            double totalGb = rs.getDouble("size_bytes") / 1024.0 / 1024.0 / 1024.0;
-            schemaList.add(new SpaceUsage(
-                    rs.getInt("no"), rs.getString("label"), rs.getString("name"),
-                    0, totalGb, totalGb, 0, 0, 0, 0, 0));
-            return null;
-        });
-        result.add(schemaList);
+        // Level 2: database space (same per-database data as the datafile chart)
+        List<SpaceUsage> databaseList = new ArrayList<>(dbSpaceList);
+        result.add(databaseList);
 
         // Level 3: table/index sizes (top 20), data/index split into the meta fields
         List<SpaceUsage> tableList = new ArrayList<>();
