@@ -783,8 +783,7 @@ public class SftpDialogController {
                 });
             }
         }
-        // Refresh remote listing after single-file uploads (dir uploads refresh on their own)
-        AppExecutor.runAsync(() -> { try { Thread.sleep(500); } catch (InterruptedException ignored) {} Platform.runLater(() -> loadRemote(remotePath)); });
+        // 单文件上传在 upFile 完成后刷新远程列表；目录上传在自身任务完成后刷新
     }
 
     private void upFile(File src, String dest, XferRow r) {
@@ -807,6 +806,8 @@ public class SftpDialogController {
             if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); return; }
             renameRemote(tmp, dest);
             r.done(total);
+            // Refresh the remote listing only after the file has fully arrived
+            Platform.runLater(() -> loadRemote(remotePath));
         } catch (Exception ex) {
             if (r.cancelled) { r.cancel(); removeRemoteQuiet(tmp); }
             else { log.error("Upload: {}", src.getName(), ex); removeRemoteQuiet(tmp); r.fail(ex.getMessage()); }
@@ -869,7 +870,7 @@ public class SftpDialogController {
             }
         }
         dnFiles(toDownload, localDir);
-        AppExecutor.runAsync(() -> { try { Thread.sleep(500); } catch (InterruptedException ignored) {} Platform.runLater(this::loadLocal); });
+        // 单文件下载在 dnFile 完成后刷新本地列表；目录下载在自身任务完成后刷新
     }
 
     private void dnFiles(ObservableList<FileEntry> entries, File dest) {
@@ -919,6 +920,8 @@ public class SftpDialogController {
                 if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); return; }
                 Files.move(tmp.toPath(), lf.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 r.done(offset);
+                // Refresh the local listing only after the file has fully arrived
+                Platform.runLater(this::loadLocal);
             }
         } catch (Exception ex) {
             if (r.cancelled) { r.cancel(); deleteLocalQuiet(tmp); }
