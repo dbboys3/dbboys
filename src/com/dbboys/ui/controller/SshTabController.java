@@ -77,6 +77,11 @@ public class SshTabController {
     public java.util.function.Consumer<Boolean> onConnectionStateChanged;
     /** Callback invoked when new server output arrives (not disconnect/status messages). */
     public Runnable onActivity;
+    /** Resize-echo suppression: after sendWindowChange (SIGWINCH) the server echoes
+     *  a redraw, which must not count as "new output" for the tab-icon pulse —
+     *  resizing the UI is not server activity. updatePtySize() bumps this deadline. */
+    private static final long RESIZE_ECHO_SUPPRESS_MS = 500;
+    private volatile long resizeEchoSuppressUntil;
     private ScrollBar scrollBar;
     private boolean updatingScrollBar;
     // ---- Terminal components (screen model, escape interpreter, canvas view) ----
@@ -85,7 +90,12 @@ public class SshTabController {
     private final TerminalEmulator emulator = new TerminalEmulator(termBuffer, new TerminalEmulator.Listener() {
         @Override public void onDrawRequest() { renderer.requestDraw(); }
         @Override public void onImmediateDraw() { renderer.draw(); }
-        @Override public void onActivity() { if (onActivity != null) onActivity.run(); }
+        @Override public void onActivity() {
+            // Skip redraws echoed back after our own window-change (SIGWINCH):
+            // a UI resize must not trigger the tab-icon pulse.
+            if (System.currentTimeMillis() < resizeEchoSuppressUntil) return;
+            if (onActivity != null) onActivity.run();
+        }
     });
     private boolean selecting;
     private Thread readThread;
@@ -365,6 +375,9 @@ public class SshTabController {
             try {
                 shellChannel.sendWindowChange(termBuffer.getCols(), termBuffer.getRows(),
                         (int) renderer.getCanvas().getWidth(), (int) renderer.getCanvas().getHeight());
+                // The server echoes a redraw after SIGWINCH; suppress activity briefly
+                // so the resize does not start the tab-icon pulse.
+                resizeEchoSuppressUntil = System.currentTimeMillis() + RESIZE_ECHO_SUPPRESS_MS;
             } catch (Exception ignored) {}
         }
     }
