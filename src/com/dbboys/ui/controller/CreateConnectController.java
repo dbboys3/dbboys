@@ -1,5 +1,6 @@
 package com.dbboys.ui.controller;
 import com.dbboys.ui.util.TabpaneUtil;
+import com.dbboys.ui.util.SshConnectionPicker;
 
 
 import com.dbboys.app.AppContext;
@@ -98,8 +99,8 @@ public class CreateConnectController {
     @FXML
     private Button switchGroupOrIP;
     private Button sqliteBrowseButton;
-    /** Maps dropdown index -> ssh connection id for the "use existing SSH connection" dropdown. */
-    private final java.util.List<Integer> sshConnectionIds = new java.util.ArrayList<>();
+    /** Shared "use existing SSH connection" dropdown logic (populate + fill fields). */
+    private SshConnectionPicker sshConnectionPicker;
     private Runnable updateSshAuthRows;
     @FXML
     private TabPane connectTabPane;
@@ -355,7 +356,8 @@ public class CreateConnectController {
         sshTab.textProperty().bind(I18n.bind("createconnect.tab.ssh", "SSH 隧道"));
 
         // Populate SSH connection dropdown and auth type choice box
-        populateSshConnectionDropdown();
+        sshConnectionPicker = new SshConnectionPicker(sshConnectionChoiceBox);
+        sshConnectionPicker.refresh();
         // Default to Password if no selection has been made (new connection path)
         if (sshAuthTypeChoiceBox.getSelectionModel().getSelectedIndex() < 0) {
             sshAuthTypeChoiceBox.getSelectionModel().select(0);
@@ -374,46 +376,13 @@ public class CreateConnectController {
                 .addListener((obs, o, n) -> updateSshAuthRows.run());
 
         // SSH connection dropdown: populate fields from selected connection
-        sshConnectionChoiceBox.getSelectionModel().selectedIndexProperty()
-                .addListener((obs, o, n) -> {
-                    int idx = n.intValue();
-                    if (idx > 0 && idx < sshConnectionIds.size()) {
-                        int sshId = sshConnectionIds.get(idx);
-                        com.dbboys.model.SshConnect sel = getSshConnectionById(sshId);
-                        if (sel != null) {
-                            sshHostTextField.setText(sel.getHost());
-                            sshPortTextField.setText(sel.getPort());
-                            sshUserTextField.setText(sel.getUsername());
-                            if (sel.isAuthKey()) {
-                                sshAuthTypeChoiceBox.getSelectionModel().select(1);
-                                sshKeyPathTextField.setText(sel.getKeyPath());
-                                sshKeyPassphraseField.setText(sel.getKeyPassphrase());
-                                sshPasswordTextField.setText("");
-                            } else {
-                                sshAuthTypeChoiceBox.getSelectionModel().select(0);
-                                sshPasswordTextField.setText(sel.getPassword());
-                                sshKeyPathTextField.setText("");
-                                sshKeyPassphraseField.setText("");
-                            }
-                            if (updateSshAuthRows != null) updateSshAuthRows.run();
-                        }
-                    }
-                });
+        sshConnectionPicker.bindFill(new SshConnectionPicker.Fields(
+                sshHostTextField, sshPortTextField, sshUserTextField, sshAuthTypeChoiceBox,
+                sshPasswordTextField, sshKeyPathTextField, sshKeyPassphraseField),
+                () -> { if (updateSshAuthRows != null) updateSshAuthRows.run(); });
 
         // SSH key browse button
-        sshKeyBrowseButton.setOnAction(e -> {
-            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-            chooser.setTitle(I18n.t("ssh.prompt.key_path", "Select SSH Private Key"));
-            java.io.File homeDir = new java.io.File(System.getProperty("user.home"));
-            if (homeDir.isDirectory()) {
-                java.io.File sshDir = new java.io.File(homeDir, ".ssh");
-                chooser.setInitialDirectory(sshDir.isDirectory() ? sshDir : homeDir);
-            }
-            java.io.File selected = chooser.showOpenDialog(AppState.getWindow());
-            if (selected != null) {
-                sshKeyPathTextField.setText(selected.getAbsolutePath());
-            }
-        });
+        sshKeyBrowseButton.setOnAction(e -> SshConnectionPicker.browseKeyFile(AppState.getWindow(), sshKeyPathTextField));
 
         Button tryConnectButton = (Button) dialogPane.lookupButton(testButtonType);
         tryConnectButton.disableProperty().bind(connectingHBox.visibleProperty());
@@ -559,19 +528,16 @@ public class CreateConnectController {
 
         // SSH: controlled by toggle switch
         connect.setSshEnabled(sshToggleButton.isSelected());
-        if (sshConnectionChoiceBox.getSelectionModel().getSelectedIndex() > 0) {
-            // Using an existing SSH connection: copy fields from it
-            int sshConnId = sshConnectionIds.get(sshConnectionChoiceBox.getSelectionModel().getSelectedIndex());
-            SshConnect sel = getSshConnectionById(sshConnId);
-            if (sel != null) {
-                connect.setSshHost(sel.getHost());
-                connect.setSshPort(sel.getPort());
-                connect.setSshUser(sel.getUsername());
-                connect.setSshAuthType(sel.getAuthType());
-                connect.setSshKeyPath(sel.getKeyPath());
-                connect.setSshKeyPassphrase(sel.getKeyPassphrase());
-                connect.setSshPassword(sel.isAuthKey() ? "" : sel.getPassword());
-            }
+        // Using an existing SSH connection: copy fields from it
+        SshConnect sel = sshConnectionPicker.selected();
+        if (sel != null) {
+            connect.setSshHost(sel.getHost());
+            connect.setSshPort(sel.getPort());
+            connect.setSshUser(sel.getUsername());
+            connect.setSshAuthType(sel.getAuthType());
+            connect.setSshKeyPath(sel.getKeyPath());
+            connect.setSshKeyPassphrase(sel.getKeyPassphrase());
+            connect.setSshPassword(sel.isAuthKey() ? "" : sel.getPassword());
         } else {
             connect.setSshHost(sshHostTextField.getText());
             connect.setSshPort(sshPortTextField.getText());
@@ -1667,25 +1633,4 @@ public class CreateConnectController {
         sshConnectionChoiceBox.setDisable(!enabled);
     }
 
-    /** Populate the "use existing SSH connection" dropdown with saved SSH connections. */
-    private void populateSshConnectionDropdown() {
-        sshConnectionIds.clear();
-        sshConnectionChoiceBox.getItems().clear();
-        sshConnectionChoiceBox.getItems().add(I18n.t("ssh.prompt.manual_ssh", "-- Manual --"));
-        sshConnectionIds.add(0);
-        java.util.List<SshConnect> sshList = LocalDbRepository.getAllSsh();
-        for (SshConnect sc : sshList) {
-            sshConnectionChoiceBox.getItems().add(sc.getName());
-            sshConnectionIds.add(sc.getId());
-        }
-        sshConnectionChoiceBox.getSelectionModel().select(0);
-    }
-
-    /** Get an SshConnect by its database ID. */
-    private static SshConnect getSshConnectionById(int id) {
-        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
-            if (sc.getId() == id) return sc;
-        }
-        return null;
-    }
 }

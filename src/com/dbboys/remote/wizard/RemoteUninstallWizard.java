@@ -7,9 +7,8 @@ import com.dbboys.remote.RemoteUninstallExecutionContext;
 
 import com.dbboys.app.AppExecutor;
 import com.dbboys.ui.component.*;
-import com.dbboys.infra.db.LocalDbRepository;
 import com.dbboys.infra.i18n.I18n;
-import com.dbboys.model.SshConnect;
+import com.dbboys.ui.util.SshConnectionPicker;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.dialog.AlertUtil;
@@ -78,8 +77,8 @@ public class RemoteUninstallWizard {
     private static CustomPasswordField keyPassphraseField;
     /** "Use existing SSH connection" dropdown; index 0 is manual entry. */
     private static ChoiceBox<String> sshConnectionChoiceBox;
-    /** Maps dropdown index -> ssh connection id (index 0 = manual entry). */
-    private static final java.util.List<Integer> sshConnectionIds = new ArrayList<>();
+    /** Shared dropdown content/selection logic (saved SSH connections). */
+    private static SshConnectionPicker sshConnectionPicker;
     private static HBox backgroundHBox;
     private static Button stopButton;
     private static Label runningLabel;
@@ -396,47 +395,15 @@ public class RemoteUninstallWizard {
         keyBrowseButton.setFocusTraversable(false);
         keyBrowseButton.getStyleClass().addAll("custom-button-with-radius", "small");
         keyBrowseButton.setMaxSize(14, 14);
-        keyBrowseButton.setOnAction(e -> {
-            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-            chooser.setTitle(I18n.t("ssh.prompt.key_path", "选择 SSH 私钥文件"));
-            java.io.File homeDir = new java.io.File(System.getProperty("user.home"));
-            if (homeDir.isDirectory()) {
-                java.io.File sshDir = new java.io.File(homeDir, ".ssh");
-                chooser.setInitialDirectory(sshDir.isDirectory() ? sshDir : homeDir);
-            }
-            java.io.File selected = chooser.showOpenDialog(parent);
-            if (selected != null) {
-                keyPathField.setText(selected.getAbsolutePath());
-            }
-        });
+        keyBrowseButton.setOnAction(e -> SshConnectionPicker.browseKeyFile(parent, keyPathField));
 
         // 已有SSH连接下拉框：选中后填充主机/端口/用户名/认证信息
         sshConnectionChoiceBox = new ChoiceBox<>();
         sshConnectionChoiceBox.setPrefWidth(280);
-        populateSshConnectionDropdown();
-        sshConnectionChoiceBox.getSelectionModel().selectedIndexProperty()
-                .addListener((obs, o, n) -> {
-                    int idx = n.intValue();
-                    if (idx > 0 && idx < sshConnectionIds.size()) {
-                        SshConnect sel = getSshConnectionById(sshConnectionIds.get(idx));
-                        if (sel != null) {
-                            hostField.setText(sel.getHost());
-                            portField.setText(sel.getPort());
-                            userField.setText(sel.getUsername());
-                            if (sel.isAuthKey()) {
-                                authTypeChoiceBox.getSelectionModel().select(1);
-                                keyPathField.setText(sel.getKeyPath());
-                                keyPassphraseField.setText(sel.getKeyPassphrase());
-                                passField.setText("");
-                            } else {
-                                authTypeChoiceBox.getSelectionModel().select(0);
-                                passField.setText(sel.getPassword());
-                                keyPathField.setText("");
-                                keyPassphraseField.setText("");
-                            }
-                        }
-                    }
-                });
+        sshConnectionPicker = new SshConnectionPicker(sshConnectionChoiceBox);
+        sshConnectionPicker.refresh();
+        sshConnectionPicker.bindFill(new SshConnectionPicker.Fields(
+                hostField, portField, userField, authTypeChoiceBox, passField, keyPathField, keyPassphraseField), null);
 
         // 标签
         Label sshConnLabel = new Label();
@@ -528,27 +495,6 @@ public class RemoteUninstallWizard {
         //step1ConnectTask = connectTask;
 
         return stackPane;
-    }
-
-    /** Populate the "use existing SSH connection" dropdown with saved SSH connections. */
-    private static void populateSshConnectionDropdown() {
-        sshConnectionIds.clear();
-        sshConnectionChoiceBox.getItems().clear();
-        sshConnectionChoiceBox.getItems().add(I18n.t("ssh.prompt.manual_ssh", "-- Manual --"));
-        sshConnectionIds.add(0);
-        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
-            sshConnectionChoiceBox.getItems().add(sc.getName());
-            sshConnectionIds.add(sc.getId());
-        }
-        sshConnectionChoiceBox.getSelectionModel().select(0);
-    }
-
-    /** Get an SshConnect by its database ID. */
-    private static SshConnect getSshConnectionById(int id) {
-        for (SshConnect sc : LocalDbRepository.getAllSsh()) {
-            if (sc.getId() == id) return sc;
-        }
-        return null;
     }
 
 
