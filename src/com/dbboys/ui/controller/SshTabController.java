@@ -726,6 +726,9 @@ public class SshTabController {
                     // Normalize line endings to a single \r (terminals expect \r for Enter);
                     // Windows clipboard text uses \r\n, which would otherwise become \r\r
                     text = text.replace("\r\n", "\r").replace("\n", "\r");
+                    // Pasting is input: pin the viewport to the bottom like typed keys do,
+                    // otherwise a scroll-locked view stays put while the echo streams in
+                    jumpToBottom();
                     clearSelection(); // pasting invalidates the stale selection
                     try {
                         OutputStream os = shellChannel.getInvertedIn();
