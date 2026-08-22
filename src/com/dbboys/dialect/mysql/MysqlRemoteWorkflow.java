@@ -9,7 +9,7 @@ import com.dbboys.remote.*;
 import java.io.File;
 
 public final class MysqlRemoteWorkflow {
-    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-dialog-title-fg;-fx-font-weight: bold;-fx-font-family:system;";
+    private static final String RESULT_TITLE_STYLE = "-fx-fill: -color-accent-fg;-fx-font-weight: bold;-fx-font-family:system;";
     private MysqlRemoteWorkflow() {
     }
 
@@ -95,6 +95,10 @@ public final class MysqlRemoteWorkflow {
 
         databaseInfoArea.append(I18n.t("remote.install.mysql.result.variables", "MySQL variables") + "\n", RESULT_TITLE_STYLE);
         databaseInfoArea.append(ctx.executeCommand(ctx.shellQuote(basedir + "/bin/mysql") + " --socket=" + ctx.shellQuote(socket) + " -uroot -p" + ctx.shellQuote(ctx.fieldValue(MysqlRemoteFields.MYSQL_ROOT_PASSWORD)) + " -e \"show variables where Variable_name in ('basedir','datadir','port','socket','version','innodb_buffer_pool_size')\" 2>/dev/null") + "\n\n", "-fx-fill: -color-fg-default; -fx-font-weight: normal;-fx-font-family:Courier New;");
+
+        // System info goes through the unified renderer (same interface and
+        // title/text styles as the wizard's step-2 system-info panel)
+        RemoteSystemInfoCollector.appendSystemInfo(databaseInfoArea, ctx);
     }
 
     public static Connect buildInstalledConnect(RemoteInstallExecutionContext ctx) {
