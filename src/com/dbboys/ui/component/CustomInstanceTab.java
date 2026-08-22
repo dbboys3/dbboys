@@ -135,7 +135,7 @@ public class CustomInstanceTab extends CustomTab {
         instancePortText.set(connect.getPort());
         instanceInfoLabel=new Label();
         instanceInfoLabel.textProperty().bind(Bindings.createStringBinding(
-                () -> isMysqlConnect()
+                () -> isMysqlConnect() || isPostgresqlConnect()
                         ? String.format(
                         I18n.t("instance.info.current.mysql.format", "当前实例信息 ( IP：%s   端口：%s )"),
                         instanceIpText.get(),
@@ -941,6 +941,10 @@ public class CustomInstanceTab extends CustomTab {
 
     private boolean isMysqlConnect() {
         return connect != null && "MYSQL".equalsIgnoreCase(connect.getDbtype());
+    }
+
+    private boolean isPostgresqlConnect() {
+        return connect != null && "POSTGRESQL".equalsIgnoreCase(connect.getDbtype());
     }
 
     private String resolveNamedServerPropertyName() {

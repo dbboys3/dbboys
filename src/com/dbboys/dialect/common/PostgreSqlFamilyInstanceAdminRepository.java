@@ -162,6 +162,12 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
     // ------------------------------------------------------------------
 
     @Override
+    public boolean supportsSpaceMutation(Connect connect) {
+        // Tablespace create/drop needs filesystem paths and superuser; read-only charts only
+        return false;
+    }
+
+    @Override
     public void setStorageSegmentExtendable(Connection conn, int segmentId, boolean extendable) throws SQLException {
         throw new UnsupportedOperationException("Storage segment extendable is not supported for PostgreSQL");
     }
@@ -173,9 +179,31 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
 
     @Override
     public List<List<SpaceUsage>> getStorageSpaceUsage(Connection conn) throws SQLException {
+        // The space tab always renders four charts: tablespace / database / schema / top-20 tables
         List<List<SpaceUsage>> result = new ArrayList<>();
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
 
-        // Level 1: Database sizes
+        // Level 0: tablespaces
+        List<SpaceUsage> tablespaceList = new ArrayList<>();
+        String tablespaceSql = """
+                SELECT
+                    ROW_NUMBER() OVER (ORDER BY spcname)::int AS no,
+                    spcname AS label,
+                    spcname AS name,
+                    pg_catalog.pg_tablespace_size(oid) AS size_bytes
+                FROM pg_catalog.pg_tablespace
+                ORDER BY spcname
+                """;
+        runner.query(tablespaceSql, null, rs -> {
+            double totalGb = rs.getDouble("size_bytes") / 1024.0 / 1024.0 / 1024.0;
+            tablespaceList.add(new SpaceUsage(
+                    rs.getInt("no"), rs.getString("label"), rs.getString("name"),
+                    0, totalGb, totalGb, 0, 0, 0, 0, 0));
+            return null;
+        });
+        result.add(tablespaceList);
+
+        // Level 1: databases
         List<SpaceUsage> dbSpaceList = new ArrayList<>();
         String dbSql = """
                 SELECT
@@ -187,7 +215,6 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
                 WHERE NOT datistemplate
                 ORDER BY datname
                 """;
-        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
         runner.query(dbSql, null, rs -> {
             double totalGb = rs.getDouble("size_bytes") / 1024.0 / 1024.0 / 1024.0;
             SpaceUsage space = new SpaceUsage(
@@ -198,28 +225,55 @@ public abstract class PostgreSqlFamilyInstanceAdminRepository implements Instanc
         });
         result.add(dbSpaceList);
 
-        // Level 2: Table/index sizes by schema (top 20)
+        // Level 2: schemas of the current database
+        List<SpaceUsage> schemaList = new ArrayList<>();
+        String schemaSql = """
+                SELECT
+                    ROW_NUMBER() OVER (ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC)::int AS no,
+                    n.nspname AS label,
+                    n.nspname AS name,
+                    SUM(pg_catalog.pg_total_relation_size(c.oid)) AS size_bytes
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r', 'i', 'm')
+                  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND n.nspname NOT LIKE 'pg_toast%'
+                GROUP BY n.nspname
+                ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC
+                """;
+        runner.query(schemaSql, null, rs -> {
+            double totalGb = rs.getDouble("size_bytes") / 1024.0 / 1024.0 / 1024.0;
+            schemaList.add(new SpaceUsage(
+                    rs.getInt("no"), rs.getString("label"), rs.getString("name"),
+                    0, totalGb, totalGb, 0, 0, 0, 0, 0));
+            return null;
+        });
+        result.add(schemaList);
+
+        // Level 3: table/index sizes (top 20), data/index split into the meta fields
         List<SpaceUsage> tableList = new ArrayList<>();
         String tableSql = """
                 SELECT
-                    ROW_NUMBER() OVER (ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC)::int AS no,
+                    ROW_NUMBER() OVER (ORDER BY pg_catalog.pg_total_relation_size(c.oid) DESC)::int AS no,
                     n.nspname || '.' || c.relname AS label,
-                    c.relname AS name,
+                    n.nspname || '.' || c.relname AS name,
+                    pg_catalog.pg_relation_size(c.oid) AS data_bytes,
+                    pg_catalog.pg_indexes_size(c.oid) AS index_bytes,
                     pg_catalog.pg_total_relation_size(c.oid) AS size_bytes
                 FROM pg_catalog.pg_class c
                 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relkind IN ('r', 'i')
                   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
                   AND n.nspname NOT LIKE 'pg_toast%'
-                GROUP BY n.nspname, c.relname, c.oid
-                ORDER BY SUM(pg_catalog.pg_total_relation_size(c.oid)) DESC
+                ORDER BY pg_catalog.pg_total_relation_size(c.oid) DESC
                 LIMIT 20
                 """;
         runner.query(tableSql, null, rs -> {
             double totalGb = rs.getDouble("size_bytes") / 1024.0 / 1024.0 / 1024.0;
+            double indexGb = rs.getDouble("index_bytes") / 1024.0 / 1024.0 / 1024.0;
             SpaceUsage space = new SpaceUsage(
                     rs.getInt("no"), rs.getString("label"), rs.getString("name"),
-                    0, totalGb, totalGb, 0, 0, 0, 0, 0);
+                    0, totalGb, totalGb, 0, 0, 0, indexGb, indexGb);
             tableList.add(space);
             return null;
         });

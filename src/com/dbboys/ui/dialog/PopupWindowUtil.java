@@ -792,7 +792,12 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.metadata_change",
                         "main.compatibility.feature.execute_sql",
                         "main.compatibility.feature.execution_plan",
-                        "main.compatibility.feature.import_export")),
+                        "main.compatibility.feature.import_export",
+                        "main.compatibility.feature.instance_info",
+                        "main.compatibility.feature.instance_space",
+                        "main.compatibility.feature.instance_log",
+                        "main.compatibility.feature.instance_params",
+                        "main.compatibility.feature.instance_inspection")),
                 new CompatibilityRow("DAMENG", "8", compatibilityFeaturesByKey(
                         "main.compatibility.feature.install",
                         "main.compatibility.feature.uninstall",

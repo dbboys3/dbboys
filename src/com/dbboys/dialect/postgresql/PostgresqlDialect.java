@@ -10,10 +10,13 @@ import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.ReconnectFallbackCapability;
 import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.infra.i18n.I18n;
+import com.dbboys.infra.ssh.SshUtil;
 import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.model.Connect;
 import com.dbboys.model.Database;
 import com.dbboys.model.HealthCheck;
+import org.apache.sshd.client.session.ClientSession;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -599,7 +602,7 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
 
     @Override
     public boolean supportsLogTab(Connect connect) {
-        return false; // PostgreSQL pg_log files are not accessible via SQL
+        return true;
     }
 
     @Override
@@ -609,7 +612,7 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
 
     @Override
     public boolean canEditConfig(Connect connect) {
-        return false; // listing pg_settings read-only; ALTER SYSTEM editing not implemented
+        return connect != null && !Boolean.TRUE.equals(connect.getReadonly());
     }
 
     @Override
@@ -624,8 +627,49 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public SpaceLabels spaceLabels(Connect connect) {
+        return new SpaceLabels(
+                "",
+                "",
+                "instance.space.postgresql.chart.tablespace",
+                "Tablespace Usage(GB)",
+                "instance.space.chart.database",
+                "数据库使用空间情况图(GB)",
+                "instance.space.postgresql.chart.schema",
+                "Schema Usage(GB)",
+                "instance.space.chart.table",
+                "表/索引空间使用情况图TOP20(GB)",
+                "",
+                ""
+        );
+    }
+
+    @Override
     public String loadRuntimeLog(Connect connect) throws Exception {
-        return ""; // PostgreSQL uses pg_log files, not accessible via SQL
+        try (Connection conn = new com.dbboys.core.ConnectionServiceImpl().getConnectionWithSessionInit(connect)) {
+            StringBuilder text = new StringBuilder();
+            appendSection(text, "ACTIVITY (pg_stat_activity)", queryRows(conn, """
+                    SELECT pid, usename, datname, client_addr, state, wait_event_type, backend_start, left(query, 200) AS query
+                    FROM pg_catalog.pg_stat_activity ORDER BY pid""", 200));
+            appendSection(text, "DATABASE STATS (pg_stat_database)", queryRows(conn, """
+                    SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit,
+                           tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted
+                    FROM pg_catalog.pg_stat_database ORDER BY datname""", 100));
+            try {
+                // Tail of the current server log file; needs logging_collector=on and
+                // superuser or pg_read_server_files, otherwise the error text is shown
+                appendSection(text, "SERVER LOG (pg_current_logfile, tail 300)", queryRows(conn, """
+                        WITH lines AS (
+                            SELECT row_number() OVER () AS rn, u.line
+                            FROM unnest(string_to_array(pg_catalog.pg_read_file(pg_catalog.pg_current_logfile()), E'\\n')) AS u(line)
+                        )
+                        SELECT string_agg(line, E'\\n' ORDER BY rn) FROM lines
+                        WHERE rn > (SELECT max(rn) FROM lines) - 300""", 1));
+            } catch (SQLException e) {
+                appendSection(text, "SERVER LOG (pg_current_logfile)", e.getMessage());
+            }
+            return text.toString();
+        }
     }
 
     @Override
@@ -642,28 +686,124 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public ConfigUpdateResult updateConfig(Connect connect, String paramName, String newValue) throws Exception {
+        String name = paramName == null ? "" : paramName.trim();
+        if (name.isEmpty()) {
+            return new ConfigUpdateResult(ConfigUpdateStatus.FILE_ONLY, "Empty parameter name");
+        }
+        // GUC names are dotted identifiers; reject anything else before issuing ALTER SYSTEM
+        if (!name.matches("[A-Za-z0-9_.]+")) {
+            return new ConfigUpdateResult(ConfigUpdateStatus.FILE_ONLY, "Invalid parameter name: " + paramName);
+        }
+        try (Connection conn = new com.dbboys.core.ConnectionServiceImpl().getConnectionWithSessionInit(new Connect(connect));
+             var stmt = conn.createStatement()) {
+            stmt.execute("ALTER SYSTEM SET " + name + " = " + pgValueLiteral(newValue));
+            String context = null;
+            try (ResultSet rs = stmt.executeQuery("SELECT context FROM pg_catalog.pg_settings WHERE name = '" + name + "'")) {
+                if (rs.next()) {
+                    context = rs.getString(1);
+                }
+            }
+            // postmaster-context GUCs only take effect after a restart; everything else reloads
+            if ("postmaster".equals(context)) {
+                return new ConfigUpdateResult(ConfigUpdateStatus.RESTART_REQUIRED,
+                        "ALTER SYSTEM SET " + name + " written to postgresql.auto.conf; restart required to take effect");
+            }
+            stmt.execute("SELECT pg_catalog.pg_reload_conf()");
+            return new ConfigUpdateResult(ConfigUpdateStatus.APPLIED, "ALTER SYSTEM SET " + name + " applied");
+        }
+    }
+
+    @Override
+    public boolean supportsStartStopTab(Connect connect) {
+        return connect != null;
+    }
+
+    @Override
+    public boolean isInstanceOnline(Connect connect) throws Exception {
+        try (Connection conn = new com.dbboys.core.ConnectionServiceImpl().getConnectionWithSessionInit(new Connect(connect));
+             var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT 1")) {
+            return rs.next();
+        }
+    }
+
+    @Override
+    public void startInstance(Connect connect) throws Exception {
+        runPostgresqlServiceCommand(connect, "start");
+    }
+
+    @Override
+    public void stopInstance(Connect connect) throws Exception {
+        runPostgresqlServiceCommand(connect, "stop");
+    }
+
+    /** Start/stop via systemd over SSH: prefer the PGDG postgresql-14 unit, then the
+     *  generic postgresql meta unit, then any other postgresql* service (templates excluded). */
+    private static void runPostgresqlServiceCommand(Connect connect, String action) throws Exception {
+        String script = "pgunit=\"\";"
+                + "for u in postgresql-14.service postgresql.service; do"
+                + " systemctl cat \"$u\" >/dev/null 2>&1 && pgunit=\"$u\" && break;"
+                + " done;"
+                + "[ -n \"$pgunit\" ] || pgunit=$(systemctl list-unit-files --type=service 2>/dev/null"
+                + " | awk '$1 ~ /^postgresql.*\\.service$/ && $1 !~ /@\\.service$/ {print $1; exit}');"
+                + "[ -n \"$pgunit\" ] || { echo 'no postgresql systemd unit found' >&2; exit 1; };"
+                + "systemctl " + action + " \"$pgunit\"";
+        ClientSession session = SshUtil.getConnect(connect);
+        try {
+            int result = SshUtil.executeCommandWithExitStatus(session, script);
+            if (result != 0) {
+                throw new Exception(I18n.t(
+                        "start".equals(action) ? "instance.error.start_failed" : "instance.error.stop_failed",
+                        "start".equals(action) ? "启动数据库失败，请检查日志错误！" : "关闭数据库失败，请检查日志错误！"));
+            }
+        } finally {
+            SshUtil.disConnect(session);
+        }
+    }
+
+    @Override
     public List<HealthCheck> loadHealthChecks(Connect connect) throws Exception {
-        List<HealthCheck> checks = new ArrayList<>();
+        try (Connection conn = new com.dbboys.core.ConnectionServiceImpl().getConnectionWithSessionInit(connect)) {
+            List<HealthCheck> checks = new ArrayList<>();
 
-        checks.add(new HealthCheck("Version", "SELECT version()",
-                "Should be available", "", "", ""));
-        checks.add(new HealthCheck("Uptime",
-                "SELECT pg_postmaster_start_time()",
-                "Should be available", "", "", ""));
-        checks.add(new HealthCheck("Active Connections",
-                "SELECT count(*) FROM pg_stat_activity",
-                "Below 85% of max_connections", "", "", ""));
-        checks.add(new HealthCheck("Database Size",
-                "SELECT pg_size_pretty(pg_database_size(current_database()))",
-                "Should be measurable", "", "", ""));
-        checks.add(new HealthCheck("Cache Hit Ratio",
-                "SELECT CASE WHEN sum(blks_hit) + sum(blks_read) > 0 THEN round(sum(blks_hit) * 100.0 / (sum(blks_hit) + sum(blks_read)), 2) ELSE 0 END FROM pg_stat_database",
-                "Should be >= 99%", "", "", ""));
-        checks.add(new HealthCheck("Transaction Rate",
-                "SELECT xact_commit, xact_rollback FROM pg_stat_database WHERE datname = current_database()",
-                "Monitor continuously", "", "", ""));
+            String version = queryScalar(conn, "SELECT version()");
+            addCheck(checks, "Version", "SELECT version()", "Should be available", version, present(version));
 
-        return checks;
+            String uptime = queryScalar(conn, "SELECT now() - pg_catalog.pg_postmaster_start_time()");
+            addCheck(checks, "Uptime", "SELECT pg_postmaster_start_time()", "Should be available", uptime, present(uptime));
+
+            long activeConnections = parseLong(queryScalar(conn, "SELECT count(*) FROM pg_catalog.pg_stat_activity"));
+            long maxConnections = parseLong(queryScalar(conn, "SHOW max_connections"));
+            addCheck(checks, "Active Connections", "SELECT count(*) FROM pg_stat_activity", "Below 85% of max_connections",
+                    activeConnections + " / " + maxConnections,
+                    maxConnections <= 0 || activeConnections * 100d / maxConnections < 85d);
+
+            String dbSize = queryScalar(conn, "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(current_database()))");
+            addCheck(checks, "Database Size", "SELECT pg_size_pretty(pg_database_size(current_database()))",
+                    "Should be measurable", dbSize, present(dbSize));
+
+            double cacheHit = parseDouble(queryScalar(conn, """
+                    SELECT CASE WHEN sum(blks_hit) + sum(blks_read) > 0
+                           THEN round(sum(blks_hit) * 100.0 / (sum(blks_hit) + sum(blks_read)), 2)
+                           ELSE 100 END FROM pg_catalog.pg_stat_database"""));
+            addCheck(checks, "Cache Hit Ratio", "blks_hit / (blks_hit + blks_read)", ">= 99%",
+                    cacheHit + "%", cacheHit >= 99d);
+
+            String txn = queryScalar(conn, "SELECT xact_commit || ' / ' || xact_rollback FROM pg_catalog.pg_stat_database WHERE datname = current_database()");
+            addCheck(checks, "Transaction Rate", "SELECT xact_commit, xact_rollback FROM pg_stat_database WHERE datname = current_database()",
+                    "Monitor continuously", txn, true);
+
+            long deadlocks = parseLong(queryScalar(conn, "SELECT COALESCE(sum(deadlocks), 0) FROM pg_catalog.pg_stat_database"));
+            addCheck(checks, "Deadlocks", "SELECT sum(deadlocks) FROM pg_stat_database", "0",
+                    String.valueOf(deadlocks), deadlocks == 0);
+
+            long idleInTx = parseLong(queryScalar(conn, "SELECT count(*) FROM pg_catalog.pg_stat_activity WHERE state = 'idle in transaction'"));
+            addCheck(checks, "Idle In Transaction", "SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction'", "0 or few",
+                    String.valueOf(idleInTx), idleInTx == 0);
+
+            return checks;
+        }
     }
 
     @Override
@@ -748,5 +888,86 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     @Override
     public SqlParser parser() {
         return new PostgresqlSqlParser();
+    }
+
+    private static void addCheck(List<HealthCheck> checks, String entry, String cmd, String expected, String current, boolean ok) {
+        checks.add(new HealthCheck(entry, cmd, expected, current == null ? "" : current, ok ? "0" : "2", current));
+    }
+
+    private static boolean present(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static double parseDouble(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static String queryScalar(Connection conn, String sql) throws SQLException {
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : "";
+        }
+    }
+
+    private static String queryRows(Connection conn, String sql, int maxRows) throws SQLException {
+        StringBuilder text = new StringBuilder();
+        try (var stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            int columnCount = rs.getMetaData().getColumnCount();
+            for (int i = 1; i <= columnCount; i++) {
+                if (i > 1) {
+                    text.append('\t');
+                }
+                text.append(rs.getMetaData().getColumnLabel(i));
+            }
+            int rows = 0;
+            while (rs.next() && rows++ < maxRows) {
+                text.append('\n');
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        text.append('\t');
+                    }
+                    String value = rs.getString(i);
+                    text.append(value == null ? "NULL" : value);
+                }
+            }
+        }
+        return text.toString();
+    }
+
+    private static void appendSection(StringBuilder text, String title, String body) {
+        if (!text.isEmpty()) {
+            text.append("\n\n");
+        }
+        text.append("##########################################################################################\n");
+        text.append(title).append('\n');
+        text.append("##########################################################################################\n");
+        text.append(body == null ? "" : body);
+    }
+
+    private static String pgValueLiteral(String value) {
+        String text = value == null ? "" : value.trim();
+        if (text.matches("(?i)^(ON|OFF|TRUE|FALSE|DEFAULT|NULL)$") || text.matches("[-+]?\\d+(\\.\\d+)?")) {
+            return text;
+        }
+        return "'" + DatabasePlatform.escapeSqlString(text) + "'";
     }
 }
