@@ -88,6 +88,15 @@
                                     </CustomShortcutMenuItem>
                                 </items>
                             </CustomMenu>
+
+                            <CustomMenu fx:id="menuConfigPostgresql" mnemonicParsing="false">
+                                <items>
+                                    <CustomShortcutMenuItem fx:id="menuConfigInstallPostgresql" mnemonicParsing="false" onAction="#installPostgresql">
+                                    </CustomShortcutMenuItem>
+                                    <CustomShortcutMenuItem fx:id="menuConfigUninstallPostgresql" mnemonicParsing="false" onAction="#unInstallPostgresql">
+                                    </CustomShortcutMenuItem>
+                                </items>
+                            </CustomMenu>
                         </items>
                     </Menu>
                     <Menu fx:id="menuSettings" mnemonicParsing="false" >

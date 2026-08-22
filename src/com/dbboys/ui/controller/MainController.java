@@ -160,6 +160,12 @@ public class MainController {
     @FXML
     private CustomShortcutMenuItem menuConfigUninstallDameng;
     @FXML
+    private Menu menuConfigPostgresql;
+    @FXML
+    private CustomShortcutMenuItem menuConfigInstallPostgresql;
+    @FXML
+    private CustomShortcutMenuItem menuConfigUninstallPostgresql;
+    @FXML
     private Menu menuSettings;
     @FXML
     private Menu menuSettingsLanguage;
@@ -318,6 +324,9 @@ public class MainController {
         menuConfigDameng.setGraphic(IconFactory.group(IconPaths.DAMENG_LOGO, 0.02));
         menuConfigInstallDameng.setGraphic(null);
         menuConfigUninstallDameng.setGraphic(null);
+        menuConfigPostgresql.setGraphic(IconFactory.group(IconPaths.POSTGRESQL_LOGO, 0.55));
+        menuConfigInstallPostgresql.setGraphic(null);
+        menuConfigUninstallPostgresql.setGraphic(null);
         menuSettingsLanguage.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_LANGUAGE, 0.68));
         menuSettingsTheme.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_THEME, 0.68));
         menuSettingsReset.setGraphic(IconFactory.group(IconPaths.MAIN_MENU_RESET, 0.6));
@@ -806,6 +815,9 @@ public class MainController {
         bindText(menuConfigDameng, "main.menu.config.dameng");
         bindText(menuConfigInstallDameng, "main.menu.config.install_dameng");
         bindText(menuConfigUninstallDameng, "main.menu.config.uninstall_dameng");
+        bindText(menuConfigPostgresql, "main.menu.config.postgresql");
+        bindText(menuConfigInstallPostgresql, "main.menu.config.install_postgresql");
+        bindText(menuConfigUninstallPostgresql, "main.menu.config.uninstall_postgresql");
 
         bindText(menuSettings, "main.menu.settings");
         bindText(menuSettingsLanguage, "main.menu.settings.language");
@@ -2439,6 +2451,14 @@ public class MainController {
 
     public void unInstallDameng(){
         RemoteDatabaseProviders.dameng().startUninstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void installPostgresql(){
+        RemoteDatabaseProviders.postgresql().startInstallWizard((Stage) AppState.getWindow());
+    }
+
+    public void unInstallPostgresql(){
+        RemoteDatabaseProviders.postgresql().startUninstallWizard((Stage) AppState.getWindow());
     }
 
     public void setLanguageZh() {

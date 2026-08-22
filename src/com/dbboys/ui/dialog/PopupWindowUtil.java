@@ -785,6 +785,8 @@ public class PopupWindowUtil {
                         "main.compatibility.feature.instance_params",
                         "main.compatibility.feature.instance_inspection")),
                 new CompatibilityRow("POSTGRESQL", "14", compatibilityFeaturesByKey(
+                        "main.compatibility.feature.install",
+                        "main.compatibility.feature.uninstall",
                         "main.compatibility.feature.metadata_list",
                         "main.compatibility.feature.metadata_detail",
                         "main.compatibility.feature.metadata_change",

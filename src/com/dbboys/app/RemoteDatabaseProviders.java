@@ -8,6 +8,7 @@ public final class RemoteDatabaseProviders {
     private static final RemoteDatabaseProvider MYSQL = new com.dbboys.dialect.mysql.MysqlRemoteProvider();
     private static final RemoteDatabaseProvider ORACLE = new com.dbboys.dialect.oracle.OracleRemoteProvider();
     private static final RemoteDatabaseProvider DAMENG = new com.dbboys.dialect.dameng.DamengRemoteProvider();
+    private static final RemoteDatabaseProvider POSTGRESQL = new com.dbboys.dialect.postgresql.PostgresqlRemoteProvider();
 
     private RemoteDatabaseProviders() {
     }
@@ -30,5 +31,9 @@ public final class RemoteDatabaseProviders {
 
     public static RemoteDatabaseProvider dameng() {
         return DAMENG;
+    }
+
+    public static RemoteDatabaseProvider postgresql() {
+        return POSTGRESQL;
     }
 }
