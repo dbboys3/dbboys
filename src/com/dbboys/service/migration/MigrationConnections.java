@@ -12,7 +12,8 @@ import java.sql.Connection;
  * （避免 GBase 8S 的 sqlmode 强制等会话级设置影响迁移的 DDL 与类型映射判定）。
  * 库/模式选择由连接 URL（catalog/sessionCatalog）承载。
  * 例外：SCHEMA / DATABASE_SCHEMA 模型（oracle/dameng/postgresql）的模式切换
- * 无法由 URL 承载（CURRENT_SCHEMA / search_path），这类平台补做方言会话初始化。
+ * 无法由 URL 承载（CURRENT_SCHEMA / search_path），这类平台补做方言会话初始化；
+ * GBase 8S 即使两层模型也要补 sqlmode 初始化，否则数据 SQL 会按默认 sqlmode 执行报语法错误。
  */
 public final class MigrationConnections {
 
@@ -23,9 +24,11 @@ public final class MigrationConnections {
         Connection conn = BackgroundSqlService.getConnectionService().createConnection(connect);
         try {
             DatabasePlatform platform = PlatformResolvers.get().requirePlatform(connect);
+            boolean gbase8s = "GBASE 8S".equalsIgnoreCase(connect.getDbtype());
+            boolean schemaModel = platform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE;
             if (platform.connection().supportsSessionInit()
-                    && platform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE
-                    && connect.getSessionCatalog() != null && !connect.getSessionCatalog().isBlank()) {
+                    && (gbase8s || (schemaModel
+                            && connect.getSessionCatalog() != null && !connect.getSessionCatalog().isBlank()))) {
                 platform.connection().sessionInit(conn, connect);
             }
         } catch (Exception e) {

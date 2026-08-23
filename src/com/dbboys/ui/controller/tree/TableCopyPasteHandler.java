@@ -18,6 +18,7 @@ import com.dbboys.model.Schema;
 import com.dbboys.model.Sql;
 import com.dbboys.model.TreeData;
 import com.dbboys.service.BackgroundSqlService;
+import com.dbboys.service.migration.MigrationConnectInfo;
 import com.dbboys.service.migration.TableMigrationService;
 import com.dbboys.service.migration.TypeMapper;
 import com.dbboys.ui.component.CustomInlineCssTextArea;
@@ -39,6 +40,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.Statement;
@@ -53,6 +56,8 @@ import java.util.Map;
  * 数据复制复用 {@link TableMigrationService}（migrateDdl=false，目标表名走 targetTableNames 映射）。
  */
 public final class TableCopyPasteHandler {
+
+    private static final Logger LOG = LogManager.getLogger(TableCopyPasteHandler.class);
 
     // ---- 复制的表记录 ----
     private static Connect sourceConnect;   // 副本，catalog/sessionCatalog 已定位到表所在库/模式
@@ -171,6 +176,7 @@ public final class TableCopyPasteHandler {
                 indexDdl = buildIndexDdl(src, dst, table, table, convertedDdl);
             } catch (Exception e) {
                 String msg = e.getMessage();
+                LOG.error("加载表DDL失败: {}", msg, e);
                 Platform.runLater(() -> {
                     if (!dialog.getStage().isShowing()) {
                         return;
@@ -219,6 +225,7 @@ public final class TableCopyPasteHandler {
             } catch (Exception e) {
                 // 建表失败：弹出错误信息（不用系统通知）
                 String msg = e.getMessage();
+                LOG.error("建表失败: {}", msg, e);
                 Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("tablecopy.error.create_failed", "建表失败：%s").formatted(msg)));
                 return;
@@ -282,23 +289,26 @@ public final class TableCopyPasteHandler {
         }
     }
 
-    /** 同方言：原 DDL 原样回放；跨方言：TypeMapper 按列元数据重建目标方言建表 DDL。 */
+    /** DDL 转换基准：源表级 sqlmode 优先、其次源连接 sqlmode，目标连接 sqlmode 优先、其次目标 dbtype。 */
     private static String buildConvertedDdl(Connect src, Connect dst, String table, String originalDdl) throws Exception {
-        if (src.getDbtype() != null && src.getDbtype().equalsIgnoreCase(dst.getDbtype())) {
-            return originalDdl;
-        }
         DatabasePlatform sourcePlatform = platform(src);
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            String sourceType = sourceMappingType(src, table, conn);
+            String targetType = MigrationConnectInfo.effectiveDbType(dst);
+            if (sourceType != null && sourceType.equalsIgnoreCase(targetType)) {
+                return originalDdl;
+            }
             ArrayList<ColumnsInfo> columns = sourcePlatform.metadata().getColumns(conn, table);
             List<String> primaryKeyColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, table);
             String tableComment = null;
             try {
                 tableComment = sourcePlatform.metadata().getTableComment(conn, table);
             } catch (Exception ignored) {
+                LOG.debug("获取表注释失败: {}", ignored.getMessage(), ignored);
             }
             List<String> warnings = new ArrayList<>();
             String script = TypeMapper.buildCreateTableScript(
-                    src.getDbtype(), dst.getDbtype(), table, columns, primaryKeyColumns, tableComment, warnings);
+                    sourceType, targetType, table, columns, primaryKeyColumns, tableComment, warnings);
             if (!warnings.isEmpty()) {
                 // 类型回退说明作为注释行放在最前，确认执行时会被剔除
                 StringBuilder sb = new StringBuilder();
@@ -314,7 +324,7 @@ public final class TableCopyPasteHandler {
     /** 剔除注释行后，按目标平台 parser 切分并逐条执行（参照 TableMigrationService.executeScript）。 */
     private static void executeDdl(Connect dst, String ddlText) throws Exception {
         SqlParser parser = platform(dst).parser();
-        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(dst);
+        try (Connection conn = new ConnectionServiceImpl().createConnection(dst);
              Statement stmt = conn.createStatement()) {
             Sql currentSql = new Sql();
             for (SqlParserUtil.Segment segment : SqlParserUtil.split(ddlText)) {
@@ -399,6 +409,7 @@ public final class TableCopyPasteHandler {
             if (!failed.isEmpty()) {
                 TableMigrationService.ItemResult r = failed.get(0);
                 String detail = r.message() + (r.errorSql() == null ? "" : "\n" + r.errorSql());
+                LOG.error("表数据迁移失败: {}", detail);
                 AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s").formatted(detail));
                 return;
@@ -412,9 +423,13 @@ public final class TableCopyPasteHandler {
             TreeViewUtil.tableService.updateStatisticsForTable(dst, dstTable, platform(dst), schemaName,
                     () -> refreshTableAfterMigration(treeItem, dstTable));
         });
-        task.setOnFailed(e -> NotificationUtil.showMainNotification(
-                I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
-                        .formatted(task.getException() == null ? "" : task.getException().getMessage())));
+        task.setOnFailed(e -> {
+            Throwable ex = task.getException();
+            LOG.error("表数据迁移任务失败", ex);
+            NotificationUtil.showMainNotification(
+                    I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
+                            .formatted(ex == null ? "" : ex.getMessage()));
+        });
         BackgroundSqlService.backSqlExecutor.submit(task);
     }
 
@@ -472,20 +487,24 @@ public final class TableCopyPasteHandler {
      *  改名粘贴时索引名改为 <目标表名>_<原索引名> 避免同模式冲突。 */
     private static String buildIndexDdl(Connect src, Connect dst, String srcTable, String dstTable,
                                         String convertedDdl) {
-        boolean nativeDdl = src.getDbtype() != null && src.getDbtype().equalsIgnoreCase(dst.getDbtype());
-        if (convertedDdl != null && tableDdlAlreadyHasIndexes(convertedDdl, dst.getDbtype(), nativeDdl)) {
-            return "";
-        }
+        String targetType = MigrationConnectInfo.effectiveDbType(dst);
         String dbName = sourceSchema != null && !sourceSchema.isBlank() ? sourceSchema : sourceCatalog;
         List<Index> indexes;
         List<String> pkColumns;
+        String sourceType;
         DatabasePlatform sourcePlatform = platform(src);
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            sourceType = sourceMappingType(src, srcTable, conn);
             indexes = sourcePlatform.metadata().getIndexes(conn, dbName);
             pkColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, srcTable);
         } catch (Exception e) {
+            LOG.error("索引DDL生成失败: {}", e.getMessage(), e);
             return "-- " + I18n.t("tablecopy.error.index_generate_failed", "索引DDL生成失败：%s")
                     .formatted(e.getMessage()) + "\n";
+        }
+        boolean nativeDdl = sourceType != null && sourceType.equalsIgnoreCase(targetType);
+        if (convertedDdl != null && tableDdlAlreadyHasIndexes(convertedDdl, targetType, nativeDdl)) {
+            return "";
         }
         if (indexes == null || indexes.isEmpty()) {
             return "";
@@ -520,6 +539,20 @@ public final class TableCopyPasteHandler {
                     .append(" ON ").append(dstTable).append(" (").append(columns).append(");\n");
         }
         return sb.toString();
+    }
+
+    /** 粘贴转换用的源方言：表级 sqlmode 优先，其次源连接 sqlmode，最后连接 dbtype。 */
+    private static String sourceMappingType(Connect src, String tableName, Connection conn) {
+        String sqlMode = null;
+        try {
+            sqlMode = platform(src).metadata().getTableSqlMode(conn, tableName);
+        } catch (Exception e) {
+            LOG.debug("read table sqlmode failed: {}", tableName, e);
+        }
+        if (sqlMode != null && !sqlMode.isBlank()) {
+            return MigrationConnectInfo.resolveDbTypeFromSqlMode(sqlMode, null);
+        }
+        return MigrationConnectInfo.effectiveDbType(src);
     }
 
     /** 用户在弹窗中改名建表语句时，同步修正生成索引语句里的目标表名/索引名。 */

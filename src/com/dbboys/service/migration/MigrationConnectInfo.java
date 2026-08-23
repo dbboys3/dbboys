@@ -37,19 +37,28 @@ public final class MigrationConnectInfo {
             return null;
         }
         String sqlMode = probeSqlMode(connect);
-        if (sqlMode != null) {
-            String mode = sqlMode.replace("sqlmode=", "").trim();
-            if ("oracle".equalsIgnoreCase(mode)) {
-                return "ORACLE";
-            }
-            if ("mysql".equalsIgnoreCase(mode)) {
-                return "MYSQL";
-            }
-            if ("gbase".equalsIgnoreCase(mode)) {
-                return "GBASE 8S";
-            }
+        return resolveDbTypeFromSqlMode(sqlMode, connect.getDbtype());
+    }
+
+    /**
+     * 将 sqlmode 映射为类型映射用的方言字面量：oracle→ORACLE、mysql→MYSQL、
+     * gbase→GBASE 8S；无 sqlmode 或不识别时回退 fallbackDbType。
+     */
+    public static String resolveDbTypeFromSqlMode(String sqlMode, String fallbackDbType) {
+        if (sqlMode == null || sqlMode.isBlank()) {
+            return fallbackDbType;
         }
-        return connect.getDbtype();
+        String mode = sqlMode.replace("sqlmode=", "").trim();
+        if ("oracle".equalsIgnoreCase(mode)) {
+            return "ORACLE";
+        }
+        if ("mysql".equalsIgnoreCase(mode)) {
+            return "MYSQL";
+        }
+        if ("gbase".equalsIgnoreCase(mode)) {
+            return "GBASE 8S";
+        }
+        return fallbackDbType;
     }
 
     /** 探测当前 sqlmode；不支持/失败返回 null。 */
