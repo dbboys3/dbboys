@@ -183,10 +183,7 @@ public final class TableCopyPasteHandler {
             Platform.runLater(() -> {
                 NotificationUtil.showMainNotification(
                         I18n.t("tablecopy.notice.created", "表\"%s\"已创建，开始后台迁移数据").formatted(newName));
-                // 刷新目标库/模式节点（与刷新菜单对非叶节点的处理一致），让新表出现在树上
-                item.getChildren().clear();
-                item.setExpanded(false);
-                item.setExpanded(true);
+                refreshTableList(item);
             });
             submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where);
         });
@@ -337,6 +334,19 @@ public final class TableCopyPasteHandler {
                     ? new String[]{parentDb, name}
                     : new String[]{name, null};
         };
+    }
+
+    /** 建表成功后刷新目标节点下的"表"文件夹（不折叠目标节点本身；表文件夹未加载时不动，展开时会新加载）。 */
+    private static void refreshTableList(TreeItem<TreeData> node) {
+        for (TreeItem<TreeData> child : node.getChildren()) {
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.ObjectFolder
+                    && TreeDataLoader.getObjectFolderKind(child) == TreeDataLoader.ObjectFolderKind.TABLES) {
+                child.getChildren().clear();
+                child.setExpanded(false);
+                child.setExpanded(true);
+                return;
+            }
+        }
     }
 
     /** 每行加 "-- " 前缀，把原 DDL 变成注释参考块。 */
