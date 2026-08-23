@@ -188,7 +188,7 @@ public final class TableCopyPasteHandler {
                 return;
             }
             String original = originalDdl;
-            String converted = convertedDdl;
+            String converted = commentSqlModeLine(convertedDdl);
             String indexes = indexDdl;
             Platform.runLater(() -> {
                 if (!dialog.getStage().isShowing()) {
@@ -759,6 +759,24 @@ public final class TableCopyPasteHandler {
         StringBuilder sb = new StringBuilder();
         for (String line : (ddl == null ? "" : ddl).split("\n", -1)) {
             sb.append("-- ").append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** 把 SET ENVIRONMENT SQLMODE 'xxx'; 这类会话设置行注释掉，避免执行时切换目标会话模式。 */
+    private static String commentSqlModeLine(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        String[] lines = ddl.split("\n", -1);
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            if (line.trim().matches("(?i)SET\\s+ENVIRONMENT\\s+SQLMODE\\s+.*")) {
+                sb.append("-- ").append(line);
+            } else {
+                sb.append(line);
+            }
+            sb.append('\n');
         }
         return sb.toString();
     }

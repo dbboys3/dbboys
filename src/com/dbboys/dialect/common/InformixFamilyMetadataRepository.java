@@ -231,7 +231,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_INDEXES = """
-            select %1$s, i.idxname, t.tabname,
+            select %1$s, nvl(substr(i.idxname, instr(i.idxname,'$$')+2), i.idxname), t.tabname,
             trim( case when i.part1 > 0 then( select colname from syscolumns where colno = i.part1 and tabid = i.tabid ) else '' end )
             || trim( case when i.part2 > 0 then( select ',' || colname from syscolumns where colno = i.part2 and tabid = i.tabid ) else '' end )
             || trim( case when i.part3 > 0 then( select ',' || colname from syscolumns where colno = i.part3 and tabid = i.tabid ) else '' end )
