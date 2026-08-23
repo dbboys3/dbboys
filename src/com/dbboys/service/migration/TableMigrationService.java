@@ -717,7 +717,7 @@ public class TableMigrationService {
                             for (Object[] row : batch.rows) {
                                 checkCancelled(ctx.backSqlTask);
                                 for (int i = 0; i < row.length; i++) {
-                                    bindObject(ps, i + 1, row[i]);
+                                    bindObject(ps, i + 1, row[i], pipe.types[i]);
                                 }
                                 ps.addBatch();
                             }
@@ -1363,10 +1363,11 @@ public class TableMigrationService {
         }
     }
 
-    /** 绑定物化值：null → setNull(Types.OTHER)，其余按运行时类型绑定（与 readValue 的物化类型一一对应）。 */
-    private static void bindObject(PreparedStatement ps, int index, Object value) throws SQLException {
+    /** 绑定物化值：null 按列类型族绑定具体 JDBC 类型（Oracle 拒绝 setNull(Types.OTHER)，报 ORA-17004），
+     *  其余按运行时类型绑定（与 readValue 的物化类型一一对应）。 */
+    private static void bindObject(PreparedStatement ps, int index, Object value, TypeMapper.GenericType type) throws SQLException {
         if (value == null) {
-            ps.setNull(index, Types.OTHER);
+            ps.setNull(index, sqlTypeForNull(type));
         } else if (value instanceof java.math.BigDecimal decimal) {
             ps.setBigDecimal(index, decimal);
         } else if (value instanceof Double doubleValue) {
@@ -1378,6 +1379,27 @@ public class TableMigrationService {
         } else {
             ps.setString(index, String.valueOf(value));
         }
+    }
+
+    /** null 绑定时使用的 JDBC 类型：按列类型族给出具体类型（Oracle 不接受 Types.OTHER）。 */
+    private static int sqlTypeForNull(TypeMapper.GenericType type) {
+        if (type == null) {
+            return Types.VARCHAR;
+        }
+        return switch (type) {
+            case TINYINT, SMALLINT, INTEGER -> Types.INTEGER;
+            case BIGINT -> Types.BIGINT;
+            case DECIMAL -> Types.DECIMAL;
+            case FLOAT, DOUBLE -> Types.DOUBLE;
+            case DATE -> Types.DATE;
+            case TIME -> Types.TIME;
+            case DATETIME, TIMESTAMP -> Types.TIMESTAMP;
+            case BINARY -> Types.VARBINARY;
+            case BLOB -> Types.BLOB;
+            case CLOB -> Types.CLOB;
+            case BOOLEAN -> Types.BOOLEAN;
+            default -> Types.VARCHAR; // CHAR/VARCHAR/TEXT/JSON/OTHER
+        };
     }
 
     // ==================================================================
