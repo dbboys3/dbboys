@@ -2,6 +2,8 @@ package com.dbboys.dialect.sqlite;
 
 import com.dbboys.core.DdlRepository;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.LongConsumer;
 
 public final class SqliteDdlRepository implements DdlRepository {
@@ -17,6 +19,18 @@ public final class SqliteDdlRepository implements DdlRepository {
     @Override
     public String printTable(Connection conn, String objectName) throws Exception {
         return printObjectDdl(conn, "table", objectName);
+    }
+
+    @Override
+    public String printTableWithDependencies(Connection conn, String objectName) throws Exception {
+        StringBuilder ddl = new StringBuilder(printTable(conn, objectName));
+        for (String indexSql : printDependencyDdl(conn, "index", objectName)) {
+            ddl.append(";\n\n").append(indexSql);
+        }
+        for (String triggerSql : printDependencyDdl(conn, "trigger", objectName)) {
+            ddl.append(";\n\n").append(triggerSql);
+        }
+        return ddl.toString();
     }
 
     @Override
@@ -81,5 +95,28 @@ public final class SqliteDdlRepository implements DdlRepository {
             }
         }
         return sb.toString();
+    }
+
+    private List<String> printDependencyDdl(Connection conn, String type, String tableName) throws Exception {
+        List<String> result = new ArrayList<>();
+        String sql = """
+                SELECT sql
+                FROM sqlite_master
+                WHERE type = ?
+                  AND tbl_name = ?
+                  AND sql IS NOT NULL
+                  AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+                """;
+        try (var stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, type);
+            stmt.setString(2, tableName);
+            try (var rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    result.add(rs.getString(1));
+                }
+            }
+        }
+        return result;
     }
 }

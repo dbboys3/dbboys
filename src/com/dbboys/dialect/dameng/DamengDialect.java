@@ -437,7 +437,7 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public String gatherTableSql(String schemaName, String tableName) {
-        return "BEGIN DBMS_STATS.GATHER_TABLE_STATS(ownname => '" + schemaName + "', tabname => '" + tableName + "'); END;";
+        return "BEGIN DBMS_STATS.GATHER_TABLE_STATS(ownname => '" + schemaName + "', tabname => '" + tableName.toUpperCase() + "'); END;";
     }
 
     @Override

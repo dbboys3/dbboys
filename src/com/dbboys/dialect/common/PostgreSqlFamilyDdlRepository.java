@@ -18,6 +18,44 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
 
     protected static final int QUERY_TIMEOUT = 60;
 
+    private static final String SQL_TABLE_STANDALONE_INDEXES = """
+            SELECT i.relname
+            FROM pg_catalog.pg_index x
+            JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid
+            JOIN pg_catalog.pg_class t ON t.oid = x.indrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = ?
+              AND t.relname = ?
+              AND NOT x.indisprimary
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_catalog.pg_constraint c
+                  WHERE c.conindid = x.indexrelid
+                    AND c.contype IN ('p','u'))
+            ORDER BY i.relname
+            """;
+
+    private static final String SQL_TABLE_CONSTRAINTS = """
+            SELECT conname, pg_catalog.pg_get_constraintdef(oid) AS def
+            FROM pg_catalog.pg_constraint c
+            JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = ?
+              AND t.relname = ?
+              AND c.contype IN ('u','c','f','x')
+            ORDER BY conname
+            """;
+
+    private static final String SQL_TABLE_TRIGGERS = """
+            SELECT t.tgname
+            FROM pg_catalog.pg_trigger t
+            JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = ?
+              AND c.relname = ?
+              AND NOT t.tgisinternal
+            ORDER BY t.tgname
+            """;
+
     // ------------------------------------------------------------------
     // Dialect hooks
     // ------------------------------------------------------------------
@@ -191,6 +229,39 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
                     .append(comment.replace("'", "''")).append("';\n");
         }
 
+        return ddl.toString();
+    }
+
+    @Override
+    public String printTableWithDependencies(Connection conn, String objectName) throws Exception {
+        String schema = parseSchema(objectName, conn);
+        String table = parseObjectName(objectName);
+        StringBuilder ddl = new StringBuilder(printTable(conn, objectName));
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+
+        List<String> indexes = runner.query(SQL_TABLE_STANDALONE_INDEXES, List.of(schema, table), rs -> rs.getString(1));
+        for (String index : indexes) {
+            String indexDdl = printIndex(conn, plainQualified(schema, index));
+            if (indexDdl != null && !indexDdl.isBlank()) {
+                ddl.append("\n\n").append(indexDdl);
+            }
+        }
+
+        List<String[]> constraints = runner.query(SQL_TABLE_CONSTRAINTS, List.of(schema, table),
+                rs -> new String[]{rs.getString(1), rs.getString(2)});
+        for (String[] constraint : constraints) {
+            ddl.append("\n\nALTER TABLE ").append(qualifyName(schema, table))
+                    .append(" ADD CONSTRAINT ").append(quoteIdentifier(constraint[0]))
+                    .append(' ').append(constraint[1]).append(';');
+        }
+
+        List<String> triggers = runner.query(SQL_TABLE_TRIGGERS, List.of(schema, table), rs -> rs.getString(1));
+        for (String trigger : triggers) {
+            String triggerDdl = printTrigger(conn, plainQualified(schema, trigger));
+            if (triggerDdl != null && !triggerDdl.isBlank()) {
+                ddl.append("\n\n").append(triggerDdl);
+            }
+        }
         return ddl.toString();
     }
 

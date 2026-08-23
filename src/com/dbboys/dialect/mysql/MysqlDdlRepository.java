@@ -62,6 +62,29 @@ public final class MysqlDdlRepository implements DdlRepository {
     }
 
     @Override
+    public String printTableWithDependencies(Connection conn, String objectName) throws SQLException {
+        List<String> parts = splitName(objectName);
+        String db;
+        String table;
+        if (parts.size() >= 2) {
+            db = normalizeIdentifier(parts.get(parts.size() - 2));
+            table = normalizeIdentifier(parts.get(parts.size() - 1));
+        } else {
+            db = currentDatabase(conn, null);
+            table = normalizeIdentifier(objectName);
+        }
+        StringBuilder ddl = new StringBuilder(printTable(conn, objectName));
+        List<String> triggers = triggerNamesForTable(conn, db, table);
+        if (!triggers.isEmpty()) {
+            ddl.append("\n\n");
+            for (String trigger : triggers) {
+                ddl.append(printTrigger(conn, qualified(db, trigger))).append("\n\n");
+            }
+        }
+        return ddl.toString();
+    }
+
+    @Override
     public String printView(Connection conn, String objectName) throws SQLException {
         String ddl = showCreate(conn, "SHOW CREATE VIEW " + qualifiedIdentifier(conn, objectName), "Create View");
         return withSemicolon(ddl);
@@ -169,6 +192,27 @@ public final class MysqlDdlRepository implements DdlRepository {
         List<String> names = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, db);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString(1));
+                }
+            }
+        }
+        return names;
+    }
+
+    private static List<String> triggerNamesForTable(Connection conn, String db, String table) throws SQLException {
+        String sql = """
+                select trigger_name
+                from information_schema.triggers
+                where trigger_schema = ?
+                  and event_object_table = ?
+                order by trigger_name
+                """;
+        List<String> names = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, db);
+            ps.setString(2, table);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     names.add(rs.getString(1));

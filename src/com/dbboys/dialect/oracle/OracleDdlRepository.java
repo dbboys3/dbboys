@@ -194,6 +194,11 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
         return ddl.toString().stripTrailing();
     }
 
+    @Override
+    public String printTableWithDependencies(Connection conn, String objectName) throws SQLException {
+        return printTable(conn, objectName);
+    }
+
     /** 迁移用建表 DDL 保持原来的表结构（不含独立索引/约束/触发器，避免迁移阶段重复创建）。 */
     @Override
     public String printTableForMigration(Connection conn, String objectName) throws SQLException {

@@ -1170,6 +1170,11 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         return printTable(connection, tablename, false);
     }
 
+    @Override
+    public String printTableWithDependencies(Connection connection, String tablename) throws Exception {
+        return printTable(connection, tablename);
+    }
+
     /** 迁移用建表 DDL：不带索引和约束（索引/外键作为独立迁移对象，在全部表数据迁移完成后才创建）。 */
     @Override
     public String printTableForMigration(Connection connection, String tablename) throws SQLException, ClassNotFoundException {
