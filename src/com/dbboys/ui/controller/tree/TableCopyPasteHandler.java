@@ -25,7 +25,6 @@ import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.notification.NotificationUtil;
 import javafx.application.Platform;
-import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Pos;
 import javafx.scene.control.ButtonBar;
@@ -409,8 +408,9 @@ public final class TableCopyPasteHandler {
             String schemaName = treeItem == null ? targetSchema : TreeNavigator.getCurrentDatabase(treeItem).getName();
             String doneMessage = I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）")
                     .formatted(dstTable, rows);
+            NotificationUtil.showMainNotification(doneMessage);
             TreeViewUtil.tableService.updateStatisticsForTable(dst, dstTable, platform(dst), schemaName,
-                    () -> refreshTableAfterMigration(treeItem, dstTable, doneMessage));
+                    () -> refreshTableAfterMigration(treeItem, dstTable));
         });
         task.setOnFailed(e -> NotificationUtil.showMainNotification(
                 I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
@@ -419,10 +419,9 @@ public final class TableCopyPasteHandler {
     }
 
     /** 统计更新完成后选中目标表，并复用右键刷新的刷新逻辑，不整体刷新表列表。 */
-    private static void refreshTableAfterMigration(TreeItem<TreeData> treeItem, String tableName, String doneMessage) {
+    private static void refreshTableAfterMigration(TreeItem<TreeData> treeItem, String tableName) {
         TreeItem<TreeData> tableItem = findTableItem(treeItem, tableName);
         if (tableItem == null) {
-            NotificationUtil.showMainNotification(doneMessage);
             return;
         }
         AppState.getDatabaseMetaTreeView().getSelectionModel().select(tableItem);
@@ -434,22 +433,9 @@ public final class TableCopyPasteHandler {
                     TreeNavigator.getCurrentDatabase(tableItem),
                     tableName,
                     tableItem::setValue,
-                    () -> {
-                        tableItem.getValue().setRunning(false);
-                        NotificationUtil.showMainNotification(doneMessage);
-                    });
+                    () -> tableItem.getValue().setRunning(false));
             return;
         }
-        final boolean[] fired = {false};
-        final ChangeListener<Boolean>[] listenerRef = new ChangeListener[1];
-        listenerRef[0] = (obs, oldValue, newValue) -> {
-            if (fired[0] && Boolean.TRUE.equals(oldValue) && !newValue) {
-                tableItem.getValue().runningProperty().removeListener(listenerRef[0]);
-                NotificationUtil.showMainNotification(doneMessage);
-            }
-        };
-        tableItem.getValue().runningProperty().addListener(listenerRef[0]);
-        fired[0] = true;
         TreeViewUtil.refreshItem.fire();
     }
 
