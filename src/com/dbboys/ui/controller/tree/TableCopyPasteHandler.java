@@ -128,7 +128,7 @@ public final class TableCopyPasteHandler {
             default -> null;
         };
         submitDataMigration(sourceConnect, target, targetDatabase, targetSchema,
-                sourceTable, item.getValue().getName());
+                sourceTable, item.getValue().getName(), null);
     }
 
     // ------------------------------------------------------------------
@@ -138,18 +138,17 @@ public final class TableCopyPasteHandler {
     private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
                                       String targetDatabase, String targetSchema,
                                       String table, String originalDdl, String convertedDdl) {
-        TextField nameField = new TextField(table);
-        nameField.setPrefWidth(280);
-
-        Label nameLabel = new Label(I18n.t("tablecopy.dialog.target_name", "目标表名") + ":");
-        HBox nameBox = new HBox(10, nameLabel, nameField);
-        nameBox.setAlignment(Pos.CENTER_LEFT);
+        // WHERE 条件输入（可选，过滤迁移的数据）；目标表名从建表语句中提取
+        TextField whereField = new TextField();
+        whereField.setPrefWidth(420);
+        whereField.setPromptText(I18n.t("tablecopy.dialog.where", "WHERE 条件（可选，例如 id > 100）"));
 
         Label noteLabel = new Label(I18n.t("tablecopy.dialog.original_ddl", "原表DDL（注释参考，不会执行）") + ":");
 
         CustomInlineCssTextArea sqlArea = new CustomInlineCssTextArea();
+        sqlArea.setEditable(true); // 粘贴弹窗的表结构可编辑（该类默认只读）
         sqlArea.replaceText(commented(originalDdl) + "\n" + convertedDdl);
-        VBox content = new VBox(8, nameBox, noteLabel, sqlArea);
+        VBox content = new VBox(8, whereField, noteLabel, sqlArea);
         VBox.setVgrow(sqlArea, Priority.ALWAYS);
 
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
@@ -159,17 +158,25 @@ public final class TableCopyPasteHandler {
         if (dialog.showAndWait() != okType) {
             return;
         }
-        String newName = nameField.getText() == null ? "" : nameField.getText().trim();
         String ddlText = stripCommentLines(sqlArea.getText());
-        if (newName.isEmpty() || ddlText.isBlank()) {
+        // 目标表名从（可能被用户修改过的）建表语句中提取
+        String newName = parseCreateTableName(ddlText);
+        String where = whereField.getText() == null ? "" : whereField.getText().trim();
+        if (newName.isEmpty()) {
+            AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                    I18n.t("tablecopy.error.no_create_table", "未从建表语句中解析到目标表名"));
+            return;
+        }
+        if (ddlText.isBlank()) {
             return;
         }
         AppExecutor.runAsync(() -> {
             try {
                 executeDdl(dst, ddlText);
             } catch (Exception e) {
+                // 建表失败：弹出错误信息（不用系统通知）
                 String msg = e.getMessage();
-                Platform.runLater(() -> NotificationUtil.showMainNotification(
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                         I18n.t("tablecopy.error.create_failed", "建表失败：%s").formatted(msg)));
                 return;
             }
@@ -181,7 +188,7 @@ public final class TableCopyPasteHandler {
                 item.setExpanded(false);
                 item.setExpanded(true);
             });
-            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName);
+            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where);
         });
     }
 
@@ -240,16 +247,44 @@ public final class TableCopyPasteHandler {
                     }
                     String statement = currentSql.getSqlstr();
                     if (SqlParserUtil.isExecutableStatement(statement)) {
-                        stmt.execute(statement.trim());
+                        executeStatement(stmt, statement);
                     }
                     remainingChunk = currentSql.getSqlRemainder();
                     currentSql = new Sql();
                 }
             }
             if (SqlParserUtil.isExecutableStatement(currentSql.getSqlstr())) {
-                stmt.execute(currentSql.getSqlstr().trim());
+                executeStatement(stmt, currentSql.getSqlstr());
             }
         }
+    }
+
+    /** 执行单条 DDL：去掉末尾分号（Oracle 等驱动拒绝语句尾的分号；BEGIN/DECLARE 块保留）。 */
+    private static void executeStatement(Statement stmt, String statement) throws Exception {
+        String execSql = statement == null ? "" : statement.trim();
+        String upper = execSql.toUpperCase(java.util.Locale.ROOT);
+        if (!(upper.startsWith("BEGIN") || upper.startsWith("DECLARE")) && execSql.endsWith(";")) {
+            execSql = execSql.substring(0, execSql.length() - 1).trim();
+        }
+        if (!execSql.isEmpty()) {
+            stmt.execute(execSql);
+        }
+    }
+
+    /** 从建表语句文本提取目标表名：第一个 CREATE TABLE 后的名字，去引号/反引号/方括号，取最后一段（去模式前缀）。 */
+    private static String parseCreateTableName(String ddlText) {
+        if (ddlText == null) {
+            return "";
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?i)\\bCREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([\"'`\\[\\]\\w.]+)")
+                .matcher(ddlText);
+        if (!m.find()) {
+            return "";
+        }
+        String name = m.group(1).replaceAll("[\"'`\\[\\]]", "");
+        int dot = name.lastIndexOf('.');
+        return dot >= 0 ? name.substring(dot + 1) : name;
     }
 
     // ------------------------------------------------------------------
@@ -259,9 +294,10 @@ public final class TableCopyPasteHandler {
     /** 提交后台数据迁移：只迁数据（表结构由调用方保证），源表名→目标表名走 targetTableNames 映射。 */
     private static void submitDataMigration(Connect src, Connect dst,
                                             String targetDatabase, String targetSchema,
-                                            String srcTable, String dstTable) {
+                                            String srcTable, String dstTable, String where) {
+        // where 条件过滤源表数据（可带或不带 WHERE 关键字，由迁移引擎归一化）
         MigrationObjectRef ref = new MigrationObjectRef(sourceCatalog, sourceSchema,
-                MigrationObjectRef.Kind.TABLE, srcTable);
+                MigrationObjectRef.Kind.TABLE, srcTable, where);
         TableMigrationService.MigrationRequest request = new TableMigrationService.MigrationRequest(
                 src, dst, targetDatabase, targetSchema, List.of(ref),
                 false, true, false, false, 1, 1, Map.of(),

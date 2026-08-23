@@ -1537,7 +1537,7 @@ public class TreeContextMenuBuilder {
                     }
                     treeview_menu.getItems().add(copyItem);
                     // 模式节点：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
-                    pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                    pasteItem.setDisable(pasteDisabled(selectedItem));
                     treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
@@ -1594,7 +1594,7 @@ public class TreeContextMenuBuilder {
                     // 库节点（两层模型，库下无模式）：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
                     if (dbNodePlatform == null
                             || dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE) {
-                        pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                        pasteItem.setDisable(pasteDisabled(selectedItem));
                         treeview_menu.getItems().add(pasteItem);
                     }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
@@ -1697,7 +1697,7 @@ public class TreeContextMenuBuilder {
                     }
                     treeview_menu.getItems().add(copyItem);
                     // 表节点：粘贴 = 把复制的表数据后台追加到该表
-                    pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                    pasteItem.setDisable(pasteDisabled(selectedItem));
                     treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
@@ -1824,5 +1824,12 @@ public class TreeContextMenuBuilder {
                 treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
             }
         });
+    }
+
+    /** 粘贴菜单禁用条件：没有复制的表记录，或目标连接为只读（粘贴要写入目标库）。 */
+    private static boolean pasteDisabled(TreeItem<TreeData> item) {
+        Connect pasteTarget = TreeNavigator.getMetaConnect(item);
+        return !TableCopyPasteHandler.hasCopied()
+                || (pasteTarget != null && Boolean.TRUE.equals(pasteTarget.getReadonly()));
     }
 }
