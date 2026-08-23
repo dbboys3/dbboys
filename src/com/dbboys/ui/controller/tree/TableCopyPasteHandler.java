@@ -301,7 +301,26 @@ public final class TableCopyPasteHandler {
                 Map.of(srcTable, dstTable));
         var task = new TableMigrationService().createTask(request, null);
         task.setOnSucceeded(e -> {
-            long rows = task.getValue().results().isEmpty() ? 0 : task.getValue().results().get(0).rowsCopied();
+            TableMigrationService.MigrationSummary summary = task.getValue();
+            if (summary == null) {
+                return;
+            }
+            if (summary.cancelled()) {
+                NotificationUtil.showMainNotification(I18n.t("migration.log.cancelled", "迁移已取消"));
+                return;
+            }
+            // 条目级失败（插入报错等）不抛异常而是收进结果集：必须检查并弹出错误信息
+            List<TableMigrationService.ItemResult> failed = summary.results().stream()
+                    .filter(r -> r.status() == TableMigrationService.ItemStatus.FAILED)
+                    .toList();
+            if (!failed.isEmpty()) {
+                TableMigrationService.ItemResult r = failed.get(0);
+                String detail = r.message() + (r.errorSql() == null ? "" : "\n" + r.errorSql());
+                AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                        I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s").formatted(detail));
+                return;
+            }
+            long rows = summary.results().isEmpty() ? 0 : summary.results().get(0).rowsCopied();
             NotificationUtil.showMainNotification(
                     I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows));
         });
