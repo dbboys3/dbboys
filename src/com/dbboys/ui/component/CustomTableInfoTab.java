@@ -697,7 +697,7 @@ public class CustomTableInfoTab extends CustomTab {
         }
 
             try {
-                ddl = SqlFormatter.formatSql(TreeViewUtil.tableService.getDDL(connect,database, tableName));
+                ddl = TreeViewUtil.tableService.getDDL(connect,database, tableName);
                 ;
             } catch (Exception e) {
                 // TODO Auto-generated catch block
