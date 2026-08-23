@@ -854,18 +854,8 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
     public List<Index> getIndexes(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         String owner = currentSchema(conn);
-        boolean includeSize = canReadSchemaSegmentSize(owner);
-        try {
-            return runner.query(SQL_INDEXES, List.of(owner, owner), rs -> mapIndex(rs, owner, includeSize));
-        } catch (SQLException e) {
-            if (!isOra942ObjectNotExists(e)) {
-                throw e;
-            }
-            if (owner.equalsIgnoreCase(sessionUser(conn))) {
-                return runner.query(SQL_INDEXES_VIA_USER_SEGMENTS, List.of(owner), rs -> mapIndex(rs, owner, includeSize));
-            }
-            return runner.query(SQL_INDEXES_WITHOUT_SEGMENT_BYTES, List.of(owner), rs -> mapIndex(rs, owner, false));
-        }
+        // 索引列表不查询段大小，避免 dba/all_segments 查询拖慢列表加载
+        return runner.query(SQL_INDEXES_WITHOUT_SEGMENT_BYTES, List.of(owner), rs -> mapIndex(rs, owner, false));
     }
 
     @Override
@@ -877,7 +867,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
 
     @Override
     public String getIndexSize(Connection conn) throws SQLException {
-        return queryOwnerIndexSegmentsTotalSize(conn, currentSchema(conn));
+        return null;
     }
 
     @Override
@@ -1401,7 +1391,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         index.setUniqvalues(String.valueOf(rs.getLong("distinct_keys")));
         index.setPagesize("");
         index.setTotalpages(String.valueOf(rs.getLong("leaf_blocks")));
-        index.setTotalsize(formatBytes(rs.getBigDecimal("size_bytes")));
+        index.setTotalsize(includeSize ? formatBytes(rs.getBigDecimal("size_bytes")) : "");
         index.setIsdisabled(!"VALID".equalsIgnoreCase(rs.getString("status")));
         return index;
     }
