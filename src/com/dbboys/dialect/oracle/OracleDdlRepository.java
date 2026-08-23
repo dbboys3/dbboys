@@ -101,9 +101,7 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
             FROM all_constraints
             WHERE owner = ?
               AND table_name = ?
-              AND status = 'ENABLED'
               AND constraint_type IN ('P','U','C')
-              AND (generated IS NULL OR generated = 'USER NAME')
             ORDER BY CASE constraint_type
                        WHEN 'P' THEN 1 WHEN 'U' THEN 2 WHEN 'C' THEN 3
                      END,
@@ -115,9 +113,7 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
             FROM all_constraints
             WHERE owner = ?
               AND table_name = ?
-              AND status = 'ENABLED'
               AND constraint_type = 'R'
-              AND (generated IS NULL OR generated = 'USER NAME')
             ORDER BY constraint_name
             """;
 
@@ -125,7 +121,6 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
             SELECT trigger_name
             FROM all_triggers
             WHERE owner = ?
-              AND table_owner = ?
               AND table_name = ?
             ORDER BY trigger_name
             """;
@@ -238,7 +233,6 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
         if (n == 0) {
             return;
         }
-        ddl.append("-- ### Constraints (").append(n).append(")\n\n");
         for (String[] row : pucRows) {
             String objDdl = getDdlSafe(conn, "CONSTRAINT", row[0], schema);
             if (!objDdl.isEmpty()) {
@@ -249,7 +243,6 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
                 ddl.append("\n\n");
             }
         }
-        ddl.append("-- ### Referential constraints (foreign keys)\n\n");
         for (String consName : refRows) {
             String objDdl = getDdlSafe(conn, "REF_CONSTRAINT", consName, schema);
             if (!objDdl.isEmpty()) {
@@ -265,12 +258,11 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
     private void appendTriggersForTable(Connection conn, StringBuilder ddl,
                                         String schema, String table) throws SQLException {
         SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
-        List<String> names = runner.query(SQL_TABLE_TRIGGERS, List.of(schema, schema, table),
+        List<String> names = runner.query(SQL_TABLE_TRIGGERS, List.of(schema, table),
                 rs -> rs.getString(1));
         if (names.isEmpty()) {
             return;
         }
-        ddl.append("-- ### Triggers (").append(names.size()).append(")\n\n");
         for (String name : names) {
             String objDdl = getDdlSafe(conn, "TRIGGER", name, schema);
             if (!objDdl.isEmpty()) {
