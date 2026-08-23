@@ -308,7 +308,8 @@ public final class TableCopyPasteHandler {
             }
             List<String> warnings = new ArrayList<>();
             String script = TypeMapper.buildCreateTableScript(
-                    sourceType, targetType, table, columns, primaryKeyColumns, tableComment, warnings);
+                    sourceType, targetType, table, columns, primaryKeyColumns, tableComment,
+                    warnings, null, null, "MYSQL".equalsIgnoreCase(targetType));
             if (!warnings.isEmpty()) {
                 // 类型回退说明作为注释行放在最前，确认执行时会被剔除
                 StringBuilder sb = new StringBuilder();
@@ -509,6 +510,7 @@ public final class TableCopyPasteHandler {
         if (indexes == null || indexes.isEmpty()) {
             return "";
         }
+        boolean quoteMysql = "MYSQL".equalsIgnoreCase(targetType);
         StringBuilder sb = new StringBuilder();
         for (Index index : indexes) {
             if (index == null) {
@@ -535,8 +537,13 @@ public final class TableCopyPasteHandler {
             String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
                     ? indexName
                     : dstTable + "_" + indexName;
+            if (quoteMysql) {
+                targetIndexName = quoteMysqlName(targetIndexName);
+                columns = quoteMysqlColumns(columns);
+            }
+            String targetTableName = quoteMysql ? quoteMysqlName(dstTable) : dstTable;
             sb.append("CREATE ").append(unique ? "UNIQUE " : "").append("INDEX ").append(targetIndexName)
-                    .append(" ON ").append(dstTable).append(" (").append(columns).append(");\n");
+                    .append(" ON ").append(targetTableName).append(" (").append(columns).append(");\n");
         }
         return sb.toString();
     }
@@ -553,6 +560,43 @@ public final class TableCopyPasteHandler {
             return MigrationConnectInfo.resolveDbTypeFromSqlMode(sqlMode, null);
         }
         return MigrationConnectInfo.effectiveDbType(src);
+    }
+
+    /** MySQL 目标标识符：去引号后整体小写并用反引号包裹（与 TypeMapper 口径一致）。 */
+    private static String quoteMysqlName(String name) {
+        if (name == null || name.isBlank()) {
+            return name == null ? "" : name;
+        }
+        String normalized = name.trim()
+                .replace("`", "")
+                .replace("\"", "")
+                .replace("[", "")
+                .replace("]", "");
+        String[] parts = normalized.split("\\.");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append('.');
+            }
+            sb.append('`').append(parts[i].toLowerCase(java.util.Locale.ROOT)).append('`');
+        }
+        return sb.toString();
+    }
+
+    /** MySQL 目标索引列清单：逐个去引号、小写并反引号包裹。 */
+    private static String quoteMysqlColumns(String columns) {
+        if (columns == null || columns.isBlank()) {
+            return columns == null ? "" : columns;
+        }
+        String[] parts = columns.split(",");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(quoteMysqlName(parts[i].trim()));
+        }
+        return sb.toString();
     }
 
     /** 用户在弹窗中改名建表语句时，同步修正生成索引语句里的目标表名/索引名。 */

@@ -764,12 +764,27 @@ public final class TypeMapper {
             String tableName, List<ColumnsInfo> columns, List<String> primaryKeyColumns,
             String tableComment, List<String> warnings, TableMapping mapping,
             Map<String, String> globalTypeOverrides) {
+        return buildCreateTableScript(sourceDbType, targetDbType, tableName, columns,
+                primaryKeyColumns, tableComment, warnings, mapping, globalTypeOverrides, false);
+    }
+
+    /**
+     * 完整版本。{@code mysqlQuoteIdentifiers} 仅在目标为 MYSQL 时生效：
+     * 表名/列名/主键列名统一转小写并用反引号包裹，供 GBase 8S mysql 模式等
+     * MySQL 方言目标的粘贴建表转换使用。
+     */
+    public static String buildCreateTableScript(String sourceDbType, String targetDbType,
+            String tableName, List<ColumnsInfo> columns, List<String> primaryKeyColumns,
+            String tableComment, List<String> warnings, TableMapping mapping,
+            Map<String, String> globalTypeOverrides, boolean mysqlQuoteIdentifiers) {
         boolean mysql = is(targetDbType, "MYSQL");
         boolean pg = is(targetDbType, "POSTGRESQL");
         boolean oracleFamily = isOracleFamily(targetDbType);
         boolean gbaseFamily = isGbaseFamily(targetDbType);
         boolean sqlite = is(targetDbType, "SQLITE");
         boolean ansi = !(mysql || pg || oracleFamily || gbaseFamily || sqlite);
+        boolean quoteMysqlIdentifiers = mysql && mysqlQuoteIdentifiers;
+        String outputTableName = quoteMysqlIdentifiers ? quoteMysqlName(tableName) : tableName;
         if (ansi && !is(targetDbType, "GENERAL JDBC")) {
             warnings.add("未知目标平台 " + targetDbType + "，按 ANSI 近似语法生成建表脚本");
         }
@@ -820,6 +835,7 @@ public final class TypeMapper {
         List<ColumnsInfo> commentedColumns = new ArrayList<>();
         for (ColumnsInfo column : columns) {
             String col = colName(column);
+            String outputCol = quoteMysqlIdentifiers ? quoteMysqlName(col) : col;
             GenericType gt = normalize(sourceDbType, column);
             boolean auto = column.isIsAutoincrement();
             String override = mapping == null ? null : mapping.overrideType(col);
@@ -855,7 +871,7 @@ public final class TypeMapper {
                 typeSql = toTargetType(targetDbType, gt, column, warnings);
             }
 
-            StringBuilder line = new StringBuilder("  " + col + " " + typeSql);
+            StringBuilder line = new StringBuilder("  " + outputCol + " " + typeSql);
             String def = mapDefault(column.getColDef(), targetDbType, col, warnings);
             if (def != null) {
                 line.append(" DEFAULT ").append(def);
@@ -896,11 +912,14 @@ public final class TypeMapper {
 
         // 内联主键
         if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
-            lines.add("  PRIMARY KEY (" + String.join(", ", primaryKeyColumns) + ")");
+            List<String> outputPk = quoteMysqlIdentifiers
+                    ? primaryKeyColumns.stream().map(TypeMapper::quoteMysqlName).toList()
+                    : primaryKeyColumns;
+            lines.add("  PRIMARY KEY (" + String.join(", ", outputPk) + ")");
         }
 
         StringBuilder create = new StringBuilder();
-        create.append("CREATE TABLE ").append(tableName).append(" (\n");
+        create.append("CREATE TABLE ").append(outputTableName).append(" (\n");
         create.append(String.join(",\n", lines));
         create.append("\n)");
         // MySQL 表注释跟在表选项里
@@ -917,11 +936,12 @@ public final class TypeMapper {
             if (oracleFamily || pg) {
                 // Oracle/Dameng/PostgreSQL：独立 COMMENT ON 语句
                 if (hasTableComment) {
-                    statements.add("COMMENT ON TABLE " + tableName + " IS '"
+                    statements.add("COMMENT ON TABLE " + outputTableName + " IS '"
                             + escapeQuotes(tableComment) + "'");
                 }
                 for (ColumnsInfo c : commentedColumns) {
-                    statements.add("COMMENT ON COLUMN " + tableName + "." + c.getColName()
+                    statements.add("COMMENT ON COLUMN " + outputTableName + "."
+                            + (quoteMysqlIdentifiers ? quoteMysqlName(c.getColName()) : c.getColName())
                             + " IS '" + escapeQuotes(c.getColComm()) + "'");
                 }
             } else if (!mysql) {
@@ -934,5 +954,26 @@ public final class TypeMapper {
 
         // 多语句用 ";\n" 分隔，整体以 ";" 结尾
         return String.join(";\n", statements) + ";";
+    }
+
+    /** MySQL 目标标识符：去掉已有引号后整体小写，每个点分段用反引号包裹。 */
+    private static String quoteMysqlName(String name) {
+        if (name == null || name.isBlank()) {
+            return name == null ? "" : name;
+        }
+        String normalized = name.trim()
+                .replace("`", "")
+                .replace("\"", "")
+                .replace("]", "")
+                .replace("[", "");
+        String[] parts = normalized.split("\\.");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append('.');
+            }
+            sb.append('`').append(parts[i].toLowerCase(Locale.ROOT)).append('`');
+        }
+        return sb.toString();
     }
 }
