@@ -46,6 +46,11 @@ public interface DdlRepository {
 
     String printTable(Connection conn, String objectName) throws Exception;
 
+    /** 单表完整 DDL：默认与 {@link #printTable} 相同；Oracle 等方言会追加索引、约束、触发器。 */
+    default String printTableWithDependencies(Connection conn, String objectName) throws Exception {
+        return printTable(conn, objectName);
+    }
+
     /** 迁移用建表 DDL：默认同 {@link #printTable}；Informix 族覆盖为不带索引和约束的版本
      *  （索引/外键作为独立迁移对象，在全部表数据迁移完成后才创建）。 */
     default String printTableForMigration(Connection conn, String objectName) throws Exception {

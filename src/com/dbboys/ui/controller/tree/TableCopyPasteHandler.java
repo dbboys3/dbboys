@@ -22,18 +22,23 @@ import com.dbboys.service.migration.TableMigrationService;
 import com.dbboys.service.migration.TypeMapper;
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.ui.dialog.AlertUtil;
+import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.notification.NotificationUtil;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
+import javafx.geometry.Pos;
 import javafx.scene.control.ButtonBar;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.sql.Connection;
@@ -96,25 +101,7 @@ public final class TableCopyPasteHandler {
         };
         Connect src = sourceConnect;
         String table = sourceTable;
-        AppExecutor.runAsync(() -> {
-            String originalDdl;
-            String convertedDdl;
-            String indexDdl;
-            try {
-                originalDdl = fetchOriginalDdl(src, table);
-                convertedDdl = buildConvertedDdl(src, target, table, originalDdl);
-                indexDdl = buildIndexDdl(src, target, table, table, convertedDdl);
-            } catch (Exception e) {
-                String msg = e.getMessage();
-                Platform.runLater(() -> NotificationUtil.showMainNotification(msg));
-                return;
-            }
-            String original = originalDdl;
-            String converted = convertedDdl;
-            String indexes = indexDdl;
-            String tdb = targetDatabase, tsch = targetSchema;
-            Platform.runLater(() -> showDdlDialog(item, src, target, tdb, tsch, table, original, converted, indexes));
-        });
+        showDdlDialog(item, src, target, targetDatabase, targetSchema, table);
     }
 
     /** 表节点上粘贴：弹窗输入 WHERE 条件后，把复制的表数据后台追加到该表。 */
@@ -144,8 +131,9 @@ public final class TableCopyPasteHandler {
 
     private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
                                       String targetDatabase, String targetSchema,
-                                      String table, String originalDdl, String convertedDdl,
-                                      String indexDdl) {
+                                      String table) {
+        ImageView loadingIcon = IconFactory.loadingImageView(1);
+
         CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
         migrateDataCheck.setSelected(true);
 
@@ -162,15 +150,53 @@ public final class TableCopyPasteHandler {
 
         CustomInlineCssTextArea sqlArea = new CustomInlineCssTextArea();
         sqlArea.setEditable(true); // 粘贴弹窗的表结构可编辑（该类默认只读）
-        sqlArea.replaceText(commented(originalDdl) + "\n" + convertedDdl
-                + (indexDdl == null || indexDdl.isBlank() ? "" : "\n" + indexDdl));
         VBox content = new VBox(8, optionsRow, noteLabel, sqlArea);
         VBox.setVgrow(sqlArea, Priority.ALWAYS);
+        StackPane contentStack = new StackPane(content, loadingIcon);
+        contentStack.setAlignment(Pos.CENTER);
 
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                I18n.t("tablecopy.dialog.title", "粘贴表-建表DDL"), content, 860, 560, okType, cancelType);
+                I18n.t("tablecopy.dialog.title", "粘贴表-建表DDL"), contentStack, 860, 560, okType, cancelType);
+        Button okButton = dialog.getButton(okType);
+        okButton.setDisable(true);
+
+        AppExecutor.runAsync(() -> {
+            String originalDdl;
+            String convertedDdl;
+            String indexDdl;
+            try {
+                originalDdl = fetchOriginalDdl(src, table);
+                convertedDdl = buildConvertedDdl(src, dst, table, originalDdl);
+                indexDdl = buildIndexDdl(src, dst, table, table, convertedDdl);
+            } catch (Exception e) {
+                String msg = e.getMessage();
+                Platform.runLater(() -> {
+                    if (!dialog.getStage().isShowing()) {
+                        return;
+                    }
+                    AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                            I18n.t("tablecopy.error.load_ddl_failed", "加载表DDL失败：%s").formatted(msg));
+                    dialog.getStage().close();
+                });
+                return;
+            }
+            String original = originalDdl;
+            String converted = convertedDdl;
+            String indexes = indexDdl;
+            Platform.runLater(() -> {
+                if (!dialog.getStage().isShowing()) {
+                    return;
+                }
+                sqlArea.replaceText(commented(original) + "\n" + converted
+                        + (indexes == null || indexes.isBlank() ? "" : "\n" + indexes));
+                loadingIcon.setVisible(false);
+                loadingIcon.setManaged(false);
+                okButton.setDisable(false);
+            });
+        });
+
         if (dialog.showAndWait() != okType) {
             return;
         }

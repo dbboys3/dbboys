@@ -76,6 +76,60 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
             ORDER BY job_name
             """;
 
+    private static final String SQL_TABLE_STANDALONE_INDEX_NAMES = """
+            SELECT i.object_name
+            FROM all_objects i
+            WHERE i.owner = ?
+              AND i.object_type = 'INDEX'
+              AND i.secondary = 'N'
+              AND EXISTS (
+                  SELECT 1 FROM all_indexes ai
+                  WHERE ai.owner = i.owner
+                    AND ai.index_name = i.object_name
+                    AND ai.table_owner = ?
+                    AND ai.table_name = ?)
+              AND NOT EXISTS (
+                  SELECT 1 FROM all_constraints c
+                  WHERE c.owner = i.owner
+                    AND c.index_name = i.object_name
+                    AND c.index_name IS NOT NULL)
+            ORDER BY i.object_name
+            """;
+
+    private static final String SQL_TABLE_CONSTRAINTS_PUC = """
+            SELECT constraint_name, constraint_type
+            FROM all_constraints
+            WHERE owner = ?
+              AND table_name = ?
+              AND status = 'ENABLED'
+              AND constraint_type IN ('P','U','C')
+              AND (generated IS NULL OR generated = 'USER NAME')
+            ORDER BY CASE constraint_type
+                       WHEN 'P' THEN 1 WHEN 'U' THEN 2 WHEN 'C' THEN 3
+                     END,
+                     constraint_name
+            """;
+
+    private static final String SQL_TABLE_CONSTRAINTS_R = """
+            SELECT constraint_name
+            FROM all_constraints
+            WHERE owner = ?
+              AND table_name = ?
+              AND status = 'ENABLED'
+              AND constraint_type = 'R'
+              AND (generated IS NULL OR generated = 'USER NAME')
+            ORDER BY constraint_name
+            """;
+
+    private static final String SQL_TABLE_TRIGGERS = """
+            SELECT trigger_name
+            FROM all_triggers
+            WHERE owner = ?
+              AND table_owner = ?
+              AND table_name = ?
+            ORDER BY trigger_name
+            """;
+
     @Override
     protected String defaultSchemaName() {
         return "ORACLE";
@@ -122,6 +176,117 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
                     "DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM,'REF_CONSTRAINTS'," + v + ");" +
                     "END;");
         }
+    }
+
+    @Override
+    public String printTable(Connection conn, String objectName) throws SQLException {
+        String schema = currentSchema(conn);
+        String table = simpleObjectName(objectName).toUpperCase(java.util.Locale.ROOT);
+        StringBuilder ddl = new StringBuilder();
+
+        setEmbeddedTableConstraintsInMetadata(conn, false);
+        configureMetadataTransform(conn);
+        ddl.append(getDdl(conn, "TABLE", table, schema)).append("\n\n");
+        setEmbeddedTableConstraintsInMetadata(conn, true);
+        appendStandaloneIndexesForTable(conn, ddl, schema, table);
+        appendConstraintsForTable(conn, ddl, schema, table);
+        appendTriggersForTable(conn, ddl, schema, table);
+        return ddl.toString().stripTrailing();
+    }
+
+    /** 迁移用建表 DDL 保持原来的表结构（不含独立索引/约束/触发器，避免迁移阶段重复创建）。 */
+    @Override
+    public String printTableForMigration(Connection conn, String objectName) throws SQLException {
+        String schema = currentSchema(conn);
+        configureMetadataTransform(conn);
+        return getDdl(conn, "TABLE", simpleObjectName(objectName).toUpperCase(java.util.Locale.ROOT), schema);
+    }
+
+    private void appendStandaloneIndexesForTable(Connection conn, StringBuilder ddl,
+                                                 String schema, String table) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        List<String> names = runner.query(SQL_TABLE_STANDALONE_INDEX_NAMES,
+                List.of(schema, schema, table), rs -> rs.getString(1));
+        if (names.isEmpty()) {
+            return;
+        }
+        for (String name : names) {
+            String objDdl = getDdlSafe(conn, "INDEX", name, schema).trim();
+            if (!objDdl.isEmpty()) {
+                ddl.append(objDdl);
+                if (!objDdl.endsWith(";")) {
+                    ddl.append(";");
+                }
+                ddl.append("\n\n");
+            }
+        }
+    }
+
+    private void appendConstraintsForTable(Connection conn, StringBuilder ddl,
+                                           String schema, String table) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        List<String[]> pucRows = runner.query(SQL_TABLE_CONSTRAINTS_PUC, List.of(schema, table),
+                rs -> new String[]{rs.getString(1), rs.getString(2)});
+        List<String> refRows = runner.query(SQL_TABLE_CONSTRAINTS_R, List.of(schema, table),
+                rs -> rs.getString(1));
+        int n = pucRows.size() + refRows.size();
+        if (n == 0) {
+            return;
+        }
+        ddl.append("-- ### Constraints (").append(n).append(")\n\n");
+        for (String[] row : pucRows) {
+            String objDdl = getDdlSafe(conn, "CONSTRAINT", row[0], schema);
+            if (!objDdl.isEmpty()) {
+                ddl.append(objDdl);
+                if (!objDdl.endsWith(";")) {
+                    ddl.append("\n;");
+                }
+                ddl.append("\n\n");
+            }
+        }
+        ddl.append("-- ### Referential constraints (foreign keys)\n\n");
+        for (String consName : refRows) {
+            String objDdl = getDdlSafe(conn, "REF_CONSTRAINT", consName, schema);
+            if (!objDdl.isEmpty()) {
+                ddl.append(objDdl);
+                if (!objDdl.endsWith(";")) {
+                    ddl.append("\n;");
+                }
+                ddl.append("\n\n");
+            }
+        }
+    }
+
+    private void appendTriggersForTable(Connection conn, StringBuilder ddl,
+                                        String schema, String table) throws SQLException {
+        SqlRunner runner = new SqlRunner(conn, QUERY_TIMEOUT);
+        List<String> names = runner.query(SQL_TABLE_TRIGGERS, List.of(schema, schema, table),
+                rs -> rs.getString(1));
+        if (names.isEmpty()) {
+            return;
+        }
+        ddl.append("-- ### Triggers (").append(names.size()).append(")\n\n");
+        for (String name : names) {
+            String objDdl = getDdlSafe(conn, "TRIGGER", name, schema);
+            if (!objDdl.isEmpty()) {
+                ddl.append(objDdl);
+                if (!objDdl.endsWith(";")) {
+                    ddl.append("\n;");
+                }
+                ddl.append("\n\n");
+            }
+        }
+    }
+
+    private static String simpleObjectName(String objectName) {
+        String raw = objectName == null ? "" : objectName.trim();
+        int dot = raw.lastIndexOf('.');
+        String name = dot >= 0 ? raw.substring(dot + 1) : raw;
+        String trimmed = name.trim();
+        if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     @Override

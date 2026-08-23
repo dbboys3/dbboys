@@ -85,7 +85,7 @@ public class TableService implements MetaObjectService {
 
     @Override
     public DdlFetcher ddlFetcher() {
-        return (connect, conn, objectName) -> platformResolver.ddl(connect).printTable(conn, objectName);
+        return (connect, conn, objectName) -> platformResolver.ddl(connect).printTableWithDependencies(conn, objectName);
     }
 
 
@@ -1402,4 +1402,3 @@ public class TableService implements MetaObjectService {
 
 
 }
-

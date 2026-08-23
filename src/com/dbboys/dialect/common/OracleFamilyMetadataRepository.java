@@ -1401,7 +1401,7 @@ public abstract class OracleFamilyMetadataRepository implements MetadataReposito
         index.setUniqvalues(String.valueOf(rs.getLong("distinct_keys")));
         index.setPagesize("");
         index.setTotalpages(String.valueOf(rs.getLong("leaf_blocks")));
-        index.setTotalsize(includeSize ? formatBytes(rs.getBigDecimal("size_bytes")) : "");
+        index.setTotalsize(formatBytes(rs.getBigDecimal("size_bytes")));
         index.setIsdisabled(!"VALID".equalsIgnoreCase(rs.getString("status")));
         return index;
     }
