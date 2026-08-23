@@ -112,7 +112,9 @@ public class ColumnsInfo {
         switch (colType) {
             case "DECIMAL":
             case "MONEY":
-                this.typeS.set(colLength % 256);              
+                // GBase/Informix 用低字节 255 表示"未指定小数位"，归一为 0，避免转成 DECIMAL(p,255)
+                int scale = colLength % 256;
+                this.typeS.set(scale == 255 ? 0 : scale);
                 break;
             case "VARCHAR":
             case "NVARCHAR":
