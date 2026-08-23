@@ -62,7 +62,7 @@ public final class MigrationConnectInfo {
     }
 
     /** 探测当前 sqlmode；不支持/失败返回 null。 */
-    private static String probeSqlMode(Connect connect) {
+    public static String probeSqlMode(Connect connect) {
         try {
             var repo = PlatformResolvers.get().sqlexe(connect);
             if (!(repo instanceof SqlModeCapability capability)) {

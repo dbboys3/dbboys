@@ -24,6 +24,7 @@ import com.dbboys.service.migration.TypeMapper;
 import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconFactory;
+import com.dbboys.ui.icon.IconPaths;
 import com.dbboys.ui.notification.NotificationUtil;
 import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
@@ -136,7 +137,7 @@ public final class TableCopyPasteHandler {
     private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
                                       String targetDatabase, String targetSchema,
                                       String table) {
-        ImageView loadingIcon = IconFactory.loadingImageView(1);
+        ImageView loadingIcon = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
 
         CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
         migrateDataCheck.setSelected(true);
@@ -289,12 +290,12 @@ public final class TableCopyPasteHandler {
         }
     }
 
-    /** DDL 转换基准：源表级 sqlmode 优先、其次源连接 sqlmode，目标连接 sqlmode 优先、其次目标 dbtype。 */
+    /** DDL 转换基准：GBase 仅 mysql sqlmode 按 MySQL 处理，oracle sqlmode 忽略、按数据库类型转换。 */
     private static String buildConvertedDdl(Connect src, Connect dst, String table, String originalDdl) throws Exception {
         DatabasePlatform sourcePlatform = platform(src);
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
             String sourceType = sourceMappingType(src, table, conn);
-            String targetType = MigrationConnectInfo.effectiveDbType(dst);
+            String targetType = targetMappingType(dst);
             if (sourceType != null && sourceType.equalsIgnoreCase(targetType)) {
                 return originalDdl;
             }
@@ -488,7 +489,7 @@ public final class TableCopyPasteHandler {
      *  改名粘贴时索引名改为 <目标表名>_<原索引名> 避免同模式冲突。 */
     private static String buildIndexDdl(Connect src, Connect dst, String srcTable, String dstTable,
                                         String convertedDdl) {
-        String targetType = MigrationConnectInfo.effectiveDbType(dst);
+        String targetType = targetMappingType(dst);
         String dbName = sourceSchema != null && !sourceSchema.isBlank() ? sourceSchema : sourceCatalog;
         List<Index> indexes;
         List<String> pkColumns;
@@ -548,7 +549,7 @@ public final class TableCopyPasteHandler {
         return sb.toString();
     }
 
-    /** 粘贴转换用的源方言：表级 sqlmode 优先，其次源连接 sqlmode，最后连接 dbtype。 */
+    /** 粘贴转换用的源方言：GBase 表 sqlmode 仅 mysql 时用 MYSQL，oracle 等其他 sqlmode 忽略、按源连接 dbtype。 */
     private static String sourceMappingType(Connect src, String tableName, Connection conn) {
         String sqlMode = null;
         try {
@@ -556,10 +557,22 @@ public final class TableCopyPasteHandler {
         } catch (Exception e) {
             LOG.debug("read table sqlmode failed: {}", tableName, e);
         }
-        if (sqlMode != null && !sqlMode.isBlank()) {
-            return MigrationConnectInfo.resolveDbTypeFromSqlMode(sqlMode, null);
+        if (sqlMode != null && "mysql".equalsIgnoreCase(sqlMode)) {
+            return "MYSQL";
         }
-        return MigrationConnectInfo.effectiveDbType(src);
+        return src == null ? null : src.getDbtype();
+    }
+
+    /** 粘贴目标方言：GBase 会话 sqlmode 仅 mysql 时用 MYSQL，oracle 等其他 sqlmode 忽略、按目标连接 dbtype。 */
+    private static String targetMappingType(Connect dst) {
+        if (dst == null) {
+            return null;
+        }
+        String sqlMode = MigrationConnectInfo.probeSqlMode(dst);
+        if (sqlMode != null && "mysql".equalsIgnoreCase(sqlMode.replace("sqlmode=", "").trim())) {
+            return "MYSQL";
+        }
+        return dst.getDbtype();
     }
 
     /** MySQL 目标标识符：去引号后整体小写并用反引号包裹（与 TypeMapper 口径一致）。 */
