@@ -44,8 +44,8 @@ import java.util.Locale;
 public class Main extends Application {
     private static final Logger log = LogManager.getLogger(Main.class);
 
-    private static final String VERSION_NAME = "DBboys V5.1.1.20260816";
-    private static final int BUILD_NUMBER = 20;
+    private static final String VERSION_NAME = "DBboys V5.1.2.20260823";
+    private static final int BUILD_NUMBER = 21;
     private static final String VERSION_URL = "";
     private static final String CHANGELOG = "";
 

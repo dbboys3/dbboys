@@ -218,7 +218,7 @@ public class TableMigrationService {
         backSqlTask.setConnectName(request.target().getName());
         backSqlTask.setDatabaseName(request.targetDatabase() != null && !request.targetDatabase().isBlank()
                 ? request.targetDatabase() : request.targetSchema());
-        backSqlTask.setSql(I18n.t("migration.title", "Data Migration") + " (" + total + ")");
+        backSqlTask.setSql("Data Migration"+ " (" + total + ")");
         BackgroundSqlService.backSqlTaskList.add(backSqlTask);
         BackgroundSqlService.updateBackSqlUIOnStart();
 

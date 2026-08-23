@@ -203,7 +203,26 @@ public class MigrationDialogController {
         targetSchemaChoiceBox = stringChoiceBox();
 
         sourceChoiceBox.setItems(FXCollections.observableArrayList(connects));
-        targetChoiceBox.setItems(FXCollections.observableArrayList(connects));
+        List<Connect> targetConnects = new ArrayList<>();
+        for (Connect connect : connects) {
+            if (connect == null || !Boolean.TRUE.equals(connect.getReadonly())) {
+                targetConnects.add(connect);
+            }
+        }
+        // 编辑旧任务时目标若已变成只读：仍保留当前目标，保证回显与保存不丢
+        if (editingTask != null && editingTask.getTargetId() > 0) {
+            boolean present = targetConnects.stream()
+                    .anyMatch(c -> c != null && c.getId() == editingTask.getTargetId());
+            if (!present) {
+                for (Connect connect : connects) {
+                    if (connect != null && connect.getId() == editingTask.getTargetId()) {
+                        targetConnects.add(connect);
+                        break;
+                    }
+                }
+            }
+        }
+        targetChoiceBox.setItems(FXCollections.observableArrayList(targetConnects));
 
         Label nameLabel = boundLabel("migration.task.name", "Task Name");
         Label sourceLabel = boundLabel("migration.label.source_connection", "Source Connection");
