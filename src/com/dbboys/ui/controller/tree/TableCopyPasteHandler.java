@@ -1,5 +1,6 @@
 package com.dbboys.ui.controller.tree;
 
+import com.dbboys.app.AppState;
 import com.dbboys.app.AppExecutor;
 import com.dbboys.core.ConnectionServiceImpl;
 import com.dbboys.core.DatabasePlatform;
@@ -23,9 +24,11 @@ import com.dbboys.ui.component.CustomInlineCssTextArea;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.notification.NotificationUtil;
 import javafx.application.Platform;
-import javafx.geometry.Pos;
+import javafx.beans.value.ChangeListener;
+import javafx.collections.ListChangeListener;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
@@ -41,8 +44,8 @@ import java.util.Map;
 
 /**
  * 表复制/粘贴：树菜单在单个表节点上执行"复制"时记录源表；
- * 在库（两层模型）/模式节点上"粘贴"时弹窗编辑转换后的建表 DDL、确认后建表并后台迁移数据；
- * 在表节点上"粘贴"时直接把源表数据后台追加到该表。
+ * 在库（两层模型）/模式节点上"粘贴"时弹窗编辑转换后的建表 DDL、确认后建表并可选择后台迁移数据；
+ * 在表节点上"粘贴"时弹窗输入 WHERE 条件后，把源表数据后台追加到该表。
  * 数据复制复用 {@link TableMigrationService}（migrateDdl=false，目标表名走 targetTableNames 映射）。
  */
 public final class TableCopyPasteHandler {
@@ -96,9 +99,11 @@ public final class TableCopyPasteHandler {
         AppExecutor.runAsync(() -> {
             String originalDdl;
             String convertedDdl;
+            String indexDdl;
             try {
                 originalDdl = fetchOriginalDdl(src, table);
                 convertedDdl = buildConvertedDdl(src, target, table, originalDdl);
+                indexDdl = buildIndexDdl(src, target, table, table, convertedDdl);
             } catch (Exception e) {
                 String msg = e.getMessage();
                 Platform.runLater(() -> NotificationUtil.showMainNotification(msg));
@@ -106,12 +111,13 @@ public final class TableCopyPasteHandler {
             }
             String original = originalDdl;
             String converted = convertedDdl;
+            String indexes = indexDdl;
             String tdb = targetDatabase, tsch = targetSchema;
-            Platform.runLater(() -> showDdlDialog(item, src, target, tdb, tsch, table, original, converted));
+            Platform.runLater(() -> showDdlDialog(item, src, target, tdb, tsch, table, original, converted, indexes));
         });
     }
 
-    /** 表节点上粘贴：无弹窗，直接把复制的表数据后台追加到该表。 */
+    /** 表节点上粘贴：弹窗输入 WHERE 条件后，把复制的表数据后台追加到该表。 */
     public static void pasteToTable(TreeItem<TreeData> item) {
         if (!hasCopied()) {
             return;
@@ -128,8 +134,8 @@ public final class TableCopyPasteHandler {
             case DATABASE_SCHEMA -> cs[1];
             default -> null;
         };
-        submitDataMigration(sourceConnect, target, targetDatabase, targetSchema,
-                sourceTable, item.getValue().getName(), null, false);
+        showDataMigrationDialog(item, sourceConnect, target, targetDatabase, targetSchema,
+                sourceTable, item.getValue().getName());
     }
 
     // ------------------------------------------------------------------
@@ -138,18 +144,27 @@ public final class TableCopyPasteHandler {
 
     private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
                                       String targetDatabase, String targetSchema,
-                                      String table, String originalDdl, String convertedDdl) {
+                                      String table, String originalDdl, String convertedDdl,
+                                      String indexDdl) {
+        CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
+        migrateDataCheck.setSelected(true);
+
         // WHERE 条件输入（可选，过滤迁移的数据）；目标表名从建表语句中提取
         TextField whereField = new TextField();
-        whereField.setPrefWidth(420);
+        whereField.setPrefWidth(360);
         whereField.setPromptText(I18n.t("tablecopy.dialog.where", "WHERE 条件（可选，例如 id > 100）"));
+        whereField.disableProperty().bind(migrateDataCheck.selectedProperty().not());
+
+        HBox optionsRow = new HBox(8, migrateDataCheck, whereField);
+        HBox.setHgrow(whereField, Priority.ALWAYS);
 
         Label noteLabel = new Label(I18n.t("tablecopy.dialog.original_ddl", "原表DDL（注释参考，不会执行）") + ":");
 
         CustomInlineCssTextArea sqlArea = new CustomInlineCssTextArea();
         sqlArea.setEditable(true); // 粘贴弹窗的表结构可编辑（该类默认只读）
-        sqlArea.replaceText(commented(originalDdl) + "\n" + convertedDdl);
-        VBox content = new VBox(8, whereField, noteLabel, sqlArea);
+        sqlArea.replaceText(commented(originalDdl) + "\n" + convertedDdl
+                + (indexDdl == null || indexDdl.isBlank() ? "" : "\n" + indexDdl));
+        VBox content = new VBox(8, optionsRow, noteLabel, sqlArea);
         VBox.setVgrow(sqlArea, Priority.ALWAYS);
 
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
@@ -162,7 +177,8 @@ public final class TableCopyPasteHandler {
         String ddlText = stripCommentLines(sqlArea.getText());
         // 目标表名从（可能被用户修改过的）建表语句中提取
         String newName = parseCreateTableName(ddlText);
-        String where = whereField.getText() == null ? "" : whereField.getText().trim();
+        boolean migrateData = migrateDataCheck.isSelected();
+        String where = migrateData && whereField.getText() != null ? whereField.getText().trim() : "";
         if (newName.isEmpty()) {
             AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
                     I18n.t("tablecopy.error.no_create_table", "未从建表语句中解析到目标表名"));
@@ -171,9 +187,10 @@ public final class TableCopyPasteHandler {
         if (ddlText.isBlank()) {
             return;
         }
+        String finalDdlText = rewriteIndexStatementsForTarget(ddlText, table, newName);
         AppExecutor.runAsync(() -> {
             try {
-                executeDdl(dst, ddlText);
+                executeDdl(dst, finalDdlText);
             } catch (Exception e) {
                 // 建表失败：弹出错误信息（不用系统通知）
                 String msg = e.getMessage();
@@ -182,12 +199,51 @@ public final class TableCopyPasteHandler {
                 return;
             }
             Platform.runLater(() -> {
-                NotificationUtil.showMainNotification(
-                        I18n.t("tablecopy.notice.created", "表\"%s\"已创建，开始后台迁移数据").formatted(newName));
-                refreshTableList(item);
+                if (migrateData) {
+                    NotificationUtil.showMainNotification(
+                            I18n.t("tablecopy.notice.created", "表\"%s\"已创建，开始后台迁移数据").formatted(newName));
+                } else {
+                    NotificationUtil.showMainNotification(
+                            I18n.t("tablecopy.notice.created_no_migrate", "表\"%s\"已创建（未迁移数据）").formatted(newName));
+                }
+                refreshTableList(item, newName);
             });
-            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where, true);
+            if (migrateData) {
+                submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where, item);
+            }
         });
+    }
+
+    /** 表节点粘贴：弹窗选择是否迁移数据并输入 WHERE 条件。 */
+    private static void showDataMigrationDialog(TreeItem<TreeData> item, Connect src, Connect dst,
+                                                String targetDatabase, String targetSchema,
+                                                String srcTable, String dstTable) {
+        CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
+        migrateDataCheck.setSelected(true);
+        migrateDataCheck.setDisable(true);
+
+        TextField whereField = new TextField();
+        whereField.setPrefWidth(360);
+        whereField.setPromptText(I18n.t("tablecopy.dialog.where", "WHERE 条件（可选，例如 id > 100）"));
+        whereField.disableProperty().bind(migrateDataCheck.selectedProperty().not());
+
+        HBox optionsRow = new HBox(8, migrateDataCheck, whereField);
+        HBox.setHgrow(whereField, Priority.ALWAYS);
+
+        ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                I18n.t("tablecopy.dialog.title_data", "粘贴表-迁移数据"), optionsRow, 520, 160, okType, cancelType);
+        if (dialog.showAndWait() != okType) {
+            return;
+        }
+        if (!migrateDataCheck.isSelected()) {
+            NotificationUtil.showMainNotification(
+                    I18n.t("tablecopy.notice.migrate_skipped", "未勾选迁移数据，跳过数据迁移"));
+            return;
+        }
+        String where = whereField.getText() == null ? "" : whereField.getText().trim();
+        submitDataMigration(src, dst, targetDatabase, targetSchema, srcTable, dstTable, where, item);
     }
 
     // ------------------------------------------------------------------
@@ -293,7 +349,7 @@ public final class TableCopyPasteHandler {
     private static void submitDataMigration(Connect src, Connect dst,
                                             String targetDatabase, String targetSchema,
                                             String srcTable, String dstTable, String where,
-                                            boolean createIndexesAfter) {
+                                            TreeItem<TreeData> treeItem) {
         // where 条件过滤源表数据（可带或不带 WHERE 关键字，由迁移引擎归一化）
         MigrationObjectRef ref = new MigrationObjectRef(sourceCatalog, sourceSchema,
                 MigrationObjectRef.Kind.TABLE, srcTable, where);
@@ -323,23 +379,12 @@ public final class TableCopyPasteHandler {
                 return;
             }
             long rows = summary.results().isEmpty() ? 0 : summary.results().get(0).rowsCopied();
-            if (!createIndexesAfter) {
-                NotificationUtil.showMainNotification(
-                        I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows));
-                return;
-            }
-            // 大批量插入完成后再建索引（更快）；索引失败弹窗报错，数据不受影响
-            AppExecutor.runAsync(() -> {
-                try {
-                    createIndexes(src, dst, srcTable, dstTable);
-                } catch (Exception ex) {
-                    String msg = ex.getMessage();
-                    Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
-                            I18n.t("tablecopy.error.index_failed", "索引创建失败：%s").formatted(msg)));
-                }
-                Platform.runLater(() -> NotificationUtil.showMainNotification(
-                        I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows)));
-            });
+            // 数据迁移完成后先执行统计更新，再刷新这张表的元数据，保证行数等是最新的
+            String schemaName = treeItem == null ? targetSchema : TreeNavigator.getCurrentDatabase(treeItem).getName();
+            String doneMessage = I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）")
+                    .formatted(dstTable, rows);
+            TreeViewUtil.tableService.updateStatisticsForTable(dst, dstTable, platform(dst), schemaName,
+                    () -> refreshTableAfterMigration(treeItem, dstTable, doneMessage));
         });
         task.setOnFailed(e -> NotificationUtil.showMainNotification(
                 I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
@@ -347,9 +392,78 @@ public final class TableCopyPasteHandler {
         BackgroundSqlService.backSqlExecutor.submit(task);
     }
 
-    /** 把源表索引建到目标表：跳过主键支撑索引（已在建表 DDL 内联创建）；
+    /** 统计更新完成后选中目标表，并复用右键刷新的刷新逻辑，不整体刷新表列表。 */
+    private static void refreshTableAfterMigration(TreeItem<TreeData> treeItem, String tableName, String doneMessage) {
+        TreeItem<TreeData> tableItem = findTableItem(treeItem, tableName);
+        if (tableItem == null) {
+            NotificationUtil.showMainNotification(doneMessage);
+            return;
+        }
+        AppState.getDatabaseMetaTreeView().getSelectionModel().select(tableItem);
+        if (TreeViewUtil.refreshItem == null) {
+            // 与右键刷新一致的兜底逻辑
+            tableItem.getValue().setRunning(true);
+            TreeViewUtil.tableService.refreshTableMeta(
+                    TreeNavigator.getMetaConnect(tableItem),
+                    TreeNavigator.getCurrentDatabase(tableItem),
+                    tableName,
+                    tableItem::setValue,
+                    () -> {
+                        tableItem.getValue().setRunning(false);
+                        NotificationUtil.showMainNotification(doneMessage);
+                    });
+            return;
+        }
+        final boolean[] fired = {false};
+        final ChangeListener<Boolean>[] listenerRef = new ChangeListener[1];
+        listenerRef[0] = (obs, oldValue, newValue) -> {
+            if (fired[0] && Boolean.TRUE.equals(oldValue) && !newValue) {
+                tableItem.getValue().runningProperty().removeListener(listenerRef[0]);
+                NotificationUtil.showMainNotification(doneMessage);
+            }
+        };
+        tableItem.getValue().runningProperty().addListener(listenerRef[0]);
+        fired[0] = true;
+        TreeViewUtil.refreshItem.fire();
+    }
+
+    private static TreeItem<TreeData> findTableItem(TreeItem<TreeData> node, String tableName) {
+        if (node == null || tableName == null || tableName.isBlank()) {
+            return null;
+        }
+        if (node.getValue() instanceof com.dbboys.model.Table table
+                && tableName.equalsIgnoreCase(table.getName())) {
+            return node;
+        }
+        TreeItem<TreeData> catalogItem = node;
+        while (catalogItem != null && !(catalogItem.getValue() instanceof CatalogNode)) {
+            catalogItem = catalogItem.getParent();
+        }
+        if (catalogItem == null) {
+            return null;
+        }
+        for (TreeItem<TreeData> child : catalogItem.getChildren()) {
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.ObjectFolder
+                    && TreeDataLoader.getObjectFolderKind(child) == TreeDataLoader.ObjectFolderKind.TABLES) {
+                for (TreeItem<TreeData> tableItem : child.getChildren()) {
+                    if (tableItem.getValue() instanceof com.dbboys.model.Table table
+                            && tableName.equalsIgnoreCase(table.getName())) {
+                        return tableItem;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 生成源表索引 DDL，供建表弹窗编辑并在建表时一并执行；跳过主键支撑索引（已在建表 DDL 内联创建）。
      *  改名粘贴时索引名改为 <目标表名>_<原索引名> 避免同模式冲突。 */
-    private static void createIndexes(Connect src, Connect dst, String srcTable, String dstTable) throws Exception {
+    private static String buildIndexDdl(Connect src, Connect dst, String srcTable, String dstTable,
+                                        String convertedDdl) {
+        boolean nativeDdl = src.getDbtype() != null && src.getDbtype().equalsIgnoreCase(dst.getDbtype());
+        if (convertedDdl != null && tableDdlAlreadyHasIndexes(convertedDdl, dst.getDbtype(), nativeDdl)) {
+            return "";
+        }
         String dbName = sourceSchema != null && !sourceSchema.isBlank() ? sourceSchema : sourceCatalog;
         List<Index> indexes;
         List<String> pkColumns;
@@ -357,42 +471,86 @@ public final class TableCopyPasteHandler {
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
             indexes = sourcePlatform.metadata().getIndexes(conn, dbName);
             pkColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, srcTable);
+        } catch (Exception e) {
+            return "-- " + I18n.t("tablecopy.error.index_generate_failed", "索引DDL生成失败：%s")
+                    .formatted(e.getMessage()) + "\n";
         }
         if (indexes == null || indexes.isEmpty()) {
-            return;
+            return "";
         }
-        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(dst);
-             Statement stmt = conn.createStatement()) {
-            for (Index index : indexes) {
-                if (index == null) {
-                    continue;
-                }
-                String idxTable = index.getTableName() != null && !index.getTableName().isBlank()
-                        ? index.getTableName() : index.getTabname();
-                if (idxTable == null || !idxTable.equalsIgnoreCase(srcTable)) {
-                    continue; // 只处理源表的索引
-                }
-                String indexName = index.getName();
-                String columns = index.getCols() != null && !index.getCols().isBlank()
-                        ? index.getCols()
-                        : (index.getIndexCols() == null ? "" : index.getIndexCols());
-                if (indexName == null || indexName.isBlank() || columns.isBlank()) {
-                    continue;
-                }
-                boolean unique = "U".equalsIgnoreCase(index.getIdxtype())
-                        || "UNIQUE".equalsIgnoreCase(index.getIdxtype());
-                if ("PRIMARY".equalsIgnoreCase(indexName)
-                        || (unique && sameColumns(columns, pkColumns))) {
-                    continue; // 主键及其支撑唯一索引已在建表 DDL 中内联创建
-                }
-                String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
-                        ? indexName
-                        : dstTable + "_" + indexName;
-                String ddl = "CREATE " + (unique ? "UNIQUE " : "") + "INDEX " + targetIndexName
-                        + " ON " + dstTable + " (" + columns + ")";
-                stmt.execute(ddl);
+        StringBuilder sb = new StringBuilder();
+        for (Index index : indexes) {
+            if (index == null) {
+                continue;
             }
+            String idxTable = index.getTableName() != null && !index.getTableName().isBlank()
+                    ? index.getTableName() : index.getTabname();
+            if (idxTable == null || !idxTable.equalsIgnoreCase(srcTable)) {
+                continue; // 只处理源表的索引
+            }
+            String indexName = index.getName();
+            String columns = index.getCols() != null && !index.getCols().isBlank()
+                    ? index.getCols()
+                    : (index.getIndexCols() == null ? "" : index.getIndexCols());
+            if (indexName == null || indexName.isBlank() || columns.isBlank()) {
+                continue;
+            }
+            boolean unique = "U".equalsIgnoreCase(index.getIdxtype())
+                    || "UNIQUE".equalsIgnoreCase(index.getIdxtype());
+            if ("PRIMARY".equalsIgnoreCase(indexName)
+                    || (unique && sameColumns(columns, pkColumns))) {
+                continue; // 主键及其支撑唯一索引已在建表 DDL 中内联创建
+            }
+            String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
+                    ? indexName
+                    : dstTable + "_" + indexName;
+            sb.append("CREATE ").append(unique ? "UNIQUE " : "").append("INDEX ").append(targetIndexName)
+                    .append(" ON ").append(dstTable).append(" (").append(columns).append(");\n");
         }
+        return sb.toString();
+    }
+
+    /** 用户在弹窗中改名建表语句时，同步修正生成索引语句里的目标表名/索引名。 */
+    private static String rewriteIndexStatementsForTarget(String ddlText, String oldTable, String newTable) {
+        if (ddlText == null || ddlText.isBlank()
+                || oldTable == null || newTable == null || oldTable.equalsIgnoreCase(newTable)) {
+            return ddlText;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String line : ddlText.split("\n", -1)) {
+            String upper = line.toUpperCase(java.util.Locale.ROOT);
+            if (upper.contains("CREATE") && upper.contains("INDEX")) {
+                line = line.replaceAll("(?i)\\bON\\s+(?:[\"'`\\[\\]\\w.]+\\.)?[\"'`\\[\\]]*"
+                                + java.util.regex.Pattern.quote(oldTable) + "[\"'`\\[\\]]*\\b",
+                        " ON " + java.util.regex.Matcher.quoteReplacement(newTable));
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("(?i)^\\s*CREATE\\s+(?:UNIQUE\\s+|CLUSTER\\s+)?INDEX\\s+([^\\s(]+)")
+                        .matcher(line);
+                if (m.find()) {
+                    String indexName = m.group(1);
+                    String bare = indexName.replaceAll("[\"'`\\[\\]]", "");
+                    if (!bare.regionMatches(true, 0, newTable + "_", 0, newTable.length() + 1)) {
+                        line = line.substring(0, m.start(1)) + newTable + "_" + indexName
+                                + line.substring(m.end(1));
+                    }
+                }
+            }
+            sb.append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** 建表 DDL 已含索引定义时不再追加索引语句（例如 MySQL 的 SHOW CREATE TABLE、Informix 系 printTable）。 */
+    private static boolean tableDdlAlreadyHasIndexes(String ddl, String dbType, boolean nativeDdl) {
+        if (ddl == null || ddl.isBlank()) {
+            return false;
+        }
+        if (java.util.regex.Pattern.compile("(?is)\\bCREATE\\s+(?:UNIQUE\\s+|CLUSTER\\s+)?INDEX\\b")
+                    .matcher(ddl).find()) {
+            return true;
+        }
+        return nativeDdl && "MYSQL".equalsIgnoreCase(dbType)
+                && java.util.regex.Pattern.compile("(?is)\\b(?:KEY|INDEX)\\b").matcher(ddl).find();
     }
 
     /** 索引列与主键列是否为同一组（大小写/顺序/引号不敏感）：是则说明该唯一索引是主键支撑索引。 */
@@ -441,17 +599,70 @@ public final class TableCopyPasteHandler {
         };
     }
 
-    /** 建表成功后刷新目标节点下的"表"文件夹（不折叠目标节点本身；表文件夹未加载时不动，展开时会新加载）。 */
-    private static void refreshTableList(TreeItem<TreeData> node) {
-        for (TreeItem<TreeData> child : node.getChildren()) {
+    /** 刷新目标库/模式下的"表"文件夹（不折叠目标节点本身；表文件夹未加载时不动，展开时会新加载），并等待选中新表。 */
+    private static void refreshTableList(TreeItem<TreeData> node, String selectTableName) {
+        TreeItem<TreeData> catalogItem = node;
+        while (catalogItem != null && !(catalogItem.getValue() instanceof CatalogNode)) {
+            catalogItem = catalogItem.getParent();
+        }
+        if (catalogItem == null) {
+            return;
+        }
+        for (TreeItem<TreeData> child : catalogItem.getChildren()) {
             if (child.getValue() instanceof com.dbboys.ui.treemodel.ObjectFolder
                     && TreeDataLoader.getObjectFolderKind(child) == TreeDataLoader.ObjectFolderKind.TABLES) {
                 child.getChildren().clear();
                 child.setExpanded(false);
                 child.setExpanded(true);
+                if (selectTableName != null && !selectTableName.isBlank()) {
+                    waitAndSelectCreatedTableNode(catalogItem, selectTableName);
+                }
                 return;
             }
         }
+    }
+
+    /** 等待"表"文件夹异步加载完成后，在树中选中刚粘贴创建的表。 */
+    private static void waitAndSelectCreatedTableNode(TreeItem<TreeData> catalogItem, String tableName) {
+        TreeItem<TreeData> tableFolder = findTableFolder(catalogItem);
+        if (tableFolder == null) {
+            return;
+        }
+        final int[] retries = {100};
+        final ListChangeListener<TreeItem<TreeData>>[] listenerRef = new ListChangeListener[1];
+        final Runnable[] trySelectRef = new Runnable[1];
+        trySelectRef[0] = () -> {
+            TreeItem<TreeData> found = findTableItem(catalogItem, tableName);
+            if (found != null) {
+                if (listenerRef[0] != null) {
+                    tableFolder.getChildren().removeListener(listenerRef[0]);
+                }
+                AppState.getDatabaseMetaTreeView().getSelectionModel().clearSelection();
+                AppState.getDatabaseMetaTreeView().getSelectionModel().select(found);
+                return;
+            }
+            if (retries[0]-- > 0) {
+                javafx.animation.PauseTransition delay =
+                        new javafx.animation.PauseTransition(javafx.util.Duration.millis(100));
+                delay.setOnFinished(e -> trySelectRef[0].run());
+                delay.play();
+            } else if (listenerRef[0] != null) {
+                tableFolder.getChildren().removeListener(listenerRef[0]);
+            }
+        };
+        listenerRef[0] = change -> Platform.runLater(trySelectRef[0]);
+        tableFolder.getChildren().addListener(listenerRef[0]);
+        Platform.runLater(trySelectRef[0]);
+    }
+
+    private static TreeItem<TreeData> findTableFolder(TreeItem<TreeData> catalogItem) {
+        for (TreeItem<TreeData> child : catalogItem.getChildren()) {
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.ObjectFolder
+                    && TreeDataLoader.getObjectFolderKind(child) == TreeDataLoader.ObjectFolderKind.TABLES) {
+                return child;
+            }
+        }
+        return null;
     }
 
     /** 每行加 "-- " 前缀，把原 DDL 变成注释参考块。 */
