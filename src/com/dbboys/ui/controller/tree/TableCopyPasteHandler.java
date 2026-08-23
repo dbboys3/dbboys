@@ -510,7 +510,7 @@ public final class TableCopyPasteHandler {
             boolean unique = "U".equalsIgnoreCase(index.getIdxtype())
                     || "UNIQUE".equalsIgnoreCase(index.getIdxtype());
             if ("PRIMARY".equalsIgnoreCase(indexName)
-                    || (unique && sameColumns(columns, pkColumns))) {
+                    || sameColumns(columns, pkColumns)) {
                 continue; // 主键及其支撑唯一索引已在建表 DDL 中内联创建
             }
             String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
