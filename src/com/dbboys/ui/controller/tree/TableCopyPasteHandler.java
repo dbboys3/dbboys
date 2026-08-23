@@ -1,0 +1,325 @@
+package com.dbboys.ui.controller.tree;
+
+import com.dbboys.app.AppExecutor;
+import com.dbboys.core.ConnectionServiceImpl;
+import com.dbboys.core.DatabasePlatform;
+import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.PlatformResolvers;
+import com.dbboys.core.SqlParser;
+import com.dbboys.infra.i18n.I18n;
+import com.dbboys.infra.util.SqlParserUtil;
+import com.dbboys.model.CatalogNode;
+import com.dbboys.model.ColumnsInfo;
+import com.dbboys.model.Connect;
+import com.dbboys.model.MigrationObjectRef;
+import com.dbboys.model.Schema;
+import com.dbboys.model.Sql;
+import com.dbboys.model.TreeData;
+import com.dbboys.service.BackgroundSqlService;
+import com.dbboys.service.migration.TableMigrationService;
+import com.dbboys.service.migration.TypeMapper;
+import com.dbboys.ui.component.CustomInlineCssTextArea;
+import com.dbboys.ui.dialog.AlertUtil;
+import com.dbboys.ui.notification.NotificationUtil;
+import javafx.application.Platform;
+import javafx.geometry.Pos;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TreeItem;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 表复制/粘贴：树菜单在单个表节点上执行"复制"时记录源表；
+ * 在库（两层模型）/模式节点上"粘贴"时弹窗编辑转换后的建表 DDL、确认后建表并后台迁移数据；
+ * 在表节点上"粘贴"时直接把源表数据后台追加到该表。
+ * 数据复制复用 {@link TableMigrationService}（migrateDdl=false，目标表名走 targetTableNames 映射）。
+ */
+public final class TableCopyPasteHandler {
+
+    // ---- 复制的表记录 ----
+    private static Connect sourceConnect;   // 副本，catalog/sessionCatalog 已定位到表所在库/模式
+    private static String sourceCatalog;    // MigrationObjectRef.catalog（按源平台 catalogModel 约定）
+    private static String sourceSchema;     // MigrationObjectRef.schema（仅 DATABASE_SCHEMA 模型）
+    private static String sourceTable;
+
+    private TableCopyPasteHandler() {
+    }
+
+    /** 记录复制的表（树菜单在单个表节点上执行复制时调用）。 */
+    public static void recordCopy(TreeItem<TreeData> tableItem) {
+        Connect connect = TreeObjectCrudHandler.buildObjectConnect(tableItem, false);
+        if (connect == null) {
+            return;
+        }
+        String[] catalogSchema = catalogSchemaOf(tableItem, platform(connect));
+        sourceConnect = connect;
+        sourceCatalog = catalogSchema[0];
+        sourceSchema = catalogSchema[1];
+        sourceTable = tableItem.getValue().getName();
+    }
+
+    public static boolean hasCopied() {
+        return sourceConnect != null && sourceTable != null && !sourceTable.isBlank();
+    }
+
+    /** 库/模式节点上粘贴：弹窗编辑转换后的 DDL，确认后建表并后台迁移数据。 */
+    public static void pasteToCatalogNode(TreeItem<TreeData> item) {
+        if (!hasCopied()) {
+            return;
+        }
+        Connect target = TreeObjectCrudHandler.buildObjectConnect(item, false);
+        if (target == null) {
+            return;
+        }
+        DatabasePlatform targetPlatform = platform(target);
+        String[] cs = catalogSchemaOf(item, targetPlatform);
+        // buildTargetSessionConnect 的语义：DATABASE→targetDatabase；SCHEMA→targetSchema；DATABASE_SCHEMA→两者
+        String targetDatabase = targetPlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA ? null : cs[0];
+        String targetSchema = switch (targetPlatform.catalogModel()) {
+            case SCHEMA -> cs[0];
+            case DATABASE_SCHEMA -> cs[1];
+            default -> null;
+        };
+        Connect src = sourceConnect;
+        String table = sourceTable;
+        AppExecutor.runAsync(() -> {
+            String originalDdl;
+            String convertedDdl;
+            try {
+                originalDdl = fetchOriginalDdl(src, table);
+                convertedDdl = buildConvertedDdl(src, target, table, originalDdl);
+            } catch (Exception e) {
+                String msg = e.getMessage();
+                Platform.runLater(() -> NotificationUtil.showMainNotification(msg));
+                return;
+            }
+            String original = originalDdl;
+            String converted = convertedDdl;
+            String tdb = targetDatabase, tsch = targetSchema;
+            Platform.runLater(() -> showDdlDialog(item, src, target, tdb, tsch, table, original, converted));
+        });
+    }
+
+    /** 表节点上粘贴：无弹窗，直接把复制的表数据后台追加到该表。 */
+    public static void pasteToTable(TreeItem<TreeData> item) {
+        if (!hasCopied()) {
+            return;
+        }
+        Connect target = TreeObjectCrudHandler.buildObjectConnect(item, false);
+        if (target == null) {
+            return;
+        }
+        DatabasePlatform targetPlatform = platform(target);
+        String[] cs = catalogSchemaOf(item, targetPlatform);
+        String targetDatabase = targetPlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA ? null : cs[0];
+        String targetSchema = switch (targetPlatform.catalogModel()) {
+            case SCHEMA -> cs[0];
+            case DATABASE_SCHEMA -> cs[1];
+            default -> null;
+        };
+        submitDataMigration(sourceConnect, target, targetDatabase, targetSchema,
+                sourceTable, item.getValue().getName());
+    }
+
+    // ------------------------------------------------------------------
+    // DDL 弹窗
+    // ------------------------------------------------------------------
+
+    private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
+                                      String targetDatabase, String targetSchema,
+                                      String table, String originalDdl, String convertedDdl) {
+        TextField nameField = new TextField(table);
+        nameField.setPrefWidth(280);
+
+        Label nameLabel = new Label(I18n.t("tablecopy.dialog.target_name", "目标表名") + ":");
+        HBox nameBox = new HBox(10, nameLabel, nameField);
+        nameBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label noteLabel = new Label(I18n.t("tablecopy.dialog.original_ddl", "原表DDL（注释参考，不会执行）") + ":");
+
+        CustomInlineCssTextArea sqlArea = new CustomInlineCssTextArea();
+        sqlArea.replaceText(commented(originalDdl) + "\n" + convertedDdl);
+        VBox content = new VBox(8, nameBox, noteLabel, sqlArea);
+        VBox.setVgrow(sqlArea, Priority.ALWAYS);
+
+        ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
+                I18n.t("tablecopy.dialog.title", "粘贴表-建表DDL"), content, 860, 560, okType, cancelType);
+        if (dialog.showAndWait() != okType) {
+            return;
+        }
+        String newName = nameField.getText() == null ? "" : nameField.getText().trim();
+        String ddlText = stripCommentLines(sqlArea.getText());
+        if (newName.isEmpty() || ddlText.isBlank()) {
+            return;
+        }
+        AppExecutor.runAsync(() -> {
+            try {
+                executeDdl(dst, ddlText);
+            } catch (Exception e) {
+                String msg = e.getMessage();
+                Platform.runLater(() -> NotificationUtil.showMainNotification(
+                        I18n.t("tablecopy.error.create_failed", "建表失败：%s").formatted(msg)));
+                return;
+            }
+            Platform.runLater(() -> {
+                NotificationUtil.showMainNotification(
+                        I18n.t("tablecopy.notice.created", "表\"%s\"已创建，开始后台迁移数据").formatted(newName));
+                // 刷新目标库/模式节点（与刷新菜单对非叶节点的处理一致），让新表出现在树上
+                item.getChildren().clear();
+                item.setExpanded(false);
+                item.setExpanded(true);
+            });
+            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // DDL 获取 / 转换 / 执行
+    // ------------------------------------------------------------------
+
+    /** 原表 DDL（源方言 printTable，连接会话已定位到表所在库/模式）。 */
+    private static String fetchOriginalDdl(Connect src, String table) throws Exception {
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            return PlatformResolvers.get().ddl(src).printTable(conn, table);
+        }
+    }
+
+    /** 同方言：原 DDL 原样回放；跨方言：TypeMapper 按列元数据重建目标方言建表 DDL。 */
+    private static String buildConvertedDdl(Connect src, Connect dst, String table, String originalDdl) throws Exception {
+        if (src.getDbtype() != null && src.getDbtype().equalsIgnoreCase(dst.getDbtype())) {
+            return originalDdl;
+        }
+        DatabasePlatform sourcePlatform = platform(src);
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            ArrayList<ColumnsInfo> columns = sourcePlatform.metadata().getColumns(conn, table);
+            List<String> primaryKeyColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, table);
+            String tableComment = null;
+            try {
+                tableComment = sourcePlatform.metadata().getTableComment(conn, table);
+            } catch (Exception ignored) {
+            }
+            List<String> warnings = new ArrayList<>();
+            String script = TypeMapper.buildCreateTableScript(
+                    src.getDbtype(), dst.getDbtype(), table, columns, primaryKeyColumns, tableComment, warnings);
+            if (!warnings.isEmpty()) {
+                // 类型回退说明作为注释行放在最前，确认执行时会被剔除
+                StringBuilder sb = new StringBuilder();
+                for (String warning : warnings) {
+                    sb.append("-- ").append(warning).append('\n');
+                }
+                script = sb + script;
+            }
+            return script;
+        }
+    }
+
+    /** 剔除注释行后，按目标平台 parser 切分并逐条执行（参照 TableMigrationService.executeScript）。 */
+    private static void executeDdl(Connect dst, String ddlText) throws Exception {
+        SqlParser parser = platform(dst).parser();
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(dst);
+             Statement stmt = conn.createStatement()) {
+            Sql currentSql = new Sql();
+            for (SqlParserUtil.Segment segment : SqlParserUtil.split(ddlText)) {
+                String remainingChunk = segment.getText();
+                while (remainingChunk != null && !remainingChunk.isBlank()) {
+                    currentSql = parser.modifySql(currentSql, remainingChunk);
+                    if (!currentSql.getSqlEnd()) {
+                        break;
+                    }
+                    String statement = currentSql.getSqlstr();
+                    if (SqlParserUtil.isExecutableStatement(statement)) {
+                        stmt.execute(statement.trim());
+                    }
+                    remainingChunk = currentSql.getSqlRemainder();
+                    currentSql = new Sql();
+                }
+            }
+            if (SqlParserUtil.isExecutableStatement(currentSql.getSqlstr())) {
+                stmt.execute(currentSql.getSqlstr().trim());
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 数据迁移
+    // ------------------------------------------------------------------
+
+    /** 提交后台数据迁移：只迁数据（表结构由调用方保证），源表名→目标表名走 targetTableNames 映射。 */
+    private static void submitDataMigration(Connect src, Connect dst,
+                                            String targetDatabase, String targetSchema,
+                                            String srcTable, String dstTable) {
+        MigrationObjectRef ref = new MigrationObjectRef(sourceCatalog, sourceSchema,
+                MigrationObjectRef.Kind.TABLE, srcTable);
+        TableMigrationService.MigrationRequest request = new TableMigrationService.MigrationRequest(
+                src, dst, targetDatabase, targetSchema, List.of(ref),
+                false, true, false, false, 1, 1, Map.of(),
+                Map.of(srcTable, dstTable));
+        var task = new TableMigrationService().createTask(request, null);
+        task.setOnSucceeded(e -> {
+            long rows = task.getValue().results().isEmpty() ? 0 : task.getValue().results().get(0).rowsCopied();
+            NotificationUtil.showMainNotification(
+                    I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows));
+        });
+        task.setOnFailed(e -> NotificationUtil.showMainNotification(
+                I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
+                        .formatted(task.getException() == null ? "" : task.getException().getMessage())));
+        BackgroundSqlService.backSqlExecutor.submit(task);
+    }
+
+    // ------------------------------------------------------------------
+    // 辅助
+    // ------------------------------------------------------------------
+
+    private static DatabasePlatform platform(Connect connect) {
+        return resolver().requirePlatform(connect);
+    }
+
+    private static DatabasePlatformResolver resolver() {
+        return PlatformResolvers.get();
+    }
+
+    /** [catalog, schema]：DATABASE→[库名,null]；SCHEMA→[模式名,null]；DATABASE_SCHEMA→[库名,模式名]。 */
+    private static String[] catalogSchemaOf(TreeItem<TreeData> item, DatabasePlatform platform) {
+        CatalogNode node = TreeNavigator.getCurrentDatabase(item);
+        String name = node == null ? null : node.getName();
+        String parentDb = node instanceof Schema schema ? schema.getParentDb() : null;
+        return switch (platform.catalogModel()) {
+            case DATABASE, SCHEMA -> new String[]{name, null};
+            case DATABASE_SCHEMA -> parentDb != null && !parentDb.isBlank()
+                    ? new String[]{parentDb, name}
+                    : new String[]{name, null};
+        };
+    }
+
+    /** 每行加 "-- " 前缀，把原 DDL 变成注释参考块。 */
+    private static String commented(String ddl) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : (ddl == null ? "" : ddl).split("\n", -1)) {
+            sb.append("-- ").append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** 剔除注释行（弹窗确认后只执行非注释内容）。 */
+    private static String stripCommentLines(String text) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : (text == null ? "" : text).split("\n", -1)) {
+            if (!line.trim().startsWith("--")) {
+                sb.append(line).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+}

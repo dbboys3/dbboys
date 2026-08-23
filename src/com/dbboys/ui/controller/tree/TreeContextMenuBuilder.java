@@ -64,6 +64,8 @@ public class TreeContextMenuBuilder {
                 IconFactory.group(IconPaths.METADATA_MODIFY_USER, 0.5, 0.5));
         CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("metadata.menu.copy_name", "Ctrl+C",
                 IconFactory.group(IconPaths.METADATA_COPY_ITEM, 0.65, 0.65));
+        CustomShortcutMenuItem pasteItem = MenuItemUtil.createMenuItemI18n("metadata.menu.paste",
+                IconFactory.group(IconPaths.PASTE, 0.6, 0.6));
         CustomShortcutMenuItem packageDDLItem = MenuItemUtil.createMenuItemI18n("metadata.menu.show_package_ddl",
                 IconFactory.group(IconPaths.METADATA_PACKAGE_DDL_ITEM, 0.6, 0.6));
         CustomShortcutMenuItem modifyToRawItem = MenuItemUtil.createMenuItemI18n("metadata.menu.modify_to_raw",
@@ -348,6 +350,21 @@ public class TreeContextMenuBuilder {
             ClipboardContent content = new ClipboardContent();
             content.putString(String.join(System.lineSeparator(), names));
             clipboard.setContent(content);
+            // 单选表节点：记录为粘贴源（粘贴时建表并迁移数据）
+            if (selectedItems.size() == 1 && selectedItems.get(0).getValue() instanceof Table) {
+                TableCopyPasteHandler.recordCopy(selectedItems.get(0));
+            }
+        });
+        pasteItem.setOnAction(event -> {
+            TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
+            if (selectedItem == null || selectedItem.getValue() == null) {
+                return;
+            }
+            if (selectedItem.getValue() instanceof Table) {
+                TableCopyPasteHandler.pasteToTable(selectedItem);
+            } else {
+                TableCopyPasteHandler.pasteToCatalogNode(selectedItem);
+            }
         });
         packageDDLItem.setOnAction(event-> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
@@ -1519,6 +1536,9 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
                     treeview_menu.getItems().add(copyItem);
+                    // 模式节点：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
+                    pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                    treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
                     // ---- 重命名 / 删除 ---- //
@@ -1571,6 +1591,12 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
                     treeview_menu.getItems().add(copyItem);
+                    // 库节点（两层模型，库下无模式）：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
+                    if (dbNodePlatform == null
+                            || dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE) {
+                        pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                        treeview_menu.getItems().add(pasteItem);
+                    }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
                     // ---- 重命名 / 删除 ---- //
@@ -1670,6 +1696,9 @@ public class TreeContextMenuBuilder {
                         importDataItem.setDisable(true);
                     }
                     treeview_menu.getItems().add(copyItem);
+                    // 表节点：粘贴 = 把复制的表数据后台追加到该表
+                    pasteItem.setDisable(!TableCopyPasteHandler.hasCopied());
+                    treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
                     treeview_menu.getItems().add(renameItem);
                     treeview_menu.getItems().add(deleteItem);

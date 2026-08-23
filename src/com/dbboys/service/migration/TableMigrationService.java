@@ -82,11 +82,41 @@ public class TableMigrationService {
                                    List<MigrationObjectRef> objects,
                                    boolean migrateDdl, boolean migrateData, boolean overwrite,
                                    boolean truncateTable, int readThreadCount, int writeThreadCount,
-                                   java.util.Map<String, TableMapping> mappings) {
+                                   java.util.Map<String, TableMapping> mappings,
+                                   java.util.Map<String, String> targetTableNames) {
         /** 读/写线程数下限 1。 */
         public MigrationRequest {
             readThreadCount = Math.max(1, readThreadCount);
             writeThreadCount = Math.max(1, writeThreadCount);
+            if (targetTableNames == null) {
+                targetTableNames = java.util.Map.of();
+            }
+        }
+
+        /** 数据插入使用的目标表名（默认与源表同名；仅改写 INSERT，DDL 建表脚本不改写）。 */
+        public String targetTableName(String sourceTableName) {
+            if (sourceTableName == null || targetTableNames.isEmpty()) {
+                return sourceTableName;
+            }
+            for (var entry : targetTableNames.entrySet()) {
+                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(sourceTableName)) {
+                    return entry.getValue() == null || entry.getValue().isBlank()
+                            ? sourceTableName : entry.getValue();
+                }
+            }
+            return sourceTableName;
+        }
+
+        /** 兼容旧调用：无目标表改名。 */
+        public MigrationRequest(Connect source, Connect target,
+                                String targetDatabase, String targetSchema,
+                                List<MigrationObjectRef> objects,
+                                boolean migrateDdl, boolean migrateData, boolean overwrite,
+                                boolean truncateTable, int readThreadCount, int writeThreadCount,
+                                java.util.Map<String, TableMapping> mappings) {
+            this(source, target, targetDatabase, targetSchema, objects,
+                    migrateDdl, migrateData, overwrite, truncateTable, readThreadCount, writeThreadCount,
+                    mappings, java.util.Map.of());
         }
 
         /** 兼容旧调用：无清空表/读写线程数/自定义数据映射。 */
@@ -1234,7 +1264,7 @@ public class TableMigrationService {
                     : " WHERE " + clause;
             selectSql += whereSql;
         }
-        String insertSql = "INSERT INTO " + tableName + " (" + columnList + ") VALUES (" + placeholders + ")";
+        String insertSql = "INSERT INTO " + ctx.request.targetTableName(tableName) + " (" + columnList + ") VALUES (" + placeholders + ")";
 
         // 源表行数（含 WHERE 过滤）：供明细 tab"行数"列展示；统计失败按未知 -1，不影响迁移
         long totalRows = -1;
