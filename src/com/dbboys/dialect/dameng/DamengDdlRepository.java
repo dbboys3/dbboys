@@ -69,6 +69,7 @@ public final class DamengDdlRepository extends OracleFamilyDdlRepository {
             FROM all_objects i
             WHERE i.owner = ?
               AND i.object_type = 'INDEX'
+              AND GENERATED = 'N'
               AND EXISTS (
                   SELECT 1 FROM all_indexes ai
                   WHERE ai.owner = i.owner

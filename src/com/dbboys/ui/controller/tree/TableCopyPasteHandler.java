@@ -275,10 +275,10 @@ public final class TableCopyPasteHandler {
     // DDL 获取 / 转换 / 执行
     // ------------------------------------------------------------------
 
-    /** 原表 DDL（源方言 printTable，连接会话已定位到表所在库/模式）。 */
+    /** 原表完整 DDL（与表右键导出一致，含索引/约束/触发器；连接会话已定位到表所在库/模式）。 */
     private static String fetchOriginalDdl(Connect src, String table) throws Exception {
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
-            return PlatformResolvers.get().ddl(src).printTable(conn, table);
+            return PlatformResolvers.get().ddl(src).printTableWithDependencies(conn, table);
         }
     }
 
