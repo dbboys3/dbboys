@@ -11,6 +11,7 @@ import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.CatalogNode;
 import com.dbboys.model.ColumnsInfo;
 import com.dbboys.model.Connect;
+import com.dbboys.model.Index;
 import com.dbboys.model.MigrationObjectRef;
 import com.dbboys.model.Schema;
 import com.dbboys.model.Sql;
@@ -128,7 +129,7 @@ public final class TableCopyPasteHandler {
             default -> null;
         };
         submitDataMigration(sourceConnect, target, targetDatabase, targetSchema,
-                sourceTable, item.getValue().getName(), null);
+                sourceTable, item.getValue().getName(), null, false);
     }
 
     // ------------------------------------------------------------------
@@ -185,7 +186,7 @@ public final class TableCopyPasteHandler {
                         I18n.t("tablecopy.notice.created", "表\"%s\"已创建，开始后台迁移数据").formatted(newName));
                 refreshTableList(item);
             });
-            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where);
+            submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where, true);
         });
     }
 
@@ -291,7 +292,8 @@ public final class TableCopyPasteHandler {
     /** 提交后台数据迁移：只迁数据（表结构由调用方保证），源表名→目标表名走 targetTableNames 映射。 */
     private static void submitDataMigration(Connect src, Connect dst,
                                             String targetDatabase, String targetSchema,
-                                            String srcTable, String dstTable, String where) {
+                                            String srcTable, String dstTable, String where,
+                                            boolean createIndexesAfter) {
         // where 条件过滤源表数据（可带或不带 WHERE 关键字，由迁移引擎归一化）
         MigrationObjectRef ref = new MigrationObjectRef(sourceCatalog, sourceSchema,
                 MigrationObjectRef.Kind.TABLE, srcTable, where);
@@ -321,13 +323,97 @@ public final class TableCopyPasteHandler {
                 return;
             }
             long rows = summary.results().isEmpty() ? 0 : summary.results().get(0).rowsCopied();
-            NotificationUtil.showMainNotification(
-                    I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows));
+            if (!createIndexesAfter) {
+                NotificationUtil.showMainNotification(
+                        I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows));
+                return;
+            }
+            // 大批量插入完成后再建索引（更快）；索引失败弹窗报错，数据不受影响
+            AppExecutor.runAsync(() -> {
+                try {
+                    createIndexes(src, dst, srcTable, dstTable);
+                } catch (Exception ex) {
+                    String msg = ex.getMessage();
+                    Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                            I18n.t("tablecopy.error.index_failed", "索引创建失败：%s").formatted(msg)));
+                }
+                Platform.runLater(() -> NotificationUtil.showMainNotification(
+                        I18n.t("tablecopy.notice.paste_done", "表数据迁移完成：%s（%d 行）").formatted(dstTable, rows)));
+            });
         });
         task.setOnFailed(e -> NotificationUtil.showMainNotification(
                 I18n.t("tablecopy.error.paste_failed", "表数据迁移失败：%s")
                         .formatted(task.getException() == null ? "" : task.getException().getMessage())));
         BackgroundSqlService.backSqlExecutor.submit(task);
+    }
+
+    /** 把源表索引建到目标表：跳过主键支撑索引（已在建表 DDL 内联创建）；
+     *  改名粘贴时索引名改为 <目标表名>_<原索引名> 避免同模式冲突。 */
+    private static void createIndexes(Connect src, Connect dst, String srcTable, String dstTable) throws Exception {
+        String dbName = sourceSchema != null && !sourceSchema.isBlank() ? sourceSchema : sourceCatalog;
+        List<Index> indexes;
+        List<String> pkColumns;
+        DatabasePlatform sourcePlatform = platform(src);
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            indexes = sourcePlatform.metadata().getIndexes(conn, dbName);
+            pkColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, srcTable);
+        }
+        if (indexes == null || indexes.isEmpty()) {
+            return;
+        }
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(dst);
+             Statement stmt = conn.createStatement()) {
+            for (Index index : indexes) {
+                if (index == null) {
+                    continue;
+                }
+                String idxTable = index.getTableName() != null && !index.getTableName().isBlank()
+                        ? index.getTableName() : index.getTabname();
+                if (idxTable == null || !idxTable.equalsIgnoreCase(srcTable)) {
+                    continue; // 只处理源表的索引
+                }
+                String indexName = index.getName();
+                String columns = index.getCols() != null && !index.getCols().isBlank()
+                        ? index.getCols()
+                        : (index.getIndexCols() == null ? "" : index.getIndexCols());
+                if (indexName == null || indexName.isBlank() || columns.isBlank()) {
+                    continue;
+                }
+                boolean unique = "U".equalsIgnoreCase(index.getIdxtype())
+                        || "UNIQUE".equalsIgnoreCase(index.getIdxtype());
+                if ("PRIMARY".equalsIgnoreCase(indexName)
+                        || (unique && sameColumns(columns, pkColumns))) {
+                    continue; // 主键及其支撑唯一索引已在建表 DDL 中内联创建
+                }
+                String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
+                        ? indexName
+                        : dstTable + "_" + indexName;
+                String ddl = "CREATE " + (unique ? "UNIQUE " : "") + "INDEX " + targetIndexName
+                        + " ON " + dstTable + " (" + columns + ")";
+                stmt.execute(ddl);
+            }
+        }
+    }
+
+    /** 索引列与主键列是否为同一组（大小写/顺序/引号不敏感）：是则说明该唯一索引是主键支撑索引。 */
+    private static boolean sameColumns(String indexColumns, List<String> pkColumns) {
+        if (pkColumns == null || pkColumns.isEmpty()) {
+            return false;
+        }
+        String[] idxCols = indexColumns.split(",");
+        if (idxCols.length != pkColumns.size()) {
+            return false;
+        }
+        java.util.Set<String> idxSet = new java.util.HashSet<>();
+        for (String c : idxCols) {
+            idxSet.add(c.trim().replaceAll("[\"'`\\[\\]]", "").toLowerCase(java.util.Locale.ROOT));
+        }
+        for (String pk : pkColumns) {
+            if (!idxSet.contains(pk == null ? "" : pk.trim().toLowerCase(java.util.Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------

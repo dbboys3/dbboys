@@ -206,7 +206,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             locklevel,case when t.partnum==0 then 1 else 0 end isfragment,
             case when t.partnum=0 then f.partn else t.partnum end  as partnum
             from
-            systables t left join sysfragments f on t.tabid=f.tabid
+            systables t left join sysfragments f on t.tabid=f.tabid and f.fragtype='T' 
             where t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and tabtype in ('T','E')
             ) t
             left join sysmaster:systabinfo i on i.ti_partnum=partnum
@@ -225,7 +225,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             locklevel,case when t.partnum==0 then 1 else 0 end isfragment,
             case when t.partnum=0 then f.partn else t.partnum end  as partnum
             from
-            systables t left join sysfragments f on t.tabid=f.tabid
+            systables t left join sysfragments f on t.tabid=f.tabid and f.fragtype='T' 
             where tabname=?) t
             join sysmaster:systabinfo i on i.ti_partnum=partnum
             """;

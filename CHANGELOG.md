@@ -1,6 +1,8 @@
 ### 20260823
 新增postgresql安装、卸载、实例管理  
 新增支持同构、异构库表复制粘贴，支持where过滤    
+修复数据迁移informix/gbase8s serial到oracle映射错误  
+修复informix/gbase8s元数据部分表行数显示错误  
 修复ssh 窗口大小变化导致非当前窗口图标缩放呼吸  
 修复ssh 粘贴后滚动条没滚动到最后  
 修复sftp传输完成未刷新列表  
