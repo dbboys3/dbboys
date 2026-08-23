@@ -1499,13 +1499,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
             ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
         }
         
-        ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
-        if ("MySQL".equals(sqlmode)){
-            // mysql模式下暂时不支持 lock mode row的写法
-            ddl.append(";\n");
-        } else {
-            ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
-        }
+        ddl.append(";\n");
 
         for (Index index : indexes) {
             ddl.append("\nCREATE");
@@ -1519,7 +1513,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
             // 不再打印表owner及索引owner
             ddl.append(" ").append(getName(getIndexNameBySqlMode(index.getName(), sqlmode),sqlmode)).append(" ON ");
             ddl.append(getName(tableInfo.getName(),sqlmode)).append("(").append(index.getIndexCols()).append(")");
-            ddl.append(buildFragmentString(getIndexFragmentInfo(connection, index.getName()))).append(";");
+            ddl.append(buildFragmentString(getIndexFragmentInfo(connection, index.getName()), false)).append(";");
         }
         ddl.append("\n\n");
 
@@ -1648,6 +1642,14 @@ public final class Gbase8sDdlRepository implements DdlRepository {
      * @return
      */
     private static String buildFragmentString(ArrayList<FragmentInfo> arrayList) {
+        return buildFragmentString(arrayList, true);
+    }
+
+    /**
+     * 生成分片信息。
+     * {@code includeStorage} 为 false 时（索引页）省略末尾的 {@code IN <dbspace>}。
+     */
+    private static String buildFragmentString(ArrayList<FragmentInfo> arrayList, boolean includeStorage) {
         StringBuilder ddl = new StringBuilder();
         String fragtype = "";
         String fragcolumn = "";         // for List and range, column
@@ -1705,7 +1707,9 @@ public final class Gbase8sDdlRepository implements DdlRepository {
             }
         }
         if ("I".equals(fragtype)) {                     // in dbspace
-            ddl.append(" IN ").append(arrayList.get(0).getDbspace());
+            if (includeStorage) {
+                ddl.append(" IN ").append(arrayList.get(0).getDbspace());
+            }
         } else if ("T".equals(fragtype)){               // 索引使用表的分片表达式
 
         } else if ("R".equals(fragtype)){
@@ -2019,7 +2023,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         // 表名(索引字段（函数索引字段）列表)
         ddl.append(getName(indexInfo.getTableName(),indexInfo.getTableSqlMode())).append("(").append(indexInfo.getIndexCols()).append(")");
         // 索引分片规则或者存储
-        ddl.append(buildFragmentString(getIndexFragmentInfo(connection, indexname))).append(";");
+        ddl.append(buildFragmentString(getIndexFragmentInfo(connection, indexname), false)).append(";");
         return ddl.toString();
     }
 
@@ -3422,13 +3426,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
                     ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
                 }
 
-                // 区段大小及锁模式
-                ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
-                if ("MySQL".equals(tableInfo.getTableSqlMode())){       // mysql模式下暂时不支持锁定模式
-                    ddl.append(";\n");
-                } else {
-                    ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
-                }
+                ddl.append(";\n");
             }
             
             // 追加输出单独的注释语句，oracle和gbase模式
@@ -4081,9 +4079,7 @@ public final class Gbase8sDdlRepository implements DdlRepository {
         } else {
             ddl.append("\n").append(tableInfo.getTableGlobalTemporaryLevel()).append(" ");
         }
-        // 区段大小及锁模式
-        ddl.append("EXTENT SIZE ").append(tableInfo.getFirstExtSize()).append(" NEXT SIZE ").append(tableInfo.getNextExtSize());
-        ddl.append(" LOCK MODE ").append(tableInfo.getLockTypeFunc()).append(";\n");
+        ddl.append(";\n");
 
         return ddl.toString();
     }
