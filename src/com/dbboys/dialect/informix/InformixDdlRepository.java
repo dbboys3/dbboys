@@ -1681,13 +1681,19 @@ public final class InformixDdlRepository implements DdlRepository {
      */
     @Override
     public String printIndex(Connection connection, String indexname) throws SQLException {
+        // 入参是树展示名：列表按 $$ 截取显示（见 SQL_INDEXES），先解析回内部名
+        indexname = resolveIndexName(connection, indexname);
         ArrayList<String> colNameList = getColNameListByIndexname(connection, indexname);
         Index indexInfo = getIndexInfo(connection, indexname, colNameList);
         if (indexInfo == null || indexInfo.getName() == null){
             return "";
         }
+        String sqlmode = indexInfo.getTableSqlMode();
         StringBuilder ddl = new StringBuilder();
-        ddl.append("\nCREATE");
+        if (displaySqlMode(getDataBaseProductVersionNumber(connection))){
+            ddl.append("SET ENVIRONMENT SQLMODE '").append(sqlmode).append("';\n");
+        }
+        ddl.append("CREATE");
         // 索引类型
         if("U".equals(indexInfo.getIndexType())) {
             ddl.append(" UNIQUE INDEX");
@@ -1697,12 +1703,29 @@ public final class InformixDdlRepository implements DdlRepository {
             ddl.append(" INDEX");
         }
         // 索引名称  属主.索引名
-        ddl.append(" ").append(getName(indexInfo.getName(),indexInfo.getTableSqlMode())).append(" ON ");
+        ddl.append(" ").append(getName(indexInfo.getName(),sqlmode)).append(" ON ");
         // 表名(索引字段（函数索引字段）列表)
-        ddl.append(getName(indexInfo.getTableName(),indexInfo.getTableSqlMode())).append("(").append(indexInfo.getIndexCols()).append(")");
+        ddl.append(getName(indexInfo.getTableName(),sqlmode)).append("(").append(indexInfo.getIndexCols()).append(")");
         // 索引分片规则或者存储
         ddl.append(buildFragmentString(getIndexFragmentInfo(connection, indexname))).append(";");
         return ddl.toString();
+    }
+
+    /**
+     * 解析索引内部名：树的索引列表按 $$ 截取显示（见 SQL_INDEXES），入参可能是展示名；
+     * 按原名或展示名匹配（原名优先，避免同名索引歧义），查不到原样返回。
+     */
+    private static String resolveIndexName(Connection connection, String indexname) throws SQLException {
+        String sql = """
+                SELECT i.idxname FROM sysindices i
+                WHERE i.idxname = ?
+                   OR case when instr(i.idxname,'$$') > 0 then substr(i.idxname, instr(i.idxname,'$$')+2) else i.idxname end = ?
+                ORDER BY CASE WHEN i.idxname = ? THEN 0 ELSE 1 END
+                """;
+        SqlRunner runner = new SqlRunner(connection, DEFAULT_QUERY_TIMEOUT_SECONDS);
+        String rawName = runner.queryOne(sql, List.of(indexname, indexname, indexname),
+                resultSet -> resultSet.getString("idxname"));
+        return rawName == null ? indexname : rawName;
     }
 
     /**

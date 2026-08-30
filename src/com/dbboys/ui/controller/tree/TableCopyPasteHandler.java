@@ -5,6 +5,7 @@ import com.dbboys.app.AppExecutor;
 import com.dbboys.core.ConnectionServiceImpl;
 import com.dbboys.core.DatabasePlatform;
 import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.DdlRepository;
 import com.dbboys.core.PlatformResolvers;
 import com.dbboys.core.SqlParser;
 import com.dbboys.infra.i18n.I18n;
@@ -51,42 +52,99 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 表复制/粘贴：树菜单在单个表节点上执行"复制"时记录源表；
- * 在库（两层模型）/模式节点上"粘贴"时弹窗编辑转换后的建表 DDL、确认后建表并可选择后台迁移数据；
- * 在表节点上"粘贴"时弹窗输入 WHERE 条件后，把源表数据后台追加到该表。
+ * 对象复制/粘贴：树菜单在单个对象节点上执行"复制"时记录源对象
+ * （表/视图/索引/序列/同义词/触发器/函数/存储过程/包/类型/队列/作业）；
+ * 在库（两层模型）/模式节点上"粘贴"时弹窗显示源对象位置并编辑 DDL，确认后创建对象；
+ * 源对象为表时弹窗编辑转换后的建表 DDL、可勾选后台迁移数据，其他对象按原 DDL 回放（禁用迁移数据及 WHERE 条件）；
+ * 在表节点上"粘贴"（仅源为表）时弹窗输入 WHERE 条件后，把源表数据后台追加到该表。
  * 数据复制复用 {@link TableMigrationService}（migrateDdl=false，目标表名走 targetTableNames 映射）。
  */
 public final class TableCopyPasteHandler {
 
     private static final Logger LOG = LogManager.getLogger(TableCopyPasteHandler.class);
 
-    // ---- 复制的表记录 ----
-    private static Connect sourceConnect;   // 副本，catalog/sessionCatalog 已定位到表所在库/模式
+    // ---- 复制的对象记录 ----
+    private static Connect sourceConnect;   // 副本，catalog/sessionCatalog 已定位到对象所在库/模式
     private static String sourceCatalog;    // MigrationObjectRef.catalog（按源平台 catalogModel 约定）
     private static String sourceSchema;     // MigrationObjectRef.schema（仅 DATABASE_SCHEMA 模型）
-    private static String sourceTable;
+    private static String sourceName;
+    private static CopyKind sourceKind;
+
+    /** 可复制粘贴的对象类型（独立于 MigrationObjectRef.Kind：类型/队列/作业不参与迁移任务）。 */
+    private enum CopyKind { TABLE, VIEW, SEQUENCE, SYNONYM, TRIGGER, FUNCTION, PROCEDURE, PACKAGE, INDEX, TYPE, QUEUE, JOB }
 
     private TableCopyPasteHandler() {
     }
 
-    /** 记录复制的表（树菜单在单个表节点上执行复制时调用）。 */
-    public static void recordCopy(TreeItem<TreeData> tableItem) {
-        Connect connect = TreeObjectCrudHandler.buildObjectConnect(tableItem, false);
+    /** 记录复制的对象（树菜单在单个对象节点上执行复制时调用；不支持的节点类型保持原记录不变）。 */
+    public static void recordCopy(TreeItem<TreeData> item) {
+        CopyKind kind = kindOf(item.getValue());
+        if (kind == null) {
+            return;
+        }
+        Connect connect = TreeObjectCrudHandler.buildObjectConnect(item, false);
         if (connect == null) {
             return;
         }
-        String[] catalogSchema = catalogSchemaOf(tableItem, platform(connect));
+        String[] catalogSchema = catalogSchemaOf(item, platform(connect));
         sourceConnect = connect;
         sourceCatalog = catalogSchema[0];
         sourceSchema = catalogSchema[1];
-        sourceTable = tableItem.getValue().getName();
+        sourceName = item.getValue().getName();
+        sourceKind = kind;
     }
 
     public static boolean hasCopied() {
-        return sourceConnect != null && sourceTable != null && !sourceTable.isBlank();
+        return sourceConnect != null && sourceName != null && !sourceName.isBlank();
     }
 
-    /** 库/模式节点上粘贴：弹窗编辑转换后的 DDL，确认后建表并后台迁移数据。 */
+    /** 当前复制的源对象是否为表（表节点粘贴=追加数据，仅源为表时可用）。 */
+    public static boolean isCopiedTable() {
+        return hasCopied() && sourceKind == CopyKind.TABLE;
+    }
+
+    /** 树节点类型 → 可复制对象类型；不支持的类型返回 null（回收站对象、包内函数/过程等不记录）。 */
+    private static CopyKind kindOf(TreeData treeData) {
+        if (treeData instanceof com.dbboys.model.Table) {
+            return CopyKind.TABLE;
+        }
+        if (treeData instanceof com.dbboys.model.View) {
+            return CopyKind.VIEW;
+        }
+        if (treeData instanceof com.dbboys.model.Index) {
+            return CopyKind.INDEX;
+        }
+        if (treeData instanceof com.dbboys.model.Sequence) {
+            return CopyKind.SEQUENCE;
+        }
+        if (treeData instanceof com.dbboys.model.Synonym) {
+            return CopyKind.SYNONYM;
+        }
+        if (treeData instanceof com.dbboys.model.Trigger) {
+            return CopyKind.TRIGGER;
+        }
+        if (treeData instanceof com.dbboys.model.Function) {
+            return CopyKind.FUNCTION;
+        }
+        if (treeData instanceof com.dbboys.model.Procedure) {
+            return CopyKind.PROCEDURE;
+        }
+        if (treeData instanceof com.dbboys.model.DBPackage) {
+            return CopyKind.PACKAGE;
+        }
+        if (treeData instanceof com.dbboys.model.Type) {
+            return CopyKind.TYPE;
+        }
+        if (treeData instanceof com.dbboys.model.Queue) {
+            return CopyKind.QUEUE;
+        }
+        if (treeData instanceof com.dbboys.model.SchedulerJob) {
+            return CopyKind.JOB;
+        }
+        return null;
+    }
+
+    /** 库/模式节点上粘贴：弹窗显示源对象位置并编辑 DDL，确认后创建对象（表可勾选后台迁移数据）。 */
     public static void pasteToCatalogNode(TreeItem<TreeData> item) {
         if (!hasCopied()) {
             return;
@@ -105,13 +163,14 @@ public final class TableCopyPasteHandler {
             default -> null;
         };
         Connect src = sourceConnect;
-        String table = sourceTable;
-        showDdlDialog(item, src, target, targetDatabase, targetSchema, table);
+        String name = sourceName;
+        CopyKind kind = sourceKind;
+        showDdlDialog(item, src, target, targetDatabase, targetSchema, kind, name);
     }
 
-    /** 表节点上粘贴：弹窗输入 WHERE 条件后，把复制的表数据后台追加到该表。 */
+    /** 表节点上粘贴（仅源为表）：弹窗输入 WHERE 条件后，把复制的表数据后台追加到该表。 */
     public static void pasteToTable(TreeItem<TreeData> item) {
-        if (!hasCopied()) {
+        if (!isCopiedTable()) {
             return;
         }
         Connect target = TreeObjectCrudHandler.buildObjectConnect(item, false);
@@ -127,7 +186,7 @@ public final class TableCopyPasteHandler {
             default -> null;
         };
         showDataMigrationDialog(item, sourceConnect, target, targetDatabase, targetSchema,
-                sourceTable, item.getValue().getName());
+                sourceName, item.getValue().getName());
     }
 
     // ------------------------------------------------------------------
@@ -136,11 +195,17 @@ public final class TableCopyPasteHandler {
 
     private static void showDdlDialog(TreeItem<TreeData> item, Connect src, Connect dst,
                                       String targetDatabase, String targetSchema,
-                                      String table) {
+                                      CopyKind kind, String name) {
+        boolean isTable = kind == CopyKind.TABLE;
         ImageView loadingIcon = IconFactory.imageView(IconPaths.LOADING_GIF, 12, 12, true);
 
+        // 源对象位置：连接名 / catalog.schema.对象名（类型）
+        Label sourceLabel = new Label(sourceLocationText());
+
         CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
-        migrateDataCheck.setSelected(true);
+        // 仅源为表时可迁移数据；其他对象禁用迁移数据及 WHERE 条件
+        migrateDataCheck.setSelected(isTable);
+        migrateDataCheck.setDisable(!isTable);
 
         // WHERE 条件输入（可选，过滤迁移的数据）；目标表名从建表语句中提取
         TextField whereField = new TextField();
@@ -151,39 +216,54 @@ public final class TableCopyPasteHandler {
         HBox optionsRow = new HBox(8, migrateDataCheck, whereField);
         HBox.setHgrow(whereField, Priority.ALWAYS);
 
-        Label noteLabel = new Label(I18n.t("tablecopy.dialog.original_ddl", "原表DDL（注释参考，不会执行）") + ":");
+        Label noteLabel = new Label(I18n.t("tablecopy.dialog.original_ddl", "源对象DDL（注释参考，不会执行）") + ":");
 
         CustomInlineCssTextArea sqlArea = new CustomInlineCssTextArea();
-        sqlArea.setEditable(true); // 粘贴弹窗的表结构可编辑（该类默认只读）
-        VBox content = new VBox(8, optionsRow, noteLabel, sqlArea);
+        sqlArea.setEditable(true); // 粘贴弹窗的 DDL 可编辑（该类默认只读）
+        // 默认边框（跟随主题边框色），把 DDL 编辑区与对话框背景区分开
+        sqlArea.setStyle("-fx-border-color: -color-border-default;");
+        VBox content = new VBox(8, sourceLabel, optionsRow, noteLabel, sqlArea);
         VBox.setVgrow(sqlArea, Priority.ALWAYS);
         StackPane contentStack = new StackPane(content, loadingIcon);
         contentStack.setAlignment(Pos.CENTER);
 
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        String dialogTitle = isTable
+                ? I18n.t("tablecopy.dialog.title", "粘贴表-建表DDL")
+                : I18n.t("tablecopy.dialog.title_object", "粘贴%s-DDL").formatted(kindDisplayName(kind));
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                I18n.t("tablecopy.dialog.title", "粘贴表-建表DDL"), contentStack, 860, 560, okType, cancelType);
+                dialogTitle, contentStack, 860, 560, okType, cancelType);
         Button okButton = dialog.getButton(okType);
         okButton.setDisable(true);
+
+        // 源 DDL 注释参考块：确认执行时按前缀原样剔除（非表对象不能用整行注释剔除，过程体可能含 "--" 注释）
+        final String[] commentedBlockHolder = new String[1];
 
         AppExecutor.runAsync(() -> {
             String originalDdl;
             String convertedDdl;
-            String indexDdl;
+            String indexDdl = null;
             try {
-                originalDdl = fetchOriginalDdl(src, table);
-                convertedDdl = buildConvertedDdl(src, dst, table, originalDdl);
-                indexDdl = buildIndexDdl(src, dst, table, table, convertedDdl);
+                if (isTable) {
+                    originalDdl = fetchOriginalDdl(src, name);
+                    convertedDdl = buildConvertedDdl(src, dst, name, originalDdl);
+                    indexDdl = buildIndexDdl(src, dst, name, name, convertedDdl);
+                } else {
+                    // 其他对象：按源端 DDL 原样回放，不做类型转换（不兼容由目标库执行时报错）；
+                    // 源 DDL 同时作为注释参考块显示（与表一致）
+                    originalDdl = fetchObjectDdl(src, kind, name);
+                    convertedDdl = originalDdl;
+                }
             } catch (Exception e) {
                 String msg = e.getMessage();
-                LOG.error("加载表DDL失败: {}", msg, e);
+                LOG.error("加载对象DDL失败: {}", msg, e);
                 Platform.runLater(() -> {
                     if (!dialog.getStage().isShowing()) {
                         return;
                     }
                     AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
-                            I18n.t("tablecopy.error.load_ddl_failed", "加载表DDL失败：%s").formatted(msg));
+                            I18n.t("tablecopy.error.load_ddl_failed", "加载DDL失败：%s").formatted(msg));
                     dialog.getStage().close();
                 });
                 return;
@@ -191,11 +271,13 @@ public final class TableCopyPasteHandler {
             String original = originalDdl;
             String converted = commentSqlModeLine(convertedDdl);
             String indexes = indexDdl;
+            String commentedBlock = commented(original) + "\n";
+            commentedBlockHolder[0] = commentedBlock;
             Platform.runLater(() -> {
                 if (!dialog.getStage().isShowing()) {
                     return;
                 }
-                sqlArea.replaceText(commented(original) + "\n" + converted
+                sqlArea.replaceText(commentedBlock + converted
                         + (indexes == null || indexes.isBlank() ? "" : "\n" + indexes));
                 loadingIcon.setVisible(false);
                 loadingIcon.setManaged(false);
@@ -204,6 +286,11 @@ public final class TableCopyPasteHandler {
         });
 
         if (dialog.showAndWait() != okType) {
+            return;
+        }
+        if (!isTable) {
+            executeObjectDdl(item, dst, kind, name,
+                    stripLeadingCommentedBlock(sqlArea.getText(), commentedBlockHolder[0]));
             return;
         }
         String ddlText = stripCommentLines(sqlArea.getText());
@@ -219,7 +306,7 @@ public final class TableCopyPasteHandler {
         if (ddlText.isBlank()) {
             return;
         }
-        String finalDdlText = rewriteIndexStatementsForTarget(ddlText, table, newName);
+        String finalDdlText = rewriteIndexStatementsForTarget(ddlText, name, newName);
         AppExecutor.runAsync(() -> {
             try {
                 executeDdl(dst, finalDdlText);
@@ -242,8 +329,34 @@ public final class TableCopyPasteHandler {
                 refreshTableList(item, newName);
             });
             if (migrateData) {
-                submitDataMigration(src, dst, targetDatabase, targetSchema, table, newName, where, item);
+                submitDataMigration(src, dst, targetDatabase, targetSchema, name, newName, where, item);
             }
+        });
+    }
+
+    /** 非表对象粘贴确认：剔除源 DDL 注释参考块后执行弹窗中的 DDL（其余注释行保留，存储过程/函数体可能含 "--" 注释），成功后刷新对应对象文件夹。 */
+    private static void executeObjectDdl(TreeItem<TreeData> item, Connect dst,
+                                         CopyKind kind, String name, String ddlText) {
+        if (ddlText == null || ddlText.isBlank()) {
+            return;
+        }
+        AppExecutor.runAsync(() -> {
+            try {
+                executeDdl(dst, ddlText);
+            } catch (Exception e) {
+                // 创建失败：弹出错误信息（不用系统通知）
+                String msg = e.getMessage();
+                LOG.error("创建对象失败: {}", msg, e);
+                Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error", "错误"),
+                        I18n.t("tablecopy.error.create_object_failed", "创建对象失败：%s").formatted(msg)));
+                return;
+            }
+            Platform.runLater(() -> {
+                NotificationUtil.showMainNotification(
+                        I18n.t("tablecopy.notice.object_created", "%s\"%s\"已创建")
+                                .formatted(kindDisplayName(kind), name));
+                refreshObjectFolder(item, folderKindOf(kind));
+            });
         });
     }
 
@@ -263,10 +376,14 @@ public final class TableCopyPasteHandler {
         HBox optionsRow = new HBox(8, migrateDataCheck, whereField);
         HBox.setHgrow(whereField, Priority.ALWAYS);
 
+        // 源对象位置：连接名 / catalog.schema.表名（表）
+        Label sourceLabel = new Label(sourceLocationText());
+        VBox content = new VBox(8, sourceLabel, optionsRow);
+
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                I18n.t("tablecopy.dialog.title_data", "粘贴表-迁移数据"), optionsRow, 520, 160, okType, cancelType);
+                I18n.t("tablecopy.dialog.title_data", "粘贴表-迁移数据"), content, 520, 190, okType, cancelType);
         if (dialog.showAndWait() != okType) {
             return;
         }
@@ -287,6 +404,42 @@ public final class TableCopyPasteHandler {
     private static String fetchOriginalDdl(Connect src, String table) throws Exception {
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
             return PlatformResolvers.get().ddl(src).printTableWithDependencies(conn, table);
+        }
+    }
+
+    /** 剔除弹窗内容前部的源 DDL 注释参考块（仅精确匹配前缀；用户改过注释块时不剔除，注释行由 SQL 解析器跳过）。 */
+    private static String stripLeadingCommentedBlock(String text, String commentedBlock) {
+        if (text != null && commentedBlock != null && !commentedBlock.isEmpty()
+                && text.startsWith(commentedBlock)) {
+            return text.substring(commentedBlock.length());
+        }
+        return text;
+    }
+
+    /** 非表对象源端 DDL（原样回放，不做类型转换；连接会话已定位到对象所在库/模式）。 */
+    private static String fetchObjectDdl(Connect src, CopyKind kind, String name) throws Exception {
+        try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
+            DdlRepository ddl = PlatformResolvers.get().ddl(src);
+            String ddlText = switch (kind) {
+                case VIEW -> ddl.printView(conn, name);
+                case SEQUENCE -> ddl.printSequence(conn, name);
+                case SYNONYM -> ddl.printSynonym(conn, name);
+                case TRIGGER -> ddl.printTrigger(conn, name);
+                case FUNCTION -> ddl.printFunction(conn, name);
+                case PROCEDURE -> ddl.printProcedure(conn, name);
+                case PACKAGE -> ddl.printPackage(conn, name);
+                case INDEX -> ddl.printIndex(conn, name);
+                case TYPE -> ddl.printType(conn, name);
+                case QUEUE -> ddl.printQueue(conn, name);
+                case JOB -> ddl.printSchedulerJob(conn, name);
+                default -> throw new IllegalArgumentException("unsupported copy kind: " + kind);
+            };
+            // 不支持导出该对象 DDL 的方言返回 "--" 占位（如 SQLite 的序列），按加载失败处理
+            if (ddlText == null || ddlText.isBlank() || ddlText.trim().equals("--")) {
+                throw new IllegalStateException(
+                        I18n.t("tablecopy.error.ddl_unsupported", "该数据库不支持导出此对象的DDL"));
+            }
+            return ddlText;
         }
     }
 
@@ -680,6 +833,66 @@ public final class TableCopyPasteHandler {
     // 辅助
     // ------------------------------------------------------------------
 
+    /** 源对象位置展示：连接名 / catalog.schema.对象名（类型）。 */
+    private static String sourceLocationText() {
+        StringBuilder path = new StringBuilder();
+        if (sourceCatalog != null) {
+            path.append(sourceCatalog);
+        }
+        if (sourceSchema != null) {
+            if (path.length() > 0) {
+                path.append('.');
+            }
+            path.append(sourceSchema);
+        }
+        if (path.length() > 0) {
+            path.append('.');
+        }
+        path.append(sourceName);
+        String connName = sourceConnect == null || sourceConnect.getName() == null ? "" : sourceConnect.getName();
+        return I18n.t("tablecopy.dialog.source", "源对象：%s")
+                .formatted(connName + " / " + path + "（" + kindDisplayName(sourceKind) + "）");
+    }
+
+    /** 对象类型展示名（弹窗标题/源位置/通知用）。 */
+    private static String kindDisplayName(CopyKind kind) {
+        if (kind == null) {
+            return "";
+        }
+        return switch (kind) {
+            case TABLE -> I18n.t("tablecopy.kind.table", "表");
+            case VIEW -> I18n.t("tablecopy.kind.view", "视图");
+            case SEQUENCE -> I18n.t("tablecopy.kind.sequence", "序列");
+            case SYNONYM -> I18n.t("tablecopy.kind.synonym", "同义词");
+            case TRIGGER -> I18n.t("tablecopy.kind.trigger", "触发器");
+            case FUNCTION -> I18n.t("tablecopy.kind.function", "函数");
+            case PROCEDURE -> I18n.t("tablecopy.kind.procedure", "存储过程");
+            case PACKAGE -> I18n.t("tablecopy.kind.package", "包");
+            case INDEX -> I18n.t("tablecopy.kind.index", "索引");
+            case TYPE -> I18n.t("tablecopy.kind.type", "类型");
+            case QUEUE -> I18n.t("tablecopy.kind.queue", "队列");
+            case JOB -> I18n.t("tablecopy.kind.job", "作业");
+        };
+    }
+
+    /** 对象类型 → 树上的对象文件夹类型（粘贴成功后刷新用）。 */
+    private static TreeDataLoader.ObjectFolderKind folderKindOf(CopyKind kind) {
+        return switch (kind) {
+            case VIEW -> TreeDataLoader.ObjectFolderKind.VIEWS;
+            case SEQUENCE -> TreeDataLoader.ObjectFolderKind.SEQUENCES;
+            case SYNONYM -> TreeDataLoader.ObjectFolderKind.SYNONYMS;
+            case TRIGGER -> TreeDataLoader.ObjectFolderKind.TRIGGERS;
+            case FUNCTION -> TreeDataLoader.ObjectFolderKind.FUNCTIONS;
+            case PROCEDURE -> TreeDataLoader.ObjectFolderKind.PROCEDURES;
+            case PACKAGE -> TreeDataLoader.ObjectFolderKind.PACKAGES;
+            case INDEX -> TreeDataLoader.ObjectFolderKind.INDEXES;
+            case TYPE -> TreeDataLoader.ObjectFolderKind.TYPES;
+            case QUEUE -> TreeDataLoader.ObjectFolderKind.QUEUES;
+            case JOB -> TreeDataLoader.ObjectFolderKind.JOBS;
+            default -> TreeDataLoader.ObjectFolderKind.TABLES;
+        };
+    }
+
     private static DatabasePlatform platform(Connect connect) {
         return resolver().requirePlatform(connect);
     }
@@ -699,6 +912,26 @@ public final class TableCopyPasteHandler {
                     ? new String[]{parentDb, name}
                     : new String[]{name, null};
         };
+    }
+
+    /** 刷新目标库/模式下指定类型的对象文件夹（不折叠目标节点本身；文件夹未加载时不动，展开时会新加载）。 */
+    private static void refreshObjectFolder(TreeItem<TreeData> node, TreeDataLoader.ObjectFolderKind kind) {
+        TreeItem<TreeData> catalogItem = node;
+        while (catalogItem != null && !(catalogItem.getValue() instanceof CatalogNode)) {
+            catalogItem = catalogItem.getParent();
+        }
+        if (catalogItem == null) {
+            return;
+        }
+        for (TreeItem<TreeData> child : catalogItem.getChildren()) {
+            if (child.getValue() instanceof com.dbboys.ui.treemodel.ObjectFolder
+                    && TreeDataLoader.getObjectFolderKind(child) == kind) {
+                child.getChildren().clear();
+                child.setExpanded(false);
+                child.setExpanded(true);
+                return;
+            }
+        }
     }
 
     /** 刷新目标库/模式下的"表"文件夹（不折叠目标节点本身；表文件夹未加载时不动，展开时会新加载），并等待选中新表。 */

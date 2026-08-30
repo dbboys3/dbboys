@@ -231,7 +231,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             """;
 
     private static final String SQL_INDEXES = """
-            select %1$s, nvl(substr(i.idxname, instr(i.idxname,'$$')+2), i.idxname), t.tabname,
+            select %1$s, case when instr(i.idxname,'$$') > 0 then substr(i.idxname, instr(i.idxname,'$$')+2) else i.idxname end, t.tabname,
             trim( case when i.part1 > 0 then( select colname from syscolumns where colno = i.part1 and tabid = i.tabid ) else '' end )
             || trim( case when i.part2 > 0 then( select ',' || colname from syscolumns where colno = i.part2 and tabid = i.tabid ) else '' end )
             || trim( case when i.part3 > 0 then( select ',' || colname from syscolumns where colno = i.part3 and tabid = i.tabid ) else '' end )
@@ -254,7 +254,8 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             sin.ti_pagesize pagesize,
             sum(sin.ti_nptotal) nptotal,
             format_units(sum(sin.ti_nptotal*sin.ti_pagesize),'b')  total_size,
-            max(o.state)
+            max(o.state),
+            i.idxname raw_idxname
             from
             systables t join sysindexes i
             on t.tabid = i.tabid and t.tabid>(SELECT tabid FROM systables WHERE tabname = ' VERSION') and %2$s != ' '
@@ -262,7 +263,7 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             left join sysmaster:systabnames st
             on trim(i.idxname)=trim(st.tabname) and st.dbsname=?
             left join sysmaster:systabinfo sin on st.partnum=sin.ti_partnum
-            group by 1,2,3,4,5,6,7,8
+            group by 1,2,3,4,5,6,7,8,12
             order by 3,4
             """;
 
@@ -619,6 +620,8 @@ public abstract class InformixFamilyMetadataRepository implements com.dbboys.cor
             index.setTotalpages(rs.getString(9));
             index.setTotalsize(rs.getString(10));
             index.setIsdisabled(rs.getString(11).equals("E") ? false : true);
+            // 内部名（MySQL 模式为 表名$$索引名；树显示的是截取名）：DROP/RENAME 需要用内部名
+            index.setInternalName(rs.getString(12));
             return index;
         });
     }

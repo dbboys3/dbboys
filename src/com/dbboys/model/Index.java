@@ -29,6 +29,8 @@ public class Index extends TreeData {
     private StringProperty totalSize=new SimpleStringProperty();
     private StringProperty database=new SimpleStringProperty();
     private BooleanProperty isDisabled=new SimpleBooleanProperty();
+    // 内部名（GBase/Informix MySQL 模式为 表名$$索引名；树显示截取名，DROP/RENAME 用内部名）
+    private StringProperty internalName=new SimpleStringProperty();
     public Index() {}
     public Index(String name) {
         super(name);
@@ -173,6 +175,24 @@ public class Index extends TreeData {
 
     public String getDatabase() {
         return database.get();
+    }
+
+    public String getInternalName() {
+        return internalName.get();
+    }
+
+    public StringProperty internalNameProperty() {
+        return internalName;
+    }
+
+    public void setInternalName(String internalName) {
+        this.internalName.set(internalName);
+    }
+
+    /** DROP/RENAME 用的索引名：内部名优先（GBase/Informix MySQL 模式内部名为 表名$$索引名），未设置时用显示名。 */
+    public String getEffectiveInternalName() {
+        String internal = getInternalName();
+        return internal == null || internal.isBlank() ? getName() : internal;
     }
 
     public StringProperty databaseProperty() {

@@ -350,8 +350,8 @@ public class TreeContextMenuBuilder {
             ClipboardContent content = new ClipboardContent();
             content.putString(String.join(System.lineSeparator(), names));
             clipboard.setContent(content);
-            // 单选表节点：记录为粘贴源（粘贴时建表并迁移数据）
-            if (selectedItems.size() == 1 && selectedItems.get(0).getValue() instanceof Table) {
+            // 单选对象节点：记录为粘贴源（表粘贴时建表并可迁移数据；视图/序列/存储过程等其他对象粘贴时回放 DDL）
+            if (selectedItems.size() == 1) {
                 TableCopyPasteHandler.recordCopy(selectedItems.get(0));
             }
         });
@@ -361,7 +361,10 @@ public class TreeContextMenuBuilder {
                 return;
             }
             if (selectedItem.getValue() instanceof Table) {
-                TableCopyPasteHandler.pasteToTable(selectedItem);
+                // 表节点粘贴=追加数据，仅复制的源对象为表时可用
+                if (TableCopyPasteHandler.isCopiedTable()) {
+                    TableCopyPasteHandler.pasteToTable(selectedItem);
+                }
             } else {
                 TableCopyPasteHandler.pasteToCatalogNode(selectedItem);
             }
@@ -1039,7 +1042,8 @@ public class TreeContextMenuBuilder {
                 List<String> sqlList = new ArrayList<>();
                 for (TreeItem<TreeData> item : selectedItems) {
                     if (batchDropPlatform != null && item.getValue() instanceof Index index) {
-                        sqlList.add(batchDropPlatform.dropIndexSql(index.getName(), index.getTabname()));
+                        // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），DROP 需要用内部名
+                        sqlList.add(batchDropPlatform.dropIndexSql(index.getEffectiveInternalName(), index.getTabname()));
                     } else if (batchDropPlatform != null && item.getValue() instanceof Trigger trigger) {
                         sqlList.add(batchDropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName()));
                     } else {
@@ -1536,7 +1540,7 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
                     treeview_menu.getItems().add(copyItem);
-                    // 模式节点：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
+                    // 模式节点：粘贴 = 弹窗显示源对象位置并编辑 DDL，确认后创建对象（源为表时可迁移数据）
                     pasteItem.setDisable(pasteDisabled(selectedItem));
                     treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
@@ -1591,7 +1595,7 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(updateStatisticsItem);
                     }
                     treeview_menu.getItems().add(copyItem);
-                    // 库节点（两层模型，库下无模式）：粘贴 = 弹窗编辑转换 DDL 后建表并迁移数据
+                    // 库节点（两层模型，库下无模式）：粘贴 = 弹窗显示源对象位置并编辑 DDL，确认后创建对象（源为表时可迁移数据）
                     if (dbNodePlatform == null
                             || dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE) {
                         pasteItem.setDisable(pasteDisabled(selectedItem));
@@ -1696,7 +1700,7 @@ public class TreeContextMenuBuilder {
                         importDataItem.setDisable(true);
                     }
                     treeview_menu.getItems().add(copyItem);
-                    // 表节点：粘贴 = 把复制的表数据后台追加到该表
+                    // 表节点：粘贴 = 把复制的表数据后台追加到该表（仅复制的源对象为表时可用）
                     pasteItem.setDisable(pasteDisabled(selectedItem));
                     treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
@@ -1826,10 +1830,11 @@ public class TreeContextMenuBuilder {
         });
     }
 
-    /** 粘贴菜单禁用条件：没有复制的表记录，或目标连接为只读（粘贴要写入目标库）。 */
+    /** 粘贴菜单禁用条件：没有复制的对象记录、表节点上粘贴非表对象（表节点仅支持表数据追加），或目标连接为只读（粘贴要写入目标库）。 */
     private static boolean pasteDisabled(TreeItem<TreeData> item) {
         Connect pasteTarget = TreeNavigator.getMetaConnect(item);
         return !TableCopyPasteHandler.hasCopied()
+                || (item.getValue() instanceof Table && !TableCopyPasteHandler.isCopiedTable())
                 || (pasteTarget != null && Boolean.TRUE.equals(pasteTarget.getReadonly()));
     }
 }

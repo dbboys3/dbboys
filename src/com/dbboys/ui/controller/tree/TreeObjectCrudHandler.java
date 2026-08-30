@@ -188,7 +188,8 @@ public class TreeObjectCrudHandler {
         } else {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
             if (renamePlatform != null && selectedItem.getValue() instanceof Index index) {
-                sql = renamePlatform.renameIndexSql(oldName, index.getTabname(), newName);
+                // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），RENAME 需要用内部名
+                sql = renamePlatform.renameIndexSql(index.getEffectiveInternalName(), index.getTabname(), newName);
             } else if (renamePlatform != null) {
                 sql = renamePlatform.renameObjectSql(objectType, oldName, newName);
             } else {
@@ -232,7 +233,8 @@ public class TreeObjectCrudHandler {
         DatabasePlatform dropPlatform = TreeNavigator.resolvePlatform(selectedItem);
         String sql;
         if (dropPlatform != null && selectedItem.getValue() instanceof Index index) {
-            sql = dropPlatform.dropIndexSql(index.getName(), index.getTabname());
+            // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），DROP 需要用内部名
+            sql = dropPlatform.dropIndexSql(index.getEffectiveInternalName(), index.getTabname());
         } else if (dropPlatform != null && selectedItem.getValue() instanceof Trigger trigger) {
             sql = dropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName());
         } else {
@@ -428,9 +430,10 @@ public class TreeObjectCrudHandler {
         if (!confirm) {
             return;
         }
+        // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），SET INDEXES 需要用内部名
         String sql = platform != null
-                ? platform.toggleIndexSql(treeData.getName(), enabled)
-                : "set indexes " + treeData.getName() + (enabled ? " enabled" : " disabled");
+                ? platform.toggleIndexSql(((Index) treeData).getEffectiveInternalName(), enabled)
+                : "set indexes " + ((Index) treeData).getEffectiveInternalName() + (enabled ? " enabled" : " disabled");
         Runnable onSucceeded = () -> {
             ((Index)treeData).setIsdisabled(!enabled);
 
