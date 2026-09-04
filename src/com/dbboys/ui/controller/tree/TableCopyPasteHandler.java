@@ -23,6 +23,7 @@ import com.dbboys.service.migration.MigrationConnectInfo;
 import com.dbboys.service.migration.TableMigrationService;
 import com.dbboys.service.migration.TypeMapper;
 import com.dbboys.ui.component.CustomInlineCssTextArea;
+import com.dbboys.ui.component.CustomUserTextField;
 import com.dbboys.ui.dialog.AlertUtil;
 import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
@@ -35,7 +36,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
@@ -208,7 +208,7 @@ public final class TableCopyPasteHandler {
         migrateDataCheck.setDisable(!isTable);
 
         // WHERE 条件输入（可选，过滤迁移的数据）；目标表名从建表语句中提取
-        TextField whereField = new TextField();
+        CustomUserTextField whereField = new CustomUserTextField();
         whereField.setPrefWidth(360);
         whereField.setPromptText(I18n.t("tablecopy.dialog.where", "WHERE 条件（可选，例如 id > 100）"));
         whereField.disableProperty().bind(migrateDataCheck.selectedProperty().not());
@@ -368,7 +368,7 @@ public final class TableCopyPasteHandler {
         migrateDataCheck.setSelected(true);
         migrateDataCheck.setDisable(true);
 
-        TextField whereField = new TextField();
+        CustomUserTextField whereField = new CustomUserTextField();
         whereField.setPrefWidth(360);
         whereField.setPromptText(I18n.t("tablecopy.dialog.where", "WHERE 条件（可选，例如 id > 100）"));
         whereField.disableProperty().bind(migrateDataCheck.selectedProperty().not());
