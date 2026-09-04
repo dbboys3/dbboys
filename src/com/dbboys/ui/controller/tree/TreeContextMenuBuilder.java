@@ -1218,6 +1218,11 @@ public class TreeContextMenuBuilder {
 
         //右键内容及处理逻辑
         treeView.setOnContextMenuRequested(event -> {
+            //已显示时先隐藏再重新弹出：让皮肤的ON_SHOWN处理器重置内部焦点索引，
+            //否则子菜单关闭后焦点会被恢复到同一位置的菜单项上，出现无悬停的误高亮
+            if (treeview_menu.isShowing()) {
+                treeview_menu.hide();
+            }
             ObservableList<TreeItem<TreeData>> selectedItems = treeView.getSelectionModel().getSelectedItems();
             if (selectedItems == null || selectedItems.isEmpty()) {
                 treeview_menu.hide();
@@ -1279,6 +1284,9 @@ public class TreeContextMenuBuilder {
                 }
                 if (exportMenu.isShowing()) {
                     exportMenu.hide();
+                }
+                if (instanceManagementMenu.isShowing()) {
+                    instanceManagementMenu.hide();
                 }
                 treeview_menu.getItems().clear();
                 //设置初始值
