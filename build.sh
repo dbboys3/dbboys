@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# ========== DBboys Linux Build Script ==========
+# ========== dbboys Linux Build Script ==========
 # Requires: JDK 25, JavaFX jmods 25, zip tool
 # Equivalent to build.bat on Windows
 
@@ -18,7 +18,7 @@ CLASSES="$BUILD_DIR/classes"
 JRE_MIN="$BUILD_DIR/jre-min"
 DIST_DIR="$BUILD_DIR/dist"
 
-echo "=== DBboys Linux Build ==="
+echo "=== dbboys Linux Build ==="
 echo "Project dir : $PROJECT_DIR"
 echo "JavaFX jmods: $JAVAFX_JMODS"
 echo ""

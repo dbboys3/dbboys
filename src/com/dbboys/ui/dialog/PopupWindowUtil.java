@@ -55,7 +55,7 @@ public class PopupWindowUtil {
     @Deprecated public static Stage about_pupupstage = aboutPopupStage;
     public static Label aboutPopupStageLabel = new Label(Main.VERSION.getVersion());
     @Deprecated public static Label about_pupupstage_label = aboutPopupStageLabel;
-    private static final Label aboutProductLabel = new Label("DBboys");
+    private static final Label aboutProductLabel = new Label("dbboys");
     private static final Label aboutPoweredByLabel = new Label("Powered by OpenJFX 25.0.3");
     private static final VBox aboutPopupContent = new VBox(10);
     public static StackPane aboutPopupStageStackPane = new StackPane(aboutPopupContent);
@@ -117,7 +117,7 @@ public class PopupWindowUtil {
     private static Scene checkOutputPopupStageScene = new Scene(checkOutputPopupStageStackPane, 600, 400);
     private static Image checkOutputPopupStageIcon = new Image(IconPaths.MAIN_LOGO);
 
-    private static final StringBinding aboutTitleBinding = I18n.bind("popup.about.title", "关于DBboys");
+    private static final StringBinding aboutTitleBinding = I18n.bind("popup.about.title", "关于dbboys");
     private static final StringBinding cmdOutputTitleBinding = I18n.bind("popup.cmd_output.title", "命令输出");
     private static final StringBinding sqlHistoryTitleBinding = I18n.bind("popup.sql_history.title", "当前连接变更SQL执行历史记录");
     private static final StringBinding backSqlTitleBinding = I18n.bind("popup.back_sql.title", "后台正在执行的sql任务");

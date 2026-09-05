@@ -44,8 +44,8 @@ import java.util.Locale;
 public class Main extends Application {
     private static final Logger log = LogManager.getLogger(Main.class);
 
-    private static final String VERSION_NAME = "DBboys V5.1.2.20260823";
-    private static final int BUILD_NUMBER = 21;
+    private static final String VERSION_NAME = "dbboys V5.1.3.20260906";
+    private static final int BUILD_NUMBER = 22;
     private static final String VERSION_URL = "";
     private static final String CHANGELOG = "";
 
@@ -89,7 +89,7 @@ public class Main extends Application {
             bootLogo.setFitHeight(42);
             bootLogo.setPreserveRatio(true);
 
-            Label bootTitle = new Label("DBboys");
+            Label bootTitle = new Label("dbboys");
             bootTitle.getStyleClass().add("boot-title");
             Label bootSubtitle = new Label("Database Toolkit");
             bootSubtitle.getStyleClass().add("boot-subtitle");

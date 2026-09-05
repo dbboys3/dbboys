@@ -2328,7 +2328,7 @@ public class MainController {
 
 
 
-    public void aboutDBboys() {
+    public void aboutdbboys() {
         PopupWindowUtil.openAboutWindow();
     }
 

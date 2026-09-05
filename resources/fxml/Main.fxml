@@ -120,7 +120,7 @@
                     </Menu>
                     <Menu fx:id="menuHelp" mnemonicParsing="false" >
                         <items>
-                            <CustomShortcutMenuItem fx:id="menuHelpAbout" mnemonicParsing="false"  id="helpMenu" onAction="#aboutDBboys">
+                            <CustomShortcutMenuItem fx:id="menuHelpAbout" mnemonicParsing="false"  id="helpMenu" onAction="#aboutdbboys">
                             </CustomShortcutMenuItem>
                             <CustomShortcutMenuItem fx:id="menuHelpCompatibilityList" mnemonicParsing="false" onAction="#showCompatibilityList">
                             </CustomShortcutMenuItem>
