@@ -41,6 +41,10 @@ public class ResultSetColumnBuilder {
 
     private static final String HEADER_ROWID_BADGE_STYLE = "resultset-header-rowid-badge";
 
+    /** Column property keys: numeric type flags recorded at build time, reused by batch paste validation. */
+    private static final String COL_INTEGRAL = "resultset.col.integral";
+    private static final String COL_DECIMAL = "resultset.col.decimal";
+
     private final ResultSetTabController ctrl;
 
     public ResultSetColumnBuilder(ResultSetTabController ctrl) {
@@ -381,6 +385,8 @@ public class ResultSetColumnBuilder {
                                     int columnIndex,
                                     boolean integralColumn,
                                     boolean decimalColumn) {
+        column.getProperties().put(COL_INTEGRAL, integralColumn);
+        column.getProperties().put(COL_DECIMAL, decimalColumn);
         column.setOnEditCommit(event -> {
             ObservableList<String> row = event.getRowValue();
             String oldValue = row == null ? null : row.get(columnIndex);
@@ -392,6 +398,13 @@ public class ResultSetColumnBuilder {
             }
             ctrl.applyLocalCellEdit(columnIndex, row, oldValue, colValue);
         });
+    }
+
+    /** Paste-path numeric check: reads the type flags recorded by bindEditableColumn from the column itself. */
+    boolean isValidNumericPasteValue(TableColumn<ObservableList<String>, Object> column, String value) {
+        boolean integral = Boolean.TRUE.equals(column.getProperties().get(COL_INTEGRAL));
+        boolean decimal = Boolean.TRUE.equals(column.getProperties().get(COL_DECIMAL));
+        return isValidNumericEdit(value, integral, decimal);
     }
 
     private boolean isValidNumericEdit(String value, boolean integralColumn, boolean decimalColumn) {

@@ -15,6 +15,9 @@ import java.util.List;
 public class CustomTableView<S> extends TableView<S> {
 
     public final CustomShortcutMenuItem copyMenuItem;
+    /** Created here for consistent i18n/icon, but not added to the context menu by default:
+     *  paste only makes sense for editable tables (the result set tab wires it up itself). */
+    public final CustomShortcutMenuItem pasteMenuItem;
     public final Menu generateSqlMenu;
     public final CustomShortcutMenuItem generateInsertSqlMenuItem;
     public final CustomShortcutMenuItem generateUpdateSqlMenuItem;
@@ -62,6 +65,12 @@ public class CustomTableView<S> extends TableView<S> {
                 IconFactory.group(IconPaths.COPY, 0.7)
         );
         copyMenuItem.setOnAction(e -> copySelectionToClipboard());
+
+        pasteMenuItem = MenuItemUtil.createMenuItemI18n(
+                "resultset.table.menu.paste",
+                "Ctrl+V",
+                IconFactory.group(IconPaths.PASTE, 0.62)
+        );
 
         generateInsertSqlMenuItem = MenuItemUtil.createMenuItemI18n(
                 "resultset.table.menu.generateInsertSql",

@@ -30,6 +30,8 @@ import javafx.scene.Group;
 import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.shape.SVGPath;
@@ -380,6 +382,19 @@ public class ResultSetTabController {
             }
         });
 
+        // Ctrl+V 批量粘贴：单元格编辑器打开时放行，让编辑器 TextField 正常粘贴
+        resultSetTableView.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.isControlDown() && event.getCode() == KeyCode.V) {
+                if (resultSetTableView.getEditingCell() != null) {
+                    return;
+                }
+                if (resultSetEditAllowed.get()) {
+                    pasteClipboardIntoSelection();
+                    event.consume();
+                }
+            }
+        });
+
         setupResultSetContextMenu();
     }
 
@@ -437,6 +452,8 @@ public class ResultSetTabController {
         resultSetTableView.generateUpdateSqlMenuItem.setOnAction(e -> generateUpdateSql());
         resultSetTableView.generateDeleteSqlMenuItem.setOnAction(e -> generateDeleteSql());
         resultSetTableView.generateSelectSqlMenuItem.setOnAction(e -> generateSelectSql());
+        resultSetTableView.getContextMenu().getItems().add(1, resultSetTableView.pasteMenuItem);
+        resultSetTableView.pasteMenuItem.setOnAction(e -> pasteClipboardIntoSelection());
 
         // 覆盖单元格级 ContextMenu（CustomTableCell 有独立的复制菜单），强制弹出 TableView 级菜单
         resultSetTableView.addEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, e -> {
@@ -457,6 +474,8 @@ public class ResultSetTabController {
             resultSetTableView.generateUpdateSqlMenuItem.setDisable(!hasSelection || !editable);
             resultSetTableView.generateDeleteSqlMenuItem.setDisable(!hasSelection || !editable);
             resultSetTableView.generateSelectSqlMenuItem.setDisable(!hasSelection || !editable);
+            resultSetTableView.pasteMenuItem.setDisable(!hasSelection || !editable
+                    || !Clipboard.getSystemClipboard().hasString());
         });
     }
 
@@ -586,6 +605,95 @@ public class ResultSetTabController {
             pendingUpdatedCells.computeIfAbsent(row, k -> new HashSet<>()).add(columnIndex);
         }
         resultSetTableView.refresh();
+    }
+
+    /**
+     * Batch paste (Ctrl+V / context menu): Excel-style clipboard text (Tab separates columns,
+     * newline separates rows) into editable cells, reusing the local-edit staging path.
+     * A single clipboard value fills every selected editable cell; larger grids start at the
+     * top-left selected cell and are clipped to the rows/columns below it.
+     */
+    void pasteClipboardIntoSelection() {
+        if (!resultSetEditAllowed.get()) {
+            return;
+        }
+        ObservableList<? extends TablePosition> selectedCells =
+                resultSetTableView.getSelectionModel().getSelectedCells();
+        Clipboard clipboard = Clipboard.getSystemClipboard();
+        if (selectedCells == null || selectedCells.isEmpty() || !clipboard.hasString()) {
+            NotificationUtil.showMainNotification(I18n.t("resultset.edit.paste_nothing", "没有可粘贴的单元格。"));
+            return;
+        }
+        stopResultSetCellEdit();
+
+        String[] lines = clipboard.getString().split("\r\n|\r|\n", -1);
+        int lineCount = lines.length;
+        if (lineCount > 1 && lines[lineCount - 1].isEmpty()) {
+            lineCount--;
+        }
+        String[][] grid = new String[lineCount][];
+        for (int i = 0; i < lineCount; i++) {
+            grid[i] = lines[i].split("\t", -1);
+        }
+
+        int applied = 0;
+        int skipped = 0;
+        if (grid.length == 1 && grid[0].length == 1 && selectedCells.size() > 1) {
+            for (TablePosition<?, ?> pos : selectedCells) {
+                if (applyPastedCell(pos.getRow(), pos.getColumn(), grid[0][0])) {
+                    applied++;
+                } else {
+                    skipped++;
+                }
+            }
+        } else {
+            int anchorRow = Integer.MAX_VALUE;
+            int anchorCol = Integer.MAX_VALUE;
+            for (TablePosition<?, ?> pos : selectedCells) {
+                anchorRow = Math.min(anchorRow, pos.getRow());
+                anchorCol = Math.min(anchorCol, pos.getColumn());
+            }
+            if (anchorCol == 0) {
+                anchorCol = 1;
+            }
+            for (int i = 0; i < grid.length; i++) {
+                for (int j = 0; j < grid[i].length; j++) {
+                    if (applyPastedCell(anchorRow + i, anchorCol + j, grid[i][j])) {
+                        applied++;
+                    } else {
+                        skipped++;
+                    }
+                }
+            }
+        }
+
+        if (applied > 0) {
+            NotificationUtil.showMainNotification(String.format(
+                    I18n.t("resultset.edit.paste_done", "已粘贴 %d 个单元格，跳过 %d 个。"), applied, skipped));
+        } else {
+            NotificationUtil.showMainNotification(I18n.t("resultset.edit.paste_nothing", "没有可粘贴的单元格。"));
+        }
+    }
+
+    /** Writes one pasted value through the normal local-edit path; false = target rejected (not writable). */
+    private boolean applyPastedCell(int targetRow, int targetCol, String value) {
+        ObservableList<ObservableList<String>> items = resultSetTableView.getItems();
+        if (items == null || targetRow < 0 || targetRow >= items.size()
+                || targetCol <= 0 || targetCol >= resultSetTableView.getColumns().size()) {
+            return false;
+        }
+        ObservableList<String> row = items.get(targetRow);
+        if (row == null || row == emptyResultPlaceholderRow) {
+            return false;
+        }
+        @SuppressWarnings("unchecked")
+        TableColumn<ObservableList<String>, Object> column =
+                (TableColumn<ObservableList<String>, Object>) resultSetTableView.getColumns().get(targetCol);
+        if (!column.isEditable() || !columnBuilder.isValidNumericPasteValue(column, value)) {
+            return false;
+        }
+        applyLocalCellEdit(targetCol, row, row.get(targetCol), value);
+        return true;
     }
 
     /** True if committed text equals the value before this edit (no pending DML / highlight). */
