@@ -6199,6 +6199,10 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-border-color: transparent;
 }
 
+.treeview-tab-icon {
+  -fx-fill: -color-fg-subtle;
+}
+
 .icon-primary {
   -fx-fill: -color-button-default;
 }

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(javac -cp \"build/classes;extlib/*\" -d build/classes test_sql_parser.java)",
+      "Bash(javac -cp \"build/classes;extlib/*\" -sourcepath src -d build/classes test_sql_parser.java)"
+    ]
+  }
+}

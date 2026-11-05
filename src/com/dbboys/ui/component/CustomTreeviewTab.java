@@ -15,15 +15,11 @@ import javafx.collections.ObservableList;
 import javafx.scene.Group;
 import javafx.scene.control.*;
 import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
-import com.dbboys.ui.icon.IconFactory;
 import com.dbboys.ui.icon.IconPaths;
 
 public class CustomTreeviewTab extends Tab {
     private static final Logger log = LogManager.getLogger(CustomTreeviewTab.class);
-    private static final Color DEFAULT_ICON_COLOR = Color.valueOf("#888");
-
     public ToggleButton titleToggle = new ToggleButton();
     public ContextMenu contextMenu=new CustomContextMenu();
     public SVGPath titleToggleIcon;
@@ -35,7 +31,11 @@ public class CustomTreeviewTab extends Tab {
         //header.setSpacing(5);
         
         // 默认灰色图标；移除 svg-icon 样式类，避免被全局 SVG 白色规则覆盖
-        titleToggleIcon = IconFactory.create(IconPaths.DATABASE_CONNECT_TOGGLE, 0.6, DEFAULT_ICON_COLOR);
+        titleToggleIcon = new SVGPath();
+        titleToggleIcon.setContent(IconPaths.DATABASE_CONNECT_TOGGLE);
+        titleToggleIcon.setScaleX(0.6);
+        titleToggleIcon.setScaleY(0.6);
+        titleToggleIcon.getStyleClass().add("treeview-tab-icon");
         titleToggle.setGraphic(new Group(titleToggleIcon));
         titleToggle.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
         // 仅图标，无背景无边框
@@ -175,9 +175,6 @@ public class CustomTreeviewTab extends Tab {
         titleToggleIcon.getStyleClass().removeAll("icon-primary");
         if (active) {
             titleToggleIcon.getStyleClass().add("icon-primary");
-            titleToggleIcon.setFill(null);
-        } else {
-            titleToggleIcon.setFill(DEFAULT_ICON_COLOR);
         }
     }
 
