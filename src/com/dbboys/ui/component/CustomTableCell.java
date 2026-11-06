@@ -24,14 +24,6 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     private CustomUserTextField textField;
     //结果集拖动鼠标框选
-    private static int resultSelectRow1 = 0;
-    private static int resultSelectRow2 = 0;
-    private static int resultSelectCol1 = 0;
-    private static int resultSelectCol2 = 0;
-    private static int resultSelectStartRow = 0;
-    private static int resultSelectEndRow = 0;
-    private static int resultSelectStartCol = 0;
-    private static int resultSelectEndCol = 0;
     private static long lastClickTime = 0;
 
 
@@ -183,30 +175,22 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
         contextMenu.setOnShowing(event -> copyItem.setDisable(isEmpty()));
 
         setOnDragDetected(event -> {
+            beginTableDrag();
             startFullDrag(); // 不执行任何拖动任务
             getScene().setCursor(Cursor.CROSSHAIR);
-            resultSelectRow1 = getIndex();
-            resultSelectCol1 = getTableView().getColumns().indexOf(getTableColumn());
             event.consume();
         });
 
         setOnMouseDragEntered(event -> {
-            resultSelectRow2 = getIndex();
-            resultSelectCol2 = getTableView().getColumns().indexOf(getTableColumn());
-            resultSelectStartRow = Math.min(resultSelectRow1, resultSelectRow2);
-            resultSelectStartCol = Math.min(resultSelectCol1, resultSelectCol2);
-            resultSelectEndRow = Math.max(resultSelectRow1, resultSelectRow2);
-            resultSelectEndCol = Math.max(resultSelectCol1, resultSelectCol2);
-            getTableView().getSelectionModel().clearSelection();
-            for (int i = resultSelectStartRow; i <= resultSelectEndRow; i++) {
-                for (int j = resultSelectStartCol; j <= resultSelectEndCol; j++) {
-                    getTableView().getSelectionModel().select(i, getTableView().getColumns().get(j));
-                }
+            if (getTableView() instanceof CustomTableView<?> tableView) {
+                tableView.extendCellDrag(getIndex(), getTableColumnIndex());
             }
         });
 
         setOnMouseReleased(event -> {
-            getScene().setCursor(Cursor.DEFAULT);
+            if (getTableView() instanceof CustomTableView<?> tableView) {
+                tableView.finishCellDrag();
+            }
             event.consume(); // 消费事件
         });
         // 单击更新点击事件，用于下次单击时判断两次单击事件间隔，来确定是否进入编辑模式，在startedit里判断
@@ -249,5 +233,15 @@ public class CustomTableCell<S, T> extends TableCell<S, T> {
 
     protected CustomUserTextField getTextField() {
         return textField;
+    }
+
+    private void beginTableDrag() {
+        if (getTableView() instanceof CustomTableView<?> tableView) {
+            tableView.beginCellDrag(getIndex(), getTableColumnIndex());
+        }
+    }
+
+    private int getTableColumnIndex() {
+        return getTableView() == null ? -1 : getTableView().getColumns().indexOf(getTableColumn());
     }
 }
