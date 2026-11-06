@@ -5505,7 +5505,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-padding: 3px 6px 3px 6px;
   -fx-font-family: "Courier New", "Consolas", "Monaco", monospace;
   -fx-border-width: 1px;
-  -fx-border-color: -color-chart-8;
+  -fx-border-color: -color-popup-border;
   -fx-border-radius: 3px;
   -fx-effect: dropshadow(three-pass-box, -color-shadow-default, 2px, 0.3, 0, 1);
 }
