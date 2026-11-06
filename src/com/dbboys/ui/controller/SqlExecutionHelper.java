@@ -103,6 +103,7 @@ public class SqlExecutionHelper {
         }
 
         ctrl.sqlUsedTime = 0;
+        ctrl.sqlEditCodeArea.clearErrorLines();
         SqlParser platformParser = platformResolver.requirePlatform(ctrl.sqlConnect).parser();
         ctrl.isSingleSql = platformParser.isSingleStatement(ctrl.sqlText);
         ctrl.clearUpdateResults();
@@ -144,9 +145,10 @@ public class SqlExecutionHelper {
                             }
                             ctrl.sqlExe = stripTrailingSemicolon(currentSql[0].getSqlstr());
                             ctrl.sqlStatementCount++;
-                            highlightCurrentSegment(segment, currentSql[0]);
+                            int[] statementRange = highlightCurrentSegment(segment, currentSql[0]);
 
                             ctrl.updateResult = new UpdateResult();
+                            ctrl.lastSqlException = null;
 
                             if (!ReadOnlyGuard.canExecuteSql(ctrl.sqlConnect, currentSql[0].getSqlstr())) {
                                 blockReadOnlyStatement(sdf);
@@ -160,8 +162,13 @@ public class SqlExecutionHelper {
 
                             if (ctrl.sqlExecutionSuccess) {
                                 handlePostExecutionSuccess(currentSql[0]);
-                            } else if (shouldClearTransactionAfterDdl(ctrl.sqlExe)) {
-                                ctrl.sqlTransactionText.set("");
+                            } else {
+                                if (!isCancelled()) {
+                                    markStatementErrorLines(statementRange);
+                                }
+                                if (shouldClearTransactionAfterDdl(ctrl.sqlExe)) {
+                                    ctrl.sqlTransactionText.set("");
+                                }
                             }
 
                             currentSql[0].setSqlStr("");
@@ -216,20 +223,236 @@ public class SqlExecutionHelper {
         Platform.runLater(() -> AlertUtil.CustomAlert(I18n.t("common.error"), ctrl.sqlExecutionResult));
     }
 
-    private void highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
+    private void markStatementErrorLines(int[] range) {
+        if (range == null) {
+            return;
+        }
+        int errorOffset = resolveErrorOffset(range);
+        Platform.runLater(() -> ctrl.sqlEditCodeArea.markErrorLine(errorOffset));
+    }
+
+    /**
+     * Locates the editor offset of the failing line inside the statement range.
+     * Prefers the exact position reported by the driver/database, then line
+     * numbers parsed from the message; falls back to the statement's first line.
+     */
+    private int resolveErrorOffset(int[] range) {
+        String executedText = ctrl.sqlText == null ? "" : ctrl.sqlText;
+        String sentSql = ctrl.sqlExe == null ? "" : ctrl.sqlExe;
+        // The sent statement (ctrl.sqlExe) may be trimmed relative to the raw
+        // parsed text, so locate its exact start inside the executed text.
+        int base = range[0];
+        if (!sentSql.isEmpty()) {
+            int relBase = Math.max(0, range[0] - ctrl.sqlSelectionRange[0]);
+            int idx = executedText.indexOf(sentSql, relBase);
+            if (idx >= 0) {
+                base = ctrl.sqlSelectionRange[0] + idx;
+            }
+        }
+        int maxTarget = Math.max(range[1] - 1, base);
+        SQLException error = ctrl.lastSqlException;
+
+        // Informix/GBase: the driver stores the byte offset of the error inside
+        // the sent statement (SQLCA sqlerrd[4]) for every error response, not
+        // only syntax errors. Use it whenever it points inside the statement.
+        if (error != null) {
+            Integer byteOffset = queryDriverStatementErrorOffset();
+            log.info("SQL error offset: code={}, offset={}, sql={}",
+                    error.getErrorCode(), byteOffset, abbreviate(sentSql));
+            if (byteOffset != null && byteOffset >= 0 && byteOffset <= utf8ByteLength(sentSql)) {
+                int charIndex = byteOffsetToCharIndex(sentSql, byteOffset);
+                return clamp(base + charIndex, base, maxTarget);
+            }
+        }
+
+        // PostgreSQL: ServerErrorMessage carries a 1-based character position.
+        Integer charPosition = queryPostgresqlErrorPosition(error);
+        if (charPosition != null && charPosition > 0) {
+            return clamp(base + charPosition - 1, base, maxTarget);
+        }
+
+        // MySQL/Dameng style messages: "at line N" / "line N, column M" / "第N行",
+        // relative to the start of the sent statement.
+        int lineInStatement = extractErrorLineInStatement(ctrl.sqlExecutionResult);
+        int relTarget = Math.max(0, base - ctrl.sqlSelectionRange[0]);
+        int relEnd = Math.max(0, range[1] - ctrl.sqlSelectionRange[0]);
+        for (int i = 1; i < lineInStatement; i++) {
+            int nl = executedText.indexOf('\n', relTarget);
+            if (nl < 0 || nl >= relEnd) {
+                return base;
+            }
+            relTarget = nl + 1;
+        }
+        if (lineInStatement > 0) {
+            return clamp(ctrl.sqlSelectionRange[0] + relTarget, base, maxTarget);
+        }
+
+        // SQLite/SQL Server style messages carry no line number but quote the
+        // statement fragment at the error position: near "..." / near '...'.
+        int nearIndex = extractNearTokenIndex(sentSql, ctrl.sqlExecutionResult);
+        if (nearIndex >= 0) {
+            return clamp(base + nearIndex, base, maxTarget);
+        }
+        return base;
+    }
+
+    /**
+     * Finds the char index of the error fragment quoted in {@code near '...'}
+     * or {@code near "..."} messages inside the sent statement, or -1.
+     * The fragment is the statement text starting at the error position
+     * (possibly truncated), so an indexOf match gives that position.
+     */
+    private static int extractNearTokenIndex(String sentSql, String executionResult) {
+        if (sentSql == null || sentSql.isEmpty() || executionResult == null) {
+            return -1;
+        }
+        java.util.regex.Matcher matcher = NEAR_TOKEN_PATTERN.matcher(executionResult);
+        if (!matcher.find()) {
+            return -1;
+        }
+        String token = matcher.group(2);
+        if (token == null || token.isBlank()) {
+            return -1;
+        }
+        return sentSql.indexOf(token.trim());
+    }
+
+    private static final java.util.regex.Pattern NEAR_TOKEN_PATTERN = java.util.regex.Pattern.compile(
+            "(?is)near\\s+(['\"])(.{1,300}?)\\1");
+
+    /**
+     * Calls {@code getSQLStatementOffset()} on the JDBC connection when the driver
+     * supports it (Informix/GBase {@code IfmxConnection}). Reflection keeps the
+     * compile classpath free of driver classes loaded from extlib at runtime.
+     */
+    private Integer queryDriverStatementErrorOffset() {
+        try {
+            java.sql.Connection conn = ctrl.sqlConnect.getConn();
+            Object target = findOffsetCapableConnection(conn);
+            if (target == null) {
+                return null;
+            }
+            Object value = target.getClass().getMethod("getSQLStatementOffset").invoke(target);
+            return value instanceof Integer ? (Integer) value : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Object findOffsetCapableConnection(Object conn) {
+        if (conn == null) {
+            return null;
+        }
+        if (hasPublicMethod(conn.getClass(), "getSQLStatementOffset")) {
+            return conn;
+        }
+        // SSH tunnel connections are wrapped; reach the underlying driver connection.
+        try {
+            java.lang.reflect.Field delegate = conn.getClass().getDeclaredField("delegate");
+            delegate.setAccessible(true);
+            Object inner = delegate.get(conn);
+            if (inner != null && hasPublicMethod(inner.getClass(), "getSQLStatementOffset")) {
+                return inner;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** Reads the 1-based character position from a PostgreSQL PSQLException, if any. */
+    private static Integer queryPostgresqlErrorPosition(SQLException error) {
+        if (error == null) {
+            return null;
+        }
+        try {
+            Object serverError = error.getClass().getMethod("getServerErrorMessage").invoke(error);
+            if (serverError == null) {
+                return null;
+            }
+            Object position = serverError.getClass().getMethod("getPosition").invoke(serverError);
+            return position instanceof Integer ? (Integer) position : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static boolean hasPublicMethod(Class<?> type, String name) {
+        try {
+            type.getMethod(name);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    /** Maps a UTF-8 byte offset to a char index inside {@code text}. */
+    private static int byteOffsetToCharIndex(String text, int byteOffset) {
+        if (text == null || byteOffset <= 0) {
+            return 0;
+        }
+        int bytes = 0;
+        int i = 0;
+        while (i < text.length() && bytes < byteOffset) {
+            int cp = text.codePointAt(i);
+            bytes += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+            i += Character.charCount(cp);
+        }
+        return i;
+    }
+
+    private static int utf8ByteLength(String text) {
+        return text == null ? 0 : text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+    }
+
+    private static String abbreviate(String text) {
+        if (text == null) {
+            return "";
+        }
+        String oneLine = text.replaceAll("\\s+", " ").trim();
+        return oneLine.length() <= 60 ? oneLine : oneLine.substring(0, 60) + "...";
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(value, max));
+    }
+
+    /** Returns the 1-based error line within the statement, or 0 when unknown. */
+    private static int extractErrorLineInStatement(String executionResult) {
+        if (executionResult == null || executionResult.isEmpty()) {
+            return 0;
+        }
+        java.util.regex.Matcher matcher = ERROR_LINE_PATTERN.matcher(executionResult);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0;
+    }
+
+    private static final java.util.regex.Pattern ERROR_LINE_PATTERN = java.util.regex.Pattern.compile(
+            "(?i)(?:at\\s+line|line\\s*[:：]?|第)\\s*(\\d+)\\s*(?:行)?");
+
+    private int[] highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
+        int[] range = computeSegmentEditorRange(segment, sql);
+        if (!ctrl.isSqlRefresh) {
+            ctrl.selectRangeAndFollow(range[0], range[1]);
+        }
+        return range;
+    }
+
+    private int[] computeSegmentEditorRange(SqlParserUtil.Segment segment, Sql sql) {
         // A DELIMITER block is executed as one whole statement. Its segment text
         // starts after the consumed "DELIMITER xx" line, so the normal offset math
         // would shift the selection right. Highlight the whole enclosing block.
         SqlParserUtil.StatementRange blockRange = findDelimiterBlockRange(ctrl.sqlText, segment);
         if (blockRange != null) {
-            if (!ctrl.isSqlRefresh) {
-                // blockRange is relative to the executed selection (ctrl.sqlText);
-                // convert it to absolute editor coordinates before highlighting.
-                ctrl.selectRangeAndFollow(
-                        ctrl.sqlSelectionRange[0] + blockRange.getStart(),
-                        ctrl.sqlSelectionRange[0] + blockRange.getEnd());
-            }
-            return;
+            // blockRange is relative to the executed selection (ctrl.sqlText);
+            // convert it to absolute editor coordinates before highlighting.
+            return new int[]{
+                    ctrl.sqlSelectionRange[0] + blockRange.getStart(),
+                    ctrl.sqlSelectionRange[0] + blockRange.getEnd()};
         }
         int finalI = segment.getEndIndex();
         // IMPORTANT: selection/highlight must be aligned with the editor text, not the executable SQL.
@@ -240,22 +463,13 @@ public class SqlExecutionHelper {
         int rawLeadingWhitespace = getWhitespaceLength(rawStatement);
         if (sql.getSqlRemainder() != null && !sql.getSqlRemainder().isEmpty()) {
             int remaindersize = sql.getSqlRemainder().length();
-            int sqllength = rawStatementLength;
-            int whitespacelength = rawLeadingWhitespace;
-            if (!ctrl.isSqlRefresh) {
-                ctrl.selectRangeAndFollow(
-                        ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize - sqllength + whitespacelength,
-                        ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize);
-            }
-        } else {
-            int sqllength = rawStatementLength;
-            int whitespacelength = rawLeadingWhitespace;
-            if (!ctrl.isSqlRefresh) {
-                ctrl.selectRangeAndFollow(
-                        ctrl.sqlSelectionRange[0] + finalI + 1 - sqllength + whitespacelength,
-                        ctrl.sqlSelectionRange[0] + finalI + 1);
-            }
+            return new int[]{
+                    ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize - rawStatementLength + rawLeadingWhitespace,
+                    ctrl.sqlSelectionRange[0] + finalI + 1 - remaindersize};
         }
+        return new int[]{
+                ctrl.sqlSelectionRange[0] + finalI + 1 - rawStatementLength + rawLeadingWhitespace,
+                ctrl.sqlSelectionRange[0] + finalI + 1};
     }
 
     /**
@@ -314,6 +528,7 @@ public class SqlExecutionHelper {
             }
         } catch (SQLException e) {
             log.error(e.getMessage(), e);
+            ctrl.lastSqlException = e;
             ctrl.setResultsetVisible(false);
             ctrl.sqlExecutionSuccess = false;
             ctrl.sqlExecutionResult = "[" + e.getErrorCode() + "]" + e.getMessage();
@@ -417,6 +632,7 @@ public class SqlExecutionHelper {
             }
         } catch (SQLException e) {
             log.error(e.getMessage(), e);
+            ctrl.lastSqlException = e;
             ctrl.sqlExecutionSuccess = false;
             ctrl.sqlExecutionResult = "[" + e.getErrorCode() + "]" + e.getMessage();
         } finally {
@@ -478,6 +694,7 @@ public class SqlExecutionHelper {
             ctrl.sqlExecutionResult = I18n.t("sql.exec.success");
         } catch (SQLException e) {
             log.error(e.getMessage(), e);
+            ctrl.lastSqlException = e;
             boolean requiresRecovery = requiresSessionRecovery(e);
             if (ctrl.isSingleSql) {
                 Platform.runLater(() -> {

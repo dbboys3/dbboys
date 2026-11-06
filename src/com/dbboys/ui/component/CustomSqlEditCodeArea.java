@@ -18,6 +18,7 @@ import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
 import javafx.application.Platform;
+import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.*;
@@ -32,9 +33,13 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntFunction;
 import java.util.regex.Pattern;
 
 public class CustomSqlEditCodeArea extends CodeArea {
@@ -77,6 +82,8 @@ public class CustomSqlEditCodeArea extends CodeArea {
     public final CustomShortcutMenuItem aiFixSqlItem;
     private Connect activeConnect;
     private CatalogNode activeDatabase;
+    private final Set<Integer> errorLineIndexes = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Node> gutterNodes = new ConcurrentHashMap<>();
     private Runnable onSaveRequest = () -> {};
     private Runnable onContentDirty = () -> {};
     private Runnable onShowFindPanel = () -> {};
@@ -352,7 +359,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
             aiMenu.setDisable(!hasSelection);
         });
 
-        setParagraphGraphicFactory(LineNumberFactory.get(this));
+        setParagraphGraphicFactory(createErrorAwareLineNumberFactory());
         codeAreaSaveItem.setOnAction(event-> onSaveRequest.run());
 
         caretPositionProperty().addListener((obs, oldPos, newPos) -> Platform.runLater(() -> {
@@ -365,9 +372,58 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 .filter(change -> styleChangeFlag==0)
                 .successionEnds(Duration.ofMillis(20))
                 .subscribe(change -> {
+                    clearErrorLines();
                     scheduleIncrementalHighlight(change);
                     onContentDirty.run();
                 });
+    }
+
+    /** Line-number gutter factory that renders error-marked paragraphs with a red background. */
+    private IntFunction<Node> createErrorAwareLineNumberFactory() {
+        IntFunction<Node> base = LineNumberFactory.get(this);
+        return idx -> {
+            Node node = base.apply(idx);
+            gutterNodes.put(idx, node);
+            applyErrorGutterStyle(node, errorLineIndexes.contains(idx));
+            return node;
+        };
+    }
+
+    private static void applyErrorGutterStyle(Node node, boolean error) {
+        if (error) {
+            if (!node.getStyleClass().contains("lineno-error")) {
+                node.getStyleClass().add("lineno-error");
+            }
+        } else {
+            node.getStyleClass().remove("lineno-error");
+        }
+    }
+
+    /** Marks the gutter line number of the paragraph containing {@code offset} red. */
+    public void markErrorLine(int offset) {
+        if (getLength() == 0) {
+            return;
+        }
+        int pos = Math.max(0, Math.min(offset, getLength() - 1));
+        int para = offsetToPosition(pos, Bias.Forward).getMajor();
+        errorLineIndexes.add(para);
+        Node node = gutterNodes.get(para);
+        if (node != null) {
+            applyErrorGutterStyle(node, true);
+        }
+    }
+
+    public void clearErrorLines() {
+        if (errorLineIndexes.isEmpty()) {
+            return;
+        }
+        for (Integer idx : errorLineIndexes) {
+            Node node = gutterNodes.get(idx);
+            if (node != null) {
+                applyErrorGutterStyle(node, false);
+            }
+        }
+        errorLineIndexes.clear();
     }
 
 

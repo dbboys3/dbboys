@@ -195,6 +195,7 @@ public class SqlTabController {
     List<Object> sqlParamList = new ArrayList<>();
     String sqlExecutionResult = "";
     boolean sqlExecutionSuccess = false;
+    SQLException lastSqlException;
     String sqlText = "";
     final Tooltip commitButtonTooltip = new Tooltip();
     String newResultsetTabName;
