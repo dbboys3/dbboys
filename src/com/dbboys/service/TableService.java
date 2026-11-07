@@ -23,11 +23,17 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -840,11 +846,66 @@ public class TableService implements MetaObjectService {
             }
             return;
         }
+        if (isTemporalImportColumnType(columnType)) {
+            bindTemporalImportValue(preparedStatement, parameterIndex, columnType, value);
+            return;
+        }
         if (shouldTrimImportValue(columnType)) {
             preparedStatement.setString(parameterIndex, value.trim());
             return;
         }
         preparedStatement.setString(parameterIndex, value);
+    }
+
+    private void bindTemporalImportValue(PreparedStatement preparedStatement,
+                                         int parameterIndex,
+                                         String columnType,
+                                         String value) throws SQLException {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isBlank()) {
+            preparedStatement.setNull(parameterIndex, resolveImportSqlType(columnType));
+            return;
+        }
+        if (normalized.length() >= 10
+                && normalized.charAt(4) == '/'
+                && normalized.charAt(7) == '/') {
+            normalized = normalized.substring(0, 4) + "-"
+                    + normalized.substring(5, 7) + "-"
+                    + normalized.substring(8);
+        }
+        if (columnType.startsWith("DATE") && !columnType.startsWith("DATETIME")) {
+            String dateText = normalized.length() >= 10 ? normalized.substring(0, 10) : normalized;
+            try {
+                preparedStatement.setDate(parameterIndex, Date.valueOf(LocalDate.parse(dateText)));
+            } catch (DateTimeParseException e) {
+                throw invalidTemporalValue(value, columnType, e);
+            }
+            return;
+        }
+        if (columnType.startsWith("TIME") && !columnType.startsWith("TIMESTAMP")) {
+            String timeText = normalized.contains(" ")
+                    ? normalized.substring(normalized.indexOf(' ') + 1).trim()
+                    : normalized;
+            try {
+                preparedStatement.setTime(parameterIndex, Time.valueOf(LocalTime.parse(timeText)));
+            } catch (DateTimeParseException e) {
+                throw invalidTemporalValue(value, columnType, e);
+            }
+            return;
+        }
+        try {
+            String dateTimeText = normalized.replace('T', ' ');
+            if (dateTimeText.length() == 10) {
+                dateTimeText += " 00:00:00";
+            }
+            preparedStatement.setTimestamp(parameterIndex, Timestamp.valueOf(dateTimeText));
+        } catch (IllegalArgumentException e) {
+            throw invalidTemporalValue(value, columnType, e);
+        }
+    }
+
+    private SQLException invalidTemporalValue(String value, String columnType, Exception cause) {
+        return new SQLException("无法将日期时间值 \"" + value + "\" 转换为 " + columnType, cause);
     }
 
     private void executeImportBatch(PreparedStatement preparedStatement,
@@ -1017,6 +1078,16 @@ public class TableService implements MetaObjectService {
                 || columnType.startsWith("BIGSERIAL")
                 || columnType.startsWith("SERIAL8")
                 || columnType.startsWith("MONEY");
+    }
+
+    private boolean isTemporalImportColumnType(String columnType) {
+        if (columnType == null || columnType.isEmpty()) {
+            return false;
+        }
+        return columnType.startsWith("DATE")
+                || columnType.startsWith("TIME")
+                || columnType.startsWith("DATETIME")
+                || columnType.startsWith("TIMESTAMP");
     }
 
     private boolean shouldImportBlankAsNull(String columnType, String value) {
