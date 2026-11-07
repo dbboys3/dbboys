@@ -5613,7 +5613,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .error-line-gutter {
-  -fx-background-color: white;
+  -fx-background-color: -color-bg-content;
 }
 
 .custom-connectname-choicebox,.custom-connectname-choicebox:hover{

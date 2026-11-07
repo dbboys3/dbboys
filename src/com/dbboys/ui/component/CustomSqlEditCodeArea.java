@@ -393,7 +393,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
                 return lineNumber;
             }
             int digits = String.valueOf(Math.max(1, getParagraphs().size())).length();
-            double gutterWidth = Math.max(26, 10 + digits * 8.0);
+            double gutterWidth = Math.max(30, 12 + digits * 9.0);
             GutterLine gutter = new GutterLine(label, gutterWidth);
             gutterNodes.put(idx, gutter);
             applyErrorGutterStyle(gutter, errorLineIndexes.contains(idx));
@@ -425,7 +425,6 @@ public class CustomSqlEditCodeArea extends CodeArea {
             marker.setMouseTransparent(true);
             marker.setManaged(false);
             marker.setVisible(false);
-            marker.setTranslateX(-5);
             StackPane.setAlignment(marker, Pos.CENTER);
             getChildren().addAll(marker, lineNumber);
         }
