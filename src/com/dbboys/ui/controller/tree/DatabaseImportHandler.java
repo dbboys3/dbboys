@@ -956,6 +956,10 @@ public class DatabaseImportHandler {
                         || (normalized.startsWith("'") && normalized.endsWith("'")))) {
             normalized = normalized.substring(1, normalized.length() - 1).trim();
         }
+        // SQL Server 方括号引用：剥括号并还原 ] 的转义（]] -> ]）
+        if (normalized.length() >= 2 && normalized.startsWith("[") && normalized.endsWith("]")) {
+            normalized = normalized.substring(1, normalized.length() - 1).replace("]]", "]").trim();
+        }
         return normalized;
     }
 
