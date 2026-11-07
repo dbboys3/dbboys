@@ -19,7 +19,8 @@ import java.util.Set;
  * Microsoft SQL Server platform adapter. Connection + metadata + SQL execution
  * only; instance management (install/start/stop) is intentionally not implemented.
  */
-public final class SqlserverDialect implements DatabasePlatform, ConnectionSupport {
+public final class SqlserverDialect implements DatabasePlatform, ConnectionSupport,
+        com.dbboys.core.ReconnectFallbackCapability {
     private static final String DB_TYPE = "SQLSERVER";
     private static final String DRIVER_CLASS = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
     private static final String DEFAULT_DRIVER = "mssql-jdbc-12.8.1.jre11.jar";
@@ -98,6 +99,21 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
             return ChangeDatabaseFailureKind.RETRY_WITH_NEW_CONNECTION;
         }
         return ChangeDatabaseFailureKind.OTHER;
+    }
+
+    // ==================================================================
+    // ReconnectFallbackCapability
+    // ==================================================================
+
+    @Override
+    public String reconnectFallbackDatabaseName() {
+        return defaultDatabase();
+    }
+
+    @Override
+    public String reconnectFallbackDatabaseName(Connect connect) {
+        String catalog = connect == null ? null : connect.getCatalog();
+        return catalog == null || catalog.isBlank() ? reconnectFallbackDatabaseName() : catalog;
     }
 
     // ==================================================================
