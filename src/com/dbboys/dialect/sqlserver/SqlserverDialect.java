@@ -221,6 +221,27 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
                 + "', N'" + newName.replace("'", "''") + "', 'INDEX'";
     }
 
+    /** SQL Server：先建服务器级登录名，再在库内建同名数据库用户（一个批次执行）。 */
+    @Override
+    public String createUserSql(String userName, String password) {
+        String login = quoteBracket(userName);
+        return "CREATE LOGIN " + login + " WITH PASSWORD = '" + DatabasePlatform.escapeSqlString(password) + "';\n"
+                + "CREATE USER " + login + " FOR LOGIN " + login + ";";
+    }
+
+    @Override
+    public String resetUserPasswordSql(String userName, String password) {
+        return "ALTER LOGIN " + quoteBracket(userName) + " WITH PASSWORD = '" + DatabasePlatform.escapeSqlString(password) + "'";
+    }
+
+    private static String quoteBracket(String identifier) {
+        String value = identifier == null ? "" : identifier.trim();
+        if (value.startsWith("[") && value.endsWith("]")) {
+            return value;
+        }
+        return "[" + value.replace("]", "]]" ) + "]";
+    }
+
     @Override
     public String dropColumnSql(String tableName, String columnName) {
         return "ALTER TABLE " + tableName + " DROP COLUMN " + columnName;

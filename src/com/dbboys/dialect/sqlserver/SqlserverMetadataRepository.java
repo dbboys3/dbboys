@@ -38,10 +38,11 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String SQL_SCHEMAS = """
             SELECT s.name,
                    dp.name AS owner,
-                   COALESCE((SELECT SUM(p.rows)
+                   COALESCE((SELECT SUM(a.used_pages) * 8
                              FROM sys.tables t
                              JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
-                             WHERE t.schema_id = s.schema_id), 0) AS total_rows
+                             JOIN sys.allocation_units a ON a.container_id = p.partition_id
+                             WHERE t.schema_id = s.schema_id), 0) AS size_kb
             FROM sys.schemas s
             JOIN sys.database_principals dp ON dp.principal_id = s.principal_id
             ORDER BY s.name
@@ -49,7 +50,12 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     private static final String SQL_SCHEMA_INFO = """
             SELECT s.name,
-                   dp.name AS owner
+                   dp.name AS owner,
+                   COALESCE((SELECT SUM(a.used_pages) * 8
+                             FROM sys.tables t
+                             JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                             JOIN sys.allocation_units a ON a.container_id = p.partition_id
+                             WHERE t.schema_id = s.schema_id), 0) AS size_kb
             FROM sys.schemas s
             JOIN sys.database_principals dp ON dp.principal_id = s.principal_id
             WHERE s.name = ?
@@ -384,8 +390,7 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         return runner.query(SQL_SCHEMAS, null, rs -> {
             Schema schema = new Schema(rs.getString("name"), parentDb);
             schema.setDbOwner(blank(rs.getString("owner")));
-            long rows = rs.getLong("total_rows");
-            schema.setDbSize(rows > 0 ? rows + " rows" : "");
+            schema.setDbSize(formatSize(rs.getLong("size_kb")));
             schema.setDbLog("");
             schema.setDbSpace("");
             schema.setDbLocale("");
@@ -402,7 +407,7 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         Schema info = runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName(databaseName)), rs -> {
             Schema schema = new Schema(rs.getString("name"), currentDatabaseQuiet(conn));
             schema.setDbOwner(blank(rs.getString("owner")));
-            schema.setDbSize("");
+            schema.setDbSize(formatSize(rs.getLong("size_kb")));
             schema.setDbLog("");
             schema.setDbSpace("");
             schema.setDbLocale("");
@@ -879,6 +884,14 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     private static String blank(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    /** 数据大小显示：>=1MB 显示 MB（与库列表一致），小表显示 KB。 */
+    private static String formatSize(long sizeKb) {
+        if (sizeKb <= 0) {
+            return "";
+        }
+        return sizeKb >= 1024 ? (sizeKb / 1024) + " MB" : sizeKb + " KB";
     }
 
     private static SqlRunner runner(Connection conn) {
