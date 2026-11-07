@@ -155,6 +155,13 @@ public interface ConnectionSupport {
         return jsonArray.toString();
     }
 
+    /**
+     * 建连前最后调整 JDBC 连接属性的方言钩子（默认不改动）。
+     * 典型用途：Oracle 以 SYS 用户登录时自动附加 {@code internal_logon=sysdba}（ORA-28009）。
+     */
+    default void customizeConnectionProperties(Connect connect, java.util.Properties info) {
+    }
+
 
 
     // === ALTER TABLE capability hints and platform-specific SQL ===

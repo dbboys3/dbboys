@@ -360,6 +360,21 @@ public final class OracleDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
+    public void customizeConnectionProperties(Connect connect, java.util.Properties info) {
+        if (connect == null || info == null) {
+            return;
+        }
+        String username = connect.getUsername();
+        // ORA-28009: SYS 用户只能以 SYSDBA/SYSOPER 登录；用户未显式指定角色时自动按 SYSDBA 连接。
+        if (username != null && "sys".equalsIgnoreCase(username.trim())) {
+            String existing = info.getProperty("internal_logon");
+            if (existing == null || existing.isBlank()) {
+                info.setProperty("internal_logon", "sysdba");
+            }
+        }
+    }
+
+    @Override
     public void sessionInit(Connection conn, Connect connect) throws Exception {
         String sessionCatalog = getSessionCatalog(connect);
         if (sessionCatalog != null && !sessionCatalog.isBlank()) {

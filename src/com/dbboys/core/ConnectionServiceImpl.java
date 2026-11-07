@@ -132,6 +132,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
             Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath(), params.getExtraJarPaths());
             Properties info = buildConnectionProperties(connect, false);
+            dialect.connection().customizeConnectionProperties(connect, info);
             Connection conn = driver.connect(params.getUrl(), info);
             if (conn == null) {
                 throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
@@ -231,6 +232,7 @@ public class ConnectionServiceImpl implements ConnectionService {
             ConnectionSupport.ConnectionParams params = dialect.connection().getConnectionParams(connect);
             Driver driver = getOrLoadDriver(params.getDriverClassName(), params.getJarFilePath(), params.getExtraJarPaths());
             Properties info = buildConnectionProperties(connect, shouldIgnoreTrimTrailingSpaces(connect));
+            dialect.connection().customizeConnectionProperties(connect, info);
             Connection conn = driver.connect(params.getUrl(), info);
             if (conn == null) {
                 throw new SQLException(buildDriverRejectedUrlMessage(params, driver));
