@@ -19,9 +19,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
-import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -407,33 +405,6 @@ public class DatabaseImportHandler {
             backSqlTask.setStmt(null);
         }
 
-        // PostgreSQL creates a default "public" schema. If the exported bundle
-        // contains a public schema, drop the default one first so the exported
-        // DDL can recreate it without a name conflict.
-        if (isPostgresqlImport(baseConnect) && containsSchemaPart(bundle.schemaParts, "public")) {
-            throwIfDatabaseImportCancelled(backSqlTask);
-            Connect dropConnect = new Connect(baseConnect);
-            dropConnect.setCatalog(bundle.databaseName);
-            dropConnect.setSessionCatalog("");
-            updateDatabaseImportTask(
-                    backSqlTask,
-                    dropConnect,
-                    db.getName(),
-                    formatDatabaseImportFlowStep(
-                            db.getName(),
-                            step + 1,
-                            flowTotalSteps,
-                            "metadata.import_ddl_data.task.flow.phase_drop_public_schema",
-                            "鍒犻櫎榛樿 public 妯″紡")
-            );
-            try (Connection conn = TreeViewUtil.connectionService.getConnectionWithSessionInit(dropConnect);
-                 Statement stmt = conn.createStatement()) {
-                stmt.execute("DROP SCHEMA IF EXISTS \"public\" CASCADE");
-            }
-            backSqlTask.setConnection(null);
-            backSqlTask.setStmt(null);
-        }
-
         for (SchemaImportPart part : bundle.schemaParts) {
             throwIfDatabaseImportCancelled(backSqlTask);
             Schema schema = new Schema(part.schemaName);
@@ -495,30 +466,6 @@ public class DatabaseImportHandler {
             }
         }
         return affectedRows;
-    }
-
-    private static boolean isPostgresqlImport(Connect connect) {
-        if (connect == null) {
-            return false;
-        }
-        try {
-            var platform = TreeObjectCrudHandler.resolvePlatformResolver().getPlatform(connect.getDbtype());
-            return platform != null && "POSTGRESQL".equalsIgnoreCase(platform.getDbType());
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private static boolean containsSchemaPart(List<SchemaImportPart> schemaParts, String schemaName) {
-        if (schemaParts == null || schemaName == null) {
-            return false;
-        }
-        for (SchemaImportPart part : schemaParts) {
-            if (schemaName.equals(part.schemaName)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean isDatabaseLevelImport(TreeItem<TreeData> selectedItem, Connect connect) {
