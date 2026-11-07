@@ -917,10 +917,10 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         return value == null ? "" : value.trim();
     }
 
-    /** 数据大小显示：>=1MB 显示 MB（与库列表一致），小表显示 KB。 */
+    /** 数据大小显示：>=1MB 显示 MB（与库列表一致），小表显示 KB，空模式显示 0 KB（对齐 PG 的 0 bytes）。 */
     private static String formatSize(long sizeKb) {
         if (sizeKb <= 0) {
-            return "";
+            return "0 KB";
         }
         return sizeKb >= 1024 ? (sizeKb / 1024) + " MB" : sizeKb + " KB";
     }
