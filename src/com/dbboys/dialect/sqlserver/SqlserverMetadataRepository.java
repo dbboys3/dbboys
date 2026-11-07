@@ -38,9 +38,9 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String SQL_SCHEMAS = """
             SELECT s.name,
                    dp.name AS owner,
-                   COALESCE((SELECT SUM(a.used_pages) * 8
+                   COALESCE((SELECT SUM(a.total_pages) * 8
                              FROM sys.tables t
-                             JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                             JOIN sys.partitions p ON p.object_id = t.object_id
                              JOIN sys.allocation_units a ON a.container_id = p.partition_id
                              WHERE t.schema_id = s.schema_id), 0) AS size_kb
             FROM sys.schemas s
@@ -51,9 +51,9 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String SQL_SCHEMA_INFO = """
             SELECT s.name,
                    dp.name AS owner,
-                   COALESCE((SELECT SUM(a.used_pages) * 8
+                   COALESCE((SELECT SUM(a.total_pages) * 8
                              FROM sys.tables t
-                             JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                             JOIN sys.partitions p ON p.object_id = t.object_id
                              JOIN sys.allocation_units a ON a.container_id = p.partition_id
                              WHERE t.schema_id = s.schema_id), 0) AS size_kb
             FROM sys.schemas s
@@ -76,10 +76,10 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
                    COALESCE((SELECT SUM(p.rows)
                              FROM sys.partitions p
                              WHERE p.object_id = t.object_id AND p.index_id IN (0, 1)), 0) AS num_rows,
-                   COALESCE((SELECT SUM(a.used_pages) * 8
+                   COALESCE((SELECT SUM(a.total_pages) * 8
                              FROM sys.partitions p
                              JOIN sys.allocation_units a ON a.container_id = p.partition_id
-                             WHERE p.object_id = t.object_id AND p.index_id IN (0, 1)), 0) AS size_kb,
+                             WHERE p.object_id = t.object_id), 0) AS size_kb,
                    COALESCE(ep.value, '') AS table_comment
             FROM sys.tables t
             JOIN sys.schemas s ON s.schema_id = t.schema_id
@@ -97,10 +97,10 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
                    COALESCE((SELECT SUM(p.rows)
                              FROM sys.partitions p
                              WHERE p.object_id = t.object_id AND p.index_id IN (0, 1)), 0) AS num_rows,
-                   COALESCE((SELECT SUM(a.used_pages) * 8
+                   COALESCE((SELECT SUM(a.total_pages) * 8
                              FROM sys.partitions p
                              JOIN sys.allocation_units a ON a.container_id = p.partition_id
-                             WHERE p.object_id = t.object_id AND p.index_id IN (0, 1)), 0) AS size_kb,
+                             WHERE p.object_id = t.object_id), 0) AS size_kb,
                    COALESCE(ep.value, '') AS table_comment
             FROM sys.tables t
             JOIN sys.schemas s ON s.schema_id = t.schema_id
@@ -432,10 +432,10 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     public String getUserTablesSize(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         Long sizeKb = runner.queryOne("""
-                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                SELECT COALESCE(SUM(a.total_pages) * 8, 0)
                 FROM sys.tables t
                 JOIN sys.schemas s ON s.schema_id = t.schema_id
-                JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                JOIN sys.partitions p ON p.object_id = t.object_id
                 JOIN sys.allocation_units a ON a.container_id = p.partition_id
                 WHERE s.name = ?
                   AND t.is_ms_shipped = 0
@@ -454,9 +454,9 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     public String getSystemTablesSize(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         Long sizeKb = runner.queryOne("""
-                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                SELECT COALESCE(SUM(a.total_pages) * 8, 0)
                 FROM sys.all_objects o
-                JOIN sys.partitions p ON p.object_id = o.object_id AND p.index_id IN (0, 1)
+                JOIN sys.partitions p ON p.object_id = o.object_id
                 JOIN sys.allocation_units a ON a.container_id = p.partition_id
                 WHERE o.type = 'S'
                 """, null, rs -> rs.getLong(1));
@@ -567,7 +567,7 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         // index_id > 1：排除堆(0)与聚集索引(1)（它们就是表数据本身）
         Long sizeKb = runner.queryOne("""
-                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                SELECT COALESCE(SUM(a.total_pages) * 8, 0)
                 FROM sys.indexes i
                 JOIN sys.tables t ON t.object_id = i.object_id
                 JOIN sys.schemas s ON s.schema_id = t.schema_id

@@ -159,9 +159,12 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
         return DatabasePlatform.defaultMetadataTreeDragStarFromSql(qualifiedTable);
     }
 
-    /** DB2 模式是独立对象（非用户=模式模型）。 */
+    /** DB2 模式是独立对象（非用户=模式模型）；不支持重命名模式。 */
     @Override
     public String schemaNodeObjectType() { return "schema"; }
+
+    @Override
+    public boolean supportsRenameDatabaseNode() { return false; }
 
     /** DB2 不支持重命名模式；删除模式必须带 RESTRICT。 */
     @Override

@@ -223,6 +223,16 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     @Override
     public String schemaNodeObjectType() { return "schema"; }
 
+    /** T-SQL 不支持重命名模式/库（只能新建后迁移），右键不显示重命名。 */
+    @Override
+    public boolean supportsRenameDatabaseNode() { return false; }
+
+    @Override
+    public boolean supportsSchemaImportScript() { return false; }
+
+    @Override
+    public boolean supportsSchemaExport() { return false; }
+
     @Override
     public String dropObjectSql(String objectType, String objectName) {
         String type = objectType == null ? "" : objectType.toUpperCase(java.util.Locale.ROOT);

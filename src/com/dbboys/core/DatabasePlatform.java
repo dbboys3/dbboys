@@ -309,6 +309,16 @@ public interface DatabasePlatform {
         return "user";
     }
 
+    /** 模式节点右键是否提供“导入SQL脚本”。 */
+    default boolean supportsSchemaImportScript() {
+        return true;
+    }
+
+    /** 模式节点右键是否提供“导出模式/导出DDL”。 */
+    default boolean supportsSchemaExport() {
+        return true;
+    }
+
     default String renameIndexSql(String indexName, String tableName, String newName) {
         return renameObjectSql("index", indexName, newName);
     }

@@ -1562,10 +1562,12 @@ public class TreeContextMenuBuilder {
                     }
 
                     // ---- 导入SQL脚本 ---- //
-                    treeview_menu.getItems().add(importSqlScriptItem);
+                    if (schemaNodePlatform == null || schemaNodePlatform.supportsSchemaImportScript()) {
+                        treeview_menu.getItems().add(importSqlScriptItem);
+                    }
 
                     // ---- 导出模式 ---- //
-                    boolean exportAllowed = schemaNodePlatform == null || schemaNodePlatform.supportsDatabaseExport();
+                    boolean exportAllowed = schemaNodePlatform == null || schemaNodePlatform.supportsSchemaExport();
                     if (exportAllowed) {
                         exportDdlAndDataItem.textProperty().unbind();
                         String exportKey = schemaNodePlatform != null
