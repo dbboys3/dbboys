@@ -147,6 +147,15 @@ public interface DatabasePlatform {
         return catalogModel() == CatalogModel.DATABASE_SCHEMA;
     }
 
+    /**
+     * SQL 面板的库下拉框直接列数据库而不是模式；同时拖模式节点打开 SQL 面板时
+     * 等价于拖其所属库节点。适用于模式不能作为连接/会话切换目标的方言
+     * （如 SQL Server，T-SQL 无会话级 SET SCHEMA）。
+     */
+    default boolean sqlPanelComboUsesDatabases() {
+        return false;
+    }
+
     /** 建模式对话框是否需要密码（oracle/dameng 的用户=模式模型需要；PG 的 CREATE SCHEMA 不需要）。 */
     default boolean createSchemaWithPassword() {
         return true;

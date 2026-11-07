@@ -124,6 +124,10 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     @Override
     public CatalogModel catalogModel() { return CatalogModel.DATABASE_SCHEMA; }
 
+    /** T-SQL 无会话级模式切换：面板下拉框列库，拖模式节点等价于拖所属库。 */
+    @Override
+    public boolean sqlPanelComboUsesDatabases() { return true; }
+
     @Override
     public boolean supportsPackages() { return false; }
 

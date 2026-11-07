@@ -359,7 +359,10 @@ public class TreeObjectCrudHandler {
         String parentDb = (database instanceof Schema schema) ? schema.getParentDb() : null;
         if (parentDb != null && !parentDb.isBlank() && database.getName().equals(databaseName)) {
             connect.setCatalog(parentDb);
-            connect.setSessionCatalog(databaseName);
+            // 模式不能作为连接目标的方言（SQL Server）：拖模式等价于拖所属库，会话目标即库本身
+            boolean schemaAsParentDb = resolvePlatformResolver().requirePlatform(connect)
+                    .sqlPanelComboUsesDatabases();
+            connect.setSessionCatalog(schemaAsParentDb ? parentDb : databaseName);
         } else {
             resolvePlatformResolver().requirePlatform(connect).connection().setSessionCatalog(connect, databaseName);
         }

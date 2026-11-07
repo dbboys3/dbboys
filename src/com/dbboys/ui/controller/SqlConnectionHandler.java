@@ -222,7 +222,8 @@ public class SqlConnectionHandler {
                     .getPlatform(ctrl.sqlConnect.getDbtype());
             List<CatalogNode> dbNames;
             String initialSchemaName = null;
-            if (platform != null && platform.usesCatalogSchemaLevel()) {
+            if (platform != null && platform.usesCatalogSchemaLevel()
+                    && !platform.sqlPanelComboUsesDatabases()) {
                 dbNames = loadCatalogSchemaComboItems();
                 initialSchemaName = resolveInitialSchemaName(dbNames);
             } else {
@@ -324,17 +325,30 @@ public class SqlConnectionHandler {
                 sessionDb = sessionDb.substring(0, colonIdx);
             }
         }
-        if (sessionDb == null || sessionDb.isBlank()) {
+        if (sessionDb != null && !sessionDb.isBlank() && selectDatabaseByName(sessionDb)) {
             return;
+        }
+        // sessionCatalog 匹配不到列表项时（如残留的会话目标），回落到连接的库（catalog）
+        String catalog = ctrl.sqlConnect.getCatalog();
+        if (catalog != null && !catalog.isBlank()
+                && (sessionDb == null || !catalog.equalsIgnoreCase(sessionDb))) {
+            selectDatabaseByName(catalog);
+        }
+    }
+
+    private boolean selectDatabaseByName(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
         }
         int i = 0;
         for (CatalogNode item : ctrl.databaseChoiceBoxList) {
-            if (item.getName().equalsIgnoreCase(sessionDb)) {
+            if (item.getName().equalsIgnoreCase(name)) {
                 ctrl.sqlDbChoiceBox.getSelectionModel().select(i);
-                return;
+                return true;
             }
             i++;
         }
+        return false;
     }
 
     public void setupDatabaseListener() {
