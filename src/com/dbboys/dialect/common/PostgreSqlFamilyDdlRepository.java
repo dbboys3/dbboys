@@ -35,14 +35,14 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
             """;
 
     private static final String SQL_TABLE_CONSTRAINTS = """
-            SELECT conname, pg_catalog.pg_get_constraintdef(oid) AS def
+            SELECT c.conname, pg_catalog.pg_get_constraintdef(c.oid) AS def
             FROM pg_catalog.pg_constraint c
             JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
             JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
             WHERE n.nspname = ?
               AND t.relname = ?
               AND c.contype IN ('u','c','f','x')
-            ORDER BY conname
+            ORDER BY c.conname
             """;
 
     private static final String SQL_TABLE_TRIGGERS = """
