@@ -1596,6 +1596,7 @@ public class TreeContextMenuBuilder {
                             && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
+                        createDatabaseItem.setGraphic(IconFactory.group(IconPaths.METADATA_ADD_USER, 0.55, 0.55));
                         treeview_menu.getItems().add(createDatabaseItem);
                     }
 

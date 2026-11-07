@@ -399,6 +399,11 @@ public final class PostgresqlDialect implements DatabasePlatform, ConnectionSupp
     }
 
     @Override
+    public boolean supportsDatabaseImportScript() {
+        return true;
+    }
+
+    @Override
     public boolean supportsTableTypeModification() {
         return false;
     }
