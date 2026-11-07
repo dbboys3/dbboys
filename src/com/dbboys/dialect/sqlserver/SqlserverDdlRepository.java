@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * SQL Server DDL export. Views/procedures/functions/triggers return their
@@ -16,6 +18,9 @@ import java.util.List;
 public final class SqlserverDdlRepository implements DdlRepository {
 
     private static final int QUERY_TIMEOUT_SECONDS = 30;
+
+    /** 内置模式：实例创建后已存在，导出时不生成 CREATE SCHEMA。 */
+    private static final Set<String> DEFAULT_SCHEMAS = Set.of("dbo", "guest", "sys", "information_schema");
 
     private static final String SQL_MODULE_TEXT = """
             SELECT m.definition
@@ -290,6 +295,11 @@ public final class SqlserverDdlRepository implements DdlRepository {
         String schema = databaseName == null ? "" : databaseName.trim();
         StringBuilder ddl = new StringBuilder();
         SqlRunner runner = runner(conn);
+
+        // 非内置模式补 CREATE SCHEMA；T-SQL 要求其独占批次，appendObject 会用 GO 分隔
+        if (!schema.isBlank() && !DEFAULT_SCHEMAS.contains(schema.toLowerCase(Locale.ROOT))) {
+            ddl.append("CREATE SCHEMA ").append(quote(schema));
+        }
 
         List<String> sequences = runner.query(SQL_SEQUENCE_NAMES, List.of(schema), rs -> rs.getString(1));
         for (String name : sequences) {

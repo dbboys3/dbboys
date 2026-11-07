@@ -187,6 +187,15 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
         return DatabasePlatform.defaultMetadataTreeDragStarFromSql(qualifiedTable);
     }
 
+    /**
+     * 内置模式名（含固定数据库角色对应的同名模式）：导出库时随系统库一并跳过，
+     * dbo 不在其中，始终导出。
+     */
+    private static final Set<String> SYSTEM_SCHEMA_NAMES = Set.of(
+            "db_accessadmin", "db_backupoperator", "db_datareader", "db_datawriter",
+            "db_ddladmin", "db_denydatareader", "db_denydatawriter", "db_owner",
+            "db_securityadmin", "guest", "information_schema", "sys");
+
     @Override
     public Set<String> systemDatabaseNames() {
         return Set.of("master", "model", "msdb", "tempdb");
@@ -194,7 +203,11 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
 
     @Override
     public boolean isSystemDatabase(String databaseName) {
-        return databaseName != null && systemDatabaseNames().contains(databaseName.trim().toLowerCase());
+        if (databaseName == null) {
+            return false;
+        }
+        String lower = databaseName.trim().toLowerCase();
+        return systemDatabaseNames().contains(lower) || SYSTEM_SCHEMA_NAMES.contains(lower);
     }
 
     @Override

@@ -105,7 +105,10 @@ public abstract class PostgreSqlFamilyDdlRepository implements DdlRepository {
         ddl.append("-- PostgreSQL Schema DDL Export: ").append(schema).append("\n");
         ddl.append("-- ============================================================\n\n");
 
-        ddl.append("CREATE SCHEMA ").append(quoteIdentifier(schema)).append(";\n\n");
+        // 默认模式（public）已存在，不生成创建语句；非默认模式才补 CREATE SCHEMA
+        if (!defaultSchemaName().equalsIgnoreCase(schema)) {
+            ddl.append("CREATE SCHEMA ").append(quoteIdentifier(schema)).append(";\n\n");
+        }
 
         // User-defined types first: table columns may reference enums/composites/domains
         List<String> types = listUserDefinedTypes(conn, schema);
