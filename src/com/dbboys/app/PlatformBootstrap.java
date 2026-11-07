@@ -1,6 +1,7 @@
 package com.dbboys.app;
 
 import com.dbboys.core.DatabasePlatforms;
+import com.dbboys.dialect.db2.Db2Dialect;
 import com.dbboys.dialect.postgresql.PostgresqlDialect;
 import com.dbboys.dialect.dameng.DamengDialect;
 import com.dbboys.dialect.gbase8s.Gbase8sDialect;
@@ -9,6 +10,7 @@ import com.dbboys.dialect.informix.InformixDialect;
 import com.dbboys.dialect.mysql.MysqlDialect;
 import com.dbboys.dialect.oracle.OracleDialect;
 import com.dbboys.dialect.sqlite.SqliteDialect;
+import com.dbboys.dialect.sqlserver.SqlserverDialect;
 
 /**
  * 组合根接线：实例化并注册全部数据库方言。
@@ -29,6 +31,8 @@ public final class PlatformBootstrap {
         platforms.register(new PostgresqlDialect());
         platforms.register(new DamengDialect());
         platforms.register(new SqliteDialect());
+        platforms.register(new Db2Dialect());
+        platforms.register(new SqlserverDialect());
         return platforms;
     }
 }
