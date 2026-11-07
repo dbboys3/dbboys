@@ -210,9 +210,28 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
 
     @Override
     public String renameObjectSql(String objectType, String oldName, String newName) {
+        // T-SQL 不支持重命名模式（只能新建后迁移对象），返回 null 由上层提示
+        if ("schema".equalsIgnoreCase(objectType)) {
+            return null;
+        }
         String objectClass = "index".equalsIgnoreCase(objectType) ? "INDEX" : "OBJECT";
         return "EXEC sp_rename N'" + oldName.replace("'", "''") + "', N'" + newName.replace("'", "''")
                 + "', '" + objectClass + "'";
+    }
+
+    /** 模式是独立对象（非用户=模式模型）。 */
+    @Override
+    public String schemaNodeObjectType() { return "schema"; }
+
+    @Override
+    public String dropObjectSql(String objectType, String objectName) {
+        String type = objectType == null ? "" : objectType.toUpperCase(java.util.Locale.ROOT);
+        return switch (type) {
+            case "SCHEMA" -> "DROP SCHEMA " + quoteBracket(objectName);
+            case "USER" -> "DROP USER " + quoteBracket(objectName);
+            case "DATABASE" -> "DROP DATABASE " + quoteBracket(objectName);
+            default -> "DROP " + type + " " + quoteBracket(objectName);
+        };
     }
 
     @Override

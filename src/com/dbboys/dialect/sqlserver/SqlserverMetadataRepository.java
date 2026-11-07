@@ -429,8 +429,18 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public String getUserTablesSize(Connection conn, String databaseName) {
-        return null;
+    public String getUserTablesSize(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        Long sizeKb = runner.queryOne("""
+                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                FROM sys.tables t
+                JOIN sys.schemas s ON s.schema_id = t.schema_id
+                JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                JOIN sys.allocation_units a ON a.container_id = p.partition_id
+                WHERE s.name = ?
+                  AND t.is_ms_shipped = 0
+                """, List.of(schemaName(databaseName)), rs -> rs.getLong(1));
+        return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
     }
 
     @Override
@@ -441,8 +451,16 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public String getSystemTablesSize(Connection conn, String databaseName) {
-        return null;
+    public String getSystemTablesSize(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        Long sizeKb = runner.queryOne("""
+                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                FROM sys.all_objects o
+                JOIN sys.partitions p ON p.object_id = o.object_id AND p.index_id IN (0, 1)
+                JOIN sys.allocation_units a ON a.container_id = p.partition_id
+                WHERE o.type = 'S'
+                """, null, rs -> rs.getLong(1));
+        return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
     }
 
     @Override
@@ -545,8 +563,21 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     }
 
     @Override
-    public String getIndexSize(Connection conn) {
-        return null;
+    public String getIndexSize(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        // index_id > 1：排除堆(0)与聚集索引(1)（它们就是表数据本身）
+        Long sizeKb = runner.queryOne("""
+                SELECT COALESCE(SUM(a.used_pages) * 8, 0)
+                FROM sys.indexes i
+                JOIN sys.tables t ON t.object_id = i.object_id
+                JOIN sys.schemas s ON s.schema_id = t.schema_id
+                JOIN sys.partitions p ON p.object_id = i.object_id AND p.index_id = i.index_id
+                JOIN sys.allocation_units a ON a.container_id = p.partition_id
+                WHERE s.name = ?
+                  AND i.name IS NOT NULL
+                  AND i.index_id > 1
+                """, List.of(currentSchema(conn)), rs -> rs.getLong(1));
+        return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
     }
 
     @Override

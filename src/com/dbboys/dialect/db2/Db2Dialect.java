@@ -159,6 +159,27 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
         return DatabasePlatform.defaultMetadataTreeDragStarFromSql(qualifiedTable);
     }
 
+    /** DB2 模式是独立对象（非用户=模式模型）。 */
+    @Override
+    public String schemaNodeObjectType() { return "schema"; }
+
+    /** DB2 不支持重命名模式；删除模式必须带 RESTRICT。 */
+    @Override
+    public String renameObjectSql(String objectType, String oldName, String newName) {
+        if ("schema".equalsIgnoreCase(objectType)) {
+            return null;
+        }
+        return DatabasePlatform.super.renameObjectSql(objectType, oldName, newName);
+    }
+
+    @Override
+    public String dropObjectSql(String objectType, String objectName) {
+        if ("schema".equalsIgnoreCase(objectType)) {
+            return "DROP SCHEMA " + objectName + " RESTRICT";
+        }
+        return DatabasePlatform.super.dropObjectSql(objectType, objectName);
+    }
+
     @Override
     public String truncateTableSql(String tableName) {
         return "TRUNCATE TABLE " + tableName + " IMMEDIATE";

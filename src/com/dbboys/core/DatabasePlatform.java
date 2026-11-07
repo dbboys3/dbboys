@@ -300,6 +300,15 @@ public interface DatabasePlatform {
         return "rename " + objectType + " " + oldName + " to " + newName;
     }
 
+    /**
+     * 重命名/删除模式节点时使用的对象类型。
+     * Oracle/Dameng 的用户=模式模型用 {@code "user"}；模式是独立对象的方言
+     * （PostgreSQL/SQL Server/DB2）返回 {@code "schema"}。
+     */
+    default String schemaNodeObjectType() {
+        return "user";
+    }
+
     default String renameIndexSql(String indexName, String tableName, String newName) {
         return renameObjectSql("index", indexName, newName);
     }

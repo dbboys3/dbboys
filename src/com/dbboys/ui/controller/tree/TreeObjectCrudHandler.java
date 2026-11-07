@@ -101,8 +101,8 @@ public class TreeObjectCrudHandler {
                     // oracle/dameng 模式名习惯大写；PG 模式名保持用户输入
                     String effectiveName = renamePlatform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA
                             ? newName.toUpperCase() : newName;
-                    renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, effectiveName, "user",
-                            false);
+                    renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, effectiveName,
+                            renamePlatform.schemaNodeObjectType(), false);
                 } else {
                     renameDatabaseObject(TreeViewUtil.databaseService, selectedItem, newName, "database",
                             true);
@@ -197,6 +197,12 @@ public class TreeObjectCrudHandler {
             }
         }
         Connect connect = buildObjectConnect(selectedItem, useSysmaster);
+        if (sql == null) {
+            NotificationUtil.showMainNotification(
+                    I18n.t("metadata.notice.rename_not_supported", "%s不支持重命名")
+                            .formatted(objectDisplayName));
+            return;
+        }
         service.renameObject(connect, sql, () -> {
             selectedItem.getValue().setName(newName);
             NotificationUtil.showMainNotification(
@@ -306,7 +312,8 @@ public class TreeObjectCrudHandler {
         }else if(treeData instanceof CatalogNode catalog){
             DatabasePlatform platform = TreeNavigator.resolvePlatform(selectedItem);
             if (platform != null && (platform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA || treeData instanceof Schema)) {
-                deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "user", false);
+                deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem,
+                        platform.schemaNodeObjectType(), false);
             } else {
                 deleteDatabaseObject(TreeViewUtil.databaseService, selectedItem, "database", true);
             }
