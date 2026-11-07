@@ -4,6 +4,7 @@
 修复表格拖动选中滚动条不联动  
 修复Oracle SYS登录报错28009  
 修复PostgreSQL获取表结构DDL报错  
+修复PostgreSQL导入csv timestamp类型报错  
 优化浅色主题UI  
 
 ### 20260915
