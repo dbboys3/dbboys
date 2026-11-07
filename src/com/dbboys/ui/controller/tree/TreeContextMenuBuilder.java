@@ -1621,9 +1621,10 @@ public class TreeContextMenuBuilder {
                         treeview_menu.getItems().add(deleteItem);
                     }
 
-                    // ---- 非三层模型：导入SQL脚本（倒数第三，导出数据库前面） ---- //
-                    if (dbNodePlatform == null
-                            || dbNodePlatform.catalogModel() != DatabasePlatform.CatalogModel.DATABASE_SCHEMA) {
+                    // ---- 导入SQL脚本（导入模式前） ---- //
+                    boolean databaseSchemaModel = dbNodePlatform != null
+                            && dbNodePlatform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA;
+                    if (!databaseSchemaModel || dbNodePlatform.supportsDatabaseImportScript()) {
                         treeview_menu.getItems().add(importSqlScriptItem);
                     }
 

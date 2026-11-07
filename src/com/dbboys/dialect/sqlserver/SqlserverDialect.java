@@ -244,6 +244,9 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     public boolean supportsSchemaImportScript() { return false; }
 
     @Override
+    public boolean supportsDatabaseImportScript() { return true; }
+
+    @Override
     public String getExportDdlDataMenuI18nKey() { return "metadata.menu.export_ddl_schema"; }
 
     @Override

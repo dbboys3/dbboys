@@ -314,6 +314,11 @@ public interface DatabasePlatform {
         return true;
     }
 
+    /** 数据库节点右键是否提供“导入SQL脚本”（三层目录模型使用）。 */
+    default boolean supportsDatabaseImportScript() {
+        return false;
+    }
+
     /** 模式节点右键是否提供“导出模式/导出DDL”。 */
     default boolean supportsSchemaExport() {
         return true;
