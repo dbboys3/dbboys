@@ -265,14 +265,41 @@ public class SqlExecutionHelper {
             }
         }
 
+        // Oracle positions are relative to the original SQL held by the driver.
+        OracleErrorInfo oracleError = queryOracleErrorInfo(error);
+        if (oracleError != null && oracleError.position() > 0) {
+            int oracleTokenIndex = extractErrorTokenIndex(sentSql, ctrl.sqlExecutionResult);
+            if (oracleTokenIndex >= 0) {
+                return clamp(base + oracleTokenIndex, base, maxTarget);
+            }
+            int oracleBase = locateSqlSourceStart(
+                    executedText,
+                    oracleError.originalSql(),
+                    base,
+                    ctrl.sqlSelectionRange[0]
+            );
+            return clamp(oracleBase + oracleError.position(), base, maxTarget);
+        }
+
         // PostgreSQL: ServerErrorMessage carries a 1-based character position.
         Integer charPosition = queryPostgresqlErrorPosition(error);
         if (charPosition != null && charPosition > 0) {
             return clamp(base + charPosition - 1, base, maxTarget);
         }
 
-        // MySQL/Dameng style messages: "at line N" / "line N, column M" / "第N行",
-        // relative to the start of the sent statement.
+        // SQL Server often reports the statement start line, so quoted column,
+        // object, or near-token text is more precise when available.
+        int errorTokenIndex = extractErrorTokenIndex(sentSql, ctrl.sqlExecutionResult);
+        if (errorTokenIndex >= 0) {
+            return clamp(base + errorTokenIndex, base, maxTarget);
+        }
+        Integer sqlServerLine = querySqlServerErrorLine(error);
+        if (sqlServerLine != null && sqlServerLine > 0) {
+            return offsetForLineInStatement(sentSql, base, sqlServerLine, maxTarget);
+        }
+
+        // MySQL/Dameng style messages carry a line number relative to the
+        // start of the sent statement.
         int lineInStatement = extractErrorLineInStatement(ctrl.sqlExecutionResult);
         int relTarget = Math.max(0, base - ctrl.sqlSelectionRange[0]);
         int relEnd = Math.max(0, range[1] - ctrl.sqlSelectionRange[0]);
@@ -287,38 +314,97 @@ public class SqlExecutionHelper {
             return clamp(ctrl.sqlSelectionRange[0] + relTarget, base, maxTarget);
         }
 
-        // SQLite/SQL Server style messages carry no line number but quote the
-        // statement fragment at the error position: near "..." / near '...'.
-        int nearIndex = extractNearTokenIndex(sentSql, ctrl.sqlExecutionResult);
-        if (nearIndex >= 0) {
-            return clamp(base + nearIndex, base, maxTarget);
-        }
         return base;
     }
 
+    private static int offsetForLineInStatement(String sentSql,
+                                                int base,
+                                                int lineNumber,
+                                                int maxTarget) {
+        if (lineNumber <= 1 || sentSql == null || sentSql.isEmpty()) {
+            return base;
+        }
+        int cursor = 0;
+        for (int line = 1; line < lineNumber; line++) {
+            int newline = sentSql.indexOf('\n', cursor);
+            if (newline < 0) {
+                return base;
+            }
+            cursor = newline + 1;
+        }
+        return clamp(base + cursor, base, maxTarget);
+    }
+
     /**
-     * Finds the char index of the error fragment quoted in {@code near '...'}
-     * or {@code near "..."} messages inside the sent statement, or -1.
-     * The fragment is the statement text starting at the error position
-     * (possibly truncated), so an indexOf match gives that position.
+     * Finds a quoted column/object/token in a driver message and maps it back
+     * to the sent SQL, or returns -1 when no token can be located.
      */
-    private static int extractNearTokenIndex(String sentSql, String executionResult) {
+    private static int extractErrorTokenIndex(String sentSql, String executionResult) {
         if (sentSql == null || sentSql.isEmpty() || executionResult == null) {
             return -1;
         }
-        java.util.regex.Matcher matcher = NEAR_TOKEN_PATTERN.matcher(executionResult);
-        if (!matcher.find()) {
-            return -1;
+        java.util.regex.Matcher matcher = QUOTED_ERROR_TOKEN_PATTERN.matcher(executionResult);
+        while (matcher.find()) {
+            for (int group = 1; group <= matcher.groupCount(); group++) {
+                String token = matcher.group(group);
+                if (token == null || token.isBlank()) {
+                    continue;
+                }
+                int index = indexOfIgnoreCase(sentSql, token.trim());
+                if (index >= 0) {
+                    return index;
+                }
+                String unquoted = token.replace("[", "").replace("]", "").trim();
+                index = indexOfIgnoreCase(sentSql, unquoted);
+                if (index >= 0) {
+                    return index;
+                }
+            }
         }
-        String token = matcher.group(2);
-        if (token == null || token.isBlank()) {
-            return -1;
-        }
-        return sentSql.indexOf(token.trim());
+        return -1;
     }
 
-    private static final java.util.regex.Pattern NEAR_TOKEN_PATTERN = java.util.regex.Pattern.compile(
-            "(?is)near\\s+(['\"])(.{1,300}?)\\1");
+    private static int indexOfIgnoreCase(String text, String token) {
+        if (text == null || token == null || token.isEmpty() || token.length() > text.length()) {
+            return -1;
+        }
+        int limit = text.length() - token.length();
+        for (int i = 0; i <= limit; i++) {
+            if (text.regionMatches(true, i, token, 0, token.length())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int locateSqlSourceStart(String executedText,
+                                            String originalSql,
+                                            int fallbackBase,
+                                            int searchStart) {
+        if (executedText == null || originalSql == null || originalSql.isEmpty()) {
+            return fallbackBase;
+        }
+        int start = Math.max(0, Math.min(searchStart, executedText.length()));
+        int index = executedText.indexOf(originalSql, start);
+        if (index >= 0) {
+            return index;
+        }
+        String trimmed = originalSql.strip();
+        if (!trimmed.isEmpty()) {
+            index = executedText.indexOf(trimmed, start);
+            if (index >= 0) {
+                return index;
+            }
+        }
+        return fallbackBase;
+    }
+
+    private static final java.util.regex.Pattern QUOTED_ERROR_TOKEN_PATTERN =
+            java.util.regex.Pattern.compile(
+                    "(?s)[\"'`]([^\"'`\\r\\n]{1,300})[\"'`]"
+                            + "|“([^”\\r\\n]{1,300})”"
+                            + "|‘([^’\\r\\n]{1,300})’"
+                            + "|\\[([^\\]\\r\\n]{1,300})\\]");
 
     /**
      * Calls {@code getSQLStatementOffset()} on the JDBC connection when the driver
@@ -374,6 +460,58 @@ public class SqlExecutionHelper {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /** Reads the 1-based error line exposed by SQL Server JDBC, if available. */
+    private static Integer querySqlServerErrorLine(SQLException error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            try {
+                Object serverError = current.getClass()
+                        .getMethod("getSQLServerError")
+                        .invoke(current);
+                if (serverError == null) {
+                    continue;
+                }
+                Object lineNumber = serverError.getClass()
+                        .getMethod("getLineNumber")
+                        .invoke(serverError);
+                if (lineNumber instanceof Number number && number.longValue() > 0) {
+                    return number.intValue();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reads Oracle's zero-based character position and the exact SQL text used
+     * as its reference.
+     */
+    private static OracleErrorInfo queryOracleErrorInfo(SQLException error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            try {
+                Object position = current.getClass()
+                        .getMethod("getErrorPosition")
+                        .invoke(current);
+                if (position instanceof Number number && number.intValue() > 0) {
+                    String originalSql = null;
+                    try {
+                        Object value = current.getClass()
+                                .getMethod("getOriginalSql")
+                                .invoke(current);
+                        originalSql = value instanceof String text ? text : null;
+                    } catch (Exception ignored) {
+                    }
+                    return new OracleErrorInfo(number.intValue(), originalSql);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private record OracleErrorInfo(int position, String originalSql) {
     }
 
     private static boolean hasPublicMethod(Class<?> type, String name) {
