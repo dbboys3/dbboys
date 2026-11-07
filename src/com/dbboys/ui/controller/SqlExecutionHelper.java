@@ -359,6 +359,14 @@ public class SqlExecutionHelper {
                 if (index >= 0) {
                     return index;
                 }
+                int dot = unquoted.lastIndexOf('.');
+                if (dot >= 0 && dot + 1 < unquoted.length()) {
+                    String objectName = unquoted.substring(dot + 1).trim();
+                    index = indexOfIgnoreCase(sentSql, objectName);
+                    if (index >= 0) {
+                        return index;
+                    }
+                }
             }
         }
         return -1;
