@@ -191,7 +191,7 @@ public class DatabaseDdlExportHandler {
                             baseConnect == null ? "" : baseConnect.getCatalog(),
                             new Connect(baseConnect),
                             new File(dir, table.getName() + ".csv"),
-                            "select * from " + table.getName(),
+                            "select * from " + qualifiedExportTableName(table),
                             table.getNrows()
                     ));
                 }
@@ -206,6 +206,23 @@ public class DatabaseDdlExportHandler {
                 "Database data export cancelled",
                 "Database"
         );
+    }
+
+    /**
+     * 导出数据的查询目标名：owner（模式）非空时拼成 owner.table。
+     * PostgreSQL 靠 search_path 解析、owner 为空保持原样；SQL Server 无会话级
+     * 模式切换，必须显式限定，否则非默认模式会查不到表。
+     */
+    private static String qualifiedExportTableName(Table table) {
+        String name = table.getName().trim();
+        if (name.indexOf('.') >= 0) {
+            return name;
+        }
+        String owner = table.getTableOwner();
+        if (owner != null && !owner.isBlank()) {
+            return owner.trim() + "." + name;
+        }
+        return name;
     }
 
     /**

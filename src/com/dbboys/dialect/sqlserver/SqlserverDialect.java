@@ -231,7 +231,22 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     public boolean supportsSchemaImportScript() { return false; }
 
     @Override
-    public boolean supportsSchemaExport() { return false; }
+    public String getExportDdlDataMenuI18nKey() { return "metadata.menu.export_ddl_schema"; }
+
+    @Override
+    public String getExportDdlDataMenuDefaultText() { return "导出模式"; }
+
+    @Override
+    public String getExportNoticeI18nKey() { return "metadata.export.ddl_schema.notice.completed"; }
+
+    @Override
+    public String getExportNoticeDefaultText() { return "模式已导出到：%s"; }
+
+    @Override
+    public String getExportTaskNameI18nKey() { return "metadata.export.ddl_schema.task_name"; }
+
+    @Override
+    public String getExportTaskNameDefaultText() { return "导出模式\"%s\""; }
 
     @Override
     public String dropObjectSql(String objectType, String objectName) {
