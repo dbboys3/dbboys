@@ -503,6 +503,62 @@ public final class TypeMapper {
             }
         }
 
+        if (is(targetDbType, "SQLSERVER")) {
+            switch (type) {
+                case TINYINT:
+                    return "TINYINT";
+                case SMALLINT:
+                    return "SMALLINT";
+                case INTEGER:
+                    return "INT";
+                case BIGINT:
+                    return "BIGINT";
+                case DECIMAL:
+                    if (p > 0) {
+                        return "DECIMAL(" + p + "," + Math.max(s, 0) + ")";
+                    }
+                    warnings.add("目标平台 SQLSERVER 未提供 DECIMAL 精度，列 " + col
+                            + " 已使用 DECIMAL(38,10)");
+                    return "DECIMAL(38,10)";
+                case FLOAT:
+                    return "REAL";
+                case DOUBLE:
+                    return "FLOAT";
+                case CHAR:
+                    return n > 4000
+                            ? "NVARCHAR(MAX)"
+                            : "NCHAR(" + (n > 0 ? n : 1) + ")";
+                case VARCHAR:
+                    if (n <= 0) {
+                        return "NVARCHAR(255)";
+                    }
+                    return n > 4000 ? "NVARCHAR(MAX)" : "NVARCHAR(" + n + ")";
+                case TEXT:
+                case CLOB:
+                case JSON:
+                    return "NVARCHAR(MAX)";
+                case DATE:
+                    return "DATE";
+                case TIME:
+                    return "TIME";
+                case DATETIME:
+                case TIMESTAMP:
+                    return "DATETIME";
+                case BINARY:
+                    if (n <= 0) {
+                        return "VARBINARY(255)";
+                    }
+                    return n > 8000 ? "VARBINARY(MAX)" : "VARBINARY(" + n + ")";
+                case BLOB:
+                    return "VARBINARY(MAX)";
+                case BOOLEAN:
+                    return "BIT";
+                default:
+                    warnings.add("列 " + col + " 的源类型无法精确映射到 SQLSERVER，已兜底为 NVARCHAR(255)");
+                    return "NVARCHAR(255)";
+            }
+        }
+
         if (isGbaseFamily(targetDbType)) {
             switch (type) {
                 case TINYINT: // Informix 系无 TINYINT
