@@ -5601,15 +5601,19 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 }
 
 .lineno{
-  -fx-alignment: center-right; 
+  -fx-alignment: center;
   -fx-background-color: -color-bg-content;
   -fx-padding: 0;
 }
 
 .lineno.lineno-error,
 .paragraph-box:has-caret .lineno.lineno-error {
-  -fx-background-color: -color-danger-emphasis;
+  -fx-background-color: transparent;
   -fx-text-fill: -color-fg-emphasis;
+}
+
+.error-line-gutter {
+  -fx-background-color: white;
 }
 
 .custom-connectname-choicebox,.custom-connectname-choicebox:hover{

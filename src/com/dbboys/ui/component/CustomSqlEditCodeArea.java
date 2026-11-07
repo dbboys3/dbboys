@@ -18,11 +18,15 @@ import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
 import javafx.application.Platform;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.*;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.SVGPath;
 
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
@@ -54,6 +58,8 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private static final String AUTOCOMPLETE_ENABLED_KEY = "AUTOCOMPLETE_ENABLED";
     private static final String AUTOCOMPLETE_TRIGGER_DELAY_MS_KEY = "AUTOCOMPLETE_TRIGGER_DELAY_MS";
     private static final int DEFAULT_TRIGGER_DELAY_MS = 50;
+    private static final String ERROR_LINE_BACKGROUND_PATH =
+            "M12 1.5 Q9.7969 1.5 7.9062 2.3125 Q5.9844 3.1406 4.5625 4.5625 Q3.1406 5.9688 2.3281 7.8906 Q1.5 9.7969 1.5 12 Q1.5 14.2031 2.3281 16.0938 Q3.1406 18.0156 4.5625 19.4375 Q5.9844 20.8594 7.9062 21.6719 Q9.7969 22.5 12 22.5 Q14.2031 22.5 16.1094 21.6719 Q18.0312 20.8594 19.4375 19.4375 Q20.8594 18.0156 21.6875 16.0938 Q22.5 14.2031 22.5 12 Q22.5 9.7969 21.6875 7.8906 Q20.8594 5.9688 19.4375 4.5625 Q18.0312 3.1406 16.1094 2.3125 Q14.2031 1.5 12 1.5 ZM16.0625 17.25 L12 13.1875 L7.9531 17.25 L6.75 16.0469 L10.8125 12 L6.75 7.9375 L7.9531 6.75 L12 10.7969 L16.0625 6.75 L17.25 7.9375 L13.2031 12 L17.25 16.0469 L16.0625 17.25 Z";
     private static int sharedFontSize = loadConfiguredFontSize();
 
     private final int[] sqlEditCodeAreaCursorPosition = {-1, -1};
@@ -382,20 +388,63 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private IntFunction<Node> createErrorAwareLineNumberFactory() {
         IntFunction<Node> base = LineNumberFactory.get(this);
         return idx -> {
-            Node node = base.apply(idx);
-            gutterNodes.put(idx, node);
-            applyErrorGutterStyle(node, errorLineIndexes.contains(idx));
-            return node;
+            Node lineNumber = base.apply(idx);
+            if (!(lineNumber instanceof Label label)) {
+                return lineNumber;
+            }
+            int digits = String.valueOf(Math.max(1, getParagraphs().size())).length();
+            double gutterWidth = Math.max(26, 10 + digits * 8.0);
+            GutterLine gutter = new GutterLine(label, gutterWidth);
+            gutterNodes.put(idx, gutter);
+            applyErrorGutterStyle(gutter, errorLineIndexes.contains(idx));
+            return gutter;
         };
     }
 
     private static void applyErrorGutterStyle(Node node, boolean error) {
-        if (error) {
-            if (!node.getStyleClass().contains("lineno-error")) {
-                node.getStyleClass().add("lineno-error");
+        if (node instanceof GutterLine gutter) {
+            gutter.setError(error);
+        }
+    }
+
+    private static final class GutterLine extends StackPane {
+        private final Label lineNumber;
+        private final SVGPath marker;
+
+        private GutterLine(Label lineNumber, double width) {
+            this.lineNumber = lineNumber;
+            setAlignment(Pos.CENTER);
+            setMinWidth(width);
+            setPrefWidth(width);
+            setMaxWidth(width);
+            lineNumber.setMaxWidth(Double.MAX_VALUE);
+            lineNumber.setAlignment(Pos.CENTER);
+
+            marker = IconFactory.createFixedColor(
+                    ERROR_LINE_BACKGROUND_PATH, 0.512, 0.512, Color.web("#FF3B30"));
+            marker.setMouseTransparent(true);
+            marker.setManaged(false);
+            marker.setVisible(false);
+            marker.setTranslateX(-5);
+            StackPane.setAlignment(marker, Pos.CENTER);
+            getChildren().addAll(marker, lineNumber);
+        }
+
+        private void setError(boolean error) {
+            lineNumber.setVisible(!error);
+            marker.setManaged(error);
+            marker.setVisible(error);
+            if (error) {
+                if (!getStyleClass().contains("error-line-gutter")) {
+                    getStyleClass().add("error-line-gutter");
+                }
+                if (!lineNumber.getStyleClass().contains("lineno-error")) {
+                    lineNumber.getStyleClass().add("lineno-error");
+                }
+            } else {
+                getStyleClass().remove("error-line-gutter");
+                lineNumber.getStyleClass().remove("lineno-error");
             }
-        } else {
-            node.getStyleClass().remove("lineno-error");
         }
     }
 
