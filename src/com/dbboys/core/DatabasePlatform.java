@@ -99,6 +99,14 @@ public interface DatabasePlatform {
         return false;
     }
 
+    /**
+     * 建表/改表等 DDL 语句中的表名是否需要显式携带模式名。
+     * T-SQL 无会话级模式切换，不限定的语句会落到登录默认模式（dbo）。
+     */
+    default boolean ddlQualifiesTableWithSchema() {
+        return false;
+    }
+
     /** SQL fragment appended to a column when auto-increment is toggled on. */
     default String autoIncrementClause() {
         return "AUTO_INCREMENT";

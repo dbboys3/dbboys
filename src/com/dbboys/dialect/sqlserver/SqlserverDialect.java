@@ -149,6 +149,10 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     @Override
     public boolean supportsEditableAutoIncrement() { return true; }
 
+    /** T-SQL 无会话级模式切换：DDL 表名必须显式带模式名，否则落到登录默认模式（dbo）。 */
+    @Override
+    public boolean ddlQualifiesTableWithSchema() { return true; }
+
     @Override
     public String autoIncrementClause() { return "IDENTITY(1,1)"; }
 

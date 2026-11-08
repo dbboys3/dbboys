@@ -990,9 +990,11 @@ public List<String> generateAlterTableSQL() {
     String tableName = originalTableName == null || originalTableName.trim().isEmpty()
             ? this.tableName.trim()
             : originalTableName.trim();
+    String bareTableName = tableName;
+    tableName = qualifyTableNameForDdl(tableName);
     String targetTableName = normalizeTableMetaValue(tableNameField == null ? null : tableNameField.getText());
     if (targetTableName.isEmpty()) {
-        targetTableName = tableName;
+        targetTableName = bareTableName;
     }
     String schemaName = null;
     String originalComment = normalizeTableMetaValue(originalTableComment);
@@ -1179,8 +1181,8 @@ public List<String> generateAlterTableSQL() {
     String dropSQL = generateDropColumnsSQL(schemaName, tableName, dropNames);
     addSql(sqlList, dropSQL);
 
-    // 3. 表名修改
-    boolean tableRenamed = !safeEquals(tableName, targetTableName);
+    // 3. 表名修改（裸名比较；生成语句中的旧名已按需带模式限定）
+    boolean tableRenamed = !safeEquals(bareTableName, targetTableName);
     if (tableRenamed) {
         addSql(sqlList, generateRenameTableSQL(tableName, targetTableName));
     }
@@ -1200,6 +1202,7 @@ public List<String> generateCreateTableSQL() {
     if (tableName.isEmpty()) {
         return sqlList;
     }
+    String qualifiedTableName = qualifyTableNameForDdl(tableName);
 
     ObservableList<ObservableList<String>> currentData = colsTableView.getItems();
     List<String> defs = new ArrayList<>();
@@ -1225,10 +1228,10 @@ public List<String> generateCreateTableSQL() {
         defs.add("PRIMARY KEY(" + String.join(",", pkColumns) + ")");
     }
 
-    addSql(sqlList, "CREATE TABLE " + tableName + " (" + String.join(", ", defs) + ");");
+    addSql(sqlList, "CREATE TABLE " + qualifiedTableName + " (" + String.join(", ", defs) + ");");
     String tableComment = normalizeTableMetaValue(tableCommentField == null ? null : tableCommentField.getText());
     if (!tableComment.isEmpty()) {
-        addSql(sqlList, generateTableCommentSQL(tableName, tableComment));
+        addSql(sqlList, generateTableCommentSQL(qualifiedTableName, tableComment));
     }
     if (currentData != null) {
         for (ObservableList<String> row : currentData) {
@@ -1238,7 +1241,7 @@ public List<String> generateCreateTableSQL() {
             String colName = normalizeTableMetaValue(row.get(0));
             String colComment = normalizeTableMetaValue(row.get(8));
             if (!colName.isEmpty() && !colComment.isEmpty()) {
-                addSql(sqlList, generateCommentSQL("", tableName, colName, colComment));
+                addSql(sqlList, generateCommentSQL("", qualifiedTableName, colName, colComment));
             }
         }
     }
@@ -1527,6 +1530,28 @@ private String generateRenameTableSQL(String oldTableName, String newTableName) 
     } catch (Exception ignored) {
     }
     return "RENAME TABLE " + oldName + " TO " + newName + ";";
+}
+
+/**
+ * DDL 语句中的表名限定。无会话级模式切换的方言（如 T-SQL）需要显式带上
+ * 模式名，否则语句会落到登录默认模式（dbo）；其余方言原样返回。
+ */
+private String qualifyTableNameForDdl(String tableName) {
+    if (tableName == null || tableName.isBlank() || tableName.contains(".")) {
+        return tableName;
+    }
+    try {
+        if (!platformResolver.requirePlatform(connect).ddlQualifiesTableWithSchema()) {
+            return tableName;
+        }
+    } catch (Exception ignored) {
+        return tableName;
+    }
+    if (!(database instanceof com.dbboys.model.Schema)) {
+        return tableName;
+    }
+    String schema = database.getName() == null ? "" : database.getName().trim();
+    return schema.isEmpty() ? tableName : schema + "." + tableName.trim();
 }
 
 private String generateTableCommentSQL(String tableName, String comment) {
