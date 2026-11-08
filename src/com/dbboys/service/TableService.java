@@ -111,7 +111,8 @@ public class TableService implements MetaObjectService {
         return objectList;
     }
     public ArrayList<ColumnsInfo> getColumns(Connect connect, CatalogNode database,String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> new ArrayList<>(platformResolver.metadata(connect).getColumns(conn, objectName)));
+        return withMetaSession(connect, database, conn -> new ArrayList<>(
+                platformResolver.metadata(connect).getColumns(conn, qualifyForSchema(connect, database, objectName))));
     }
 
     public Table getTable(Connect connect, CatalogNode database,String objectName) throws Exception {
@@ -119,7 +120,18 @@ public class TableService implements MetaObjectService {
     }
 
     public String getTableComment(Connect connect, CatalogNode database, String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect).getTableComment(conn, objectName));
+        return withMetaSession(connect, database, conn -> platformResolver.metadata(connect)
+                .getTableComment(conn, qualifyForSchema(connect, database, objectName)));
+    }
+
+    /** 无会话级模式切换的方言（SQL Server）：元数据读取的对象名必须带模式限定。 */
+    private String qualifyForSchema(Connect connect, CatalogNode database, String objectName) {
+        try {
+            return qualifyTableNameForSchema(platformResolver.requirePlatform(connect),
+                    database == null ? null : database.getName(), objectName);
+        } catch (Exception e) {
+            return objectName;
+        }
     }
 
     public void updateStatistics(Connect connect, String sql, Runnable onSucceededUi) {
@@ -162,6 +174,17 @@ public class TableService implements MetaObjectService {
         executeObjectSql(connect, platform.truncateTableSql(tableName), onSucceededUi);
     }
 
+    /** 无会话级模式切换的方言（SQL Server）需要显式模式限定；其余方言原样返回。 */
+    private static String qualifyTableNameForSchema(com.dbboys.core.DatabasePlatform platform,
+                                                    String schemaName, String tableName) {
+        if (platform == null || !platform.ddlQualifiesTableWithSchema()
+                || schemaName == null || schemaName.isBlank()
+                || tableName == null || tableName.isBlank() || tableName.contains(".")) {
+            return tableName;
+        }
+        return schemaName.trim() + "." + tableName.trim();
+    }
+
     public void updateStatisticsForTable(Connect connect, String tableName, Runnable onSucceededUi){
         updateStatisticsForTable(connect, tableName, null, null, onSucceededUi);
     }
@@ -169,11 +192,13 @@ public class TableService implements MetaObjectService {
     public void updateStatisticsForTable(Connect connect, String tableName,
                                          com.dbboys.core.DatabasePlatform platform, String schemaName,
                                          Runnable onSucceededUi){
+        // 无会话级模式切换的方言（SQL Server）：统计与索引列查询都要带模式限定
+        String qualifiedTableName = qualifyTableNameForSchema(platform, schemaName, tableName);
         Task<List<String>> loadIndexColumnsTask = new Task<>() {
             @Override
             protected List<String> call() throws Exception {
                 try (Connection conn = connectionService().getConnectionWithSessionInit(connect)) {
-                    return platformResolver.metadata(connect).getIndexColumnsForTable(conn, tableName);
+                    return platformResolver.metadata(connect).getIndexColumnsForTable(conn, qualifiedTableName);
                 }
             }
         };
@@ -184,12 +209,12 @@ public class TableService implements MetaObjectService {
             String sql;
             if (platform != null) {
                 sql = !indexColumnsStr.isEmpty()
-                        ? platform.gatherTableHighSql(schemaName, tableName, indexColumnsStr)
-                        : platform.gatherTableSql(schemaName, tableName);
+                        ? platform.gatherTableHighSql(schemaName, qualifiedTableName, indexColumnsStr)
+                        : platform.gatherTableSql(schemaName, qualifiedTableName);
             } else {
                 sql = !indexColumnsStr.isEmpty()
-                        ? "update statistics high for table " + tableName + "(" + indexColumnsStr + ")"
-                        : "update statistics for table " + tableName;
+                        ? "update statistics high for table " + qualifiedTableName + "(" + indexColumnsStr + ")"
+                        : "update statistics for table " + qualifiedTableName;
             }
             executeObjectSql(connect, sql, onSucceededUi);
         });

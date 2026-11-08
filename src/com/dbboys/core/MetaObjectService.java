@@ -44,7 +44,27 @@ public interface MetaObjectService {
     }
 
     default String getDDL(Connect connect, CatalogNode database, String objectName) throws Exception {
-        return withMetaSession(connect, database, conn -> ddlFetcher().fetch(connect, conn, objectName));
+        return withMetaSession(connect, database,
+                conn -> ddlFetcher().fetch(connect, conn, qualifyDdlObjectName(connect, database, objectName)));
+    }
+
+    /**
+     * 无会话级模式切换的方言（SQL Server）：DDL 查询的对象名必须带模式限定，
+     * 否则按登录默认模式（dbo）解析。其余方言原样返回。
+     */
+    private static String qualifyDdlObjectName(Connect connect, CatalogNode database, String objectName) {
+        try {
+            if (connect == null || objectName == null || objectName.isBlank() || objectName.contains(".")
+                    || !(database instanceof com.dbboys.model.Schema)
+                    || !com.dbboys.core.DatabasePlatformResolver.getInstance()
+                            .requirePlatform(connect).ddlQualifiesTableWithSchema()) {
+                return objectName;
+            }
+        } catch (Exception e) {
+            return objectName;
+        }
+        String schema = database.getName() == null ? "" : database.getName().trim();
+        return schema.isEmpty() ? objectName : schema + "." + objectName.trim();
     }
 
     default ObjectList loadObjects(Connect connect, CatalogNode database) throws Exception {

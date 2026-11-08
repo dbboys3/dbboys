@@ -496,9 +496,10 @@ public class TreeContextMenuBuilder {
                 DatabasePlatform truncPlatform = TreeNavigator.resolvePlatform(selectedItems.get(0));
                 List<String> sqlList = new ArrayList<>();
                 for (TreeItem<TreeData> item : selectedItems) {
+                    String truncateName = TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName());
                     sqlList.add(truncPlatform != null
-                            ? truncPlatform.truncateTableSql(item.getValue().getName())
-                            : "truncate table " + item.getValue().getName());
+                            ? truncPlatform.truncateTableSql(truncateName)
+                            : "truncate table " + truncateName);
                 }
                 TreeViewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
                     for (TreeItem<TreeData> item : selectedItems) {
@@ -527,7 +528,8 @@ public class TreeContextMenuBuilder {
             );
             if(confirm){
                 Connect connect = TreeObjectCrudHandler.buildObjectConnect(selectedItem, false);
-                TreeViewUtil.tableService.truncateTable(connect, treeData.getName(), () -> {
+                TreeViewUtil.tableService.truncateTable(connect,
+                        TreeNavigator.qualifyObjectNameForDdl(selectedItem, treeData.getName()), () -> {
                     selectedItem.getValue().setRunning(true);
                     TreeViewUtil.tableService.refreshTableMeta(
                             TreeNavigator.getMetaConnect(selectedItem),
@@ -1003,9 +1005,10 @@ public class TreeContextMenuBuilder {
                 DatabasePlatform dropPlatform = TreeNavigator.resolvePlatform(selectedItems.get(0));
                 List<String> sqlList = new ArrayList<>();
                 for (TreeItem<TreeData> item : selectedItems) {
+                    String dropName = TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName());
                     sqlList.add(dropPlatform != null
-                            ? dropPlatform.dropObjectSql("table", item.getValue().getName())
-                            : "drop table " + item.getValue().getName());
+                            ? dropPlatform.dropObjectSql("table", dropName)
+                            : "drop table " + dropName);
                 }
                 TreeViewUtil.tableService.executeObjectSqls(connect, sqlList, () -> {
                     for (TreeItem<TreeData> item : selectedItems) {
@@ -1043,13 +1046,16 @@ public class TreeContextMenuBuilder {
                 for (TreeItem<TreeData> item : selectedItems) {
                     if (batchDropPlatform != null && item.getValue() instanceof Index index) {
                         // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），DROP 需要用内部名
-                        sqlList.add(batchDropPlatform.dropIndexSql(index.getEffectiveInternalName(), index.getTabname()));
+                        sqlList.add(batchDropPlatform.dropIndexSql(index.getEffectiveInternalName(),
+                                TreeNavigator.qualifyObjectNameForDdl(item, index.getTabname())));
                     } else if (batchDropPlatform != null && item.getValue() instanceof Trigger trigger) {
-                        sqlList.add(batchDropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName()));
+                        sqlList.add(batchDropPlatform.dropTriggerSql(
+                                TreeNavigator.qualifyObjectNameForDdl(item, trigger.getName()), trigger.getTableName()));
                     } else {
+                        String dropName = TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName());
                         sqlList.add(batchDropPlatform != null
-                                ? batchDropPlatform.dropObjectSql(objectType, item.getValue().getName())
-                                : "drop " + objectType + " " + item.getValue().getName());
+                                ? batchDropPlatform.dropObjectSql(objectType, dropName)
+                                : "drop " + objectType + " " + dropName);
                     }
                 }
                 service.executeObjectSqls(connect, sqlList, () -> {

@@ -189,9 +189,11 @@ public class TreeObjectCrudHandler {
             DatabasePlatform renamePlatform = TreeNavigator.resolvePlatform(selectedItem);
             if (renamePlatform != null && selectedItem.getValue() instanceof Index index) {
                 // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），RENAME 需要用内部名
-                sql = renamePlatform.renameIndexSql(index.getEffectiveInternalName(), index.getTabname(), newName);
+                sql = renamePlatform.renameIndexSql(index.getEffectiveInternalName(),
+                        TreeNavigator.qualifyObjectNameForDdl(selectedItem, index.getTabname()), newName);
             } else if (renamePlatform != null) {
-                sql = renamePlatform.renameObjectSql(objectType, oldName, newName);
+                sql = renamePlatform.renameObjectSql(objectType,
+                        TreeNavigator.qualifyObjectNameForDdl(selectedItem, oldName), newName);
             } else {
                 sql = "rename " + objectType + " " + oldName + " to " + newName;
             }
@@ -240,12 +242,15 @@ public class TreeObjectCrudHandler {
         String sql;
         if (dropPlatform != null && selectedItem.getValue() instanceof Index index) {
             // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），DROP 需要用内部名
-            sql = dropPlatform.dropIndexSql(index.getEffectiveInternalName(), index.getTabname());
+            sql = dropPlatform.dropIndexSql(index.getEffectiveInternalName(),
+                    TreeNavigator.qualifyObjectNameForDdl(selectedItem, index.getTabname()));
         } else if (dropPlatform != null && selectedItem.getValue() instanceof Trigger trigger) {
-            sql = dropPlatform.dropTriggerSql(trigger.getName(), trigger.getTableName());
+            sql = dropPlatform.dropTriggerSql(
+                    TreeNavigator.qualifyObjectNameForDdl(selectedItem, trigger.getName()), trigger.getTableName());
         } else {
             sql = dropPlatform != null
-                    ? dropPlatform.dropObjectSql(objectType, selectedItem.getValue().getName())
+                    ? dropPlatform.dropObjectSql(objectType,
+                            TreeNavigator.qualifyObjectNameForDdl(selectedItem, selectedItem.getValue().getName()))
                     : "drop " + objectType + " " + selectedItem.getValue().getName();
         }
         Connect connect = buildObjectConnect(selectedItem, useSysmaster);

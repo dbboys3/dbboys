@@ -90,7 +90,8 @@ public final class TableCopyPasteHandler {
         sourceConnect = connect;
         sourceCatalog = catalogSchema[0];
         sourceSchema = catalogSchema[1];
-        sourceName = item.getValue().getName();
+        // SQL Server 等无会话级模式切换的方言：对象名直接带模式限定（testschema.t）
+        sourceName = TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName());
         sourceKind = kind;
     }
 
@@ -186,7 +187,7 @@ public final class TableCopyPasteHandler {
             default -> null;
         };
         showDataMigrationDialog(item, sourceConnect, target, targetDatabase, targetSchema,
-                sourceName, item.getValue().getName());
+                sourceName, TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName()));
     }
 
     // ------------------------------------------------------------------
@@ -665,6 +666,9 @@ public final class TableCopyPasteHandler {
             return "";
         }
         boolean quoteMysql = "MYSQL".equalsIgnoreCase(targetType);
+        // srcTable 可能带模式限定（testschema.t），索引元数据中的表名是裸名，按最后一段匹配
+        String srcTableBare = srcTable != null && srcTable.contains(".")
+                ? srcTable.substring(srcTable.lastIndexOf('.') + 1) : srcTable;
         StringBuilder sb = new StringBuilder();
         for (Index index : indexes) {
             if (index == null) {
@@ -672,7 +676,7 @@ public final class TableCopyPasteHandler {
             }
             String idxTable = index.getTableName() != null && !index.getTableName().isBlank()
                     ? index.getTableName() : index.getTabname();
-            if (idxTable == null || !idxTable.equalsIgnoreCase(srcTable)) {
+            if (idxTable == null || !idxTable.equalsIgnoreCase(srcTableBare)) {
                 continue; // 只处理源表的索引
             }
             String indexName = index.getName();
@@ -839,7 +843,8 @@ public final class TableCopyPasteHandler {
         if (sourceCatalog != null) {
             path.append(sourceCatalog);
         }
-        if (sourceSchema != null) {
+        // sourceName 已带模式限定（如 testschema.t）时不再重复拼接模式名
+        if (sourceSchema != null && (sourceName == null || !sourceName.contains("."))) {
             if (path.length() > 0) {
                 path.append('.');
             }

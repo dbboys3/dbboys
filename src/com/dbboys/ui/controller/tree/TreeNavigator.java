@@ -31,6 +31,31 @@ import java.util.ResourceBundle;
 public class TreeNavigator {
     private static final Logger log = LogManager.getLogger(TreeNavigator.class);
 
+    /**
+     * 对象操作（DROP/RENAME/TRUNCATE 等 DDL）中的对象名限定。
+     * 无会话级模式切换的方言（SQL Server）必须显式带上模式名，
+     * 否则语句会落到登录默认模式（dbo）；其余方言原样返回。
+     */
+    public static String qualifyObjectNameForDdl(TreeItem<TreeData> item, String objectName) {
+        if (item == null || objectName == null || objectName.isBlank() || objectName.contains(".")) {
+            return objectName;
+        }
+        try {
+            DatabasePlatform platform = resolvePlatform(item);
+            if (platform == null || !platform.ddlQualifiesTableWithSchema()) {
+                return objectName;
+            }
+        } catch (Exception e) {
+            return objectName;
+        }
+        CatalogNode node = getCurrentDatabase(item);
+        if (!(node instanceof Schema)) {
+            return objectName;
+        }
+        String schema = node.getName() == null ? "" : node.getName().trim();
+        return schema.isEmpty() ? objectName : schema + "." + objectName.trim();
+    }
+
     public static void connectionDisconnected(){
         TreeView<TreeData> treeView = AppState.getDatabaseMetaTreeView();
         if (treeView == null || treeView.getSelectionModel() == null) {

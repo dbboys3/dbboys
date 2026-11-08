@@ -298,12 +298,35 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
         return "ALTER LOGIN " + quoteBracket(userName) + " WITH PASSWORD = '" + DatabasePlatform.escapeSqlString(password) + "'";
     }
 
+    /** T-SQL 的 DROP INDEX 必须带 ON <table>。 */
+    @Override
+    public String dropIndexSql(String indexName, String tableName) {
+        return "DROP INDEX " + quoteBracket(indexName) + " ON " + quoteBracket(tableName);
+    }
+
+    /** 限定名逐段加括号：dbo.t -> [dbo].[t]；已加括号的原样返回。 */
     private static String quoteBracket(String identifier) {
         String value = identifier == null ? "" : identifier.trim();
         if (value.startsWith("[") && value.endsWith("]")) {
             return value;
         }
-        return "[" + value.replace("]", "]]" ) + "]";
+        StringBuilder sb = new StringBuilder();
+        for (String part : value.split("\\.", -1)) {
+            if (sb.length() > 0) {
+                sb.append('.');
+            }
+            sb.append('[').append(part.replace("]", "]]" )).append(']');
+        }
+        return sb.toString();
+    }
+
+    /** schema 非空且对象名未限定时，拼成 [schema].[object]；否则只加括号。 */
+    private static String quoteQualified(String schemaName, String objectName) {
+        String object = objectName == null ? "" : objectName.trim();
+        if (object.contains(".") || schemaName == null || schemaName.isBlank()) {
+            return quoteBracket(object);
+        }
+        return quoteBracket(schemaName) + "." + quoteBracket(object);
     }
 
     @Override
@@ -360,12 +383,12 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
 
     @Override
     public String gatherTableSql(String schemaName, String tableName) {
-        return "UPDATE STATISTICS " + tableName;
+        return "UPDATE STATISTICS " + quoteQualified(schemaName, tableName);
     }
 
     @Override
     public String gatherTableHighSql(String schemaName, String tableName, String indexColumns) {
-        return "UPDATE STATISTICS " + tableName + " WITH FULLSCAN";
+        return "UPDATE STATISTICS " + quoteQualified(schemaName, tableName) + " WITH FULLSCAN";
     }
 
     @Override
