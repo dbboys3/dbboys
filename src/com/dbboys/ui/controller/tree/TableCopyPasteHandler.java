@@ -248,8 +248,9 @@ public final class TableCopyPasteHandler {
             try {
                 if (isTable) {
                     originalDdl = fetchOriginalDdl(src, name);
-                    convertedDdl = buildConvertedDdl(src, dst, name, originalDdl);
-                    indexDdl = buildIndexDdl(src, dst, name, name, convertedDdl);
+                    String targetName = resolveTargetTableName(dst, targetSchema, name);
+                    convertedDdl = buildConvertedDdl(src, dst, name, targetName, originalDdl);
+                    indexDdl = buildIndexDdl(src, dst, name, targetName, convertedDdl);
                 } else {
                     // 其他对象：按源端 DDL 原样回放，不做类型转换（不兼容由目标库执行时报错）；
                     // 源 DDL 同时作为注释参考块显示（与表一致）
@@ -295,8 +296,10 @@ public final class TableCopyPasteHandler {
             return;
         }
         String ddlText = stripCommentLines(sqlArea.getText());
-        // 目标表名从（可能被用户修改过的）建表语句中提取
-        String newName = parseCreateTableName(ddlText);
+        // 目标表名从（可能被用户修改过的）建表语句中提取：保留模式限定，与实际执行的 DDL 一致
+        String ddlTargetName = parseCreateTableName(ddlText);
+        // 展示/树刷新用裸名
+        String newName = lastSegment(ddlTargetName);
         boolean migrateData = migrateDataCheck.isSelected();
         String where = migrateData && whereField.getText() != null ? whereField.getText().trim() : "";
         if (newName.isEmpty()) {
@@ -307,7 +310,7 @@ public final class TableCopyPasteHandler {
         if (ddlText.isBlank()) {
             return;
         }
-        String finalDdlText = rewriteIndexStatementsForTarget(ddlText, name, newName);
+        String finalDdlText = rewriteIndexStatementsForTarget(ddlText, lastSegment(name), ddlTargetName);
         AppExecutor.runAsync(() -> {
             try {
                 executeDdl(dst, finalDdlText);
@@ -330,7 +333,7 @@ public final class TableCopyPasteHandler {
                 refreshTableList(item, newName);
             });
             if (migrateData) {
-                submitDataMigration(src, dst, targetDatabase, targetSchema, name, newName, where, item);
+                submitDataMigration(src, dst, targetDatabase, targetSchema, name, ddlTargetName, where, item);
             }
         });
     }
@@ -444,26 +447,28 @@ public final class TableCopyPasteHandler {
         }
     }
 
-    /** DDL 转换基准：GBase 仅 mysql sqlmode 按 MySQL 处理，oracle sqlmode 忽略、按数据库类型转换。 */
-    private static String buildConvertedDdl(Connect src, Connect dst, String table, String originalDdl) throws Exception {
+    /** DDL 转换基准：GBase 仅 mysql sqlmode 按 MySQL 处理，oracle sqlmode 忽略、按数据库类型转换。
+     *  srcTable 用于源端元数据读取（可带模式限定），dstTable 用于生成建表语句的表名。 */
+    private static String buildConvertedDdl(Connect src, Connect dst, String srcTable, String dstTable,
+                                            String originalDdl) throws Exception {
         DatabasePlatform sourcePlatform = platform(src);
         try (Connection conn = new ConnectionServiceImpl().getConnectionWithSessionInit(src)) {
-            String sourceType = sourceMappingType(src, table, conn);
+            String sourceType = sourceMappingType(src, srcTable, conn);
             String targetType = targetMappingType(dst);
             if (sourceType != null && sourceType.equalsIgnoreCase(targetType)) {
                 return originalDdl;
             }
-            ArrayList<ColumnsInfo> columns = sourcePlatform.metadata().getColumns(conn, table);
-            List<String> primaryKeyColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, table);
+            ArrayList<ColumnsInfo> columns = sourcePlatform.metadata().getColumns(conn, srcTable);
+            List<String> primaryKeyColumns = sourcePlatform.metadata().getPrimaryKeyColumns(conn, srcTable);
             String tableComment = null;
             try {
-                tableComment = sourcePlatform.metadata().getTableComment(conn, table);
+                tableComment = sourcePlatform.metadata().getTableComment(conn, srcTable);
             } catch (Exception ignored) {
                 LOG.debug("获取表注释失败: {}", ignored.getMessage(), ignored);
             }
             List<String> warnings = new ArrayList<>();
             String script = TypeMapper.buildCreateTableScript(
-                    sourceType, targetType, table, columns, primaryKeyColumns, tableComment,
+                    sourceType, targetType, dstTable, columns, primaryKeyColumns, tableComment,
                     warnings, null, null, "MYSQL".equalsIgnoreCase(targetType));
             if (!warnings.isEmpty()) {
                 // 类型回退说明作为注释行放在最前，确认执行时会被剔除
@@ -516,7 +521,10 @@ public final class TableCopyPasteHandler {
         }
     }
 
-    /** 从建表语句文本提取目标表名：第一个 CREATE TABLE 后的名字，去引号/反引号/方括号，取最后一段（去模式前缀）。 */
+    /**
+     * 从建表语句文本提取目标表名：第一个 CREATE TABLE 后的名字，去引号/反引号/方括号，
+     * 保留模式限定（迁移插入目标必须与实际执行的 DDL 一致）。裸名用 {@link #lastSegment} 取。
+     */
     private static String parseCreateTableName(String ddlText) {
         if (ddlText == null) {
             return "";
@@ -527,9 +535,33 @@ public final class TableCopyPasteHandler {
         if (!m.find()) {
             return "";
         }
-        String name = m.group(1).replaceAll("[\"'`\\[\\]]", "");
+        return m.group(1).replaceAll("[\"'`\\[\\]]", "");
+    }
+
+    /** 限定名的最后一段（去模式/库前缀）；无点时原样返回。 */
+    private static String lastSegment(String name) {
+        if (name == null) {
+            return "";
+        }
         int dot = name.lastIndexOf('.');
         return dot >= 0 ? name.substring(dot + 1) : name;
+    }
+
+    /**
+     * 生成建表 DDL 的目标表名：目标是 SQL Server 等无会话级模式切换的库时，
+     * 带上粘贴位置的目标模式限定；其他目标库去掉源端可能带的模式前缀，只留裸名。
+     */
+    private static String resolveTargetTableName(Connect dst, String targetSchema, String srcName) {
+        String bare = lastSegment(srcName == null ? "" : srcName.trim());
+        try {
+            if (bare.isEmpty() || !platform(dst).ddlQualifiesTableWithSchema()
+                    || targetSchema == null || targetSchema.isBlank()) {
+                return bare;
+            }
+            return targetSchema.trim() + "." + bare;
+        } catch (Exception e) {
+            return bare;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -577,7 +609,7 @@ public final class TableCopyPasteHandler {
                     .formatted(dstTable, rows);
             NotificationUtil.showMainNotification(doneMessage);
             TreeViewUtil.tableService.updateStatisticsForTable(dst, dstTable, platform(dst), schemaName,
-                    () -> refreshTableAfterMigration(treeItem, dstTable));
+                    () -> refreshTableAfterMigration(treeItem, lastSegment(dstTable)));
         });
         task.setOnFailed(e -> {
             Throwable ex = task.getException();
@@ -692,9 +724,11 @@ public final class TableCopyPasteHandler {
                     || sameColumns(columns, pkColumns)) {
                 continue; // 主键及其支撑唯一索引已在建表 DDL 中内联创建
             }
-            String targetIndexName = srcTable.equalsIgnoreCase(dstTable)
+            // 源/目标裸名一致不算改名；改名时索引用目标裸名做前缀（索引名不能带模式点）
+            String dstTableBare = lastSegment(dstTable);
+            String targetIndexName = srcTableBare.equalsIgnoreCase(dstTableBare)
                     ? indexName
-                    : dstTable + "_" + indexName;
+                    : dstTableBare + "_" + indexName;
             if (quoteMysql) {
                 targetIndexName = quoteMysqlName(targetIndexName);
                 columns = quoteMysqlColumns(columns);
@@ -769,10 +803,12 @@ public final class TableCopyPasteHandler {
         return sb.toString();
     }
 
-    /** 用户在弹窗中改名建表语句时，同步修正生成索引语句里的目标表名/索引名。 */
+    /** 用户在弹窗中改名建表语句时，同步修正生成索引语句里的目标表名/索引名。
+     *  oldTable/newTable 均为裸名可能不同；newTable 可带模式限定（与实际执行的 DDL 一致）。 */
     private static String rewriteIndexStatementsForTarget(String ddlText, String oldTable, String newTable) {
+        String newBare = lastSegment(newTable);
         if (ddlText == null || ddlText.isBlank()
-                || oldTable == null || newTable == null || oldTable.equalsIgnoreCase(newTable)) {
+                || oldTable == null || newTable == null || oldTable.equalsIgnoreCase(newBare)) {
             return ddlText;
         }
         StringBuilder sb = new StringBuilder();
@@ -783,13 +819,14 @@ public final class TableCopyPasteHandler {
                                 + java.util.regex.Pattern.quote(oldTable) + "[\"'`\\[\\]]*\\b",
                         " ON " + java.util.regex.Matcher.quoteReplacement(newTable));
                 java.util.regex.Matcher m = java.util.regex.Pattern
-                        .compile("(?i)^\\s*CREATE\\s+(?:UNIQUE\\s+|CLUSTER\\s+)?INDEX\\s+([^\\s(]+)")
+                        .compile("(?i)^\\s*CREATE\\s+(?:UNIQUE\\s+|CLUSTER\\s+|CLUSTERED\\s+|NONCLUSTERED\\s+)*INDEX\\s+([^\\s(]+)")
                         .matcher(line);
                 if (m.find()) {
                     String indexName = m.group(1);
                     String bare = indexName.replaceAll("[\"'`\\[\\]]", "");
-                    if (!bare.regionMatches(true, 0, newTable + "_", 0, newTable.length() + 1)) {
-                        line = line.substring(0, m.start(1)) + newTable + "_" + indexName
+                    // 索引名不能带模式点，改名前缀用目标裸名
+                    if (!bare.regionMatches(true, 0, newBare + "_", 0, newBare.length() + 1)) {
+                        line = line.substring(0, m.start(1)) + newBare + "_" + indexName
                                 + line.substring(m.end(1));
                     }
                 }
