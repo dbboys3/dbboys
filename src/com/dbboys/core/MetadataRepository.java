@@ -41,6 +41,11 @@ public interface MetadataRepository {
 
     int getUserTablesCount(Connection conn) throws SQLException;
 
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getUserTablesCount(Connection conn, String databaseName) throws SQLException {
+        return getUserTablesCount(conn);
+    }
+
     String getUserTablesSize(Connection conn, String databaseName) throws SQLException;
 
     int getSystemTablesCount(Connection conn) throws SQLException;
@@ -66,25 +71,55 @@ public interface MetadataRepository {
 
     int getIndexCount(Connection conn) throws SQLException;
 
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getIndexCount(Connection conn, String databaseName) throws SQLException {
+        return getIndexCount(conn);
+    }
+
     String getIndexSize(Connection conn) throws SQLException;
+
+    /** 带目录（模式）上下文的大小；默认退回无上下文版本。 */
+    default String getIndexSize(Connection conn, String databaseName) throws SQLException {
+        return getIndexSize(conn);
+    }
 
     Index getIndex(Connection conn, String databaseName, String indexName) throws SQLException;
 
     int getSequenceCount(Connection conn) throws SQLException;
 
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getSequenceCount(Connection conn, String databaseName) throws SQLException {
+        return getSequenceCount(conn);
+    }
+
     List<Sequence> getSequences(Connection conn, String databaseName) throws SQLException;
 
     int getSynonymCount(Connection conn) throws SQLException;
 
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getSynonymCount(Connection conn, String databaseName) throws SQLException {
+        return getSynonymCount(conn);
+    }
+
     List<Synonym> getSynonyms(Connection conn, String databaseName) throws SQLException;
 
     int getTriggerCount(Connection conn) throws SQLException;
+
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getTriggerCount(Connection conn, String databaseName) throws SQLException {
+        return getTriggerCount(conn);
+    }
 
     List<Trigger> getTriggers(Connection conn, String databaseName) throws SQLException;
 
     Trigger getTrigger(Connection conn, String databaseName, String triggerName) throws SQLException;
 
     int getViewCount(Connection conn) throws SQLException;
+
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getViewCount(Connection conn, String databaseName) throws SQLException {
+        return getViewCount(conn);
+    }
 
     List<View> getViews(Connection conn, String databaseName) throws SQLException;
 
@@ -94,9 +129,19 @@ public interface MetadataRepository {
 
     int getFunctionCount(Connection conn, boolean filterType) throws SQLException;
 
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getFunctionCount(Connection conn, boolean filterType, String databaseName) throws SQLException {
+        return getFunctionCount(conn, filterType);
+    }
+
     List<Function> getFunctions(Connection conn, String databaseName, boolean filterType) throws SQLException;
 
     int getProcedureCount(Connection conn, boolean filterType) throws SQLException;
+
+    /** 带目录（模式）上下文的计数；默认退回无上下文版本。 */
+    default int getProcedureCount(Connection conn, boolean filterType, String databaseName) throws SQLException {
+        return getProcedureCount(conn, filterType);
+    }
 
     List<Procedure> getProcedures(Connection conn, String databaseName, boolean filterType) throws SQLException;
 

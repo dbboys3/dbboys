@@ -36,7 +36,7 @@ public class TriggerService implements MetaObjectService {
         ObjectList objectList = new ObjectList();
         List<Trigger> result = new ArrayList<>();
         objectList.setItems(result);
-        int count = repo.getTriggerCount(conn);
+        int count = repo.getTriggerCount(conn, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getTriggers(conn, databaseName));
         return objectList;

@@ -29,7 +29,7 @@ public class SynonymService implements MetaObjectService {
         ObjectList objectList = new ObjectList();
         List<Synonym> result = new ArrayList<>();
         objectList.setItems(result);
-        int count = repo.getSynonymCount(conn);
+        int count = repo.getSynonymCount(conn, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getSynonyms(conn, databaseName));
         return objectList;

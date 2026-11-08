@@ -39,8 +39,8 @@ public class IndexService implements MetaObjectService {
         ObjectList objectList = new ObjectList();
         List<Index> result = new ArrayList<>();
         objectList.setItems(result);
-        int count = repo.getIndexCount(conn);
-        String size = repo.getIndexSize(conn);
+        int count = repo.getIndexCount(conn, databaseName);
+        String size = repo.getIndexSize(conn, databaseName);
         String info = count + "个";
         if (size != null) {
             info = info + "/" + size;

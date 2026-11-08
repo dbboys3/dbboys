@@ -237,32 +237,32 @@ public class DatabaseService implements MetaObjectService {
             result.add(sysSize == null ? (sysCount + "个") : (sysCount + "个/" + sysSize));
         }
 
-        int tableCount = repo.getUserTablesCount(conn);
+        int tableCount = repo.getUserTablesCount(conn, databaseName);
         String tableSize = repo.getUserTablesSize(conn, databaseName);
         result.add(tableSize == null ? (tableCount + "个") : (tableCount + "个/" + tableSize));
 
-        int viewCount = repo.getViewCount(conn);
+        int viewCount = repo.getViewCount(conn, databaseName);
         result.add(viewCount + "个");
 
-        int indexCount = repo.getIndexCount(conn);
-        String indexSize = repo.getIndexSize(conn);
+        int indexCount = repo.getIndexCount(conn, databaseName);
+        String indexSize = repo.getIndexSize(conn, databaseName);
         result.add(indexSize == null ? (indexCount + "个") : (indexCount + "个/" + indexSize));
 
         if (platform.supportsSequencesFolder()) {
-            result.add(repo.getSequenceCount(conn) + "个");
+            result.add(repo.getSequenceCount(conn, databaseName) + "个");
         }
 
         if (platform.supportsSynonymsFolder()) {
-            result.add(repo.getSynonymCount(conn) + "个");
+            result.add(repo.getSynonymCount(conn, databaseName) + "个");
         }
 
-        int triggerCount = repo.getTriggerCount(conn);
+        int triggerCount = repo.getTriggerCount(conn, databaseName);
         result.add(triggerCount + "个");
 
-        int funcCount = repo.getFunctionCount(conn, filterType);
+        int funcCount = repo.getFunctionCount(conn, filterType, databaseName);
         result.add(funcCount + "个");
 
-        int procCount = repo.getProcedureCount(conn, filterType);
+        int procCount = repo.getProcedureCount(conn, filterType, databaseName);
         result.add(procCount + "个");
 
         if (platform.supportsPackages()) {

@@ -29,7 +29,7 @@ public class ViewService implements MetaObjectService {
         ObjectList objectList = new ObjectList();
         List<View> result = new ArrayList<>();
         objectList.setItems(result);
-        int count = repo.getViewCount(conn);
+        int count = repo.getViewCount(conn, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getViews(conn, databaseName));
         return objectList;

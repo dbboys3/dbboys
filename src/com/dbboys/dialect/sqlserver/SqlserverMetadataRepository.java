@@ -435,8 +435,13 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getUserTablesCount(Connection conn) throws SQLException {
+        return getUserTablesCount(conn, null);
+    }
+
+    @Override
+    public int getUserTablesCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_TABLES_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_TABLES_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -463,9 +468,7 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     @Override
     public int getSystemTablesCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        String schema = databaseName == null || databaseName.isBlank()
-                ? currentSchema(conn) : schemaName(databaseName);
-        Integer count = runner.queryOne(SQL_SYSTEM_TABLES_COUNT, List.of(schema), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_SYSTEM_TABLES_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -583,13 +586,23 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getIndexCount(Connection conn) throws SQLException {
+        return getIndexCount(conn, null);
+    }
+
+    @Override
+    public int getIndexCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_INDEX_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_INDEX_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
     @Override
     public String getIndexSize(Connection conn) throws SQLException {
+        return getIndexSize(conn, null);
+    }
+
+    @Override
+    public String getIndexSize(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         // index_id > 1：排除堆(0)与聚集索引(1)（它们就是表数据本身）
         Long sizeKb = runner.queryOne("""
@@ -602,7 +615,7 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
                 WHERE s.name = ?
                   AND i.name IS NOT NULL
                   AND i.index_id > 1
-                """, List.of(currentSchema(conn)), rs -> rs.getLong(1));
+                """, List.of(contextSchema(conn, databaseName)), rs -> rs.getLong(1));
         return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
     }
 
@@ -644,8 +657,13 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getSequenceCount(Connection conn) throws SQLException {
+        return getSequenceCount(conn, null);
+    }
+
+    @Override
+    public int getSequenceCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_SEQUENCE_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_SEQUENCE_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -667,8 +685,13 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getSynonymCount(Connection conn) throws SQLException {
+        return getSynonymCount(conn, null);
+    }
+
+    @Override
+    public int getSynonymCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_SYNONYM_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_SYNONYM_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -686,8 +709,13 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getTriggerCount(Connection conn) throws SQLException {
+        return getTriggerCount(conn, null);
+    }
+
+    @Override
+    public int getTriggerCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_TRIGGER_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_TRIGGER_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -727,8 +755,13 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getViewCount(Connection conn) throws SQLException {
+        return getViewCount(conn, null);
+    }
+
+    @Override
+    public int getViewCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_VIEW_COUNT, List.of(currentSchema(conn)), rs -> rs.getInt(1));
+        Integer count = runner.queryOne(SQL_VIEW_COUNT, List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -756,9 +789,14 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getFunctionCount(Connection conn, boolean filterType) throws SQLException {
+        return getFunctionCount(conn, filterType, null);
+    }
+
+    @Override
+    public int getFunctionCount(Connection conn, boolean filterType, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         Integer count = runner.queryOne(routineSql(SQL_ROUTINE_COUNT, FUNCTION_TYPES),
-                List.of(currentSchema(conn)), rs -> rs.getInt(1));
+                List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -775,9 +813,14 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getProcedureCount(Connection conn, boolean filterType) throws SQLException {
+        return getProcedureCount(conn, filterType, null);
+    }
+
+    @Override
+    public int getProcedureCount(Connection conn, boolean filterType, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
         Integer count = runner.queryOne(routineSql(SQL_ROUTINE_COUNT, PROCEDURE_TYPES),
-                List.of(currentSchema(conn)), rs -> rs.getInt(1));
+                List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -852,6 +895,14 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         String schema = runner.queryOne("SELECT SCHEMA_NAME()", null, rs -> rs.getString(1));
         return schema != null && !schema.isBlank() ? schema.trim() : "dbo";
+    }
+
+    /**
+     * 计数/大小查询的目标模式。T-SQL 无会话级 SET SCHEMA，连接上的"当前模式"
+     * 始终是登录默认模式，因此必须优先使用树节点（databaseName）携带的模式名。
+     */
+    private String contextSchema(Connection conn, String databaseName) throws SQLException {
+        return databaseName == null || databaseName.isBlank() ? currentSchema(conn) : schemaName(databaseName);
     }
 
     String currentDatabase(Connection conn) throws SQLException {

@@ -30,7 +30,7 @@ public class FunctionService implements MetaObjectService {
         List<Function> result = new ArrayList<>();
         objectList.setItems(result);
         boolean filterType = repo.hasSysProcTypeColumn(conn);
-        int count = repo.getFunctionCount(conn, filterType);
+        int count = repo.getFunctionCount(conn, filterType, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getFunctions(conn, databaseName, filterType));
         return objectList;

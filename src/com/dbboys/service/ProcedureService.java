@@ -30,7 +30,7 @@ public class ProcedureService implements MetaObjectService {
         List<Procedure> result = new ArrayList<>();
         objectList.setItems(result);
         boolean filterType = repo.hasSysProcTypeColumn(conn);
-        int count = repo.getProcedureCount(conn, filterType);
+        int count = repo.getProcedureCount(conn, filterType, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getProcedures(conn, databaseName, filterType));
         return objectList;

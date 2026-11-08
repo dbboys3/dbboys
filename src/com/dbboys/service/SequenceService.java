@@ -30,7 +30,7 @@ public class SequenceService implements MetaObjectService {
         ObjectList objectList = new ObjectList();
         List<Sequence> result = new ArrayList<>();
         objectList.setItems(result);
-        int count = repo.getSequenceCount(conn);
+        int count = repo.getSequenceCount(conn, databaseName);
         objectList.setInfo(count + "个");
         result.addAll(repo.getSequences(conn, databaseName));
         return objectList;
