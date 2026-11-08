@@ -9,11 +9,15 @@ import com.dbboys.core.MetadataRepository;
 import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
 import com.dbboys.model.Connect;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Microsoft SQL Server platform adapter. Connection + metadata + SQL execution
@@ -25,12 +29,91 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     private static final String DRIVER_CLASS = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
     private static final String DEFAULT_DRIVER = "mssql-jdbc-12.8.1.jre11.jar";
 
-    private static final String DEFAULT_CONNECTION_PROPS = """
-            [
-              {"propName":"encrypt","propValue":"false"},
-              {"propName":"trustServerCertificate","propValue":"true"}
-            ]
-            """;
+    /** Driver properties supported by mssql-jdbc 12.8; empty values use driver defaults. */
+    private static final String DEFAULT_CONNECTION_PROPS = buildDefaultConnectionProps(
+            "applicationIntent", "",
+            "applicationName", "",
+            "prepareMethod", "",
+            "databaseName", "",
+            "failoverPartner", "",
+            "hostNameInCertificate", "",
+            "instanceName", "",
+            "jaasConfigurationName", "",
+            "password", "",
+            "responseBuffering", "",
+            "selectMethod", "",
+            "domain", "",
+            "serverName", "",
+            "iPAddressPreference", "",
+            "serverSpn", "",
+            "realm", "",
+            "socketFactoryClass", "",
+            "socketFactoryConstructorArg", "",
+            "trustStoreType", "",
+            "trustStore", "",
+            "trustStorePassword", "",
+            "trustManagerClass", "",
+            "trustManagerConstructorArg", "",
+            "user", "",
+            "workstationID", "",
+            "authenticationScheme", "",
+            "authentication", "",
+            "accessToken", "",
+            "columnEncryptionSetting", "",
+            "enclaveAttestationUrl", "",
+            "enclaveAttestationProtocol", "",
+            "keyStoreAuthentication", "",
+            "keyStoreSecret", "",
+            "keyStoreLocation", "",
+            "sslProtocol", "",
+            "msiClientId", "",
+            "keyVaultProviderClientId", "",
+            "keyVaultProviderClientKey", "",
+            "keyStorePrincipalId", "",
+            "clientCertificate", "",
+            "clientKey", "",
+            "clientKeyPassword", "",
+            "AADSecurePrincipalId", "",
+            "AADSecurePrincipalSecret", "",
+            "maxResultBuffer", "",
+            "encrypt", "false",
+            "serverCertificate", "",
+            "datetimeParameterType", "",
+            "accessTokenCallbackClass", "",
+            "disableStatementPooling", "",
+            "integratedSecurity", "",
+            "lastUpdateCount", "",
+            "multiSubnetFailover", "",
+            "replication", "",
+            "serverNameAsACE", "",
+            "sendStringParametersAsUnicode", "",
+            "sendTimeAsDatetime", "",
+            "TransparentNetworkIPResolution", "",
+            "trustServerCertificate", "true",
+            "xopenStates", "",
+            "fips", "",
+            "enablePrepareOnFirstPreparedStatementCall", "",
+            "cacheBulkCopyMetadata", "",
+            "useBulkCopyForBatchInsert", "",
+            "useFmtOnly", "",
+            "sendTemporalDataTypesAsStringForBulkCopy", "",
+            "delayLoadingLobs", "",
+            "ignoreOffsetOnDateTimeOffsetConversion", "",
+            "useDefaultJaasConfig", "",
+            "useDefaultGSSCredential", "",
+            "calcBigDecimalPrecision", "",
+            "packetSize", "",
+            "lockTimeout", "",
+            "loginTimeout", "",
+            "queryTimeout", "",
+            "portNumber", "",
+            "socketTimeout", "",
+            "serverPreparedStatementDiscardThreshold", "",
+            "statementPoolingCacheSize", "",
+            "cancelQueryTimeout", "",
+            "connectRetryCount", "",
+            "connectRetryInterval", ""
+    );
 
     private final SqlserverMetadataRepository metadataRepository = new SqlserverMetadataRepository();
     private final SqlexeRepository sqlexeRepository = new SqlserverSqlexeRepository(metadataRepository);
@@ -442,6 +525,24 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
                 "bit", "uniqueidentifier", "xml", "sql_variant",
                 "varchar(max)", "nvarchar(max)", "varbinary(max)"
         );
+    }
+
+    private static String buildDefaultConnectionProps(String... keyValues) {
+        if (keyValues == null) {
+            return new JSONArray().toString();
+        }
+        Map<String, String> sortedProperties = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            sortedProperties.put(keyValues[i], keyValues[i + 1]);
+        }
+        JSONArray properties = new JSONArray();
+        for (Map.Entry<String, String> entry : sortedProperties.entrySet()) {
+            JSONObject property = new JSONObject();
+            property.put("propName", entry.getKey());
+            property.put("propValue", entry.getValue());
+            properties.put(property);
+        }
+        return properties.toString();
     }
 
     @Override

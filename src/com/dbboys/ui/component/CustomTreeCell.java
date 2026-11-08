@@ -807,22 +807,20 @@ public class CustomTreeCell extends TreeCell<TreeData> {
             return;
         }
         if (item instanceof Connect connect) {
-            String cd = connect.getDbtype();
-            if (cd != null) {
-                com.dbboys.core.DatabasePlatform cdp = resolvePlatformResolver().getPlatform(cd);
-                if (cdp != null && cdp.connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
-                    Connect sqlConnect = new Connect(connect);
-                    if (cdp.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.FILE_PATH) {
-                        String catalog = sqlConnect.getCatalog();
-                        if (catalog == null || catalog.isBlank()) {
-                            sqlConnect.setCatalog("main");
-                        }
+            String dbType = connect.getDbtype();
+            Connect sqlConnect = new Connect(connect);
+            if (dbType != null) {
+                com.dbboys.core.DatabasePlatform platform = resolvePlatformResolver().getPlatform(dbType);
+                if (platform != null
+                        && platform.connection().connectionAddressType()
+                        == com.dbboys.core.ConnectionAddressType.FILE_PATH) {
+                    String catalog = sqlConnect.getCatalog();
+                    if (catalog == null || catalog.isBlank()) {
+                        sqlConnect.setCatalog("main");
                     }
-                    TabpaneUtil.addCustomSqlTab(sqlConnect);
-                } else {
-                    TreeViewUtil.connectInfoItem.fire();
                 }
             }
+            TabpaneUtil.addCustomSqlTab(sqlConnect);
             return;
         }
         if (item instanceof CatalogNode) {
