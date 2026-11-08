@@ -252,6 +252,13 @@ public class SqlExecutionHelper {
         int maxTarget = Math.max(range[1] - 1, base);
         SQLException error = ctrl.lastSqlException;
 
+        if (isSqliteConnection()) {
+            int sqliteOffset = resolveSqliteErrorOffset(sentSql, ctrl.sqlExecutionResult, base, maxTarget);
+            if (sqliteOffset >= 0) {
+                return clamp(sqliteOffset, base, maxTarget);
+            }
+        }
+
         // Informix/GBase: the driver stores the byte offset of the error inside
         // the sent statement (SQLCA sqlerrd[4]) for every error response, not
         // only syntax errors. Use it whenever it points inside the statement.
@@ -315,6 +322,87 @@ public class SqlExecutionHelper {
         }
 
         return base;
+    }
+
+    private boolean isSqliteConnection() {
+        if (ctrl.sqlConnect != null && "SQLITE".equalsIgnoreCase(ctrl.sqlConnect.getDbtype())) {
+            return true;
+        }
+        for (Throwable current = ctrl.lastSqlException; current != null; current = current.getCause()) {
+            if ("org.sqlite.SQLiteException".equals(current.getClass().getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * SQLite reports error tokens or a broad error description, but not a
+     * character position. Map those descriptions back to the sent statement.
+     */
+    private static int resolveSqliteErrorOffset(String sentSql,
+                                                String executionResult,
+                                                int base,
+                                                int maxTarget) {
+        if (sentSql == null || sentSql.isEmpty()) {
+            return -1;
+        }
+        java.util.regex.Matcher nearMatcher = SQLITE_NEAR_TOKEN_PATTERN.matcher(
+                executionResult == null ? "" : executionResult);
+        if (nearMatcher.find()) {
+            int index = lastIndexOfIgnoreCase(sentSql, nearMatcher.group(1).trim());
+            return index >= 0
+                    ? clamp(base + index, base, maxTarget)
+                    : clamp(base + lastNonBlankLineStart(sentSql), base, maxTarget);
+        }
+
+        java.util.regex.Matcher missingObjectMatcher = SQLITE_MISSING_OBJECT_PATTERN.matcher(
+                executionResult == null ? "" : executionResult);
+        if (missingObjectMatcher.find()) {
+            String object = missingObjectMatcher.group(1).trim();
+            int index = indexOfIgnoreCase(sentSql, object);
+            if (index < 0) {
+                int dot = object.lastIndexOf('.');
+                if (dot >= 0 && dot + 1 < object.length()) {
+                    index = indexOfIgnoreCase(sentSql, object.substring(dot + 1));
+                }
+            }
+            if (index >= 0) {
+                return clamp(base + index, base, maxTarget);
+            }
+        }
+
+        if (executionResult != null
+                && (executionResult.contains("incomplete input")
+                || executionResult.contains("unrecognized token")
+                || executionResult.contains("syntax error"))) {
+            return clamp(base + lastNonBlankLineStart(sentSql), base, maxTarget);
+        }
+        return -1;
+    }
+
+    private static int lastNonBlankLineStart(String sql) {
+        int end = sql.length();
+        while (end > 0) {
+            int start = sql.lastIndexOf('\n', end - 1) + 1;
+            if (!sql.substring(start, end).isBlank()) {
+                return start;
+            }
+            end = start - 1;
+        }
+        return 0;
+    }
+
+    private static int lastIndexOfIgnoreCase(String text, String token) {
+        if (text == null || token == null || token.isEmpty() || token.length() > text.length()) {
+            return -1;
+        }
+        for (int i = text.length() - token.length(); i >= 0; i--) {
+            if (text.regionMatches(true, i, token, 0, token.length())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static int offsetForLineInStatement(String sentSql,
@@ -406,6 +494,13 @@ public class SqlExecutionHelper {
         }
         return fallbackBase;
     }
+
+    private static final java.util.regex.Pattern SQLITE_NEAR_TOKEN_PATTERN =
+            java.util.regex.Pattern.compile("(?is)\\bnear\\s+[\"'](.+?)[\"']\\s*:");
+
+    private static final java.util.regex.Pattern SQLITE_MISSING_OBJECT_PATTERN =
+            java.util.regex.Pattern.compile(
+                    "(?is)\\bno such\\s+(?:column|table|function|module|collation):\\s*([^\\r\\n]+)");
 
     private static final java.util.regex.Pattern QUOTED_ERROR_TOKEN_PATTERN =
             java.util.regex.Pattern.compile(
