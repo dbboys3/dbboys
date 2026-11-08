@@ -339,24 +339,29 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String FUNCTION_TYPES = "'FN', 'IF', 'TF', 'FS', 'FT', 'AF'";
     private static final String PROCEDURE_TYPES = "'P', 'PC', 'RF', 'X'";
 
-    // 系统对象 = 微软随库发布且可直接查询的目录视图/表（sys.tables、INFORMATION_SCHEMA.* 等）。
+    // 系统对象 = 微软随库发布（is_ms_shipped=1）且可直接查询的目录视图/表
+    // （sys.tables、INFORMATION_SCHEMA.*、master 库的 spt_* 等）。
+    // sys.system_objects 只含资源库对象，master.dbo 的 spt_* 不在其中，必须用
+    // sys.all_objects（本库对象 + 资源库对象）按 is_ms_shipped 过滤。
     // type 'S' 的内部基表不可直接查询（需要 DAC），不列入。
     private static final String SQL_SYSTEM_TABLES = """
             SELECT o.name,
                    s.name AS schema_name,
                    RTRIM(o.type) AS object_type
-            FROM sys.system_objects o
+            FROM sys.all_objects o
             JOIN sys.schemas s ON s.schema_id = o.schema_id
-            WHERE s.name = ?
+            WHERE o.is_ms_shipped = 1
+              AND s.name = ?
               AND o.type IN ('U', 'V')
             ORDER BY o.name
             """;
 
     private static final String SQL_SYSTEM_TABLES_COUNT = """
             SELECT COUNT(*)
-            FROM sys.system_objects o
+            FROM sys.all_objects o
             JOIN sys.schemas s ON s.schema_id = o.schema_id
-            WHERE s.name = ?
+            WHERE o.is_ms_shipped = 1
+              AND s.name = ?
               AND o.type IN ('U', 'V')
             """;
 
@@ -469,11 +474,12 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         Long sizeKb = runner.queryOne("""
                 SELECT COALESCE(SUM(a.total_pages) * 8, 0)
-                FROM sys.system_objects o
+                FROM sys.all_objects o
                 JOIN sys.schemas s ON s.schema_id = o.schema_id
                 JOIN sys.partitions p ON p.object_id = o.object_id
                 JOIN sys.allocation_units a ON a.container_id = p.partition_id
-                WHERE s.name = ?
+                WHERE o.is_ms_shipped = 1
+                  AND s.name = ?
                   AND o.type IN ('U', 'V')
                 """, List.of(schemaName(databaseName)), rs -> rs.getLong(1));
         return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
