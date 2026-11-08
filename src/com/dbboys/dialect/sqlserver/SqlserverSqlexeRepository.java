@@ -1,13 +1,16 @@
 package com.dbboys.dialect.sqlserver;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-public final class SqlserverSqlexeRepository implements SqlexeRepository {
+public final class SqlserverSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
 
     private final SqlserverMetadataRepository metadataRepository;
 
@@ -63,6 +66,11 @@ public final class SqlserverSqlexeRepository implements SqlexeRepository {
             }
             return SqlserverShowplanFormatter.format(plan);
         }
+    }
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locateSqlServer(error, sentSql, errorMessage);
     }
 
     private static String readShowplan(Statement stmt, String sql) throws SQLException {

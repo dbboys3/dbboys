@@ -1,6 +1,9 @@
 package com.dbboys.dialect.oracle;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -8,7 +11,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class OracleSqlexeRepository implements SqlexeRepository {
+public final class OracleSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
     private static final String SQL_EXPLAIN_PLAN_PREFIX = "EXPLAIN PLAN SET STATEMENT_ID = '";
     private static final String SQL_EXPLAIN_PLAN_MIDDLE = "' FOR ";
     private static final String SQL_DISPLAY_PLAN_PREFIX =
@@ -66,6 +69,11 @@ public final class OracleSqlexeRepository implements SqlexeRepository {
             return null;
         }
         return String.join(System.lineSeparator(), planLines);
+    }
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locateOracle(error, sentSql, errorMessage);
     }
 
     private static String normalizeExplainSql(String sql) {

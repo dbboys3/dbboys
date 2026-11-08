@@ -1,12 +1,21 @@
 package com.dbboys.dialect.sqlite;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
-public final class SqliteSqlexeRepository implements SqlexeRepository {
+public final class SqliteSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locateSqlite(sentSql, errorMessage);
+    }
+
 
     @Override
     public void setDatabase(Connection conn, String databaseName) throws SQLException {

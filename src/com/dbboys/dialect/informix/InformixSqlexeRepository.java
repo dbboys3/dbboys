@@ -1,12 +1,15 @@
 package com.dbboys.dialect.informix;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-public class InformixSqlexeRepository implements SqlexeRepository {
+public class InformixSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
     public static final String SQL_EXPLAIN = "execute function ifx_explain(?)";
 
     public void setDatabase(Connection conn, String databaseName) throws SQLException {
@@ -24,6 +27,11 @@ public class InformixSqlexeRepository implements SqlexeRepository {
                 return rs.getString(1);
             }
         }
+    }
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locateInformixFamily(conn, error, sentSql, errorMessage);
     }
 
     @Override

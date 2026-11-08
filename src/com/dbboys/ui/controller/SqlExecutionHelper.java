@@ -2,6 +2,8 @@ package com.dbboys.ui.controller;
 import com.dbboys.ui.util.ReadOnlyGuard;
 
 import com.dbboys.core.DatabasePlatformResolver;
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlModeCapability;
 import com.dbboys.core.SqlParser;
 import com.dbboys.core.SqlexeRepository;
@@ -233,8 +235,9 @@ public class SqlExecutionHelper {
 
     /**
      * Locates the editor offset of the failing line inside the statement range.
-     * Prefers the exact position reported by the driver/database, then line
-     * numbers parsed from the message; falls back to the statement's first line.
+     * Dialects report where the error points via {@link SqlErrorPositionCapability};
+     * this method only maps that back to editor coordinates and falls back to
+     * the statement's first line.
      */
     private int resolveErrorOffset(int[] range) {
         String executedText = ctrl.sqlText == null ? "" : ctrl.sqlText;
@@ -250,227 +253,41 @@ public class SqlExecutionHelper {
             }
         }
         int maxTarget = Math.max(range[1] - 1, base);
-        SQLException error = ctrl.lastSqlException;
 
-        if (isSqliteConnection()) {
-            int sqliteOffset = resolveSqliteErrorOffset(sentSql, ctrl.sqlExecutionResult, base, maxTarget);
-            if (sqliteOffset >= 0) {
-                return clamp(sqliteOffset, base, maxTarget);
-            }
+        SqlErrorPosition position = locateDialectErrorPosition(ctrl.lastSqlException, sentSql);
+        if (position == null || position.offset() < 0) {
+            return base;
         }
-
-        // Informix/GBase: the driver stores the byte offset of the error inside
-        // the sent statement (SQLCA sqlerrd[4]) for every error response, not
-        // only syntax errors. Use it whenever it points inside the statement.
-        if (error != null) {
-            Integer byteOffset = queryDriverStatementErrorOffset();
-            log.info("SQL error offset: code={}, offset={}, sql={}",
-                    error.getErrorCode(), byteOffset, abbreviate(sentSql));
-            if (byteOffset != null && byteOffset >= 0 && byteOffset <= utf8ByteLength(sentSql)) {
-                int charIndex = byteOffsetToCharIndex(sentSql, byteOffset);
-                return clamp(base + charIndex, base, maxTarget);
-            }
-        }
-
-        // Oracle positions are relative to the original SQL held by the driver.
-        OracleErrorInfo oracleError = queryOracleErrorInfo(error);
-        if (oracleError != null && oracleError.position() > 0) {
-            int oracleTokenIndex = extractErrorTokenIndex(sentSql, ctrl.sqlExecutionResult);
-            if (oracleTokenIndex >= 0) {
-                return clamp(base + oracleTokenIndex, base, maxTarget);
-            }
-            int oracleBase = locateSqlSourceStart(
+        int anchor = base;
+        if (position.referenceSql() != null) {
+            // Some dialects (Oracle) report positions relative to the original
+            // SQL held by the driver rather than the sent statement.
+            anchor = locateSqlSourceStart(
                     executedText,
-                    oracleError.originalSql(),
+                    position.referenceSql(),
                     base,
                     ctrl.sqlSelectionRange[0]
             );
-            return clamp(oracleBase + oracleError.position(), base, maxTarget);
         }
-
-        // PostgreSQL: ServerErrorMessage carries a 1-based character position.
-        Integer charPosition = queryPostgresqlErrorPosition(error);
-        if (charPosition != null && charPosition > 0) {
-            return clamp(base + charPosition - 1, base, maxTarget);
-        }
-
-        // SQL Server often reports the statement start line, so quoted column,
-        // object, or near-token text is more precise when available.
-        int errorTokenIndex = extractErrorTokenIndex(sentSql, ctrl.sqlExecutionResult);
-        if (errorTokenIndex >= 0) {
-            return clamp(base + errorTokenIndex, base, maxTarget);
-        }
-        Integer sqlServerLine = querySqlServerErrorLine(error);
-        if (sqlServerLine != null && sqlServerLine > 0) {
-            return offsetForLineInStatement(sentSql, base, sqlServerLine, maxTarget);
-        }
-
-        // MySQL/Dameng style messages carry a line number relative to the
-        // start of the sent statement.
-        int lineInStatement = extractErrorLineInStatement(ctrl.sqlExecutionResult);
-        int relTarget = Math.max(0, base - ctrl.sqlSelectionRange[0]);
-        int relEnd = Math.max(0, range[1] - ctrl.sqlSelectionRange[0]);
-        for (int i = 1; i < lineInStatement; i++) {
-            int nl = executedText.indexOf('\n', relTarget);
-            if (nl < 0 || nl >= relEnd) {
-                return base;
-            }
-            relTarget = nl + 1;
-        }
-        if (lineInStatement > 0) {
-            return clamp(ctrl.sqlSelectionRange[0] + relTarget, base, maxTarget);
-        }
-
-        return base;
+        return clamp(anchor + position.offset(), base, maxTarget);
     }
 
-    private boolean isSqliteConnection() {
-        if (ctrl.sqlConnect != null && "SQLITE".equalsIgnoreCase(ctrl.sqlConnect.getDbtype())) {
-            return true;
+    private SqlErrorPosition locateDialectErrorPosition(SQLException error, String sentSql) {
+        if (!(sqlexeRepository() instanceof SqlErrorPositionCapability capability)) {
+            return null;
         }
-        for (Throwable current = ctrl.lastSqlException; current != null; current = current.getCause()) {
-            if ("org.sqlite.SQLiteException".equals(current.getClass().getName())) {
-                return true;
+        try {
+            java.sql.Connection conn = ctrl.sqlConnect == null ? null : ctrl.sqlConnect.getConn();
+            SqlErrorPosition position = capability.locateErrorPosition(conn, error, sentSql, ctrl.sqlExecutionResult);
+            if (position != null) {
+                log.info("SQL error position: code={}, offset={}, sql={}",
+                        error == null ? 0 : error.getErrorCode(), position.offset(), abbreviate(sentSql));
             }
+            return position;
+        } catch (RuntimeException e) {
+            log.warn("Failed to resolve SQL error position: {}", e.getMessage());
+            return null;
         }
-        return false;
-    }
-
-    /**
-     * SQLite reports error tokens or a broad error description, but not a
-     * character position. Map those descriptions back to the sent statement.
-     */
-    private static int resolveSqliteErrorOffset(String sentSql,
-                                                String executionResult,
-                                                int base,
-                                                int maxTarget) {
-        if (sentSql == null || sentSql.isEmpty()) {
-            return -1;
-        }
-        java.util.regex.Matcher nearMatcher = SQLITE_NEAR_TOKEN_PATTERN.matcher(
-                executionResult == null ? "" : executionResult);
-        if (nearMatcher.find()) {
-            int index = lastIndexOfIgnoreCase(sentSql, nearMatcher.group(1).trim());
-            return index >= 0
-                    ? clamp(base + index, base, maxTarget)
-                    : clamp(base + lastNonBlankLineStart(sentSql), base, maxTarget);
-        }
-
-        java.util.regex.Matcher missingObjectMatcher = SQLITE_MISSING_OBJECT_PATTERN.matcher(
-                executionResult == null ? "" : executionResult);
-        if (missingObjectMatcher.find()) {
-            String object = missingObjectMatcher.group(1).trim();
-            int index = indexOfIgnoreCase(sentSql, object);
-            if (index < 0) {
-                int dot = object.lastIndexOf('.');
-                if (dot >= 0 && dot + 1 < object.length()) {
-                    index = indexOfIgnoreCase(sentSql, object.substring(dot + 1));
-                }
-            }
-            if (index >= 0) {
-                return clamp(base + index, base, maxTarget);
-            }
-        }
-
-        if (executionResult != null
-                && (executionResult.contains("incomplete input")
-                || executionResult.contains("unrecognized token")
-                || executionResult.contains("syntax error"))) {
-            return clamp(base + lastNonBlankLineStart(sentSql), base, maxTarget);
-        }
-        return -1;
-    }
-
-    private static int lastNonBlankLineStart(String sql) {
-        int end = sql.length();
-        while (end > 0) {
-            int start = sql.lastIndexOf('\n', end - 1) + 1;
-            if (!sql.substring(start, end).isBlank()) {
-                return start;
-            }
-            end = start - 1;
-        }
-        return 0;
-    }
-
-    private static int lastIndexOfIgnoreCase(String text, String token) {
-        if (text == null || token == null || token.isEmpty() || token.length() > text.length()) {
-            return -1;
-        }
-        for (int i = text.length() - token.length(); i >= 0; i--) {
-            if (text.regionMatches(true, i, token, 0, token.length())) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static int offsetForLineInStatement(String sentSql,
-                                                int base,
-                                                int lineNumber,
-                                                int maxTarget) {
-        if (lineNumber <= 1 || sentSql == null || sentSql.isEmpty()) {
-            return base;
-        }
-        int cursor = 0;
-        for (int line = 1; line < lineNumber; line++) {
-            int newline = sentSql.indexOf('\n', cursor);
-            if (newline < 0) {
-                return base;
-            }
-            cursor = newline + 1;
-        }
-        return clamp(base + cursor, base, maxTarget);
-    }
-
-    /**
-     * Finds a quoted column/object/token in a driver message and maps it back
-     * to the sent SQL, or returns -1 when no token can be located.
-     */
-    private static int extractErrorTokenIndex(String sentSql, String executionResult) {
-        if (sentSql == null || sentSql.isEmpty() || executionResult == null) {
-            return -1;
-        }
-        java.util.regex.Matcher matcher = QUOTED_ERROR_TOKEN_PATTERN.matcher(executionResult);
-        while (matcher.find()) {
-            for (int group = 1; group <= matcher.groupCount(); group++) {
-                String token = matcher.group(group);
-                if (token == null || token.isBlank()) {
-                    continue;
-                }
-                int index = indexOfIgnoreCase(sentSql, token.trim());
-                if (index >= 0) {
-                    return index;
-                }
-                String unquoted = token.replace("[", "").replace("]", "").trim();
-                index = indexOfIgnoreCase(sentSql, unquoted);
-                if (index >= 0) {
-                    return index;
-                }
-                int dot = unquoted.lastIndexOf('.');
-                if (dot >= 0 && dot + 1 < unquoted.length()) {
-                    String objectName = unquoted.substring(dot + 1).trim();
-                    index = indexOfIgnoreCase(sentSql, objectName);
-                    if (index >= 0) {
-                        return index;
-                    }
-                }
-            }
-        }
-        return -1;
-    }
-
-    private static int indexOfIgnoreCase(String text, String token) {
-        if (text == null || token == null || token.isEmpty() || token.length() > text.length()) {
-            return -1;
-        }
-        int limit = text.length() - token.length();
-        for (int i = 0; i <= limit; i++) {
-            if (text.regionMatches(true, i, token, 0, token.length())) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private static int locateSqlSourceStart(String executedText,
@@ -495,156 +312,6 @@ public class SqlExecutionHelper {
         return fallbackBase;
     }
 
-    private static final java.util.regex.Pattern SQLITE_NEAR_TOKEN_PATTERN =
-            java.util.regex.Pattern.compile("(?is)\\bnear\\s+[\"'](.+?)[\"']\\s*:");
-
-    private static final java.util.regex.Pattern SQLITE_MISSING_OBJECT_PATTERN =
-            java.util.regex.Pattern.compile(
-                    "(?is)\\bno such\\s+(?:column|table|function|module|collation):\\s*([^\\r\\n]+)");
-
-    private static final java.util.regex.Pattern QUOTED_ERROR_TOKEN_PATTERN =
-            java.util.regex.Pattern.compile(
-                    "(?s)[\"'`]([^\"'`\\r\\n]{1,300})[\"'`]"
-                            + "|“([^”\\r\\n]{1,300})”"
-                            + "|‘([^’\\r\\n]{1,300})’"
-                            + "|\\[([^\\]\\r\\n]{1,300})\\]");
-
-    /**
-     * Calls {@code getSQLStatementOffset()} on the JDBC connection when the driver
-     * supports it (Informix/GBase {@code IfmxConnection}). Reflection keeps the
-     * compile classpath free of driver classes loaded from extlib at runtime.
-     */
-    private Integer queryDriverStatementErrorOffset() {
-        try {
-            java.sql.Connection conn = ctrl.sqlConnect.getConn();
-            Object target = findOffsetCapableConnection(conn);
-            if (target == null) {
-                return null;
-            }
-            Object value = target.getClass().getMethod("getSQLStatementOffset").invoke(target);
-            return value instanceof Integer ? (Integer) value : null;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static Object findOffsetCapableConnection(Object conn) {
-        if (conn == null) {
-            return null;
-        }
-        if (hasPublicMethod(conn.getClass(), "getSQLStatementOffset")) {
-            return conn;
-        }
-        // SSH tunnel connections are wrapped; reach the underlying driver connection.
-        try {
-            java.lang.reflect.Field delegate = conn.getClass().getDeclaredField("delegate");
-            delegate.setAccessible(true);
-            Object inner = delegate.get(conn);
-            if (inner != null && hasPublicMethod(inner.getClass(), "getSQLStatementOffset")) {
-                return inner;
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    /** Reads the 1-based character position from a PostgreSQL PSQLException, if any. */
-    private static Integer queryPostgresqlErrorPosition(SQLException error) {
-        if (error == null) {
-            return null;
-        }
-        try {
-            Object serverError = error.getClass().getMethod("getServerErrorMessage").invoke(error);
-            if (serverError == null) {
-                return null;
-            }
-            Object position = serverError.getClass().getMethod("getPosition").invoke(serverError);
-            return position instanceof Integer ? (Integer) position : null;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    /** Reads the 1-based error line exposed by SQL Server JDBC, if available. */
-    private static Integer querySqlServerErrorLine(SQLException error) {
-        for (Throwable current = error; current != null; current = current.getCause()) {
-            try {
-                Object serverError = current.getClass()
-                        .getMethod("getSQLServerError")
-                        .invoke(current);
-                if (serverError == null) {
-                    continue;
-                }
-                Object lineNumber = serverError.getClass()
-                        .getMethod("getLineNumber")
-                        .invoke(serverError);
-                if (lineNumber instanceof Number number && number.longValue() > 0) {
-                    return number.intValue();
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Reads Oracle's zero-based character position and the exact SQL text used
-     * as its reference.
-     */
-    private static OracleErrorInfo queryOracleErrorInfo(SQLException error) {
-        for (Throwable current = error; current != null; current = current.getCause()) {
-            try {
-                Object position = current.getClass()
-                        .getMethod("getErrorPosition")
-                        .invoke(current);
-                if (position instanceof Number number && number.intValue() > 0) {
-                    String originalSql = null;
-                    try {
-                        Object value = current.getClass()
-                                .getMethod("getOriginalSql")
-                                .invoke(current);
-                        originalSql = value instanceof String text ? text : null;
-                    } catch (Exception ignored) {
-                    }
-                    return new OracleErrorInfo(number.intValue(), originalSql);
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
-    }
-
-    private record OracleErrorInfo(int position, String originalSql) {
-    }
-
-    private static boolean hasPublicMethod(Class<?> type, String name) {
-        try {
-            type.getMethod(name);
-            return true;
-        } catch (NoSuchMethodException e) {
-            return false;
-        }
-    }
-
-    /** Maps a UTF-8 byte offset to a char index inside {@code text}. */
-    private static int byteOffsetToCharIndex(String text, int byteOffset) {
-        if (text == null || byteOffset <= 0) {
-            return 0;
-        }
-        int bytes = 0;
-        int i = 0;
-        while (i < text.length() && bytes < byteOffset) {
-            int cp = text.codePointAt(i);
-            bytes += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
-            i += Character.charCount(cp);
-        }
-        return i;
-    }
-
-    private static int utf8ByteLength(String text) {
-        return text == null ? 0 : text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-    }
-
     private static String abbreviate(String text) {
         if (text == null) {
             return "";
@@ -656,24 +323,6 @@ public class SqlExecutionHelper {
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(value, max));
     }
-
-    /** Returns the 1-based error line within the statement, or 0 when unknown. */
-    private static int extractErrorLineInStatement(String executionResult) {
-        if (executionResult == null || executionResult.isEmpty()) {
-            return 0;
-        }
-        java.util.regex.Matcher matcher = ERROR_LINE_PATTERN.matcher(executionResult);
-        if (matcher.find()) {
-            try {
-                return Integer.parseInt(matcher.group(1));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return 0;
-    }
-
-    private static final java.util.regex.Pattern ERROR_LINE_PATTERN = java.util.regex.Pattern.compile(
-            "(?i)(?:at\\s+line|line\\s*[:：]?|第)\\s*(\\d+)\\s*(?:行)?");
 
     private int[] highlightCurrentSegment(SqlParserUtil.Segment segment, Sql sql) {
         int[] range = computeSegmentEditorRange(segment, sql);

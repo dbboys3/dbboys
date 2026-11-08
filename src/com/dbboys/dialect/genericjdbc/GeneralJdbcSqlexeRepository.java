@@ -1,11 +1,20 @@
 package com.dbboys.dialect.genericjdbc;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
-public final class GeneralJdbcSqlexeRepository implements SqlexeRepository {
+public final class GeneralJdbcSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locateGeneralJdbc(conn, error, sentSql, errorMessage);
+    }
+
 
     @Override
     public void setDatabase(Connection conn, String databaseName) throws SQLException {

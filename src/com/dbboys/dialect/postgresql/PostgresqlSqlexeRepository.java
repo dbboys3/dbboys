@@ -1,6 +1,9 @@
 package com.dbboys.dialect.postgresql;
 
+import com.dbboys.core.SqlErrorPosition;
+import com.dbboys.core.SqlErrorPositionCapability;
 import com.dbboys.core.SqlexeRepository;
+import com.dbboys.dialect.common.ErrorPositionSupport;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -10,7 +13,7 @@ import java.sql.SQLException;
  * PostgreSQL SQL execution repository.
  * Handles schema switching via {@code SET search_path} and {@code EXPLAIN ANALYZE}.
  */
-public final class PostgresqlSqlexeRepository implements SqlexeRepository {
+public final class PostgresqlSqlexeRepository implements SqlexeRepository, SqlErrorPositionCapability {
 
     @Override
     public void setDatabase(Connection conn, String databaseName) throws SQLException {
@@ -46,6 +49,11 @@ public final class PostgresqlSqlexeRepository implements SqlexeRepository {
             }
             return sb.toString();
         }
+    }
+
+    @Override
+    public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
+        return ErrorPositionSupport.locatePostgresql(error, sentSql, errorMessage);
     }
 
     @Override
