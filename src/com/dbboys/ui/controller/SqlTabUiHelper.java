@@ -140,6 +140,7 @@ public class SqlTabUiHelper {
         ctrl.currentResultSetTabController.hiddenDisconnectedButton.setOnAction(event -> ctrl.connectionDisconnected());
 
         ctrl.explain_result_stackpane = new CustomInfoStackPane(new CustomInfoCodeArea());
+        ctrl.explain_result_stackpane.getStyleClass().add("explain-result-pane");
         ctrl.explain_result_stackpane.setVisible(false);
         ctrl.resultsetStackPane.getChildren().add(ctrl.explain_result_stackpane);
 

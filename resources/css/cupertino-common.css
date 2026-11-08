@@ -4824,6 +4824,10 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-opacity: 1;
 }
 
+.explain-result-pane {
+  -fx-background-color: -color-bg-content;
+}
+
 .scroll-pane {
   -fx-background-color: transparent;
   -fx-background-insets: 0;

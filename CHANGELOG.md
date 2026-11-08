@@ -6,6 +6,7 @@
 修复PostgreSQL获取表结构DDL报错  
 修复PostgreSQL导入csv timestamp类型报错  
 修复sql窗口连接正在连接时可点击执行且无法停止  
+修复执行计划面板滚动条透明出现下面面板内容  
 优化浅色主题UI  
 
 ### 20260915
