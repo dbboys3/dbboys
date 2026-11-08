@@ -18,6 +18,7 @@ import com.dbboys.infra.util.SqlParserUtil;
 import com.dbboys.model.CatalogNode;
 import com.dbboys.model.Connect;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
@@ -26,7 +27,6 @@ import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.*;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.SVGPath;
 
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
@@ -90,6 +90,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
     private CatalogNode activeDatabase;
     private final Set<Integer> errorLineIndexes = ConcurrentHashMap.newKeySet();
     private final Map<Integer, Node> gutterNodes = new ConcurrentHashMap<>();
+    private int gutterWidthDigits = -1;
     private Runnable onSaveRequest = () -> {};
     private Runnable onContentDirty = () -> {};
     private Runnable onShowFindPanel = () -> {};
@@ -392,13 +393,27 @@ public class CustomSqlEditCodeArea extends CodeArea {
             if (!(lineNumber instanceof Label label)) {
                 return lineNumber;
             }
-            int digits = String.valueOf(Math.max(1, getParagraphs().size())).length();
-            double gutterWidth = Math.max(30, 12 + digits * 9.0);
+            double gutterWidth = syncGutterWidth();
             GutterLine gutter = new GutterLine(label, gutterWidth);
             gutterNodes.put(idx, gutter);
             applyErrorGutterStyle(gutter, errorLineIndexes.contains(idx));
             return gutter;
         };
+    }
+
+    private double syncGutterWidth() {
+        int digits = String.valueOf(Math.max(1, getParagraphs().size())).length();
+        double gutterWidth = Math.max(30, 12 + digits * 9.0);
+        if (digits == gutterWidthDigits) {
+            return gutterWidth;
+        }
+        gutterWidthDigits = digits;
+        for (Node node : gutterNodes.values()) {
+            if (node instanceof GutterLine gutter) {
+                gutter.setGutterWidth(gutterWidth);
+            }
+        }
+        return gutterWidth;
     }
 
     private static void applyErrorGutterStyle(Node node, boolean error) {
@@ -409,28 +424,33 @@ public class CustomSqlEditCodeArea extends CodeArea {
 
     private static final class GutterLine extends StackPane {
         private final Label lineNumber;
-        private final SVGPath marker;
+        private final Node marker;
 
         private GutterLine(Label lineNumber, double width) {
             this.lineNumber = lineNumber;
             setAlignment(Pos.CENTER);
+            setGutterWidth(width);
+
+            marker = IconFactory.groupFixedColor(
+                    ERROR_LINE_BACKGROUND_PATH, 0.5, 0.5, Color.web("#FF3B30"));
+            marker.setMouseTransparent(true);
+            marker.setManaged(false);
+            marker.setVisible(false);
+            StackPane.setAlignment(marker, Pos.CENTER_RIGHT);
+            StackPane.setMargin(marker, new Insets(0, 2, 0, 2));
+            getChildren().addAll(marker, lineNumber);
+        }
+
+        private void setGutterWidth(double width) {
             setMinWidth(width);
             setPrefWidth(width);
             setMaxWidth(width);
             lineNumber.setMaxWidth(Double.MAX_VALUE);
             lineNumber.setAlignment(Pos.CENTER);
-
-            marker = IconFactory.createFixedColor(
-                    ERROR_LINE_BACKGROUND_PATH, 0.512, 0.512, Color.web("#FF3B30"));
-            marker.setMouseTransparent(true);
-            marker.setManaged(false);
-            marker.setVisible(false);
-            StackPane.setAlignment(marker, Pos.CENTER);
-            getChildren().addAll(marker, lineNumber);
         }
 
         private void setError(boolean error) {
-            lineNumber.setVisible(!error);
+            lineNumber.setVisible(true);
             marker.setManaged(error);
             marker.setVisible(error);
             if (error) {
@@ -447,7 +467,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
         }
     }
 
-    /** Marks the gutter line number of the paragraph containing {@code offset} red. */
+    /** Shows an error icon after the line number of the paragraph containing {@code offset}. */
     public void markErrorLine(int offset) {
         if (getLength() == 0) {
             return;
