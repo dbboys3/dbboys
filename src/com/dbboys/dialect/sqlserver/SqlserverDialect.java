@@ -137,6 +137,10 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     @Override
     public boolean supportsSequencesFolder() { return true; }
 
+    /** 用户自定义类型（别名类型/表类型）。 */
+    @Override
+    public boolean supportsObjectTypesFolder() { return true; }
+
     @Override
     public boolean supportsFunctionsFolder() { return true; }
 
@@ -370,6 +374,31 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
 
     @Override
     public String toggleTriggerSql(String triggerName, boolean enabled) { return null; }
+
+    @Override
+    public boolean supportsToggleTrigger() { return true; }
+
+    /**
+     * T-SQL DML 触发器启停必须带宿主表：
+     * ALTER TABLE [schema].[table] ENABLE|DISABLE TRIGGER [name]。
+     * 触发器名可带模式限定，宿主表与触发器同模式。
+     */
+    @Override
+    public String toggleTriggerSql(String triggerName, String tableName, boolean enabled) {
+        String trigger = triggerName == null ? "" : triggerName.trim();
+        if (trigger.isEmpty()) {
+            return null;
+        }
+        String schema = null;
+        String bareTrigger = trigger;
+        int dot = trigger.lastIndexOf('.');
+        if (dot > 0) {
+            schema = trigger.substring(0, dot);
+            bareTrigger = trigger.substring(dot + 1);
+        }
+        return "ALTER TABLE " + quoteQualified(schema, tableName)
+                + (enabled ? " ENABLE TRIGGER " : " DISABLE TRIGGER ") + quoteBracket(bareTrigger);
+    }
 
     @Override
     public String gatherSchemaSql(String schemaName) {

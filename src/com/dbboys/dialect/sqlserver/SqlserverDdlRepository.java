@@ -290,6 +290,91 @@ public final class SqlserverDdlRepository implements DdlRepository {
         return "--";
     }
 
+    private static final String SQL_TYPE_INFO = """
+            SELECT TYPE_NAME(t.system_type_id) AS base_type,
+                   t.max_length, t.precision, t.scale, t.is_nullable,
+                   CASE WHEN tt.user_type_id IS NOT NULL THEN 1 ELSE 0 END AS is_table_type,
+                   tt.type_table_object_id
+            FROM sys.types t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            LEFT JOIN sys.table_types tt ON tt.user_type_id = t.user_type_id
+            WHERE s.name = ?
+              AND t.name = ?
+              AND t.is_user_defined = 1
+            """;
+
+    private static final String SQL_TYPE_COLUMNS = """
+            SELECT c.name, ty.name AS type_name, c.max_length, c.precision, c.scale,
+                   c.is_nullable, c.is_identity,
+                   dc.definition AS column_default
+            FROM sys.columns c
+            JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+            LEFT JOIN sys.default_constraints dc ON dc.object_id = c.default_object_id
+            WHERE c.object_id = ?
+            ORDER BY c.column_id
+            """;
+
+    private static final String SQL_TYPE_PRIMARY_KEY = """
+            SELECT kc.name, c.name AS column_name
+            FROM sys.key_constraints kc
+            JOIN sys.index_columns ic ON ic.object_id = kc.parent_object_id AND ic.index_id = kc.unique_index_id
+            JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE kc.parent_object_id = ?
+              AND kc.type = 'PK'
+            ORDER BY ic.key_ordinal
+            """;
+
+    /** 用户自定义类型：别名类型重建 CREATE TYPE ... FROM，表类型重建 CREATE TYPE ... AS TABLE。 */
+    @Override
+    public String printType(Connection conn, String objectName) throws Exception {
+        String[] parts = SqlserverMetadataRepository.splitQualified(objectName, currentSchema(conn));
+        SqlRunner runner = runner(conn);
+        String[] info = runner.queryOne(SQL_TYPE_INFO, List.of(parts[0], parts[1]), rs -> new String[]{
+                rs.getString("base_type"),
+                String.valueOf(rs.getInt("max_length")),
+                String.valueOf(rs.getInt("precision")),
+                String.valueOf(rs.getInt("scale")),
+                String.valueOf(rs.getBoolean("is_nullable")),
+                String.valueOf(rs.getBoolean("is_table_type")),
+                String.valueOf(rs.getInt("type_table_object_id"))
+        });
+        if (info == null) {
+            return "-- type " + objectName;
+        }
+        StringBuilder ddl = new StringBuilder("CREATE TYPE ").append(qualified(parts[0], parts[1]));
+        if (!Boolean.parseBoolean(info[5])) {
+            ddl.append(" FROM ").append(SqlserverMetadataRepository.formatType(info[0],
+                    Integer.parseInt(info[1]), Integer.parseInt(info[2]), Integer.parseInt(info[3])));
+            ddl.append(Boolean.parseBoolean(info[4]) ? " NULL;" : " NOT NULL;");
+            return ddl.toString();
+        }
+        int tableObjectId = Integer.parseInt(info[6]);
+        List<String> cols = runner.query(SQL_TYPE_COLUMNS, List.of(tableObjectId), rs -> {
+            StringBuilder col = new StringBuilder("  ").append(quote(rs.getString("name"))).append(' ');
+            col.append(SqlserverMetadataRepository.formatType(rs.getString("type_name"),
+                    rs.getInt("max_length"), rs.getInt("precision"), rs.getInt("scale")));
+            if (rs.getBoolean("is_identity")) {
+                col.append(" IDENTITY(1,1)");
+            }
+            String defaultValue = rs.getString("column_default");
+            if (defaultValue != null && !defaultValue.isBlank()) {
+                col.append(" DEFAULT ").append(defaultValue.trim());
+            }
+            col.append(rs.getBoolean("is_nullable") ? " NULL" : " NOT NULL");
+            return col.toString();
+        });
+        List<String[]> pk = runner.query(SQL_TYPE_PRIMARY_KEY, List.of(tableObjectId),
+                rs -> new String[]{rs.getString("name"), rs.getString("column_name")});
+        if (!pk.isEmpty()) {
+            List<String> pkCols = new ArrayList<>();
+            for (String[] row : pk) {
+                pkCols.add(quote(row[1]));
+            }
+            cols.add("  CONSTRAINT " + quote(pk.get(0)[0]) + " PRIMARY KEY (" + String.join(", ", pkCols) + ")");
+        }
+        return ddl.append(" AS TABLE (\n").append(String.join(",\n", cols)).append("\n);").toString();
+    }
+
     @Override
     public String printDatabase(Connection conn, String databaseName) throws Exception {
         String schema = databaseName == null ? "" : databaseName.trim();

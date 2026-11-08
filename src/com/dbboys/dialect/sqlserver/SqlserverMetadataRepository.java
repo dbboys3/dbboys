@@ -339,6 +339,27 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String FUNCTION_TYPES = "'FN', 'IF', 'TF', 'FS', 'FT', 'AF'";
     private static final String PROCEDURE_TYPES = "'P', 'PC', 'RF', 'X'";
 
+    // 用户自定义类型：别名类型（CREATE TYPE x FROM int）与表类型（CREATE TYPE x AS TABLE）
+    private static final String SQL_OBJECT_TYPES = """
+            SELECT t.name,
+                   s.name AS schema_name,
+                   CASE WHEN tt.user_type_id IS NOT NULL THEN 'TABLE TYPE' ELSE 'ALIAS TYPE' END AS type_kind
+            FROM sys.types t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            LEFT JOIN sys.table_types tt ON tt.user_type_id = t.user_type_id
+            WHERE t.is_user_defined = 1
+              AND s.name = ?
+            ORDER BY t.name
+            """;
+
+    private static final String SQL_OBJECT_TYPE_COUNT = """
+            SELECT COUNT(*)
+            FROM sys.types t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            WHERE t.is_user_defined = 1
+              AND s.name = ?
+            """;
+
     // 系统对象 = 微软随库发布（is_ms_shipped=1）且可直接查询的目录视图/表
     // （sys.tables、INFORMATION_SCHEMA.*、master 库的 spt_* 等）。
     // sys.system_objects 只含资源库对象，master.dbo 的 spt_* 不在其中，必须用
@@ -837,6 +858,26 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     private static String routineSql(String template, String types) {
         return template.replace("{TYPES}", types);
+    }
+
+    @Override
+    public int getObjectTypeCount(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        Integer count = runner.queryOne(SQL_OBJECT_TYPE_COUNT,
+                List.of(contextSchema(conn, databaseName)), rs -> rs.getInt(1));
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public List<Type> getObjectTypes(Connection conn, String databaseName) throws SQLException {
+        SqlRunner runner = runner(conn);
+        return runner.query(SQL_OBJECT_TYPES, List.of(schemaName(databaseName)), rs -> {
+            Type type = new Type(rs.getString("name"));
+            type.setDatabase(rs.getString("schema_name"));
+            type.setOwner(rs.getString("schema_name"));
+            type.setTypeKind(blank(rs.getString("type_kind")));
+            return type;
+        });
     }
 
     @Override

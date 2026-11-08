@@ -429,7 +429,7 @@ public class TreeObjectCrudHandler {
             return;
         }
         if (treeData instanceof Trigger) {
-            toggleTriggerEnabled(connect, treeData, enabled, platform);
+            toggleTriggerEnabled(connect, selectedItem, enabled, platform);
         }
     }
 
@@ -466,8 +466,9 @@ public class TreeObjectCrudHandler {
         }
     }
 
-    public static void toggleTriggerEnabled(Connect connect, TreeData treeData, boolean enabled,
+    public static void toggleTriggerEnabled(Connect connect, TreeItem<TreeData> selectedItem, boolean enabled,
                                                DatabasePlatform platform) {
+        TreeData treeData = selectedItem.getValue();
         String action = enabled ? "enable" : "disable";
         boolean confirm = AlertUtil.CustomAlertConfirm(
                 I18n.t("metadata.alert." + action + "_trigger.title", enabled ? "启用触发器" : "禁用触发器"),
@@ -480,7 +481,9 @@ public class TreeObjectCrudHandler {
             return;
         }
         String sql = platform != null
-                ? platform.toggleTriggerSql(treeData.getName(), enabled)
+                ? platform.toggleTriggerSql(
+                        TreeNavigator.qualifyObjectNameForDdl(selectedItem, treeData.getName()),
+                        ((Trigger) treeData).getTableName(), enabled)
                 : "set triggers " + treeData.getName() + (enabled ? " enabled" : " disabled");
         Runnable onSucceeded = () -> {
             ((Trigger)treeData).setIsdisabled(!enabled);

@@ -399,6 +399,11 @@ public interface DatabasePlatform {
         return "set triggers " + triggerName + (enabled ? " enabled" : " disabled");
     }
 
+    /** 启停语法需要宿主表名的触发器（如 SQL Server 的 ALTER TABLE ... DISABLE TRIGGER）。 */
+    default String toggleTriggerSql(String triggerName, String tableName, boolean enabled) {
+        return toggleTriggerSql(triggerName, enabled);
+    }
+
     default boolean supportsToggleTrigger() {
         return toggleTriggerSql(null, true) != null;
     }
