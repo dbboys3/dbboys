@@ -295,9 +295,11 @@ public class DatabaseDdlExportHandler {
             }
 
             try (Connection conn = TreeViewUtil.connectionService.getConnectionWithSessionInit(dbConnect)) {
-                String ddl = platform == null ? "" : platform.ddl().printDatabase(conn, schema.getName());
-                Files.writeString(preDdlFile.toPath(), ddl, StandardCharsets.UTF_8);
-                Files.writeString(postDdlFile.toPath(), "", StandardCharsets.UTF_8);
+                var ddlParts = platform == null
+                        ? new com.dbboys.core.DdlRepository.DatabaseDdlParts("", "")
+                        : platform.ddl().exportDatabaseDdlParts(conn, schema.getName(), null);
+                Files.writeString(preDdlFile.toPath(), ddlParts.getPreDataSql(), StandardCharsets.UTF_8);
+                Files.writeString(postDdlFile.toPath(), ddlParts.getPostDataSql(), StandardCharsets.UTF_8);
 
                 List<Table> tables = platform == null
                         ? List.of()

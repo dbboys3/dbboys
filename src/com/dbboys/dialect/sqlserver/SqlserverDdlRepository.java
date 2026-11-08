@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.LongConsumer;
 
 /**
  * SQL Server DDL export. Views/procedures/functions/triggers return their
@@ -32,7 +33,11 @@ public final class SqlserverDdlRepository implements DdlRepository {
             """;
 
     private static final String SQL_COLUMNS = """
-            SELECT c.name, ty.name AS type_name, c.max_length, c.precision, c.scale,
+            SELECT c.name,
+                   CASE WHEN ty.is_user_defined = 1
+                        THEN SCHEMA_NAME(ty.schema_id) + '.' + ty.name
+                        ELSE ty.name END AS type_name,
+                   c.max_length, c.precision, c.scale,
                    c.is_nullable, c.is_identity,
                    dc.definition AS column_default
             FROM sys.columns c
@@ -375,45 +380,174 @@ public final class SqlserverDdlRepository implements DdlRepository {
         return ddl.append(" AS TABLE (\n").append(String.join(",\n", cols)).append("\n);").toString();
     }
 
+    private static final String SQL_TYPE_NAMES = """
+            SELECT t.name
+            FROM sys.types t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            WHERE s.name = ?
+              AND t.is_user_defined = 1
+            ORDER BY t.name
+            """;
+
+    private static final String SQL_INDEX_ROWS = """
+            SELECT t.name AS table_name, i.name, i.type_desc, i.is_unique
+            FROM sys.indexes i
+            JOIN sys.tables t ON t.object_id = i.object_id
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            WHERE s.name = ?
+              AND i.name IS NOT NULL
+              AND i.is_primary_key = 0
+              AND i.is_unique_constraint = 0
+            ORDER BY t.name, i.name
+            """;
+
+    private static final String SQL_FOREIGN_KEYS = """
+            SELECT fk.name AS fk_name,
+                   t.name AS table_name,
+                   rs.name AS ref_schema_name,
+                   rt.name AS ref_table_name,
+                   fk.delete_referential_action,
+                   fk.update_referential_action,
+                   STUFF((SELECT ', ' + QUOTENAME(pc.name)
+                          FROM sys.foreign_key_columns fkc
+                          JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id
+                                                AND pc.column_id = fkc.parent_column_id
+                          WHERE fkc.constraint_object_id = fk.object_id
+                          ORDER BY fkc.constraint_column_id
+                          FOR XML PATH('')), 1, 2, '') AS columns_csv,
+                   STUFF((SELECT ', ' + QUOTENAME(rc.name)
+                          FROM sys.foreign_key_columns fkc
+                          JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id
+                                                AND rc.column_id = fkc.referenced_column_id
+                          WHERE fkc.constraint_object_id = fk.object_id
+                          ORDER BY fkc.constraint_column_id
+                          FOR XML PATH('')), 1, 2, '') AS ref_columns_csv
+            FROM sys.foreign_keys fk
+            JOIN sys.tables t ON t.object_id = fk.parent_object_id
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
+            JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
+            WHERE s.name = ?
+            ORDER BY t.name, fk.name
+            """;
+
     @Override
     public String printDatabase(Connection conn, String databaseName) throws Exception {
+        return printDatabase(conn, databaseName, null);
+    }
+
+    @Override
+    public String printDatabase(Connection conn, String databaseName, LongConsumer progressCallback) throws Exception {
+        DdlRepository.DatabaseDdlParts parts = exportDatabaseDdlParts(conn, databaseName, progressCallback);
+        if (parts.getPostDataSql().isBlank()) {
+            return parts.getPreDataSql();
+        }
+        return parts.getPreDataSql() + "\n\n" + parts.getPostDataSql();
+    }
+
+    /**
+     * 模式导出：pre 段为建模式/类型/序列/表/视图/同义词/函数/过程，post 段为
+     * 独立索引、外键约束、触发器（数据导入完成后执行）。语句一律分号结束，不使用 GO。
+     */
+    @Override
+    public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connection conn,
+                                                                 String databaseName,
+                                                                 LongConsumer progressCallback) throws Exception {
         String schema = databaseName == null ? "" : databaseName.trim();
-        StringBuilder ddl = new StringBuilder();
         SqlRunner runner = runner(conn);
 
-        // 非内置模式补 CREATE SCHEMA；T-SQL 要求其独占批次，appendObject 会用 GO 分隔
+        List<String> types = runner.query(SQL_TYPE_NAMES, List.of(schema), rs -> rs.getString(1));
+        List<String> sequences = runner.query(SQL_SEQUENCE_NAMES, List.of(schema), rs -> rs.getString(1));
+        List<String> tables = runner.query(SQL_TABLE_NAMES, List.of(schema), rs -> rs.getString(1));
+        List<String> views = runner.query(objectNamesSql("'V'"), List.of(schema), rs -> rs.getString(1));
+        List<String> synonyms = runner.query(SQL_SYNONYM_NAMES, List.of(schema), rs -> rs.getString(1));
+        List<String> functions = runner.query(objectNamesSql("'FN', 'IF', 'TF'"), List.of(schema), rs -> rs.getString(1));
+        List<String> procedures = runner.query(objectNamesSql("'P'"), List.of(schema), rs -> rs.getString(1));
+        List<String> triggers = runner.query(SQL_TRIGGER_NAMES, List.of(schema), rs -> rs.getString(1));
+        List<String[]> indexRows = runner.query(SQL_INDEX_ROWS, List.of(schema), rs -> new String[]{
+                rs.getString("table_name"), rs.getString("name"), rs.getString("type_desc"),
+                String.valueOf(rs.getBoolean("is_unique"))});
+        List<String[]> fks = runner.query(SQL_FOREIGN_KEYS, List.of(schema), rs -> new String[]{
+                rs.getString("fk_name"), rs.getString("table_name"),
+                rs.getString("ref_schema_name"), rs.getString("ref_table_name"),
+                String.valueOf(rs.getShort("delete_referential_action")),
+                String.valueOf(rs.getShort("update_referential_action")),
+                rs.getString("columns_csv"), rs.getString("ref_columns_csv")});
+
+        long total = (long) types.size() + sequences.size() + tables.size() + views.size()
+                + synonyms.size() + functions.size() + procedures.size()
+                + indexRows.size() + fks.size() + triggers.size();
+        long completed = 0;
+
+        StringBuilder pre = new StringBuilder();
         if (!schema.isBlank() && !DEFAULT_SCHEMAS.contains(schema.toLowerCase(Locale.ROOT))) {
-            ddl.append("CREATE SCHEMA ").append(quote(schema));
+            // 非内置模式补 CREATE SCHEMA
+            appendStatement(pre, "CREATE SCHEMA " + quote(schema));
+        }
+        for (String name : types) {
+            appendStatement(pre, printType(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : sequences) {
+            appendStatement(pre, printSequence(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : tables) {
+            appendStatement(pre, printTable(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : views) {
+            appendStatement(pre, printView(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : synonyms) {
+            appendStatement(pre, printSynonym(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : functions) {
+            appendStatement(pre, printFunction(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
+        }
+        for (String name : procedures) {
+            appendStatement(pre, printProcedure(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
         }
 
-        List<String> sequences = runner.query(SQL_SEQUENCE_NAMES, List.of(schema), rs -> rs.getString(1));
-        for (String name : sequences) {
-            appendObject(ddl, printSequence(conn, qualified(schema, name)));
+        StringBuilder post = new StringBuilder();
+        for (String[] index : indexRows) {
+            appendStatement(post, buildIndexDdl(conn, schema, index[0], index[1], index[2],
+                    Boolean.parseBoolean(index[3])));
+            completed = reportProgress(progressCallback, completed, total);
         }
-        List<String> tables = runner.query(SQL_TABLE_NAMES, List.of(schema), rs -> rs.getString(1));
-        for (String name : tables) {
-            appendObject(ddl, printTableWithDependencies(conn, qualified(schema, name)));
+        for (String[] fk : fks) {
+            appendStatement(post, buildForeignKeyDdl(schema, fk));
+            completed = reportProgress(progressCallback, completed, total);
         }
-        List<String> views = runner.query(objectNamesSql("'V'"), List.of(schema), rs -> rs.getString(1));
-        for (String name : views) {
-            appendObject(ddl, printView(conn, qualified(schema, name)));
-        }
-        List<String> synonyms = runner.query(SQL_SYNONYM_NAMES, List.of(schema), rs -> rs.getString(1));
-        for (String name : synonyms) {
-            appendObject(ddl, printSynonym(conn, qualified(schema, name)));
-        }
-        List<String> functions = runner.query(objectNamesSql("'FN', 'IF', 'TF'"), List.of(schema), rs -> rs.getString(1));
-        for (String name : functions) {
-            appendObject(ddl, printFunction(conn, qualified(schema, name)));
-        }
-        List<String> procedures = runner.query(objectNamesSql("'P'"), List.of(schema), rs -> rs.getString(1));
-        for (String name : procedures) {
-            appendObject(ddl, printProcedure(conn, qualified(schema, name)));
-        }
-        List<String> triggers = runner.query(SQL_TRIGGER_NAMES, List.of(schema), rs -> rs.getString(1));
         for (String name : triggers) {
-            appendObject(ddl, printTrigger(conn, qualified(schema, name)));
+            appendStatement(post, printTrigger(conn, qualified(schema, name)));
+            completed = reportProgress(progressCallback, completed, total);
         }
+        return new DdlRepository.DatabaseDdlParts(pre.toString(), post.toString());
+    }
+
+    /** fk row: 0=name 1=table 2=refSchema 3=refTable 4=deleteAction 5=updateAction 6=cols 7=refCols */
+    private static String buildForeignKeyDdl(String schema, String[] fk) {
+        StringBuilder ddl = new StringBuilder("ALTER TABLE ").append(qualified(schema, fk[1]))
+                .append(" ADD CONSTRAINT ").append(quote(fk[0]))
+                .append(" FOREIGN KEY (").append(fk[6]).append(")")
+                .append(" REFERENCES ").append(qualified(fk[2], fk[3])).append(" (").append(fk[7]).append(")");
+        ddl.append(switch (fk[4]) {
+            case "1" -> " ON DELETE CASCADE";
+            case "2" -> " ON DELETE SET NULL";
+            case "3" -> " ON DELETE SET DEFAULT";
+            default -> "";
+        });
+        ddl.append(switch (fk[5]) {
+            case "1" -> " ON UPDATE CASCADE";
+            case "2" -> " ON UPDATE SET NULL";
+            case "3" -> " ON UPDATE SET DEFAULT";
+            default -> "";
+        });
         return ddl.toString();
     }
 
@@ -421,14 +555,26 @@ public final class SqlserverDdlRepository implements DdlRepository {
         return SQL_OBJECT_NAMES.replace("{TYPES}", types);
     }
 
-    private static void appendObject(StringBuilder ddl, String objectDdl) {
-        if (objectDdl == null || objectDdl.isBlank()) {
+    /** 追加一条语句：分号结束（模块文本可能不带分号），语句间空行分隔，不使用 GO。 */
+    private static void appendStatement(StringBuilder ddl, String statement) {
+        if (statement == null || statement.isBlank()) {
             return;
         }
         if (ddl.length() > 0) {
-            ddl.append("\n\nGO\n\n");
+            ddl.append("\n\n");
         }
-        ddl.append(objectDdl);
+        String text = statement.strip();
+        ddl.append(text);
+        if (!text.endsWith(";")) {
+            ddl.append(';');
+        }
+    }
+
+    private static long reportProgress(LongConsumer progressCallback, long completed, long total) {
+        if (progressCallback != null) {
+            progressCallback.accept(completed + 1);
+        }
+        return completed + 1;
     }
 
     // ==================================================================

@@ -144,6 +144,13 @@ public class DatabaseService implements MetaObjectService {
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlParts(Connect connect,
                                                                  CatalogNode database,
                                                                  BiConsumer<Long, Long> progressListener) throws Exception {
+        var platform = platformResolver.getPlatform(connect.getDbtype());
+        if (platform != null && platform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
+                && !(database instanceof com.dbboys.model.Schema)) {
+            // DATABASE_SCHEMA 库节点：汇总所有非系统模式的导出片段
+            return withMetaSession(connect, database,
+                    conn -> exportAllSchemaDdlParts(conn, connect, progressListener));
+        }
         return withMetaSession(connect, database, conn -> {
             var ddlRepository = platformResolver.ddl(connect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
@@ -157,16 +164,58 @@ public class DatabaseService implements MetaObjectService {
         });
     }
 
-    public List<Table> getUserTables(Connect connect, CatalogNode database) throws Exception {
-        return withMetaSession(connect, database,
-                conn -> platformResolver.metadata(connect).getUserTables(conn, database.getName()));
+    /** 汇总 DATABASE_SCHEMA 库下所有非系统模式的导出片段（pre/post 分别拼接）。 */
+    private DdlRepository.DatabaseDdlParts exportAllSchemaDdlParts(Connection conn, Connect connect,
+                                                                   BiConsumer<Long, Long> progressListener) throws Exception {
+        var platform = platformResolver.getPlatform(connect.getDbtype());
+        List<Schema> schemas = platformResolver.metadata(connect).getSchemas(conn);
+        List<Schema> exportSchemas = new ArrayList<>();
+        for (Schema s : schemas) {
+            if (platform == null || !platform.isSystemDatabase(s.getName())) {
+                exportSchemas.add(s);
+            }
+        }
+        if (progressListener != null) {
+            progressListener.accept(0L, (long) exportSchemas.size());
+        }
+        StringBuilder pre = new StringBuilder();
+        StringBuilder post = new StringBuilder();
+        int idx = 0;
+        for (Schema s : exportSchemas) {
+            var parts = platformResolver.ddl(connect).exportDatabaseDdlParts(conn, s.getName(), (LongConsumer) null);
+            appendDdlPart(pre, parts.getPreDataSql());
+            appendDdlPart(post, parts.getPostDataSql());
+            idx++;
+            if (progressListener != null) {
+                progressListener.accept((long) idx, (long) exportSchemas.size());
+            }
+        }
+        return new DdlRepository.DatabaseDdlParts(pre.toString(), post.toString());
+    }
+
+    private static void appendDdlPart(StringBuilder target, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        if (target.length() > 0) {
+            target.append("\n\n");
+        }
+        target.append(text.strip());
     }
 
     public DdlRepository.DatabaseDdlParts exportDatabaseDdlPartsWithNewConnection(Connect connect,
                                                                                   CatalogNode database,
                                                                                   BiConsumer<Long, Long> progressListener) throws Exception {
+        var platform = platformResolver.getPlatform(connect.getDbtype());
+        boolean allSchemas = platform != null
+                && platform.catalogModel() == DatabasePlatform.CatalogModel.DATABASE_SCHEMA
+                && !(database instanceof com.dbboys.model.Schema);
         Connect sessionConnect = buildDatabaseSessionConnect(connect, database);
         try (Connection conn = connectionService().getConnectionWithSessionInit(sessionConnect)) {
+            if (allSchemas) {
+                // DATABASE_SCHEMA 库节点：汇总所有非系统模式的导出片段
+                return exportAllSchemaDdlParts(conn, sessionConnect, progressListener);
+            }
             var ddlRepository = platformResolver.ddl(sessionConnect);
             long total = ddlRepository.countDatabaseExportItems(conn, database.getName());
             if (progressListener != null) {
@@ -177,6 +226,11 @@ public class DatabaseService implements MetaObjectService {
                     : null;
             return ddlRepository.exportDatabaseDdlParts(conn, database.getName(), progressCallback);
         }
+    }
+
+    public List<Table> getUserTables(Connect connect, CatalogNode database) throws Exception {
+        return withMetaSession(connect, database,
+                conn -> platformResolver.metadata(connect).getUserTables(conn, database.getName()));
     }
 
     public List<Table> getUserTablesWithNewConnection(Connect connect, CatalogNode database) throws Exception {
