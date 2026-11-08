@@ -45,6 +45,11 @@ public interface MetadataRepository {
 
     int getSystemTablesCount(Connection conn) throws SQLException;
 
+    /** 带目录（模式）上下文的系统表计数；默认退回无上下文版本。 */
+    default int getSystemTablesCount(Connection conn, String databaseName) throws SQLException {
+        return getSystemTablesCount(conn);
+    }
+
     String getSystemTablesSize(Connection conn, String databaseName) throws SQLException;
 
     List<SysTable> getSystemTables(Connection conn, String databaseName) throws SQLException;

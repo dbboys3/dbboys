@@ -339,18 +339,25 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
     private static final String FUNCTION_TYPES = "'FN', 'IF', 'TF', 'FS', 'FT', 'AF'";
     private static final String PROCEDURE_TYPES = "'P', 'PC', 'RF', 'X'";
 
+    // 系统对象 = 微软随库发布且可直接查询的目录视图/表（sys.tables、INFORMATION_SCHEMA.* 等）。
+    // type 'S' 的内部基表不可直接查询（需要 DAC），不列入。
     private static final String SQL_SYSTEM_TABLES = """
-            SELECT o.name
-            FROM sys.all_objects o
+            SELECT o.name,
+                   s.name AS schema_name,
+                   RTRIM(o.type) AS object_type
+            FROM sys.system_objects o
             JOIN sys.schemas s ON s.schema_id = o.schema_id
-            WHERE o.type = 'S'
+            WHERE s.name = ?
+              AND o.type IN ('U', 'V')
             ORDER BY o.name
             """;
 
     private static final String SQL_SYSTEM_TABLES_COUNT = """
             SELECT COUNT(*)
-            FROM sys.all_objects o
-            WHERE o.type = 'S'
+            FROM sys.system_objects o
+            JOIN sys.schemas s ON s.schema_id = o.schema_id
+            WHERE s.name = ?
+              AND o.type IN ('U', 'V')
             """;
 
     // ==================================================================
@@ -445,8 +452,15 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
 
     @Override
     public int getSystemTablesCount(Connection conn) throws SQLException {
+        return getSystemTablesCount(conn, null);
+    }
+
+    @Override
+    public int getSystemTablesCount(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Integer count = runner.queryOne(SQL_SYSTEM_TABLES_COUNT, null, rs -> rs.getInt(1));
+        String schema = databaseName == null || databaseName.isBlank()
+                ? currentSchema(conn) : schemaName(databaseName);
+        Integer count = runner.queryOne(SQL_SYSTEM_TABLES_COUNT, List.of(schema), rs -> rs.getInt(1));
         return count == null ? 0 : count;
     }
 
@@ -455,20 +469,26 @@ public final class SqlserverMetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         Long sizeKb = runner.queryOne("""
                 SELECT COALESCE(SUM(a.total_pages) * 8, 0)
-                FROM sys.all_objects o
+                FROM sys.system_objects o
+                JOIN sys.schemas s ON s.schema_id = o.schema_id
                 JOIN sys.partitions p ON p.object_id = o.object_id
                 JOIN sys.allocation_units a ON a.container_id = p.partition_id
-                WHERE o.type = 'S'
-                """, null, rs -> rs.getLong(1));
+                WHERE s.name = ?
+                  AND o.type IN ('U', 'V')
+                """, List.of(schemaName(databaseName)), rs -> rs.getLong(1));
         return sizeKb == null || sizeKb <= 0 ? null : formatSize(sizeKb);
     }
 
     @Override
     public List<SysTable> getSystemTables(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        return runner.query(SQL_SYSTEM_TABLES, null, rs -> {
+        return runner.query(SQL_SYSTEM_TABLES, List.of(schemaName(databaseName)), rs -> {
             SysTable table = new SysTable(rs.getString("name"));
-            table.setTableCatalog("sys");
+            String schema = blank(rs.getString("schema_name"));
+            table.setTableCatalog(schema);
+            // 拖动生成查询 SQL 时以 owner 做模式限定（sys.tables 等）
+            table.setTableOwner(schema);
+            table.setTableTypeCode("V".equals(rs.getString("object_type")) ? "view" : "table");
             return table;
         });
     }

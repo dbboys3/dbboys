@@ -232,7 +232,7 @@ public class DatabaseService implements MetaObjectService {
         var platform = platformResolver.requirePlatform(connect);
 
         if (platform.supportsSystemTablesFolder()) {
-            int sysCount = repo.getSystemTablesCount(conn);
+            int sysCount = repo.getSystemTablesCount(conn, databaseName);
             String sysSize = repo.getSystemTablesSize(conn, databaseName);
             result.add(sysSize == null ? (sysCount + "个") : (sysCount + "个/" + sysSize));
         }
