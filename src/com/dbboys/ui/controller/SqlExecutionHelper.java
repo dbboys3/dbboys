@@ -559,8 +559,18 @@ public class SqlExecutionHelper {
     private void executeUpdateStatement(Task<?> task) {
         try {
             ctrl.sqlStatement = ctrl.sqlConnect.getConn().prepareStatement(ctrl.sqlExe);
-            ctrl.parameterMetaData = ctrl.sqlStatement.getParameterMetaData();
-            int paramCount = ctrl.parameterMetaData.getParameterCount();
+            int discoveredParamCount;
+            try {
+                ctrl.parameterMetaData = ctrl.sqlStatement.getParameterMetaData();
+                discoveredParamCount = ctrl.parameterMetaData.getParameterCount();
+            } catch (SQLException e) {
+                // SQL Server 对不支持元数据发现的语句（CREATE VIEW 等 DDL）在
+                // getParameterMetaData 阶段抛 11527；此类语句无参数，直接执行即可
+                log.debug("getParameterMetaData unsupported, execute without params: {}", e.getMessage());
+                ctrl.parameterMetaData = null;
+                discoveredParamCount = 0;
+            }
+            final int paramCount = discoveredParamCount;
             if (paramCount > 0) {
                 CountDownLatch latch = new CountDownLatch(1);
                 Platform.runLater(() -> {
