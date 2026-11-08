@@ -53,10 +53,14 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Driver;
+import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.*;
 
@@ -65,6 +69,7 @@ public class CreateConnectController {
     private static final Logger log = LogManager.getLogger(CreateConnectController.class);
     private static final String EMPTY_PROPS = "[]";
     private final ConnectionService connectionService = com.dbboys.app.AppContext.get(ConnectionService.class);
+    private final Map<String, List<String>> discoveredDriverPropertyNames = new HashMap<>();
 
     @FXML
     public ChoiceBox<ConnectFolder> connectFolderChoiceBox;
@@ -1349,22 +1354,45 @@ public class CreateConnectController {
     }
 
     private ObservableList<ObservableList<String>> buildDriverPropRows(String propsJson) {
-        JSONArray jsonArray = new JSONArray(
-                propsJson == null || propsJson.isBlank() ? defaultConnectionPropsFor(dbTypeChoiceBox.getValue()) : propsJson
-        );
+        String dbType = dbTypeChoiceBox.getValue();
+        List<String> driverPropNames = discoverDriverPropertyNames(dbType, driverChoiceBox.getValue());
+        Map<String, String> propertyValues = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        putPropertyValues(propertyValues, defaultConnectionPropsFor(dbType));
+        if (propsJson != null && !propsJson.isBlank()) {
+            putPropertyValues(propertyValues, propsJson);
+        }
+        for (String propName : driverPropNames) {
+            propertyValues.putIfAbsent(propName, "");
+        }
+
         Set<String> defaultPropNames = buildDefaultPropNameSet();
+        defaultPropNames.addAll(driverPropNames);
         ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
-        for (int i = 0; i < jsonArray.length(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            String propName = jsonObject.getString("propName");
+        for (Map.Entry<String, String> entry : propertyValues.entrySet()) {
+            String propName = entry.getKey();
             ObservableList<String> row = FXCollections.observableArrayList();
-            boolean isCustom = !defaultPropNames.contains(propName);
+            boolean isCustom = defaultPropNames.stream()
+                    .noneMatch(name -> name.equalsIgnoreCase(propName));
             row.add(isCustom ? "true" : null);
             row.add(propName);
-            row.add(jsonObject.getString("propValue"));
+            row.add(entry.getValue());
             rows.add(row);
         }
         return rows;
+    }
+
+    private static void putPropertyValues(Map<String, String> target, String propsJson) {
+        if (propsJson == null || propsJson.isBlank()) {
+            return;
+        }
+        JSONArray jsonArray = new JSONArray(propsJson);
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
+            String propName = jsonObject.optString("propName", "").trim();
+            if (!propName.isEmpty()) {
+                target.put(propName, jsonObject.optString("propValue", ""));
+            }
+        }
     }
 
     /** Returns the set of property names from the current dialect's defaultConnectionProps. */
@@ -1375,6 +1403,116 @@ public class CreateConnectController {
             names.add(defaults.getJSONObject(i).getString("propName"));
         }
         return names;
+    }
+
+    private List<String> discoverDriverPropertyNames(String dbType, String driverName) {
+        if (dbType == null || dbType.isBlank() || driverName == null || driverName.isBlank()) {
+            return List.of();
+        }
+        String cacheKey = dbType.toUpperCase(Locale.ROOT) + "|" + driverName;
+        if (discoveredDriverPropertyNames.containsKey(cacheKey)) {
+            return discoveredDriverPropertyNames.get(cacheKey);
+        }
+        List<String> names = loadDriverPropertyNames(dbType, driverName);
+        discoveredDriverPropertyNames.put(cacheKey, names);
+        return names;
+    }
+
+    private List<String> loadDriverPropertyNames(String dbType, String driverName) {
+        String sampleUrl = sampleJdbcUrl(dbType);
+        String driverClassName = driverClassName(dbType);
+        if (sampleUrl == null || driverClassName == null) {
+            return List.of();
+        }
+        File driverFolder = resolveDriverFolder(dbType);
+        File selectedJar = new File(driverFolder, driverName);
+        if (!selectedJar.isFile()) {
+            return List.of();
+        }
+        List<URL> urls = new ArrayList<>();
+        try {
+            urls.add(selectedJar.toURI().toURL());
+            File[] folderFiles = driverFolder.listFiles();
+            if (folderFiles != null) {
+                for (File file : folderFiles) {
+                    if (file.isFile()
+                            && file.getName().toLowerCase(Locale.ROOT).endsWith(".jar")
+                            && !file.equals(selectedJar)) {
+                        urls.add(file.toURI().toURL());
+                    }
+                }
+            }
+            Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            try (URLClassLoader loader = new URLClassLoader(
+                    urls.toArray(URL[]::new), ClassLoader.getPlatformClassLoader())) {
+                Class<?> driverClass = Class.forName(driverClassName, true, loader);
+                Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+                DriverPropertyInfo[] propertyInfos = driver.getPropertyInfo(sampleUrl, new Properties());
+                if (propertyInfos != null) {
+                    for (DriverPropertyInfo propertyInfo : propertyInfos) {
+                        if (propertyInfo.name != null && !propertyInfo.name.isBlank()) {
+                            names.add(propertyInfo.name);
+                        }
+                    }
+                }
+                if ("DB2".equalsIgnoreCase(dbType)) {
+                    collectPrefixedStringFields(
+                            Class.forName("com.ibm.db2.jcc.DB2BaseDataSource", true, loader),
+                            "propertyKey_",
+                            names
+                    );
+                }
+            }
+            return List.copyOf(names);
+        } catch (Exception e) {
+            log.debug("Unable to discover JDBC driver properties for {} / {}.", dbType, driverName, e);
+            return List.of();
+        }
+    }
+
+    private static void collectPrefixedStringFields(Class<?> type, String prefix, Set<String> target) {
+        if (type == null) {
+            return;
+        }
+        for (java.lang.reflect.Field field : type.getFields()) {
+            if (field.getName().startsWith(prefix)
+                    && field.getType() == String.class
+                    && java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                try {
+                    Object value = field.get(null);
+                    if (value instanceof String name && !name.isBlank()) {
+                        target.add(name);
+                    }
+                } catch (IllegalAccessException ignored) {
+                }
+            }
+        }
+    }
+
+    private String sampleJdbcUrl(String dbType) {
+        return switch (dbType.toUpperCase(Locale.ROOT)) {
+            case "MYSQL" -> "jdbc:mysql://localhost:3306/mysql";
+            case "ORACLE" -> "jdbc:oracle:thin:@localhost:1521/XEPDB1";
+            case "POSTGRESQL" -> "jdbc:postgresql://localhost:5432/postgres";
+            case "SQLITE" -> "jdbc:sqlite::memory:";
+            case "SQLSERVER" -> "jdbc:sqlserver://localhost:1433;databaseName=master";
+            case "DB2" -> "jdbc:db2://localhost:50000/sample";
+            case "DAMENG" -> "jdbc:dm://localhost:5236";
+            default -> null;
+        };
+    }
+
+    private static String driverClassName(String dbType) {
+        return switch (dbType.toUpperCase(Locale.ROOT)) {
+            case "MYSQL" -> "com.mysql.cj.jdbc.Driver";
+            case "ORACLE" -> "oracle.jdbc.OracleDriver";
+            case "POSTGRESQL" -> "org.postgresql.Driver";
+            case "SQLITE" -> "org.sqlite.JDBC";
+            case "SQLSERVER" -> "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+            case "DB2" -> "com.ibm.db2.jcc.DB2Driver";
+            case "DAMENG" -> "dm.jdbc.driver.DmDriver";
+            default -> null;
+        };
     }
 
     private ObservableList<ObservableList<String>> copyDriverPropRows(List<ObservableList<String>> sourceRows) {
