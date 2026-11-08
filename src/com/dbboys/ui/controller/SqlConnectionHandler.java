@@ -82,12 +82,10 @@ public class SqlConnectionHandler {
     }
 
     private void handleConnectChanged(Connect oldVal, Connect newVal) {
+        ctrl.sqlConnectChoiceBoxDbIcon.setVisible(false);
+        ctrl.sqlConnectChoiceBoxLoadingIcon.setVisible(true);
+        ctrl.sqlSqlModeChoiceBox.setVisible(false);
         AppExecutor.runAsync(() -> {
-            Platform.runLater(() -> {
-                ctrl.sqlConnectChoiceBoxDbIcon.setVisible(false);
-                ctrl.sqlConnectChoiceBoxLoadingIcon.setVisible(true);
-                ctrl.sqlSqlModeChoiceBox.setVisible(false);
-            });
             Connection conn = null;
             try {
                 conn = connectionService.createConnection(newVal);
@@ -555,9 +553,16 @@ public class SqlConnectionHandler {
         ctrl.sqlUserTextField.disableProperty().bind(dbUserDisabled);
 
         ctrl.sqlStopButton.disableProperty().bind(ctrl.sqlExecuteProcessStackPane.visibleProperty().not());
-        ctrl.sqlRunButton.disableProperty().bind(ctrl.sqlExecuteProcessStackPane.visibleProperty());
+        ctrl.sqlRunButton.disableProperty().bind(Bindings.or(
+                ctrl.sqlExecuteProcessStackPane.visibleProperty(),
+                ctrl.sqlConnectChoiceBoxLoadingIcon.visibleProperty()
+        ));
         ctrl.sqlExplainButton.disableProperty().bind(
-                Bindings.or(ctrl.sqlExecuteProcessStackPane.visibleProperty(), generalJdbcToolbar));
+                Bindings.or(
+                        Bindings.or(ctrl.sqlExecuteProcessStackPane.visibleProperty(),
+                                ctrl.sqlConnectChoiceBoxLoadingIcon.visibleProperty()),
+                        generalJdbcToolbar
+                ));
 
         ctrl.resultsetTabPane.prefWidthProperty().bind(ctrl.bottomPane.widthProperty());
         ctrl.resultsetTabPane.prefHeightProperty().bind(ctrl.bottomPane.heightProperty());
