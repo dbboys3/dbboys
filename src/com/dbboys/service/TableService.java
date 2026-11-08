@@ -348,6 +348,8 @@ public class TableService implements MetaObjectService {
                                     String tableName,
                                     File file,
                                     BackgroundSqlTask backSqlTask) throws Exception {
+        // 无会话级模式切换的方言（SQL Server）：列元数据读取与 INSERT 都要带当前导入模式限定
+        tableName = qualifyForSchema(connect, database, tableName);
         checkImportCancelled(backSqlTask);
         if (!file.exists() || !file.isFile()) {
             throw new TableImportException(

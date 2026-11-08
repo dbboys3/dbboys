@@ -287,7 +287,32 @@ public final class SqlserverDdlRepository implements DdlRepository {
     private String printModule(Connection conn, String objectName, String label) throws Exception {
         String[] parts = SqlserverMetadataRepository.splitQualified(objectName, currentSchema(conn));
         String text = runner(conn).queryOne(SQL_MODULE_TEXT, List.of(parts[0], parts[1]), rs -> rs.getString(1));
-        return text == null ? "-- " + label + " " + objectName : text.strip();
+        return text == null ? "-- " + label + " " + objectName : qualifyModuleName(text.strip(), parts[0], parts[1]);
+    }
+
+    /**
+     * sys.sql_modules 保存的是创建时的原文，对象名可能未带模式限定
+     * （CREATE VIEW v AS ...）。导出统一补成 [schema].[name]，已带正确限定的原文不动。
+     */
+    private static String qualifyModuleName(String ddlText, String schema, String name) {
+        if (ddlText == null || schema == null || schema.isBlank() || name == null || name.isBlank()) {
+            return ddlText;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?im)^(\\s*CREATE\\s+(?:OR\\s+ALTER\\s+)?\\w+\\s+)(\\S+)")
+                .matcher(ddlText);
+        if (!m.find()) {
+            return ddlText;
+        }
+        String token = m.group(2);
+        int paren = token.indexOf('(');
+        String namePart = paren >= 0 ? token.substring(0, paren) : token;
+        String suffix = paren >= 0 ? token.substring(paren) : "";
+        String unquoted = namePart.replace("[", "").replace("]", "").replace("\"", "");
+        if (unquoted.equalsIgnoreCase(schema + "." + name)) {
+            return ddlText;
+        }
+        return ddlText.substring(0, m.start(2)) + qualified(schema, name) + suffix + ddlText.substring(m.end(2));
     }
 
     @Override
