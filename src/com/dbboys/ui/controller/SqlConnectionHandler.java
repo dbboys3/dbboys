@@ -409,6 +409,16 @@ public class SqlConnectionHandler {
         if (database instanceof Schema) {
             return false;
         }
+        // 两层模型（oracle/dameng/db2）的模式项同理：连接只到了库，模式是会话级目标，
+        // 新建连接尚未 SET CURRENT SCHEMA，必须走一次切换（幂等）。
+        try {
+            DatabasePlatform platform = DatabasePlatformResolver.getInstance()
+                    .getPlatform(ctrl.sqlConnect.getDbtype());
+            if (platform != null && platform.catalogModel() == DatabasePlatform.CatalogModel.SCHEMA) {
+                return false;
+            }
+        } catch (Exception ignored) {
+        }
         String sessionDb = ctrl.sqlConnect == null ? null : ctrl.sqlConnect.getSessionCatalog();
         return sessionDb != null && !sessionDb.isBlank() && database.getName().equalsIgnoreCase(sessionDb);
     }
