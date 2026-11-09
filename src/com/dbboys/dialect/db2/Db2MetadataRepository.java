@@ -25,12 +25,6 @@ public final class Db2MetadataRepository implements MetadataRepository {
     private static final String SYSTEM_SCHEMA_FILTER =
             "SCHEMANAME NOT LIKE 'SYS%' AND SCHEMANAME NOT IN ('NULLID', 'SQLJ', 'SYSTOOLS', 'SYSIBMADM', 'SYSPUBLIC')";
 
-    private static final String SQL_DATABASES = """
-            SELECT DB_NAME
-            FROM SYSIBMADM.SNAPDB
-            ORDER BY DB_NAME
-            """;
-
     private static final String SQL_SCHEMAS = """
             SELECT SCHEMANAME, OWNER, CREATE_TIME
             FROM SYSCAT.SCHEMATA
@@ -241,42 +235,8 @@ public final class Db2MetadataRepository implements MetadataRepository {
     @Override
     public List<Database> getDatabases(Connection conn) throws SQLException {
         SqlRunner runner = runner(conn);
-        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
-        // 当前连接库始终可见（快照视图只覆盖实例启动后激活过的库）
-        String current = currentDatabase(conn);
-        if (!current.isEmpty()) {
-            names.add(current);
-        }
-        try {
-            for (String dbName : runner.query(SQL_DATABASES, null, rs -> rs.getString(1))) {
-                if (dbName != null && !dbName.isBlank()) {
-                    names.add(dbName.trim());
-                }
-            }
-        } catch (SQLException e) {
-            // SYSIBMADM.SNAPDB 需要监控权限；不可用时退化为仅列出当前连接库
-        }
-        List<Database> databases = new ArrayList<>();
-        for (String name : names) {
-            Database database = new Database(name);
-            database.setDbOwner("");
-            database.setDbCreated("");
-            database.setDbLog("");
-            database.setDbSpace("");
-            database.setDbSize("");
-            database.setDbLocale("");
-            database.setDbUseGLU("");
-            databases.add(database);
-        }
-        return databases;
-    }
-
-    @Override
-    public List<Schema> getSchemas(Connection conn) throws SQLException {
-        SqlRunner runner = runner(conn);
-        String parentDb = currentDatabaseQuiet(conn);
         return runner.query(SQL_SCHEMAS, null, rs -> {
-            Schema schema = new Schema(rs.getString("SCHEMANAME").trim(), parentDb);
+            Database schema = new Database(rs.getString("SCHEMANAME").trim());
             schema.setDbOwner(blank(rs.getString("OWNER")));
             schema.setDbCreated(formatTimestamp(rs.getString("CREATE_TIME")));
             schema.setDbLog("");
@@ -291,9 +251,8 @@ public final class Db2MetadataRepository implements MetadataRepository {
     @Override
     public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        // 三层模型下本方法查询的是模式信息，必须返回 Schema（保持树节点身份）。
-        Schema info = runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName(databaseName)), rs -> {
-            Schema schema = new Schema(rs.getString("SCHEMANAME").trim(), currentDatabaseQuiet(conn));
+        Database info = runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName(databaseName)), rs -> {
+            Database schema = new Database(rs.getString("SCHEMANAME").trim());
             schema.setDbOwner(blank(rs.getString("OWNER")));
             schema.setDbCreated(formatTimestamp(rs.getString("CREATE_TIME")));
             schema.setDbLog("");
@@ -306,7 +265,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
         if (info != null) {
             return info;
         }
-        Schema fallback = new Schema(databaseName == null ? "" : databaseName.trim(), currentDatabaseQuiet(conn));
+        Database fallback = new Database(databaseName == null ? "" : databaseName.trim());
         fallback.setDbSize("");
         return fallback;
     }
@@ -656,66 +615,15 @@ public final class Db2MetadataRepository implements MetadataRepository {
         if (conn == null || databaseName == null || databaseName.isBlank()) {
             return;
         }
-        String name = databaseName.trim();
-        // 库-模式-表模型：名称若是实例上的真实数据库且非当前库，只能靠重连切换——
-        // 抛出 RECONNECT_REQUIRED_STATE（方言归类为 RETRY_WITH_NEW_CONNECTION），
-        // 由 ConnectionServiceImpl 的租约逻辑重连到目标库。
-        String currentDb = currentDatabase(conn);
-        if (name.equalsIgnoreCase(currentDb)) {
-            return; // 已在目标库
-        }
-        if (isInstanceDatabase(conn, name)) {
-            throw new SQLException("cross-database switch requires reconnect: " + name, RECONNECT_REQUIRED_STATE);
-        }
-        // 否则按模式处理：切换会话 CURRENT SCHEMA
-        String schema = name.replace("\"", "\"\"");
+        String schema = databaseName.trim().replace("\"", "\"\"");
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("SET CURRENT SCHEMA \"" + schema + "\"");
-        } catch (SQLException e) {
-            if ("42704".equals(e.getSQLState())) {
-                // 未定义的名称：按跨库切换探测（快照视图可能漏列未激活的库）
-                throw new SQLException("cross-database switch requires reconnect: " + name, RECONNECT_REQUIRED_STATE);
-            }
-            throw e;
-        }
-    }
-
-    /** 目标名是否是实例上的数据库（快照视图不可用或漏列时按模式处理）。 */
-    private boolean isInstanceDatabase(Connection conn, String name) {
-        try {
-            Boolean exists = runner(conn).queryOne(
-                    "SELECT COUNT(*) FROM SYSIBMADM.SNAPDB WHERE DB_NAME = ?",
-                    List.of(name.toUpperCase(java.util.Locale.ROOT)), rs -> rs.getInt(1) > 0);
-            return Boolean.TRUE.equals(exists);
-        } catch (Exception e) {
-            return false;
         }
     }
 
     // ==================================================================
     // Helpers
     // ==================================================================
-
-    String currentDatabase(Connection conn) throws SQLException {
-        try {
-            String catalog = conn.getCatalog();
-            if (catalog != null && !catalog.isBlank()) {
-                return catalog.trim();
-            }
-        } catch (Exception ignored) {
-        }
-        SqlRunner runner = runner(conn);
-        String db = runner.queryOne("SELECT CURRENT SERVER FROM SYSIBM.SYSDUMMY1", null, rs -> rs.getString(1));
-        return db != null && !db.isBlank() ? db.trim() : "";
-    }
-
-    private String currentDatabaseQuiet(Connection conn) {
-        try {
-            return currentDatabase(conn);
-        } catch (SQLException e) {
-            return "";
-        }
-    }
 
     String currentSchema(Connection conn) throws SQLException {
         try {

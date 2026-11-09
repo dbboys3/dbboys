@@ -19,8 +19,7 @@ import java.util.List;
  * IBM Db2 (LUW) platform adapter. Connection + metadata + SQL execution only;
  * instance management (install/start/stop) is intentionally not implemented.
  */
-public final class Db2Dialect implements DatabasePlatform, ConnectionSupport,
-        com.dbboys.core.ReconnectFallbackCapability {
+public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     private static final String DB_TYPE = "DB2";
     private static final String DRIVER_CLASS = "com.ibm.db2.jcc.DB2Driver";
     private static final String DEFAULT_DRIVER = "jcc-11.5.9.0.jar";
@@ -64,6 +63,29 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport,
         }
     }
 
+    /** 会话目标是模式（默认与用户名相同）；绝不写 catalog——catalog 是 JDBC URL 里的库名。 */
+    @Override
+    public String getSessionCatalog(Connect connect) {
+        if (connect == null) {
+            return "";
+        }
+        String sessionCatalog = connect.getSessionCatalog();
+        if (sessionCatalog != null && !sessionCatalog.isBlank()) {
+            return sessionCatalog;
+        }
+        String username = connect.getUsername();
+        return username == null ? "" : username;
+    }
+
+    /** 只写 sessionCatalog（模式）；默认实现会连 catalog 一起改，导致把模式名当库名拼连接地址。 */
+    @Override
+    public void setSessionCatalog(Connect connect, String catalogName) {
+        if (connect == null) {
+            return;
+        }
+        connect.setSessionCatalog(catalogName);
+    }
+
     @Override
     public boolean supportsSessionInit() { return true; }
 
@@ -101,27 +123,22 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport,
     }
 
     // ==================================================================
-    // ReconnectFallbackCapability
-    // ==================================================================
-
-    @Override
-    public String reconnectFallbackDatabaseName() {
-        return defaultDatabase();
-    }
-
-    @Override
-    public String reconnectFallbackDatabaseName(Connect connect) {
-        String catalog = connect == null ? null : connect.getCatalog();
-        return catalog == null || catalog.isBlank() ? reconnectFallbackDatabaseName() : catalog;
-    }
-
-    // ==================================================================
     // DatabasePlatform
     // ==================================================================
 
-    /** 库-模式-表：实例有多个库，库下再挂模式；跨库切换靠租约重连（同 SQL Server/PostgreSQL）。 */
+    /** Db2 connections bind to one database; the tree's first level lists schemas. */
     @Override
-    public CatalogModel catalogModel() { return CatalogModel.DATABASE_SCHEMA; }
+    public CatalogModel catalogModel() { return CatalogModel.SCHEMA; }
+
+    @Override
+    public String getDatabaseFolderI18nKey() {
+        return "metadata.folder.schemas";
+    }
+
+    @Override
+    public String getDatabaseFolderDefaultText() {
+        return "模式";
+    }
 
     @Override
     public boolean supportsPackages() { return false; }
@@ -140,6 +157,10 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport,
 
     @Override
     public boolean supportsSystemTablesFolder() { return true; }
+
+    /** 同 Oracle/Dameng：两层模型的节点是会话级模式，不能持久化为连接的"默认数据库"。 */
+    @Override
+    public boolean supportsSetDefaultDatabase() { return false; }
 
     @Override
     public boolean supportsEditableAutoIncrement() { return true; }
