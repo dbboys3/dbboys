@@ -41,7 +41,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
     private static final String SQL_TABLES = """
             SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
                    COALESCE(t.REMARKS, '') AS TAB_COMMENT,
-                   t.CARD AS NUM_ROWS,
+                   CASE WHEN t.CARD < 0 THEN 0 ELSE t.CARD END AS NUM_ROWS,
                    CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
                         ELSE t.NPAGES * ts.PAGESIZE END AS TOTAL_BYTES
             FROM SYSCAT.TABLES t
@@ -54,7 +54,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
     private static final String SQL_TABLE_DETAIL = """
             SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
                    COALESCE(t.REMARKS, '') AS TAB_COMMENT,
-                   t.CARD AS NUM_ROWS,
+                   CASE WHEN t.CARD < 0 THEN 0 ELSE t.CARD END AS NUM_ROWS,
                    CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
                         ELSE t.NPAGES * ts.PAGESIZE END AS TOTAL_BYTES
             FROM SYSCAT.TABLES t
@@ -150,16 +150,18 @@ public final class Db2MetadataRepository implements MetadataRepository {
             """;
 
     private static final String SQL_VIEWS = """
-            SELECT VIEWNAME, OWNER, CREATE_TIME
-            FROM SYSCAT.VIEWS
-            WHERE VIEWSCHEMA = ?
-            ORDER BY VIEWNAME
+            SELECT TABNAME AS VIEWNAME, OWNER, CREATE_TIME
+            FROM SYSCAT.TABLES
+            WHERE TABSCHEMA = ?
+              AND TYPE = 'V'
+            ORDER BY TABNAME
             """;
 
     private static final String SQL_VIEW_COUNT = """
             SELECT COUNT(*)
-            FROM SYSCAT.VIEWS
-            WHERE VIEWSCHEMA = ?
+            FROM SYSCAT.TABLES
+            WHERE TABSCHEMA = ?
+              AND TYPE = 'V'
             """;
 
     private static final String SQL_SEQUENCES = """
@@ -349,7 +351,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
         table.setTableCatalog(rs.getString("OWNER") == null ? "" : rs.getString("OWNER").trim());
         table.setTableOwner(table.getTableCatalog());
         table.setTableComm(blank(rs.getString("TAB_COMMENT")));
-        // CARD 为优化器统计行数；-1 表示未执行 RUNSTATS（无统计），界面不展示
+        // CARD 为优化器统计行数；无统计（-1）时 SQL 已转为 0 展示
         table.setNrows(rs.getInt("NUM_ROWS"));
         long totalBytes = rs.getLong("TOTAL_BYTES");
         if (!rs.wasNull() && totalBytes > 0) {
