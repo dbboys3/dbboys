@@ -32,7 +32,7 @@ jar --create --file lib/lib_nonmodular/dbboys.jar --main-class com.dbboys.app.Ma
 echo dbboys.jar created.
 
 :: Create minimized JRE
-jlink  --module-path "%JAVAFX_JMODS%;lib\lib_modular"  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core  --output "%JREMIN%" --strip-debug --no-man-pages  --no-header-files
+jlink  --module-path "%JAVAFX_JMODS%;lib\lib_modular"  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,jdk.charsets,java.sql.rowset,java.rmi,java.security.sasl,jdk.net,jdk.security.jgss,jdk.unsupported,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core  --output "%JREMIN%" --strip-debug --no-man-pages  --no-header-files
 echo Minimized JRE created.
 
 :: Package exe

@@ -53,7 +53,7 @@ echo "  dbboys.jar created."
 echo "[4/7] Creating minimized JRE (jlink)..."
 jlink \
   --module-path "$JAVAFX_JMODS:$PROJECT_DIR/lib/lib_modular" \
-  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core \
+  --add-modules javafx.fxml,org.json,net.sf.jsqlparser,javafx.swing,org.controlsfx.controls,org.commonmark,java.sql,java.naming,java.management,java.security.jgss,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.security.auth,jdk.charsets,java.sql.rowset,java.rmi,java.security.sasl,jdk.net,jdk.security.jgss,jdk.unsupported,org.apache.lucene.queryparser,org.apache.lucene.sandbox,org.apache.lucene.core,org.apache.logging.log4j,org.apache.logging.log4j.core \
   --output "$JRE_MIN" \
   --strip-debug \
   --no-man-pages \
