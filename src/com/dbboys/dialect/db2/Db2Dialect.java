@@ -287,9 +287,18 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
 
     @Override
     public String gatherSchemaSql(String schemaName) {
-        return schemaName == null || schemaName.isBlank()
-                ? "RUNSTATS ON TABLE SYSIBM.SYSTABLES"
-                : "CALL SYSPROC.ADMIN_CMD('RUNSTATS ON SCHEMA " + schemaName.replace("'", "''") + "')";
+        if (schemaName == null || schemaName.isBlank()) {
+            return "CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE SYSIBM.SYSTABLES')";
+        }
+        // RUNSTATS 没有 ON SCHEMA 语法，且 JDBC 下必须经 ADMIN_CMD 调用：
+        // 用复合块遍历模式下所有表，逐表收集统计信息
+        String schema = schemaName.replace("'", "''");
+        return "BEGIN\n"
+                + "FOR t AS SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA = '" + schema + "' AND TYPE IN ('T','S','N','H','U')\n"
+                + "DO\n"
+                + "  CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE \"" + schema + "\".\"' || t.TABNAME || '\" AND INDEXES ALL');\n"
+                + "END FOR;\n"
+                + "END";
     }
 
     @Override
@@ -299,12 +308,24 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
 
     @Override
     public String gatherTableSql(String schemaName, String tableName) {
-        return "RUNSTATS ON TABLE " + tableName;
+        return "CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE " + quoteQualified(schemaName, tableName) + "')";
     }
 
     @Override
     public String gatherTableHighSql(String schemaName, String tableName, String indexColumns) {
-        return "RUNSTATS ON TABLE " + tableName + " WITH DISTRIBUTION AND INDEXES ALL";
+        return "CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE " + quoteQualified(schemaName, tableName) + " WITH DISTRIBUTION AND INDEXES ALL')";
+    }
+
+    private static String quoteQualified(String schemaName, String tableName) {
+        String object = tableName == null ? "" : tableName.trim();
+        if (object.contains(".") || schemaName == null || schemaName.isBlank()) {
+            return quoteDouble(object);
+        }
+        return quoteDouble(schemaName.trim()) + "." + quoteDouble(object);
+    }
+
+    private static String quoteDouble(String name) {
+        return "\"" + name.replace("\"", "\"\"") + "\"";
     }
 
     @Override

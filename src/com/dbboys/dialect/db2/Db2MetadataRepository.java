@@ -39,7 +39,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
             """;
 
     private static final String SQL_TABLES = """
-            SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
+            SELECT t.TABNAME, t.TABSCHEMA, t.CREATE_TIME,
                    COALESCE(t.REMARKS, '') AS TAB_COMMENT,
                    CASE WHEN t.CARD < 0 THEN 0 ELSE t.CARD END AS NUM_ROWS,
                    CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
@@ -52,7 +52,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
             """;
 
     private static final String SQL_TABLE_DETAIL = """
-            SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
+            SELECT t.TABNAME, t.TABSCHEMA, t.CREATE_TIME,
                    COALESCE(t.REMARKS, '') AS TAB_COMMENT,
                    CASE WHEN t.CARD < 0 THEN 0 ELSE t.CARD END AS NUM_ROWS,
                    CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
@@ -251,9 +251,29 @@ public final class Db2MetadataRepository implements MetadataRepository {
 
     @Override
     public List<Database> getDatabases(Connection conn) throws SQLException {
+        // 兼容旧的“库列表”消费链路（如 SQL 页签下拉框）：SCHEMA 模型下把模式节点
+        // 适配为 Database 视图返回；规范入口是 getMetadataDatabases（CatalogNode/Schema）。
+        List<Database> databases = new ArrayList<>();
+        for (CatalogNode node : getMetadataDatabases(conn)) {
+            Database database = new Database(node.getName());
+            database.setDbOwner(node.getDbOwner());
+            database.setDbCreated(node.getDbCreated());
+            database.setDbSpace(node.getDbSpace());
+            database.setDbLog(node.getDbLog());
+            database.setDbUseGLU(node.getDbUseGLU());
+            database.setDbLocale(node.getDbLocale());
+            database.setDbSize(node.getDbSize());
+            databases.add(database);
+        }
+        return databases;
+    }
+
+    @Override
+    public List<CatalogNode> getMetadataDatabases(Connection conn) throws SQLException {
         SqlRunner runner = runner(conn);
-        return runner.query(SQL_SCHEMAS, null, rs -> {
-            Database schema = new Database(rs.getString("SCHEMANAME").trim());
+        List<CatalogNode> schemas = new ArrayList<>();
+        schemas.addAll(runner.query(SQL_SCHEMAS, null, rs -> {
+            Schema schema = new Schema(rs.getString("SCHEMANAME").trim());
             schema.setDbOwner(blank(rs.getString("OWNER")));
             schema.setDbCreated(formatTimestamp(rs.getString("CREATE_TIME")));
             schema.setDbLog("");
@@ -262,14 +282,16 @@ public final class Db2MetadataRepository implements MetadataRepository {
             schema.setDbLocale("");
             schema.setDbUseGLU("");
             return schema;
-        });
+        }));
+        return schemas;
     }
 
     @Override
     public CatalogNode getDatabaseInfo(Connection conn, String databaseName) throws SQLException {
         SqlRunner runner = runner(conn);
-        Database info = runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName(databaseName)), rs -> {
-            Database schema = new Database(rs.getString("SCHEMANAME").trim());
+        // 两层模型下本方法查询的是模式信息，必须返回 Schema（保持树节点身份）。
+        Schema info = runner.queryOne(SQL_SCHEMA_INFO, List.of(schemaName(databaseName)), rs -> {
+            Schema schema = new Schema(rs.getString("SCHEMANAME").trim());
             schema.setDbOwner(blank(rs.getString("OWNER")));
             schema.setDbCreated(formatTimestamp(rs.getString("CREATE_TIME")));
             schema.setDbLog("");
@@ -282,7 +304,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
         if (info != null) {
             return info;
         }
-        Database fallback = new Database(databaseName == null ? "" : databaseName.trim());
+        Schema fallback = new Schema(databaseName == null ? "" : databaseName.trim());
         fallback.setDbSize("");
         return fallback;
     }
@@ -348,7 +370,8 @@ public final class Db2MetadataRepository implements MetadataRepository {
 
     private static Table mapTable(java.sql.ResultSet rs) throws SQLException {
         Table table = new Table(rs.getString("TABNAME").trim());
-        table.setTableCatalog(rs.getString("OWNER") == null ? "" : rs.getString("OWNER").trim());
+        // DB2 的表限定名用 TABSCHEMA（模式），不是 OWNER（创建者）
+        table.setTableCatalog(rs.getString("TABSCHEMA") == null ? "" : rs.getString("TABSCHEMA").trim());
         table.setTableOwner(table.getTableCatalog());
         table.setTableComm(blank(rs.getString("TAB_COMMENT")));
         // CARD 为优化器统计行数；无统计（-1）时 SQL 已转为 0 展示
