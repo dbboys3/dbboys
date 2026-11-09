@@ -395,7 +395,12 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
 
     @Override
     public String defaultDatabase() {
-        return "";
+        return "mysql";
+    }
+
+    @Override
+    public String defaultUsername() {
+        return "root";
     }
 
     @Override

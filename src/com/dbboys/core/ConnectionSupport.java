@@ -68,12 +68,17 @@ public interface ConnectionSupport {
         return false;
     }
 
+    /** 连接时是否必须指定数据库名称（如 DB2 的 JDBC URL 必须包含库名）。 */
+    default boolean requiresDatabaseName() {
+        return false;
+    }
+
     default String getServiceNameLabelI18nKey() {
         return "createconnect.label.service_name";
     }
 
     default String getServiceNameLabelDefault() {
-        return "服务名";
+        return "实例名/服务名";
     }
 
     default String getServiceNamePromptI18nKey() {
@@ -81,7 +86,7 @@ public interface ConnectionSupport {
     }
 
     default String getServiceNamePromptDefault() {
-        return "数据库服务名，例如 ORCLPDB";
+        return "实例名或服务名，例如 ORCLPDB";
     }
 
     default String getSessionCatalog(Connect connect) {

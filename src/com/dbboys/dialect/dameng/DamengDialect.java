@@ -157,6 +157,11 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
     }
 
     @Override
+    public String defaultUsername() {
+        return "SYSDBA";
+    }
+
+    @Override
     public String defaultConnectionProps() {
         return DEFAULT_CONNECTION_PROPS;
     }

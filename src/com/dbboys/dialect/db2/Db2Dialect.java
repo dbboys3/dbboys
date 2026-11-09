@@ -70,10 +70,13 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     public String defaultPort() { return "50000"; }
 
     @Override
-    public String defaultDatabase() { return ""; }
+    public String defaultDatabase() { return "sample"; }
 
     @Override
-    public String defaultUsername() { return "db2admin"; }
+    public boolean requiresDatabaseName() { return true; }
+
+    @Override
+    public String defaultUsername() { return "db2inst1"; }
 
     @Override
     public String defaultConnectionProps() { return "[]"; }

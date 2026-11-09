@@ -69,8 +69,6 @@
                                 <Label fx:id="portLabel" text="%createconnect.label.port">
                                 </Label>
                                 <CustomUserTextField fx:id="portTextField" promptText="%createconnect.prompt.port" prefWidth="48"></CustomUserTextField>
-                                <HBox alignment="CENTER_LEFT" fx:id="instanceHBox" spacing="8">
-                                </HBox>
                             </HBox>
                             <HBox fx:id="groupHbox" prefHeight="30" alignment="CENTER_LEFT" visible="false">
                                 <Label fx:id="groupLabel" text="%createconnect.label.group" prefWidth="80">
@@ -89,6 +87,11 @@
                                 </tooltip>
                             </Button>
                         </StackPane>
+                        <HBox fx:id="databaseHBox" prefHeight="30" alignment="CENTER_LEFT">
+                            <Label fx:id="databaseLabel" text="%createconnect.label.database" prefWidth="80">
+                            </Label>
+                            <CustomUserTextField fx:id="databaseTextField" promptText="%createconnect.prompt.database" prefWidth="200"></CustomUserTextField>
+                        </HBox>
                         <HBox prefHeight="30" alignment="CENTER_LEFT">
                             <Label fx:id="usernameLabel" text="%createconnect.label.username" prefWidth="80">
                             </Label>

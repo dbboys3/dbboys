@@ -156,11 +156,15 @@ public class CreateConnectController {
     @FXML
     private Label ipAddressLabel;
     @FXML
+    private HBox databaseHBox;
+    @FXML
+    private Label databaseLabel;
+    @FXML
+    private CustomUserTextField databaseTextField;
+    @FXML
     private Label portLabel;
     @FXML
     private Label groupLabel;
-    @FXML
-    private HBox instanceHBox;
     @FXML
     private Label usernameLabel;
     @FXML
@@ -181,7 +185,6 @@ public class CreateConnectController {
     public  Dialog<?> dialog;
     private Stage dialogStage;
     private boolean initializingDbTypeSelection = true;
-    private CustomUserTextField instanceNameTextField;
 
     public CreateConnectController(){
 
@@ -242,7 +245,7 @@ public class CreateConnectController {
         dbTypeChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable,oldValue,newValue)->{
             connect.setDbtype(newValue);
             refreshDriverChoices(connect, newValue);
-            applyDialectDefaults(connect, oldValue, newValue);
+            applyDialectDefaults(connect, newValue);
             refreshConnectionPropertiesForDbType(newValue, initializingDbTypeSelection && treeDataParam instanceof Connect);
             refreshDriverPropertyButton(newValue);
         });
@@ -257,7 +260,7 @@ public class CreateConnectController {
         if (treeDataParam == null && installTemplate != null) {
             applyInstallTemplate(connect, installTemplate);
         } else if (dbTypeChoiceBox.getValue() != null) {
-            applyDialectDefaults(connect, null, dbTypeChoiceBox.getValue());
+            applyDialectDefaults(connect, dbTypeChoiceBox.getValue());
         }
 
         //如果传了参数，可能树分类上右键新建连接或编辑连接，需将已有参数填充到表单
@@ -294,8 +297,14 @@ public class CreateConnectController {
                 }
 
                 selectChoiceValue(driverChoiceBox, ((Connect) treeDataParam).getDriver());
-                // applyDialectDefaults runs on db type change: if saved username equals the *previous* dialect's
-                // defaultUsername (e.g. gbasedbt), it is replaced with GENERAL JDBC's empty default �?restore here.
+                // 回填数据库行：Oracle 显示服务名，其他显示已保存的库名；Dameng 始终使用其默认数据库。
+                DatabasePlatform editDialect = resolvePlatformResolver().getPlatform(((Connect) treeDataParam).getDbtype());
+                if (editDialect != null
+                        && !"DAMENG".equalsIgnoreCase(editDialect.getDbType())
+                        && editDialect.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.HOST_PORT) {
+                    databaseTextField.setText(Objects.toString(((Connect) treeDataParam).getCatalog(), ""));
+                }
+                // 编辑已有连接时，数据库类型初始化不会覆盖已保存的用户名和密码。
                 Connect persisted = (Connect) treeDataParam;
                 usernameTextField.setText(Objects.toString(persisted.getUsername(), ""));
                 passwordTextField.setText(Objects.toString(persisted.getPassword(), ""));
@@ -353,7 +362,7 @@ public class CreateConnectController {
 
         initializingDbTypeSelection = false;
         refreshDriverPropertyButton(dbTypeChoiceBox.getValue());
-        refreshInstanceField(dbTypeChoiceBox.getValue(), connect.getCatalog());
+        refreshConnectionInputMode(dbTypeChoiceBox.getValue());
         applyTextFormatters();
 
         // Bind i18n tab titles
@@ -511,17 +520,20 @@ public class CreateConnectController {
             }
         }
 
+        String databaseInput = databaseTextField.getText() == null ? "" : databaseTextField.getText().trim();
+        boolean damengDatabaseDisabled = "DAMENG".equalsIgnoreCase(
+                resolvePlatformResolver().requirePlatform(connect).getDbType());
         if (resolvePlatformResolver().getPlatform(connect.getDbtype()) != null && resolvePlatformResolver().getPlatform(connect.getDbtype()).connection().connectionAddressType() != com.dbboys.core.ConnectionAddressType.HOST_PORT) {
             connect.setCatalog("");
         } else if (resolvePlatformResolver().requirePlatform(connect).connection().supportsServiceName()) {
-            String serviceName = instanceNameTextField == null ? "" : instanceNameTextField.getText();
-            if (serviceName == null || serviceName.isBlank()) {
-                connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
-            } else {
-                connect.setCatalog(serviceName.trim());
-            }
-        } else if (connect.getCatalog() == null || connect.getCatalog().isBlank()) {
-            connect.setCatalog(defaultDatabaseFor(connect.getDbtype()));
+            connect.setCatalog(databaseInput.isBlank()
+                    ? defaultDatabaseFor(connect.getDbtype())
+                    : databaseInput);
+            connect.setSessionCatalog(null);
+        } else {
+            connect.setCatalog(damengDatabaseDisabled
+                    ? "N/A"
+                    : databaseInput.isBlank() ? defaultDatabaseFor(connect.getDbtype()) : databaseInput);
         }
         String username = usernameTextField.getText();
         if (resolvePlatformResolver().requirePlatform(connect).connection().supportsServiceName() && username != null) {
@@ -556,11 +568,20 @@ public class CreateConnectController {
     }
     public boolean checkInput(){
         if(resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()) != null && resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue()).connection().supportsServiceName()){
-            if(instanceNameTextField == null || instanceNameTextField.getText().isBlank()){
+            if(databaseTextField.getText() == null || databaseTextField.getText().isBlank()){
                 connectTabPane.getSelectionModel().select(connectBasicTab);
-                instanceNameTextField.requestFocus();
+                databaseTextField.requestFocus();
                 return false;
             }
+        }
+        DatabasePlatform checkDialect = resolvePlatformResolver().getPlatform(dbTypeChoiceBox.getValue());
+        if (checkDialect != null
+                && checkDialect.connection().connectionAddressType() == com.dbboys.core.ConnectionAddressType.HOST_PORT
+                && checkDialect.connection().requiresDatabaseName()
+                && (databaseTextField.getText() == null || databaseTextField.getText().isBlank())) {
+            connectTabPane.getSelectionModel().select(connectBasicTab);
+            databaseTextField.requestFocus();
+            return false;
         }
         if(driverChoiceBox.getValue()==null || driverChoiceBox.getValue().isBlank()){
             AlertUtil.CustomAlert(I18n.t("common.error"), I18n.t("createconnect.error.driver_required", "请先选择或添加驱动程序！"));
@@ -629,28 +650,54 @@ public class CreateConnectController {
             return true;
     }
 
-    private void applyDialectDefaults(Connect connect, String oldDbType, String newDbType) {
-        DatabasePlatform oldDialect = resolvePlatformResolver().getPlatform(oldDbType);
+    private void applyDialectDefaults(Connect connect, String newDbType) {
         DatabasePlatform newDialect = resolvePlatformResolver().getPlatform(newDbType);
         if (newDialect == null) {
             return;
         }
+        boolean applyDefaultValues = !(initializingDbTypeSelection && treeDataParam instanceof Connect);
         switchGroupOrIP.setVisible(supportsNamedServerConnection(newDialect));
         if (!supportsNamedServerConnection(newDialect)) {
             groupHbox.setVisible(false);
         }
-        if (shouldReplaceField(portTextField.getText(), oldDialect == null ? null : oldDialect.connection().defaultPort())) {
+        if (applyDefaultValues) {
             portTextField.setText(newDialect.connection().defaultPort());
-        }
-        if (shouldReplaceField(usernameTextField.getText(), oldDialect == null ? null : oldDialect.connection().defaultUsername())) {
             usernameTextField.setText(newDialect.connection().defaultUsername());
         }
-        if (connect.getCatalog() == null
-                || connect.getCatalog().isBlank()
-                || (oldDialect != null && connect.getCatalog().equalsIgnoreCase(oldDialect.connection().defaultDatabase()))) {
-            connect.setCatalog(newDialect.connection().defaultDatabase());
+        refreshDatabaseField(newDialect, applyDefaultValues);
+        if (applyDefaultValues) {
+            connect.setCatalog("DAMENG".equalsIgnoreCase(newDialect.getDbType())
+                    ? "N/A"
+                    : newDialect.connection().defaultDatabase());
         }
-        refreshInstanceField(newDbType, connect.getCatalog());
+        refreshConnectionInputMode(newDbType);
+    }
+
+    /** 切换数据库类型时刷新数据库行：Oracle 显示实例名/服务名，其余显示库名。 */
+    private void refreshDatabaseField(DatabasePlatform newDialect, boolean applyDefaultValue) {
+        if (databaseHBox == null || databaseTextField == null) {
+            return;
+        }
+        boolean serviceName = newDialect.connection().supportsServiceName();
+        boolean databaseDisabled = "DAMENG".equalsIgnoreCase(newDialect.getDbType());
+        databaseLabel.setDisable(databaseDisabled);
+        databaseTextField.setDisable(databaseDisabled);
+        if (serviceName) {
+            databaseLabel.setText(I18n.t(
+                    newDialect.connection().getServiceNameLabelI18nKey(),
+                    newDialect.connection().getServiceNameLabelDefault()));
+            databaseTextField.setPromptText(I18n.t(
+                    newDialect.connection().getServiceNamePromptI18nKey(),
+                    newDialect.connection().getServiceNamePromptDefault()));
+        } else {
+            databaseLabel.setText(I18n.t("createconnect.label.database"));
+            databaseTextField.setPromptText(I18n.t("createconnect.prompt.database"));
+        }
+        if (databaseDisabled) {
+            databaseTextField.setText("N/A");
+        } else if (applyDefaultValue) {
+            databaseTextField.setText(newDialect.connection().defaultDatabase());
+        }
     }
 
     private void refreshConnectionPropertiesForDbType(String newDbType, boolean preserveExistingProps) {
@@ -673,12 +720,6 @@ public class CreateConnectController {
         }
         String propsJson = dialect.connection().defaultConnectionProps();
         return propsJson == null || propsJson.isBlank() ? EMPTY_PROPS : propsJson;
-    }
-
-    private boolean shouldReplaceField(String currentValue, String oldDefault) {
-        return currentValue == null
-                || currentValue.isBlank()
-                || (oldDefault != null && !oldDefault.isBlank() && currentValue.equalsIgnoreCase(oldDefault));
     }
 
     private String defaultDatabaseFor(String dbType) {
@@ -821,7 +862,16 @@ public class CreateConnectController {
             selectChoiceValue(driverChoiceBox, template.getDriver());
         }
         connect.setCatalog(template.getCatalog());
-        refreshInstanceField(template.getDbtype(), template.getCatalog());
+        refreshConnectionInputMode(template.getDbtype());
+        if (template.getCatalog() != null && !template.getCatalog().isBlank()) {
+            DatabasePlatform templateDialect = resolvePlatformResolver().getPlatform(template.getDbtype());
+            if (templateDialect != null
+                    && !"DAMENG".equalsIgnoreCase(templateDialect.getDbType())
+                    && templateDialect.connection().connectionAddressType()
+                    == com.dbboys.core.ConnectionAddressType.HOST_PORT) {
+                databaseTextField.setText(template.getCatalog());
+            }
+        }
         String namedServerPropName = namedServerPropNameFor(template.getDbtype());
         if (!namedServerPropName.isEmpty()) {
             String namedServer = template.getPropByName(namedServerPropName);
@@ -867,7 +917,6 @@ public class CreateConnectController {
     }
 
     public void initialize() throws IOException {
-        setupInstanceField();
         setupIcons();
     }
 
@@ -882,17 +931,6 @@ public class CreateConnectController {
 
         connectingLoadingImageView.setImage(new Image(IconPaths.LOADING_GIF));
         connectingStopButton.setGraphic(IconFactory.groupFixedColor(IconPaths.SQL_STOP, 0.7, IconFactory.stopColor()));
-    }
-
-    private void setupInstanceField() {
-        instanceNameTextField = new CustomUserTextField();
-        instanceNameTextField.setPrefWidth(70);
-
-        if (instanceHBox != null) {
-            instanceHBox.getChildren().setAll(instanceNameTextField);
-            instanceHBox.managedProperty().bind(instanceHBox.visibleProperty());
-            instanceHBox.setVisible(false);
-        }
     }
 
     private void applyTextFormatters() {
@@ -917,39 +955,18 @@ public class CreateConnectController {
             }
             return change;
         }));
-        if (instanceNameTextField != null) {
-            instanceNameTextField.setTextFormatter(new TextFormatter<String>(change -> {
-                String text = change.getText();
-                if (text != null && text.contains(" ")) {
-                    change.setText(text.replace(" ", ""));
-                }
-                return change;
-            }));
-        }
+        databaseTextField.setTextFormatter(new TextFormatter<String>(change -> {
+            String text = change.getText();
+            if (text != null && text.contains(" ")) {
+                change.setText(text.replace(" ", ""));
+            }
+            return change;
+        }));
         portTextField.setTextFormatter(new TextFormatter<String>(change -> {
             String newText = change.getControlNewText();
             return newText.matches("\\d*") ? change : null;
         }));
     }
-
-    private void refreshInstanceField(String dbType, String databaseValue) {
-        if (instanceHBox == null || instanceNameTextField == null) {
-            return;
-        }
-        if (resolvePlatformResolver().getPlatform(dbType) != null && resolvePlatformResolver().getPlatform(dbType).connection().supportsServiceName()) {
-            instanceNameTextField.setPromptText(I18n.t("createconnect.prompt.service_name", "Oracle服务名，例如 ORCLPDB"));
-            instanceNameTextField.setText(databaseValue == null ? "" : databaseValue);
-            instanceHBox.setVisible(true);
-        } else {
-            instanceNameTextField.setText(databaseValue == null ? "" : databaseValue);
-            instanceHBox.setVisible(false);
-        }
-        refreshConnectionInputMode(dbType);
-    }
-
-
-
-
 
     private void refreshConnectionInputMode(String dbType) {
         com.dbboys.core.DatabasePlatform dialect = resolvePlatformResolver().getPlatform(dbType);
@@ -988,6 +1005,12 @@ public class CreateConnectController {
             if (!hostPort) {
                 portTextField.clear();
             }
+        }
+        if (databaseHBox != null) {
+            boolean hideDatabaseRow = dialect != null
+                    && "DAMENG".equalsIgnoreCase(dialect.getDbType());
+            databaseHBox.setVisible(hostPort && !hideDatabaseRow);
+            databaseHBox.setManaged(hostPort && !hideDatabaseRow);
         }
         if (switchGroupOrIP != null) {
             boolean showSwitch = hostPort && dialect != null && supportsNamedServerConnection(dialect);
