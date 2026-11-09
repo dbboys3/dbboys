@@ -318,10 +318,18 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
 
     private static String quoteQualified(String schemaName, String tableName) {
         String object = tableName == null ? "" : tableName.trim();
-        if (object.contains(".") || schemaName == null || schemaName.isBlank()) {
-            return quoteDouble(object);
+        String qualified = object.contains(".") || schemaName == null || schemaName.isBlank()
+                ? object
+                : schemaName.trim() + "." + object;
+        // 限定名按段加双引号："S"."T"，不能整体加（"S.T" 会被当成单个标识符）
+        StringBuilder sb = new StringBuilder();
+        for (String part : qualified.split("\\.")) {
+            if (sb.length() > 0) {
+                sb.append('.');
+            }
+            sb.append(quoteDouble(part));
         }
-        return quoteDouble(schemaName.trim()) + "." + quoteDouble(object);
+        return sb.toString();
     }
 
     private static String quoteDouble(String name) {
