@@ -1431,8 +1431,8 @@ Text {
   -fx-indent: 1.2em;
 }
 
-.tree-cell:filled.hover {
-  -fx-background-color: -color-base-8;
+.tree-hover-color-probe {
+  -fx-background-color: -color-hover-bg;
 }
 
 .tree-cell > .tree-disclosure-node {
@@ -5714,7 +5714,6 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
 .context-menu .radio-menu-item:focused:checked,
 .list-cell:filled:hover,
 .list-view.search-result-list > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover,
-.tree-cell:filled.hover,
 .table-row-cell:filled:hover,
 .table-cell:filled:hover,
 .date-picker-popup > .calendar-grid > .day-cell:hover,

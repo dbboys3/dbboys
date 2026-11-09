@@ -43,10 +43,8 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
 
     private static final int ICON_SLOT_SIZE = 16;
     private static final String PRIMARY_ICON_STYLE = "icon-primary";
-    private static final String HOVER_STYLE_CLASS = "hover";
     /** 任务拖拽 Dragboard 字符串前缀：内容为 {@code DRAG_PAYLOAD_PREFIX + task.getId()}。 */
     private static final String DRAG_PAYLOAD_PREFIX = "MIGRATIONTASKDRAG;";
-    private boolean hovered;
 
     private final Label nameLabel = new Label();
     /** 右侧任务状态（运行中/已完成/失败/已取消/未开始），样式同连接树的描述标签。 */
@@ -57,6 +55,7 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
     private final ImageView loadingIcon = IconFactory.loadingImageView(0.7);
     private final HBox graphicHbox = new HBox();
     private final Region spacer = new Region();
+    private final TreeCellHoverSupport hoverSupport = new TreeCellHoverSupport(this);
 
     /** 当前绑定的任务/树节点，updateItem 复用时先解除监听。 */
     private MigrationTask boundTask;
@@ -72,29 +71,11 @@ public class CustomMigrationTreeCell extends TreeCell<TreeData> {
         graphicHbox.setAlignment(Pos.CENTER_LEFT);
         statusLabel.getStyleClass().add("tree-cell-description");
         HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        // Programmatic hover style class to avoid background flash during cell recycling
-        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_ENTERED, e -> {
-            if (!hovered && !isEmpty()) {
-                hovered = true;
-                getStyleClass().add(HOVER_STYLE_CLASS);
-            }
-        });
-        setOnMouseExited(e -> {
-            if (hovered) {
-                hovered = false;
-                getStyleClass().remove(HOVER_STYLE_CLASS);
-            }
-        });
     }
 
     @Override
     protected void updateItem(TreeData item, boolean empty) {
-        // Clear hover before recycling to prevent background flash
-        if (hovered) {
-            hovered = false;
-            getStyleClass().remove(HOVER_STYLE_CLASS);
-        }
+        hoverSupport.reset();
         super.updateItem(item, empty);
         if (item != null && !empty) {
             // 同一条目复用时不重建 graphic，避免右键选中/焦点切换导致文字闪烁

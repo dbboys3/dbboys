@@ -29,9 +29,7 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
 
     private static final int ICON_SLOT_SIZE = 16;
     private static final String PRIMARY_ICON_STYLE = "icon-primary";
-    private static final String HOVER_STYLE_CLASS = "hover";
     private static final String DRAG_PAYLOAD = "DATABASEOBJECTDRAG";
-    private boolean hovered;
 
     private final Label nameLabel = new Label();
     private final SVGPath nodeIcon = new SVGPath();
@@ -39,33 +37,16 @@ public class CustomSshTreeCell extends TreeCell<TreeData> {
     private final StackPane nodeIconStackpane = new StackPane(nodeIconGroup);
     private final HBox graphicHbox = new HBox();
     private final Region spacer = new Region();
+    private final TreeCellHoverSupport hoverSupport = new TreeCellHoverSupport(this);
 
     public CustomSshTreeCell() {
         graphicHbox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        // Programmatic hover style class to avoid background flash during cell recycling
-        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_ENTERED, e -> {
-            if (!hovered && !isEmpty()) {
-                hovered = true;
-                getStyleClass().add(HOVER_STYLE_CLASS);
-            }
-        });
-        setOnMouseExited(e -> {
-            if (hovered) {
-                hovered = false;
-                getStyleClass().remove(HOVER_STYLE_CLASS);
-            }
-        });
     }
 
     @Override
     protected void updateItem(TreeData item, boolean empty) {
-        // Clear hover before recycling to prevent background flash
-        if (hovered) {
-            hovered = false;
-            getStyleClass().remove(HOVER_STYLE_CLASS);
-        }
+        hoverSupport.reset();
         super.updateItem(item, empty);
         resetCellVisualState();
         if (item == null || empty) {
