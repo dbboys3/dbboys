@@ -106,7 +106,7 @@ public class TableService implements MetaObjectService {
         objectList.setItems(result);
         int count = repo.getSystemTablesCount(conn, databaseName);
         String size = repo.getSystemTablesSize(conn, databaseName);
-        objectList.setInfo(count + "个/" + size);
+        objectList.setInfo(size == null ? (count + "个") : (count + "个/" + size));
         result.addAll(repo.getSystemTables(conn, databaseName));
         return objectList;
     }

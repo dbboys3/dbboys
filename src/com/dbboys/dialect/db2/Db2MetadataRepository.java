@@ -39,22 +39,37 @@ public final class Db2MetadataRepository implements MetadataRepository {
             """;
 
     private static final String SQL_TABLES = """
-            SELECT TABNAME, OWNER, CREATE_TIME,
-                   COALESCE(REMARKS, '') AS TAB_COMMENT,
-                   COALESCE(CARD, 0) AS NUM_ROWS
-            FROM SYSCAT.TABLES
-            WHERE TABSCHEMA = ?
-              AND TYPE IN ('T', 'S', 'N', 'H', 'U')
-            ORDER BY TABNAME
+            SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
+                   COALESCE(t.REMARKS, '') AS TAB_COMMENT,
+                   t.CARD AS NUM_ROWS,
+                   CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
+                        ELSE t.NPAGES * ts.PAGESIZE END AS TOTAL_BYTES
+            FROM SYSCAT.TABLES t
+            LEFT JOIN SYSCAT.TABLESPACES ts ON ts.TBSPACE = t.TBSPACE
+            WHERE t.TABSCHEMA = ?
+              AND t.TYPE IN ('T', 'S', 'N', 'H', 'U')
+            ORDER BY t.TABNAME
             """;
 
     private static final String SQL_TABLE_DETAIL = """
-            SELECT TABNAME, OWNER, CREATE_TIME,
-                   COALESCE(REMARKS, '') AS TAB_COMMENT,
-                   COALESCE(CARD, 0) AS NUM_ROWS
-            FROM SYSCAT.TABLES
-            WHERE TABSCHEMA = ?
-              AND TABNAME = ?
+            SELECT t.TABNAME, t.OWNER, t.CREATE_TIME,
+                   COALESCE(t.REMARKS, '') AS TAB_COMMENT,
+                   t.CARD AS NUM_ROWS,
+                   CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN NULL
+                        ELSE t.NPAGES * ts.PAGESIZE END AS TOTAL_BYTES
+            FROM SYSCAT.TABLES t
+            LEFT JOIN SYSCAT.TABLESPACES ts ON ts.TBSPACE = t.TBSPACE
+            WHERE t.TABSCHEMA = ?
+              AND t.TABNAME = ?
+            """;
+
+    private static final String SQL_TABLES_SIZE = """
+            SELECT SUM(CASE WHEN t.NPAGES < 0 OR ts.PAGESIZE IS NULL THEN 0
+                            ELSE t.NPAGES * ts.PAGESIZE END)
+            FROM SYSCAT.TABLES t
+            LEFT JOIN SYSCAT.TABLESPACES ts ON ts.TBSPACE = t.TBSPACE
+            WHERE t.TABSCHEMA = ?
+              AND t.TYPE IN ('T', 'S', 'N', 'H', 'U')
             """;
 
     private static final String SQL_TABLES_COUNT = """
@@ -279,7 +294,13 @@ public final class Db2MetadataRepository implements MetadataRepository {
 
     @Override
     public String getUserTablesSize(Connection conn, String databaseName) {
-        return null;
+        try {
+            SqlRunner runner = runner(conn);
+            long bytes = runner.queryOne(SQL_TABLES_SIZE, List.of(schemaName(databaseName)), rs -> rs.getLong(1));
+            return bytes <= 0 ? null : formatBytes(bytes);
+        } catch (SQLException e) {
+            return null;
+        }
     }
 
     @Override
@@ -300,6 +321,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
         return runner.query(SQL_SYSTEM_TABLES, null, rs -> {
             SysTable table = new SysTable(rs.getString("TABNAME").trim());
             table.setTableCatalog("SYSCAT");
+            table.setTableOwner("SYSCAT");
             table.setTableComm(blank(rs.getString("TAB_COMMENT")));
             return table;
         });
@@ -327,7 +349,12 @@ public final class Db2MetadataRepository implements MetadataRepository {
         table.setTableCatalog(rs.getString("OWNER") == null ? "" : rs.getString("OWNER").trim());
         table.setTableOwner(table.getTableCatalog());
         table.setTableComm(blank(rs.getString("TAB_COMMENT")));
+        // CARD 为优化器统计行数；-1 表示未执行 RUNSTATS（无统计），界面不展示
         table.setNrows(rs.getInt("NUM_ROWS"));
+        long totalBytes = rs.getLong("TOTAL_BYTES");
+        if (!rs.wasNull() && totalBytes > 0) {
+            table.setTotalsize(formatBytes(totalBytes));
+        }
         table.setCreateTime(formatTimestamp(rs.getString("CREATE_TIME")));
         return table;
     }
@@ -684,6 +711,17 @@ public final class Db2MetadataRepository implements MetadataRepository {
         String trimmed = value.trim();
         int dot = trimmed.indexOf('.');
         return dot > 0 ? trimmed.substring(0, dot) : trimmed;
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes <= 0) {
+            return "0 MB";
+        }
+        double mb = bytes / 1024d / 1024d;
+        if (mb < 1024) {
+            return String.format(java.util.Locale.ROOT, "%.2f MB", mb);
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f GB", mb / 1024d);
     }
 
     private static String blank(String value) {

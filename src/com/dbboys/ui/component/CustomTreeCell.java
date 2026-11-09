@@ -962,11 +962,13 @@ public class CustomTreeCell extends TreeCell<TreeData> {
 
     private String formatRowsSize(Object nrows, Object totalSize) {
         String separator = I18n.t("treecell.row_size_separator", "行/");
+        // 行数为负表示方言无统计信息（如 DB2 未执行 RUNSTATS 时 CARD=-1），不展示
+        String rowsText = nrows instanceof Number num && num.longValue() < 0 ? "" : String.valueOf(nrows);
         String sizeText = totalSize == null ? "" : totalSize.toString();
         if (sizeText.isBlank()) {
-            return (String.valueOf(nrows) + separator).replaceFirst("[/\\s]+$", "");
+            return rowsText.isBlank() ? "" : (rowsText + separator).replaceFirst("[/\\s]+$", "");
         }
-        return nrows + separator + sizeText;
+        return rowsText.isBlank() ? sizeText : rowsText + separator + sizeText;
     }
 
     private void bindRowsSizeText(Label label, ObservableValue<?> nrows, ObservableValue<?> totalSize) {
