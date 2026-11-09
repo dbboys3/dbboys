@@ -42,10 +42,11 @@ public final class Db2DdlRepository implements DdlRepository {
             """;
 
     private static final String SQL_SYNONYM_BASE = """
-            SELECT BASETABSCHEMA, BASETABNAME
-            FROM SYSCAT.SYNONYMS
+            SELECT BASE_TABSCHEMA AS BASETABSCHEMA, BASE_TABNAME AS BASETABNAME
+            FROM SYSCAT.TABLES
             WHERE TABSCHEMA = ?
-              AND SYNNAME = ?
+              AND TABNAME = ?
+              AND TYPE = 'A'
             """;
 
     private static final String SQL_SEQUENCE_DETAIL = """

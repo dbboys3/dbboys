@@ -19,7 +19,8 @@ import java.util.List;
  * IBM Db2 (LUW) platform adapter. Connection + metadata + SQL execution only;
  * instance management (install/start/stop) is intentionally not implemented.
  */
-public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
+public final class Db2Dialect implements DatabasePlatform, ConnectionSupport,
+        com.dbboys.core.ReconnectFallbackCapability {
     private static final String DB_TYPE = "DB2";
     private static final String DRIVER_CLASS = "com.ibm.db2.jcc.DB2Driver";
     private static final String DEFAULT_DRIVER = "jcc-11.5.9.0.jar";
@@ -34,7 +35,7 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
 
     @Override
     public IconInfo iconInfo() {
-        return new IconInfo(com.dbboys.ui.icon.IconPaths.DATABASE_CONNECT, 0.6, 0.6);
+        return new IconInfo(com.dbboys.ui.icon.IconPaths.DATABASE_CONNECT, 0.48, 0.48);
     }
 
     @Override
@@ -100,12 +101,27 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     }
 
     // ==================================================================
+    // ReconnectFallbackCapability
+    // ==================================================================
+
+    @Override
+    public String reconnectFallbackDatabaseName() {
+        return defaultDatabase();
+    }
+
+    @Override
+    public String reconnectFallbackDatabaseName(Connect connect) {
+        String catalog = connect == null ? null : connect.getCatalog();
+        return catalog == null || catalog.isBlank() ? reconnectFallbackDatabaseName() : catalog;
+    }
+
+    // ==================================================================
     // DatabasePlatform
     // ==================================================================
 
-    /** Db2 connections bind to one database; the tree's first level lists schemas. */
+    /** 库-模式-表：实例有多个库，库下再挂模式；跨库切换靠租约重连（同 SQL Server/PostgreSQL）。 */
     @Override
-    public CatalogModel catalogModel() { return CatalogModel.SCHEMA; }
+    public CatalogModel catalogModel() { return CatalogModel.DATABASE_SCHEMA; }
 
     @Override
     public boolean supportsPackages() { return false; }
