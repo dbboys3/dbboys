@@ -9,6 +9,7 @@ import com.dbboys.infra.i18n.I18n;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -64,20 +65,28 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
             if (statement == null) {
                 return null;
             }
-            Map<Integer, PlanOperator> operators = loadPlanOperators(conn, statement);
-            if (operators.isEmpty()) {
+            OperatorLoad operatorLoad = loadPlanOperators(conn, statement);
+            if (operatorLoad.operators().isEmpty()) {
                 return null;
             }
+            Map<Integer, PlanOperator> operators = operatorLoad.operators();
             Map<Integer, String> objects = loadOperatorObjects(conn, statement);
             Map<Integer, List<PlanStream>> children = loadPlanStreams(conn, statement);
 
             StringBuilder text = new StringBuilder();
-            text.append(String.format(Locale.ROOT, "Total cost: %.2f timerons%n", statement.totalCost()));
-            Integer root = findRootOperator(operators, children);
-            if (root == null) {
-                return null;
+            if (statement.totalCost() == null) {
+                text.append(String.format(Locale.ROOT, "Total cost: N/A%n"));
+            } else {
+                text.append(String.format(Locale.ROOT, "Total cost: %.2f timerons%n", statement.totalCost()));
             }
-            renderOperator(text, root, operators, objects, children, "", true, true);
+            if (operatorLoad.identityAvailable() && !children.isEmpty()) {
+                Integer root = findRootOperator(operators, children);
+                if (root != null) {
+                    renderOperator(text, root, operators, objects, children, "", true, true);
+                    return text.toString().stripTrailing();
+                }
+            }
+            renderFlatOperators(text, operators, objects);
             return text.toString().stripTrailing();
         } catch (SQLException e) {
             throw translateExplainFailure(e);
@@ -86,50 +95,87 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
 
     /**
      * LUW has no SET QUERYNO (z/OS only), so the just-created plan is the one
-     * with the newest EXPLAIN_TIME for this user.
+     * with the newest EXPLAIN_TIME for this user. Do not depend on
+     * STATEMENT_NO here: some installed EXPLAIN table versions do not expose
+     * that column, while the UI explains exactly one statement at a time.
      */
     private PlanStatement loadPlanStatement(Connection conn) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT EXPLAIN_TIME, STATEMENT_NO, TOTAL_COST FROM EXPLAIN_STATEMENT"
+                "SELECT * FROM EXPLAIN_STATEMENT"
                         + " WHERE EXPLAIN_REQUESTER = CURRENT USER"
                         + " ORDER BY EXPLAIN_TIME DESC FETCH FIRST 1 ROWS ONLY")) {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) {
                     return null;
                 }
-                return new PlanStatement(rs.getTimestamp(1), rs.getInt(2), rs.getDouble(3));
+                ResultSetMetaData metadata = rs.getMetaData();
+                int timeColumn = findColumn(metadata, "EXPLAIN_TIME");
+                if (timeColumn < 0) {
+                    throw new SQLException("EXPLAIN_STATEMENT is missing EXPLAIN_TIME");
+                }
+                return new PlanStatement(
+                        rs.getTimestamp(timeColumn),
+                        readNullableDouble(rs, findColumn(metadata, "TOTAL_COST")));
             }
         }
     }
 
-    private Map<Integer, PlanOperator> loadPlanOperators(Connection conn, PlanStatement statement) throws SQLException {
+    /**
+     * EXPLAIN table columns vary across DB2 releases. Read the returned
+     * metadata instead of hard-coding optional fields such as CARDINALITY or
+     * even the operator key; older or partially upgraded installations can
+     * still be rendered as a flat operator list.
+     */
+    private OperatorLoad loadPlanOperators(Connection conn, PlanStatement statement) throws SQLException {
         Map<Integer, PlanOperator> operators = new HashMap<>();
+        boolean identityAvailable = true;
+        int nextSyntheticId = 1;
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT OPERATOR_ID, OPERATOR_TYPE, TOTAL_COST, CARDINALITY FROM EXPLAIN_OPERATOR"
-                        + " WHERE EXPLAIN_REQUESTER = CURRENT USER AND EXPLAIN_TIME = ? AND STATEMENT_NO = ?")) {
+                "SELECT * FROM EXPLAIN_OPERATOR"
+                        + " WHERE EXPLAIN_REQUESTER = CURRENT USER AND EXPLAIN_TIME = ?")) {
             stmt.setTimestamp(1, statement.explainTime());
-            stmt.setInt(2, statement.statementNo());
             try (ResultSet rs = stmt.executeQuery()) {
+                ResultSetMetaData metadata = rs.getMetaData();
+                int idColumn = findColumn(metadata, "OPERATOR_ID");
+                int typeColumn = findColumn(metadata, "OPERATOR_TYPE");
+                int costColumn = findColumn(metadata, "TOTAL_COST");
+                int cardinalityColumn = findColumn(metadata, "CARDINALITY");
                 while (rs.next()) {
-                    operators.put(rs.getInt(1),
-                            new PlanOperator(rs.getString(2).trim(), rs.getDouble(3), rs.getDouble(4)));
+                    Integer operatorId = readNullableInt(rs, idColumn);
+                    if (operatorId == null) {
+                        identityAvailable = false;
+                        operatorId = -nextSyntheticId++;
+                    }
+                    String type = readString(rs, typeColumn);
+                    operators.put(operatorId, new PlanOperator(
+                            type == null ? "UNKNOWN" : type,
+                            readNullableDouble(rs, costColumn),
+                            readNullableDouble(rs, cardinalityColumn)));
                 }
             }
         }
-        return operators;
+        return new OperatorLoad(operators, identityAvailable);
     }
 
     private Map<Integer, String> loadOperatorObjects(Connection conn, PlanStatement statement) throws SQLException {
         Map<Integer, String> objects = new HashMap<>();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT OPERATOR_ID, OBJECT_SCHEMA, OBJECT_NAME FROM EXPLAIN_OBJECT"
+                "SELECT * FROM EXPLAIN_OBJECT"
                         + " WHERE EXPLAIN_REQUESTER = CURRENT USER AND EXPLAIN_TIME = ?")) {
             stmt.setTimestamp(1, statement.explainTime());
             try (ResultSet rs = stmt.executeQuery()) {
+                ResultSetMetaData metadata = rs.getMetaData();
+                int idColumn = findColumn(metadata, "OPERATOR_ID");
+                int schemaColumn = findColumn(metadata, "OBJECT_SCHEMA");
+                int nameColumn = findColumn(metadata, "OBJECT_NAME");
+                if (idColumn < 0 || schemaColumn < 0 || nameColumn < 0) {
+                    return objects;
+                }
                 while (rs.next()) {
-                    String name = qualifiedName(rs.getString(2), rs.getString(3));
+                    String name = qualifiedName(
+                            rs.getString(schemaColumn), rs.getString(nameColumn));
                     if (!name.isEmpty()) {
-                        objects.put(rs.getInt(1), name);
+                        objects.put(rs.getInt(idColumn), name);
                     }
                 }
             }
@@ -141,13 +187,21 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
     private Map<Integer, List<PlanStream>> loadPlanStreams(Connection conn, PlanStatement statement) throws SQLException {
         Map<Integer, List<PlanStream>> children = new HashMap<>();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT TARGET_ID, SOURCE_ID, STREAM_ID FROM EXPLAIN_STREAM"
+                "SELECT * FROM EXPLAIN_STREAM"
                         + " WHERE EXPLAIN_REQUESTER = CURRENT USER AND EXPLAIN_TIME = ?")) {
             stmt.setTimestamp(1, statement.explainTime());
             try (ResultSet rs = stmt.executeQuery()) {
+                ResultSetMetaData metadata = rs.getMetaData();
+                int targetColumn = findColumn(metadata, "TARGET_ID");
+                int sourceColumn = findColumn(metadata, "SOURCE_ID");
+                int streamColumn = findColumn(metadata, "STREAM_ID");
+                if (targetColumn < 0 || sourceColumn < 0 || streamColumn < 0) {
+                    return children;
+                }
                 while (rs.next()) {
-                    children.computeIfAbsent(rs.getInt(1), k -> new ArrayList<>())
-                            .add(new PlanStream(rs.getInt(3), rs.getInt(2)));
+                    children.computeIfAbsent(rs.getInt(targetColumn), k -> new ArrayList<>())
+                            .add(new PlanStream(
+                                    rs.getInt(streamColumn), rs.getInt(sourceColumn)));
                 }
             }
         }
@@ -192,13 +246,83 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
         if (object != null && !object.isBlank()) {
             text.append(' ').append(object);
         }
-        text.append(String.format(Locale.ROOT, "  (cost=%.2f, card=%.0f)%n", operator.cost(), operator.cardinality()));
+        appendOperatorMetrics(text, operator);
         List<PlanStream> streams = children.getOrDefault(operatorId, List.of());
         String childPrefix = isRoot ? "" : prefix + (isLast ? "   " : "│  ");
         for (int i = 0; i < streams.size(); i++) {
             renderOperator(text, streams.get(i).sourceId(), operators, objects, children,
                     childPrefix, i == streams.size() - 1, false);
         }
+    }
+
+    private static void renderFlatOperators(StringBuilder text,
+                                            Map<Integer, PlanOperator> operators,
+                                            Map<Integer, String> objects) {
+        List<Map.Entry<Integer, PlanOperator>> entries = new ArrayList<>(operators.entrySet());
+        entries.sort(Map.Entry.comparingByKey());
+        for (Map.Entry<Integer, PlanOperator> entry : entries) {
+            PlanOperator operator = entry.getValue();
+            text.append("├─ ").append(operator.type());
+            String object = objects.get(entry.getKey());
+            if (object != null && !object.isBlank()) {
+                text.append(' ').append(object);
+            }
+            appendOperatorMetrics(text, operator);
+        }
+    }
+
+    private static void appendOperatorMetrics(StringBuilder text, PlanOperator operator) {
+        if (operator.cost() == null && operator.cardinality() == null) {
+            text.append(String.format(Locale.ROOT, "%n"));
+            return;
+        }
+        text.append("  (");
+        if (operator.cost() != null) {
+            text.append(String.format(Locale.ROOT, "cost=%.2f", operator.cost()));
+        }
+        if (operator.cardinality() != null) {
+            if (operator.cost() != null) {
+                text.append(", ");
+            }
+            text.append(String.format(Locale.ROOT, "card=%.0f", operator.cardinality()));
+        }
+        text.append(String.format(Locale.ROOT, ")%n"));
+    }
+
+    private static int findColumn(ResultSetMetaData metadata, String columnName) throws SQLException {
+        if (metadata == null || columnName == null) {
+            return -1;
+        }
+        for (int i = 1; i <= metadata.getColumnCount(); i++) {
+            if (columnName.equalsIgnoreCase(metadata.getColumnName(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String readString(ResultSet rs, int column) throws SQLException {
+        if (column < 0) {
+            return null;
+        }
+        String value = rs.getString(column);
+        return value == null ? null : value.trim();
+    }
+
+    private static Integer readNullableInt(ResultSet rs, int column) throws SQLException {
+        if (column < 0) {
+            return null;
+        }
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static Double readNullableDouble(ResultSet rs, int column) throws SQLException {
+        if (column < 0) {
+            return null;
+        }
+        double value = rs.getDouble(column);
+        return rs.wasNull() ? null : value;
     }
 
     private static String qualifiedName(String schema, String name) {
@@ -239,10 +363,13 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
         return normalized;
     }
 
-    private record PlanStatement(Timestamp explainTime, int statementNo, double totalCost) {
+    private record PlanStatement(Timestamp explainTime, Double totalCost) {
     }
 
-    private record PlanOperator(String type, double cost, double cardinality) {
+    private record PlanOperator(String type, Double cost, Double cardinality) {
+    }
+
+    private record OperatorLoad(Map<Integer, PlanOperator> operators, boolean identityAvailable) {
     }
 
     private record PlanStream(int streamId, int sourceId) {
