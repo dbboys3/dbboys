@@ -85,6 +85,16 @@ public final class ErrorPositionSupport {
     }
 
     /**
+     * DB2: the JCC message carries the offending token unquoted in SQLERRMC
+     * (semicolon-separated), e.g. {@code SQLERRMC=token;text;expected} for
+     * SQLCODE=-104 or the object name for SQLCODE=-204/-206.
+     */
+    public static SqlErrorPosition locateDb2(String sentSql, String errorMessage) {
+        SqlErrorPosition position = locateDb2SqlErrmc(sentSql, errorMessage);
+        return position != null ? position : locateByMessage(sentSql, errorMessage);
+    }
+
+    /**
      * Generic message-text fallback (MySQL/Dameng/DB2 style): a quoted token in
      * the message mapped back to the SQL, then a "line N" number relative to
      * the start of the sent statement.
@@ -316,6 +326,55 @@ public final class ErrorPositionSupport {
     }
 
     // --- message-text heuristics --------------------------------------------------
+
+    private static final Pattern DB2_SQLERRMC_PATTERN =
+            Pattern.compile("(?im)SQLERRMC\\s*=\\s*(.+?)(?:\\s*,\\s*DRIVER\\s*=|\\s*$)");
+
+    /**
+     * The first SQLERRMC segment is the token the DB2 parser choked on
+     * ("END-OF-STATEMENT" when it ran out of input) or the offending
+     * column/object name; map it back to the sent statement.
+     */
+    private static SqlErrorPosition locateDb2SqlErrmc(String sentSql, String errorMessage) {
+        if (sentSql == null || sentSql.isEmpty() || errorMessage == null) {
+            return null;
+        }
+        Matcher matcher = DB2_SQLERRMC_PATTERN.matcher(errorMessage);
+        if (!matcher.find()) {
+            return null;
+        }
+        String token = matcher.group(1).split(";", 2)[0].trim();
+        if (token.isEmpty()) {
+            return null;
+        }
+        if (token.equalsIgnoreCase("END-OF-STATEMENT")) {
+            return SqlErrorPosition.inStatement(lastNonBlankLineStart(sentSql));
+        }
+        if (token.chars().allMatch(Character::isDigit)) {
+            // Reason codes/index numbers (e.g. SQLERRMC=1 for SQLCODE=-803)
+            // would match an arbitrary digit inside the statement.
+            return null;
+        }
+        int index = indexOfErrorToken(sentSql, token);
+        return index >= 0 ? SqlErrorPosition.inStatement(index) : null;
+    }
+
+    /** Maps an unquoted token from a driver message back to the sent SQL. */
+    private static int indexOfErrorToken(String sentSql, String token) {
+        String unquoted = token.replaceAll("^[\"'`\\[\\s]+|[\"'`\\]\\s]+$", "");
+        if (unquoted.isEmpty()) {
+            return -1;
+        }
+        int index = indexOfIgnoreCase(sentSql, unquoted);
+        if (index >= 0) {
+            return index;
+        }
+        int dot = unquoted.lastIndexOf('.');
+        if (dot >= 0 && dot + 1 < unquoted.length()) {
+            return indexOfIgnoreCase(sentSql, unquoted.substring(dot + 1).trim());
+        }
+        return -1;
+    }
 
     private static final Pattern SQLITE_NEAR_TOKEN_PATTERN =
             Pattern.compile("(?is)\\bnear\\s+[\"'](.+?)[\"']\\s*:");

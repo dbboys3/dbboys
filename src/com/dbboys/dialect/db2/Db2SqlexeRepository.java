@@ -18,7 +18,7 @@ public final class Db2SqlexeRepository implements SqlexeRepository, SqlErrorPosi
 
     @Override
     public SqlErrorPosition locateErrorPosition(Connection conn, SQLException error, String sentSql, String errorMessage) {
-        return ErrorPositionSupport.locateByMessage(sentSql, errorMessage);
+        return ErrorPositionSupport.locateDb2(sentSql, errorMessage);
     }
 
     @Override
