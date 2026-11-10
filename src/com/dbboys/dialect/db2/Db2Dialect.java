@@ -14,6 +14,7 @@ import com.dbboys.model.Connect;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * IBM Db2 (LUW) platform adapter. Connection + metadata + SQL execution only;
@@ -42,6 +43,14 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
 
     @Override
     public ConnectionParams getConnectionParams(Connect connect) throws Exception {
+        // 与 Oracle/Dameng 一致：默认会话模式 = 用户名（DB2 目录中模式名为大写）。
+        // SQL 页签选中连接后靠 sessionCatalog 在模式下拉框中自动选中默认项。
+        if (connect.getSessionCatalog() == null || connect.getSessionCatalog().isBlank()) {
+            String username = connect.getUsername();
+            if (username != null && !username.isBlank()) {
+                connect.setSessionCatalog(username.trim().toUpperCase(Locale.ROOT));
+            }
+        }
         String database = connect.getCatalog();
         if (database == null || database.isBlank()) {
             database = defaultDatabase();
@@ -60,6 +69,7 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
         String sessionCatalog = getSessionCatalog(connect);
         if (sessionCatalog != null && !sessionCatalog.isBlank()) {
             metadataRepository.setDatabase(conn, sessionCatalog);
+            connect.setSessionCatalog(sessionCatalog);
         }
     }
 
