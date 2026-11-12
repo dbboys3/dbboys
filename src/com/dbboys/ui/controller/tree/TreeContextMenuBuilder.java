@@ -1246,6 +1246,7 @@ public class TreeContextMenuBuilder {
                 if (treeview_menu.getItems().isEmpty()) {
                     treeview_menu.hide();
                 } else {
+                    moveDeleteItemToEnd(treeview_menu, deleteItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                 }
                 return;
@@ -1342,6 +1343,7 @@ public class TreeContextMenuBuilder {
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(exportMenu);
                     treeview_menu.getItems().add(ddlMenu);
+                    moveDeleteItemToEnd(treeview_menu, deleteItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                     return;
                 }
@@ -1357,11 +1359,13 @@ public class TreeContextMenuBuilder {
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(deleteItem);
                     treeview_menu.getItems().add(ddlMenu);
+                    moveDeleteItemToEnd(treeview_menu, deleteItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                     return;
                 }
                 if (selectedItems.size() > 1) {
                     treeview_menu.getItems().add(copyItem);
+                    moveDeleteItemToEnd(treeview_menu, deleteItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                     return;
                 }
@@ -1847,9 +1851,21 @@ public class TreeContextMenuBuilder {
                 }
 
                 // 树中右键框显示
+                moveDeleteItemToEnd(treeview_menu, deleteItem);
                 treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
             }
         });
+    }
+
+    private static void moveDeleteItemToEnd(ContextMenu menu, MenuItem deleteItem) {
+        ObservableList<MenuItem> items = menu.getItems();
+        if (!items.remove(deleteItem)) {
+            return;
+        }
+        while (!items.isEmpty() && items.get(items.size() - 1) instanceof SeparatorMenuItem) {
+            items.remove(items.size() - 1);
+        }
+        items.add(deleteItem);
     }
 
     /** 粘贴菜单禁用条件：没有复制的对象记录、表节点上粘贴非表对象（表节点仅支持表数据追加），或目标连接为只读（粘贴要写入目标库）。 */
