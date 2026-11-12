@@ -678,16 +678,20 @@ public final class Db2MetadataRepository implements MetadataRepository {
     // ==================================================================
 
     String currentSchema(Connection conn) throws SQLException {
+        SqlRunner runner = runner(conn);
+        String schema = runner.queryOne("SELECT CURRENT SCHEMA FROM SYSIBM.SYSDUMMY1", null,
+                rs -> rs.getString(1));
+        if (schema != null && !schema.isBlank()) {
+            return schema.trim();
+        }
         try {
-            String schema = conn.getSchema();
+            schema = conn.getSchema();
             if (schema != null && !schema.isBlank()) {
                 return schema.trim();
             }
         } catch (Exception ignored) {
         }
-        SqlRunner runner = runner(conn);
-        String schema = runner.queryOne("SELECT CURRENT SCHEMA FROM SYSIBM.SYSDUMMY1", null, rs -> rs.getString(1));
-        return schema != null && !schema.isBlank() ? schema.trim() : "";
+        return "";
     }
 
     private static String schemaName(String databaseName) {

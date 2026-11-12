@@ -47,6 +47,8 @@ public class DatabaseImportHandler {
             Pattern.compile("(?im)^\\s*--\\s*DB_LOCALE\\s*=\\s*(\\S+)\\s*$");
     private static final Pattern IMPORT_BUNDLE_CREATE_DATABASE_PATTERN =
             Pattern.compile("(?im)^\\s*create\\s+database\\s+([^\\s;]+)(?:\\s+in\\s+[^\\s;]+)?(?:\\s+with\\s+(buffered\\s+log|log))?\\s*;");
+    private static final Pattern IMPORT_BUNDLE_CREATE_SCHEMA_PATTERN =
+            Pattern.compile("(?im)^\\s*create\\s+schema\\s+(?:if\\s+not\\s+exists\\s+)?(\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\]|[^\\s;]+)\\s*;");
     private static final Pattern IMPORT_BUNDLE_DATABASE_PATTERN =
             Pattern.compile("(?im)^\\s*database\\s+([^\\s;]+)\\s*;");
 
@@ -724,8 +726,9 @@ public class DatabaseImportHandler {
                         post = null;
                     }
                     List<File> dataFiles = listBundleDataFiles(schemaDir, pre, post);
+                    String schemaName = parseBundleDatabaseName(schemaPre, schemaDir);
                     schemaParts.add(new SchemaImportPart(
-                            schemaDir.getName(), schemaDir, pre, post, dataFiles));
+                            schemaName, schemaDir, pre, post, dataFiles));
                 }
             }
             if (!schemaParts.isEmpty()) {
@@ -842,7 +845,10 @@ public class DatabaseImportHandler {
     }
 
     private static String parseBundleDatabaseName(String preSql, File dir) {
-        String databaseName = extractBundleToken(IMPORT_BUNDLE_CREATE_DATABASE_PATTERN, preSql, 1);
+        String databaseName = extractBundleToken(IMPORT_BUNDLE_CREATE_SCHEMA_PATTERN, preSql, 1);
+        if (databaseName.isBlank()) {
+            databaseName = extractBundleToken(IMPORT_BUNDLE_CREATE_DATABASE_PATTERN, preSql, 1);
+        }
         if (databaseName.isBlank()) {
             databaseName = extractBundleToken(IMPORT_BUNDLE_DATABASE_PATTERN, preSql, 1);
         }

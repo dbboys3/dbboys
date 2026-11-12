@@ -389,15 +389,19 @@ public final class Db2DdlRepository implements DdlRepository {
     }
 
     private static String currentSchema(Connection conn) throws SQLException {
+        String schema = runner(conn).queryOne("SELECT CURRENT SCHEMA FROM SYSIBM.SYSDUMMY1", null,
+                rs -> rs.getString(1));
+        if (schema != null && !schema.isBlank()) {
+            return schema.trim();
+        }
         try {
-            String schema = conn.getSchema();
+            schema = conn.getSchema();
             if (schema != null && !schema.isBlank()) {
                 return schema.trim();
             }
         } catch (Exception ignored) {
         }
-        String schema = runner(conn).queryOne("SELECT CURRENT SCHEMA FROM SYSIBM.SYSDUMMY1", null, rs -> rs.getString(1));
-        return schema != null && !schema.isBlank() ? schema.trim() : "";
+        return "";
     }
 
     private static SqlRunner runner(Connection conn) {
