@@ -301,6 +301,12 @@ public final class Db2DdlRepository implements DdlRepository {
         StringBuilder ddl = new StringBuilder();
         SqlRunner runner = runner(conn);
 
+        if (!schema.isBlank()) {
+            // 导入脚本先创建目标模式，再切换 CURRENT SCHEMA，避免后续未限定对象落到默认模式。
+            appendObject(ddl, "CREATE SCHEMA " + quote(schema));
+            appendObject(ddl, "SET CURRENT SCHEMA " + quote(schema));
+        }
+
         List<String> sequences = runner.query(SQL_SEQUENCE_NAMES, List.of(schema), rs -> rs.getString(1).trim());
         for (String name : sequences) {
             appendObject(ddl, printSequence(conn, qualified(schema, name)));
