@@ -18,7 +18,9 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
      */
     private static final String SQL_EXPORT_ITEM_COUNT_SPLIT = """
             SELECT
-              (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'SEQUENCE' AND secondary = 'N')
+              (SELECT COUNT(*) FROM all_objects
+               WHERE owner = ? AND object_type = 'SEQUENCE' AND secondary = 'N'
+                 AND NVL(generated, 'N') = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'TABLE' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'VIEW' AND secondary = 'N')
             + (SELECT COUNT(*) FROM all_objects WHERE owner = ? AND object_type = 'SYNONYM' AND secondary = 'N')
@@ -59,6 +61,7 @@ public final class OracleDdlRepository extends OracleFamilyDdlRepository {
     private static final String SQL_SCHEMA_OBJECTS = """
             SELECT object_name, object_type FROM all_objects
             WHERE owner = ? AND object_type = ? AND secondary = 'N'
+              AND (object_type <> 'SEQUENCE' OR NVL(generated, 'N') = 'N')
             ORDER BY object_name
             """;
 
