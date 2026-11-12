@@ -151,6 +151,36 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     }
 
     @Override
+    public String getExportDdlDataMenuI18nKey() {
+        return "metadata.menu.export_ddl_schema";
+    }
+
+    @Override
+    public String getExportDdlDataMenuDefaultText() {
+        return "导出模式";
+    }
+
+    @Override
+    public String getExportNoticeI18nKey() {
+        return "metadata.export.ddl_schema.notice.completed";
+    }
+
+    @Override
+    public String getExportNoticeDefaultText() {
+        return "模式已导出到：%s";
+    }
+
+    @Override
+    public String getExportTaskNameI18nKey() {
+        return "metadata.export.ddl_schema.task_name";
+    }
+
+    @Override
+    public String getExportTaskNameDefaultText() {
+        return "导出模式\"%s\"";
+    }
+
+    @Override
     public boolean supportsPackages() { return false; }
 
     @Override
@@ -184,8 +214,9 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     @Override
     public boolean canCreateDatabase() { return false; }
 
+    /** DB2 两层树的一级节点是模式，删除时由 {@link #dropObjectSql} 生成 DROP SCHEMA。 */
     @Override
-    public boolean canDropDatabase() { return false; }
+    public boolean canDropDatabase() { return true; }
 
     @Override
     public boolean supportsCreateDatabaseStorageSpace() { return false; }

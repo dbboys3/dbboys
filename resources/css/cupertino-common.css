@@ -5616,7 +5616,7 @@ o6XsZown0t5sfo/4K+vj7PuXPn6i9evDgGGKFQyOjp6Qm3t7d/RDcBGmUYEP7jgoKCzYsWLfJYa7quU2
   -fx-text-fill: -color-fg-emphasis;
 }
 
-.error-line-gutter {
+.sql-line-number-gutter {
   -fx-background-color: -color-bg-content;
 }
 

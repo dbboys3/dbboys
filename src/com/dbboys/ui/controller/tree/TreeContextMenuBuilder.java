@@ -1559,12 +1559,9 @@ public class TreeContextMenuBuilder {
                     treeview_menu.getItems().add(pasteItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
-                    // ---- 重命名 / 删除 ---- //
+                    // ---- 重命名 ---- //
                     if (schemaNodePlatform == null || schemaNodePlatform.supportsRenameDatabaseNode()) {
                         treeview_menu.getItems().add(renameItem);
-                    }
-                    if (schemaNodePlatform == null || schemaNodePlatform.canDropDatabase()) {
-                        treeview_menu.getItems().add(deleteItem);
                     }
 
                     // ---- 导入SQL脚本 ---- //
@@ -1585,6 +1582,11 @@ public class TreeContextMenuBuilder {
                         exportDdlAndDataItem.textProperty().bind(I18n.bind(exportKey, exportDefault));
                         treeview_menu.getItems().add(exportDdlAndDataItem);
                         treeview_menu.getItems().add(exportDdlMenu);
+                    }
+
+                    // ---- 删除（置于菜单末尾） ---- //
+                    if (schemaNodePlatform == null || schemaNodePlatform.canDropDatabase()) {
+                        treeview_menu.getItems().add(deleteItem);
                     }
                 }
                 //数据库节点
@@ -1620,12 +1622,9 @@ public class TreeContextMenuBuilder {
                     }
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
 
-                    // ---- 重命名 / 删除 ---- //
+                    // ---- 重命名 ---- //
                     if (dbNodePlatform == null || dbNodePlatform.supportsRenameDatabaseNode()) {
                         treeview_menu.getItems().add(renameItem);
-                    }
-                    if (dbNodePlatform == null || dbNodePlatform.canDropDatabase()) {
-                        treeview_menu.getItems().add(deleteItem);
                     }
 
                     // ---- 导入SQL脚本（导入模式前） ---- //
@@ -1650,6 +1649,11 @@ public class TreeContextMenuBuilder {
                         exportDdlAndDataItem.textProperty().bind(I18n.bind("metadata.menu.export_ddl_data", "导出数据库"));
                         treeview_menu.getItems().add(exportDdlAndDataItem);
                         treeview_menu.getItems().add(exportDdlMenu);
+                    }
+
+                    // ---- 删除（置于菜单末尾） ---- //
+                    if (dbNodePlatform == null || dbNodePlatform.canDropDatabase()) {
+                        treeview_menu.getItems().add(deleteItem);
                     }
                 }
                 //对象文件夹

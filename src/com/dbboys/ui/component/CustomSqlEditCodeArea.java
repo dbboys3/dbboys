@@ -428,6 +428,7 @@ public class CustomSqlEditCodeArea extends CodeArea {
 
         private GutterLine(Label lineNumber, double width) {
             this.lineNumber = lineNumber;
+            getStyleClass().add("sql-line-number-gutter");
             setAlignment(Pos.CENTER);
             setGutterWidth(width);
 
@@ -454,14 +455,10 @@ public class CustomSqlEditCodeArea extends CodeArea {
             marker.setManaged(error);
             marker.setVisible(error);
             if (error) {
-                if (!getStyleClass().contains("error-line-gutter")) {
-                    getStyleClass().add("error-line-gutter");
-                }
                 if (!lineNumber.getStyleClass().contains("lineno-error")) {
                     lineNumber.getStyleClass().add("lineno-error");
                 }
             } else {
-                getStyleClass().remove("error-line-gutter");
                 lineNumber.getStyleClass().remove("lineno-error");
             }
         }
