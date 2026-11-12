@@ -247,7 +247,20 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     @Override
     public boolean supportsRenameDatabaseNode() { return false; }
 
-    /** DB2 不支持重命名模式；删除模式必须带 RESTRICT。 */
+    @Override
+    public boolean deleteSchemaWithObjects() { return true; }
+
+    @Override
+    public String schemaDeletionSessionCatalog(Connect connect, String schemaName) {
+        String sessionUser = connect == null ? "" : connect.getUsername();
+        if (sessionUser != null && !sessionUser.isBlank()
+                && (schemaName == null || !sessionUser.equalsIgnoreCase(schemaName.trim()))) {
+            return sessionUser;
+        }
+        return "SYSIBM";
+    }
+
+    /** DB2 不支持重命名模式。 */
     @Override
     public String renameObjectSql(String objectType, String oldName, String newName) {
         if ("schema".equalsIgnoreCase(objectType)) {
@@ -259,7 +272,20 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     @Override
     public String dropObjectSql(String objectType, String objectName) {
         if ("schema".equalsIgnoreCase(objectType)) {
-            return "DROP SCHEMA " + objectName + " RESTRICT";
+            // DB2 原生 DROP SCHEMA ... RESTRICT 要求模式为空；ADMIN_DROP_SCHEMA 可删除模式内的全部对象。
+            String schemaName = objectName == null ? "" : objectName.trim().replace("'", "''");
+            String errorTable = "DBBOYS_DROP_" + Long.toUnsignedString(System.nanoTime(), 36)
+                    .toUpperCase(Locale.ROOT);
+            return "BEGIN\n"
+                    + "DECLARE v_err_schema VARCHAR(128);\n"
+                    + "DECLARE v_err_table VARCHAR(128);\n"
+                    + "SET v_err_schema = SESSION_USER;\n"
+                    + "SET v_err_table = '" + errorTable + "';\n"
+                    + "CALL SYSPROC.ADMIN_DROP_SCHEMA('" + schemaName + "', NULL, v_err_schema, v_err_table);\n"
+                    + "IF v_err_schema IS NOT NULL OR v_err_table IS NOT NULL THEN\n"
+                    + "  SIGNAL SQLSTATE '75000' SET MESSAGE_TEXT = 'ADMIN_DROP_SCHEMA failed; check the generated error table';\n"
+                    + "END IF;\n"
+                    + "END";
         }
         return DatabasePlatform.super.dropObjectSql(objectType, objectName);
     }

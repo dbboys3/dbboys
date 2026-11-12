@@ -332,6 +332,16 @@ public interface DatabasePlatform {
         return true;
     }
 
+    /** 删除模式时是否同时删除模式内的全部对象。 */
+    default boolean deleteSchemaWithObjects() {
+        return false;
+    }
+
+    /** 删除模式时用于建立连接的会话模式，避免删除任务自身依赖目标模式。 */
+    default String schemaDeletionSessionCatalog(Connect connect, String schemaName) {
+        return connect == null ? "" : connect.getSessionCatalog();
+    }
+
     default String renameIndexSql(String indexName, String tableName, String newName) {
         return renameObjectSql("index", indexName, newName);
     }

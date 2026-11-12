@@ -222,6 +222,10 @@ public class TreeObjectCrudHandler {
         String confirmTitleKey = getDeleteConfirmTitleKey(objectType);
         String confirmContentKey = getDeleteConfirmContentKey(objectType);
         String objectName = selectedItem.getValue().getName();
+        DatabasePlatform dropPlatform = TreeNavigator.resolvePlatform(selectedItem);
+        boolean deleteSchemaWithObjects = "schema".equalsIgnoreCase(objectType)
+                && dropPlatform != null
+                && dropPlatform.deleteSchemaWithObjects();
         String confirmContent;
         if (confirmContentKey != null) {
             confirmContent = I18n.t(confirmContentKey, "确定要删除\"%s\"吗？")
@@ -238,7 +242,6 @@ public class TreeObjectCrudHandler {
             return;
         }
 
-        DatabasePlatform dropPlatform = TreeNavigator.resolvePlatform(selectedItem);
         String sql;
         if (dropPlatform != null && selectedItem.getValue() instanceof Index index) {
             // GBase/Informix MySQL 模式索引内部名为 表名$$索引名（树显示截取名），DROP 需要用内部名
@@ -254,6 +257,9 @@ public class TreeObjectCrudHandler {
                     : "drop " + objectType + " " + selectedItem.getValue().getName();
         }
         Connect connect = buildObjectConnect(selectedItem, useSysmaster);
+        if (deleteSchemaWithObjects) {
+            connect.setSessionCatalog(dropPlatform.schemaDeletionSessionCatalog(connect, objectName));
+        }
         service.deleteObject(connect, sql, () -> {
             TreeItem<TreeData> parent = selectedItem.getParent();
             if (parent != null) {
