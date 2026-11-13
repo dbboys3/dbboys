@@ -22,14 +22,10 @@ public final class Db2MetadataRepository implements MetadataRepository {
 
     private static final int QUERY_TIMEOUT_SECONDS = 30;
 
-    private static final String SYSTEM_SCHEMA_FILTER =
-            "SCHEMANAME NOT LIKE 'SYS%' AND SCHEMANAME NOT IN ('NULLID', 'SQLJ', 'SYSTOOLS', 'SYSIBMADM', 'SYSPUBLIC')";
-
     private static final String SQL_SCHEMAS = """
             SELECT SCHEMANAME, OWNER, CREATE_TIME
             FROM SYSCAT.SCHEMATA
-            WHERE\s""" + SYSTEM_SCHEMA_FILTER + """
-             ORDER BY SCHEMANAME
+            ORDER BY SCHEMANAME
             """;
 
     private static final String SQL_SCHEMA_INFO = """

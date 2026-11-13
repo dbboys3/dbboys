@@ -15,6 +15,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.Locale;
 
 /**
  * IBM Db2 (LUW) platform adapter. Connection + metadata + SQL execution only;
@@ -196,7 +198,7 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     public boolean supportsProceduresFolder() { return true; }
 
     @Override
-    public boolean supportsSystemTablesFolder() { return true; }
+    public boolean supportsSystemTablesFolder() { return false; }
 
     /** 同 Oracle/Dameng：两层模型的节点是会话级模式，不能持久化为连接的"默认数据库"。 */
     @Override
@@ -217,6 +219,17 @@ public final class Db2Dialect implements DatabasePlatform, ConnectionSupport {
     /** DB2 两层树的一级节点是模式，删除时由 {@link #dropObjectSql} 生成 DROP SCHEMA。 */
     @Override
     public boolean canDropDatabase() { return true; }
+
+    private static final Set<String> INTERNAL_SCHEMA_NAMES = Set.of("NULLID", "SQLJ");
+
+    @Override
+    public boolean isSystemDatabase(String databaseName) {
+        if (databaseName == null || databaseName.isBlank()) {
+            return false;
+        }
+        String schema = databaseName.trim().toUpperCase(Locale.ROOT);
+        return schema.startsWith("SYS") || INTERNAL_SCHEMA_NAMES.contains(schema);
+    }
 
     @Override
     public boolean supportsCreateDatabaseStorageSpace() { return false; }

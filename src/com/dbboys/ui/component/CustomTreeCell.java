@@ -890,9 +890,14 @@ public class CustomTreeCell extends TreeCell<TreeData> {
         if (name.indexOf('.') >= 0) {
             return name.trim();
         }
-        String owner = view.getOwner();
-        if (owner != null && !owner.isBlank()) {
-            return owner.trim() + "." + name.trim();
+        // dbname is the object's schema/catalog. owner may be the creator instead
+        // (for example, DB2 SYSCAT views can be owned by SYSIBM).
+        String schema = view.getDbname();
+        if (schema == null || schema.isBlank()) {
+            schema = view.getOwner();
+        }
+        if (schema != null && !schema.isBlank()) {
+            return schema.trim() + "." + name.trim();
         }
         return name.trim();
     }
