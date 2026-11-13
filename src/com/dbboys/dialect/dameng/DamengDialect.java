@@ -494,6 +494,8 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
         return switch (type) {
             case DATABASE -> List.of(
                     new TooltipFieldDef("SCHEMA", "name"),
+                    new TooltipFieldDef("OWNER", "dbOwner"),
+                    new TooltipFieldDef("DBSPACE", "dbSpace"),
                     new TooltipFieldDef("SIZE", "dbSize"),
                     new TooltipFieldDef("CREATED", "dbCreated"),
                     new TooltipFieldDef("CHARSET", "dbLocale")
@@ -501,41 +503,83 @@ public final class DamengDialect implements DatabasePlatform, ConnectionSupport,
             case SYS_TABLE, TABLE -> List.of(
                     new TooltipFieldDef("SCHEMA", "tableCatalog"),
                     new TooltipFieldDef("TABLENAME", "name"),
+                    new TooltipFieldDef("OWNER", "tableOwner"),
                     new TooltipFieldDef("CREATED", "createTime"),
                     new TooltipFieldDef("TYPE", "tableTypeCode"),
-                    new TooltipFieldDef("FRAGMENTED", "isfragment"),
-                    new TooltipFieldDef("EXTENTS", "extents"),
                     new TooltipFieldDef("NROWS", "nrows"),
-                    new TooltipFieldDef("PAGESIZE", "pagesize"),
-                    new TooltipFieldDef("TOTALPAGES", "nptotal"),
                     new TooltipFieldDef("TOTALSIZE", "totalsize"),
-                    new TooltipFieldDef("DATAPAGES", "npdata"),
-                    new TooltipFieldDef("DATASIZE", "usedsize")
+                    new TooltipFieldDef("COMMENT", "tableComm")
             );
             case VIEW -> List.of(
                     new TooltipFieldDef("SCHEMA", "dbname"),
                     new TooltipFieldDef("VIEWNAME", "name"),
+                    new TooltipFieldDef("OWNER", "owner"),
                     new TooltipFieldDef("CREATED", "createTime")
+            );
+            case INDEX -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("INDEXNAME", "name"),
+                    new TooltipFieldDef("TABLENAME", "tabname"),
+                    new TooltipFieldDef("COLS", "cols"),
+                    new TooltipFieldDef("IDXTYPE", "idxtype"),
+                    new TooltipFieldDef("LEVELS", "levels"),
+                    new TooltipFieldDef("UNIQVALUES", "uniqvalues"),
+                    new TooltipFieldDef("LEAFPAGES", "totalpages"),
+                    new TooltipFieldDef("TOTALSIZE", "totalsize"),
+                    new TooltipFieldDef("DISABLED", "isdisabled")
+            );
+            case SEQUENCE -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("SEQNAME", "name"),
+                    new TooltipFieldDef("MINVALUE", "minVal"),
+                    new TooltipFieldDef("MAXVALUE", "maxVal"),
+                    new TooltipFieldDef("INCVALUE", "incVal"),
+                    new TooltipFieldDef("CACHE", "cache"),
+                    new TooltipFieldDef("NEXTVAL", "nextVal"),
+                    new TooltipFieldDef("CYCLE", "isCycle"),
+                    new TooltipFieldDef("ORDER", "isOrder"),
+                    new TooltipFieldDef("CREATED", "created")
             );
             case TYPE -> List.of(
                     new TooltipFieldDef("SCHEMA", "database"),
                     new TooltipFieldDef("TYPE", "name"),
+                    new TooltipFieldDef("OWNER", "owner"),
                     new TooltipFieldDef("KIND", "typeKind")
             );
             case QUEUE -> List.of(
                     new TooltipFieldDef("SCHEMA", "database"),
-                    new TooltipFieldDef("QUEUE", "name")
+                    new TooltipFieldDef("QUEUE", "name"),
+                    new TooltipFieldDef("OWNER", "owner")
+            );
+            case SYNONYM -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("SYNNAME", "name"),
+                    new TooltipFieldDef("OWNER", "synOwner"),
+                    new TooltipFieldDef("SYNTYPE", "synType"),
+                    new TooltipFieldDef("TARGET", "rTabName"),
+                    new TooltipFieldDef("DBLINK", "rServerName"),
+                    new TooltipFieldDef("CREATED", "created")
+            );
+            case TRIGGER -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("TABNAME", "tableName"),
+                    new TooltipFieldDef("TRINAME", "name"),
+                    new TooltipFieldDef("TRITYPE", "triggerType"),
+                    new TooltipFieldDef("DISABLED", "isdisabled")
             );
             case FUNCTION -> List.of(
                     new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("OWNER", "owner"),
                     new TooltipFieldDef("FUNCNAME", "name")
             );
             case PROCEDURE -> List.of(
                     new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("OWNER", "owner"),
                     new TooltipFieldDef("PROCNAME", "name")
             );
             case PACKAGE -> List.of(
                     new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("OWNER", "owner"),
                     new TooltipFieldDef("PKGNAME", "name")
             );
             default -> DatabasePlatform.super.tooltipFields(type);

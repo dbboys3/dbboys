@@ -651,6 +651,57 @@ public final class MysqlDialect implements DatabasePlatform, ConnectionSupport, 
     }
 
     @Override
+    public List<TooltipFieldDef> tooltipFields(MetadataObjectType type) {
+        if (type == null) {
+            return List.of();
+        }
+        return switch (type) {
+            case DATABASE -> List.of(
+                    new TooltipFieldDef("DATABASE", "name"),
+                    new TooltipFieldDef("SIZE", "dbSize"),
+                    new TooltipFieldDef("CHARSET", "dbLocale")
+            );
+            case SYS_TABLE, TABLE -> List.of(
+                    new TooltipFieldDef("DATABASE", "tableCatalog"),
+                    new TooltipFieldDef("TABLENAME", "name"),
+                    new TooltipFieldDef("ENGINE", "lockType"),
+                    new TooltipFieldDef("CREATED", "createTime"),
+                    new TooltipFieldDef("NROWS", "nrows"),
+                    new TooltipFieldDef("DATASIZE", "usedsize"),
+                    new TooltipFieldDef("TOTALSIZE", "totalsize"),
+                    new TooltipFieldDef("COMMENT", "tableComm")
+            );
+            case VIEW -> List.of(
+                    new TooltipFieldDef("DATABASE", "dbname"),
+                    new TooltipFieldDef("VIEWNAME", "name"),
+                    new TooltipFieldDef("CREATED", "createTime")
+            );
+            case INDEX -> List.of(
+                    new TooltipFieldDef("DATABASE", "database"),
+                    new TooltipFieldDef("INDEXNAME", "name"),
+                    new TooltipFieldDef("TABLENAME", "tabname"),
+                    new TooltipFieldDef("COLS", "cols"),
+                    new TooltipFieldDef("IDXTYPE", "idxtype")
+            );
+            case TRIGGER -> List.of(
+                    new TooltipFieldDef("DATABASE", "database"),
+                    new TooltipFieldDef("TABNAME", "tableName"),
+                    new TooltipFieldDef("TRINAME", "name"),
+                    new TooltipFieldDef("TRITYPE", "triggerType")
+            );
+            case FUNCTION -> List.of(
+                    new TooltipFieldDef("DATABASE", "database"),
+                    new TooltipFieldDef("FUNCNAME", "name")
+            );
+            case PROCEDURE -> List.of(
+                    new TooltipFieldDef("DATABASE", "database"),
+                    new TooltipFieldDef("PROCNAME", "name")
+            );
+            default -> DatabasePlatform.super.tooltipFields(type);
+        };
+    }
+
+    @Override
     public boolean supportsHealthCheckTab(Connect connect) {
         return true;
     }

@@ -274,6 +274,75 @@ public final class SqlserverDialect implements DatabasePlatform, ConnectionSuppo
     public String metadataTooltipCatalogLabel() { return "SCHEMA"; }
 
     @Override
+    public List<TooltipFieldDef> tooltipFields(MetadataObjectType type) {
+        if (type == null) {
+            return List.of();
+        }
+        return switch (type) {
+            case DATABASE -> List.of(
+                    new TooltipFieldDef("DATABASE", "name"),
+                    new TooltipFieldDef("OWNER", "dbOwner"),
+                    new TooltipFieldDef("SIZE", "dbSize"),
+                    new TooltipFieldDef("CREATED", "dbCreated"),
+                    new TooltipFieldDef("COLLATION", "dbLocale")
+            );
+            case SYS_TABLE, TABLE -> List.of(
+                    new TooltipFieldDef("SCHEMA", "tableCatalog"),
+                    new TooltipFieldDef("TABLENAME", "name"),
+                    new TooltipFieldDef("TYPE", "tableTypeCode"),
+                    new TooltipFieldDef("CREATED", "createTime"),
+                    new TooltipFieldDef("NROWS", "nrows"),
+                    new TooltipFieldDef("TOTALSIZE", "totalsize"),
+                    new TooltipFieldDef("COMMENT", "tableComm")
+            );
+            case VIEW -> List.of(
+                    new TooltipFieldDef("SCHEMA", "dbname"),
+                    new TooltipFieldDef("VIEWNAME", "name"),
+                    new TooltipFieldDef("CREATED", "createTime")
+            );
+            case INDEX -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("INDEXNAME", "name"),
+                    new TooltipFieldDef("TABLENAME", "tabname"),
+                    new TooltipFieldDef("COLS", "cols"),
+                    new TooltipFieldDef("IDXTYPE", "idxtype"),
+                    new TooltipFieldDef("DISABLED", "isdisabled")
+            );
+            case SEQUENCE -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("SEQNAME", "name"),
+                    new TooltipFieldDef("MINVALUE", "minValue"),
+                    new TooltipFieldDef("MAXVALUE", "maxValue"),
+                    new TooltipFieldDef("INCVALUE", "incValue"),
+                    new TooltipFieldDef("CACHE", "cache"),
+                    new TooltipFieldDef("NEXTVAL", "nextVal")
+            );
+            case SYNONYM -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("SYNNAME", "name"),
+                    new TooltipFieldDef("BASEOBJECT", "synonymType"),
+                    new TooltipFieldDef("CREATED", "created")
+            );
+            case TRIGGER -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("TABNAME", "tableName"),
+                    new TooltipFieldDef("TRINAME", "name"),
+                    new TooltipFieldDef("TRITYPE", "triggerType"),
+                    new TooltipFieldDef("DISABLED", "isdisabled")
+            );
+            case FUNCTION -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("FUNCNAME", "name")
+            );
+            case PROCEDURE -> List.of(
+                    new TooltipFieldDef("SCHEMA", "database"),
+                    new TooltipFieldDef("PROCNAME", "name")
+            );
+            default -> DatabasePlatform.super.tooltipFields(type);
+        };
+    }
+
+    @Override
     public String metadataTreeDragTableSelectSql(String qualifiedTable) {
         return DatabasePlatform.defaultMetadataTreeDragStarFromSql(qualifiedTable);
     }
