@@ -174,6 +174,11 @@ public interface DatabasePlatform {
         return "CREATE SCHEMA " + schemaName;
     }
 
+    /** 模式文件夹是否提供新建模式入口；与能否新建数据库相互独立。 */
+    default boolean canCreateSchema() {
+        return catalogModel() != CatalogModel.DATABASE;
+    }
+
     default boolean canCreateDatabase() {
         return true;
     }

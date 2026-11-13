@@ -1506,7 +1506,7 @@ public class TreeContextMenuBuilder {
                 //模式文件夹
                 else if(selectedItem.getValue() instanceof SchemaFolder){
                     DatabasePlatform schemaFolderPlatform = TreeNavigator.resolvePlatform(selectedItem);
-                    if (schemaFolderPlatform == null || schemaFolderPlatform.canCreateDatabase()) {
+                    if (schemaFolderPlatform == null || schemaFolderPlatform.canCreateSchema()) {
                         createDatabaseItem.textProperty().unbind();
                         createDatabaseItem.textProperty().bind(I18n.bind("metadata.menu.create_schema", "新建模式"));
                         createDatabaseItem.setGraphic(IconFactory.group(IconPaths.METADATA_ADD_USER, 0.5, 0.5));
