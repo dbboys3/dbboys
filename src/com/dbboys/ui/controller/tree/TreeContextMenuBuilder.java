@@ -1851,7 +1851,9 @@ public class TreeContextMenuBuilder {
                 }
 
                 // 树中右键框显示
-                moveDeleteItemToEnd(treeview_menu, deleteItem);
+                if (!(selectedItem.getValue() instanceof Connect)) {
+                    moveDeleteItemToEnd(treeview_menu, deleteItem);
+                }
                 treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
             }
         });

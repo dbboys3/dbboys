@@ -54,8 +54,10 @@ import java.util.Map;
 /**
  * 对象复制/粘贴：树菜单在单个对象节点上执行"复制"时记录源对象
  * （表/视图/索引/序列/同义词/触发器/函数/存储过程/包/类型/队列/作业）；
- * 在库（两层模型）/模式节点上"粘贴"时弹窗显示源对象位置并编辑 DDL，确认后创建对象；
+ * 在库（两层模型）/模式节点上"粘贴"时弹窗显示源/目标位置（连接名、库、模式）并编辑 DDL，确认后创建对象；
  * 源对象为表时弹窗编辑转换后的建表 DDL、可勾选后台迁移数据，其他对象按原 DDL 回放（禁用迁移数据及 WHERE 条件）；
+ * 弹窗 DDL 中的源模式限定词自动对齐目标：有模式的库改为目标模式名，
+ * 无模式限定词的库（informix/gbase8s/mysql）直接去掉限定词；
  * 在表节点上"粘贴"（仅源为表）时弹窗输入 WHERE 条件后，把源表数据后台追加到该表。
  * 数据复制复用 {@link TableMigrationService}（migrateDdl=false，目标表名走 targetTableNames 映射）。
  */
@@ -68,6 +70,7 @@ public final class TableCopyPasteHandler {
     private static String sourceCatalog;    // MigrationObjectRef.catalog（按源平台 catalogModel 约定）
     private static String sourceSchema;     // MigrationObjectRef.schema（仅 DATABASE_SCHEMA 模型）
     private static String sourceName;
+    private static String sourceOwner;      // 源对象属主（informix 等 DDL 里的属主限定词）
     private static CopyKind sourceKind;
 
     /** 可复制粘贴的对象类型（独立于 MigrationObjectRef.Kind：类型/队列/作业不参与迁移任务）。 */
@@ -90,9 +93,45 @@ public final class TableCopyPasteHandler {
         sourceConnect = connect;
         sourceCatalog = catalogSchema[0];
         sourceSchema = catalogSchema[1];
+        sourceOwner = ownerOf(item.getValue());
         // SQL Server 等无会话级模式切换的方言：对象名直接带模式限定（testschema.t）
         sourceName = TreeNavigator.qualifyObjectNameForDdl(item, item.getValue().getName());
         sourceKind = kind;
+    }
+
+    /** 源对象属主（DDL 属主限定词重写用；触发器/作业等无属主概念的对象返回 null）。 */
+    private static String ownerOf(TreeData treeData) {
+        if (treeData instanceof com.dbboys.model.Table table) {
+            return table.getTableOwner();
+        }
+        if (treeData instanceof com.dbboys.model.View view) {
+            return view.getOwner();
+        }
+        if (treeData instanceof Index index) {
+            return index.getIndexOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Sequence sequence) {
+            return sequence.getSeqOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Synonym synonym) {
+            return synonym.getSynOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Function function) {
+            return function.getOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Procedure procedure) {
+            return procedure.getOwner();
+        }
+        if (treeData instanceof com.dbboys.model.DBPackage dbPackage) {
+            return dbPackage.getOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Type type) {
+            return type.getOwner();
+        }
+        if (treeData instanceof com.dbboys.model.Queue queue) {
+            return queue.getOwner();
+        }
+        return null;
     }
 
     public static boolean hasCopied() {
@@ -202,6 +241,8 @@ public final class TableCopyPasteHandler {
 
         // 源对象位置：连接名 / catalog.schema.对象名（类型）
         Label sourceLabel = new Label(sourceLocationText());
+        // 目标位置：连接名 / 库[.模式]
+        Label targetLabel = new Label(targetLocationText(dst, targetDatabase, targetSchema));
 
         CheckBox migrateDataCheck = new CheckBox(I18n.t("tablecopy.dialog.migrate_data", "迁移数据"));
         // 仅源为表时可迁移数据；其他对象禁用迁移数据及 WHERE 条件
@@ -223,7 +264,7 @@ public final class TableCopyPasteHandler {
         sqlArea.setEditable(true); // 粘贴弹窗的 DDL 可编辑（该类默认只读）
         // 默认边框（跟随主题边框色），把 DDL 编辑区与对话框背景区分开
         sqlArea.setStyle("-fx-border-color: -color-border-default;");
-        VBox content = new VBox(8, sourceLabel, optionsRow, noteLabel, sqlArea);
+        VBox content = new VBox(8, sourceLabel, targetLabel, optionsRow, noteLabel, sqlArea);
         VBox.setVgrow(sqlArea, Priority.ALWAYS);
         StackPane contentStack = new StackPane(content, loadingIcon);
         contentStack.setAlignment(Pos.CENTER);
@@ -257,6 +298,8 @@ public final class TableCopyPasteHandler {
                     originalDdl = fetchObjectDdl(src, kind, name);
                     convertedDdl = originalDdl;
                 }
+                // 模式限定词对齐目标：有模式的库改为目标模式名；informix/gbase8s/mysql 等无模式库直接去掉限定
+                convertedDdl = rewriteSchemaQualifiers(convertedDdl, dst, targetSchema);
             } catch (Exception e) {
                 String msg = e.getMessage();
                 LOG.error("加载对象DDL失败: {}", msg, e);
@@ -382,12 +425,14 @@ public final class TableCopyPasteHandler {
 
         // 源对象位置：连接名 / catalog.schema.表名（表）
         Label sourceLabel = new Label(sourceLocationText());
-        VBox content = new VBox(8, sourceLabel, optionsRow);
+        // 目标位置：连接名 / 库[.模式]
+        Label targetLabel = new Label(targetLocationText(dst, targetDatabase, targetSchema));
+        VBox content = new VBox(8, sourceLabel, targetLabel, optionsRow);
 
         ButtonType okType = new ButtonType(I18n.t("createconnect.button.confirm", "确认"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelType = new ButtonType(I18n.t("createconnect.button.cancel", "取消"), ButtonBar.ButtonData.CANCEL_CLOSE);
         AlertUtil.ContentDialog dialog = AlertUtil.createContentDialog(
-                I18n.t("tablecopy.dialog.title_data", "粘贴表-迁移数据"), content, 520, 190, okType, cancelType);
+                I18n.t("tablecopy.dialog.title_data", "粘贴表-迁移数据"), content, 520, 220, okType, cancelType);
         if (dialog.showAndWait() != okType) {
             return;
         }
@@ -894,6 +939,114 @@ public final class TableCopyPasteHandler {
         String connName = sourceConnect == null || sourceConnect.getName() == null ? "" : sourceConnect.getName();
         return I18n.t("tablecopy.dialog.source", "源对象：%s")
                 .formatted(connName + " / " + path + "（" + kindDisplayName(sourceKind) + "）");
+    }
+
+    /** 目标位置展示：连接名 / 库[.模式]。 */
+    private static String targetLocationText(Connect dst, String targetDatabase, String targetSchema) {
+        StringBuilder path = new StringBuilder();
+        if (targetDatabase != null && !targetDatabase.isBlank()) {
+            path.append(targetDatabase);
+        }
+        if (targetSchema != null && !targetSchema.isBlank()) {
+            if (path.length() > 0) {
+                path.append('.');
+            }
+            path.append(targetSchema);
+        }
+        String connName = dst == null || dst.getName() == null ? "" : dst.getName();
+        return I18n.t("tablecopy.dialog.target", "目标位置：%s")
+                .formatted(connName + " / " + path);
+    }
+
+    /**
+     * 把 DDL 里的源模式限定词对齐到粘贴目标：
+     * 目标是有模式的库（oracle/dameng/db2/sqlserver/postgresql）时改为目标模式名；
+     * 目标是无模式限定词的库（informix/gbase8s/mysql）时直接去掉限定词。
+     * 限定词候选：源模式名（含 SCHEMA 模型的 catalog、限定名首段）与源对象属主。
+     */
+    private static String rewriteSchemaQualifiers(String ddl, Connect dst, String targetSchema) {
+        if (ddl == null || ddl.isBlank()) {
+            return ddl;
+        }
+        boolean strip;
+        try {
+            strip = platform(dst).catalogModel() == DatabasePlatform.CatalogModel.DATABASE;
+        } catch (Exception e) {
+            return ddl;
+        }
+        String replacement = targetSchema == null || targetSchema.isBlank() ? null : targetSchema.trim();
+        if (!strip && replacement == null) {
+            return ddl;
+        }
+        String result = ddl;
+        for (String qualifier : sourceQualifierCandidates()) {
+            result = rewriteQualifier(result, qualifier, strip ? null : replacement);
+        }
+        return result;
+    }
+
+    /** 源端可能出现的限定词候选：源模式、SCHEMA 模型的 catalog（即模式名）、限定名首段、对象属主。 */
+    private static java.util.Set<String> sourceQualifierCandidates() {
+        java.util.Set<String> candidates = new java.util.LinkedHashSet<>();
+        if (sourceSchema != null && !sourceSchema.isBlank()) {
+            candidates.add(sourceSchema.trim());
+        }
+        try {
+            if (sourceConnect != null
+                    && platform(sourceConnect).catalogModel() == DatabasePlatform.CatalogModel.SCHEMA
+                    && sourceCatalog != null && !sourceCatalog.isBlank()) {
+                candidates.add(sourceCatalog.trim());
+            }
+        } catch (Exception ignored) {
+        }
+        if (sourceName != null && sourceName.contains(".")) {
+            String qualifier = sourceName.substring(0, sourceName.indexOf('.')).trim();
+            if (!qualifier.isEmpty()) {
+                candidates.add(qualifier);
+            }
+        }
+        if (sourceOwner != null && !sourceOwner.isBlank()) {
+            candidates.add(sourceOwner.trim());
+        }
+        return candidates;
+    }
+
+    /**
+     * 替换/剥离 DDL 中的限定词（大小写不敏感，保留原引号风格，替换时大小写跟随源文本）。
+     * replacement 为 null 时剥离 {@code qualifier.} 前缀。
+     */
+    private static String rewriteQualifier(String ddl, String qualifier, String replacement) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(?i)(?<![\\w$#\"'`\\[])([\"'`\\[]?)(" + java.util.regex.Pattern.quote(qualifier)
+                        + ")([\"'`\\]]?)\\.");
+        java.util.regex.Matcher matcher = pattern.matcher(ddl);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            String text = replacement == null
+                    ? ""
+                    : matcher.group(1) + adjustCase(matcher.group(2), replacement) + matcher.group(3) + ".";
+            matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(text));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    /** 大小写跟随源文本：源全大写则目标大写、源全小写则目标小写，否则原样。 */
+    private static String adjustCase(String matched, String target) {
+        boolean hasUpper = false;
+        boolean hasLower = false;
+        for (int i = 0; i < matched.length(); i++) {
+            char c = matched.charAt(i);
+            hasUpper |= Character.isUpperCase(c);
+            hasLower |= Character.isLowerCase(c);
+        }
+        if (hasUpper && !hasLower) {
+            return target.toUpperCase(java.util.Locale.ROOT);
+        }
+        if (hasLower && !hasUpper) {
+            return target.toLowerCase(java.util.Locale.ROOT);
+        }
+        return target;
     }
 
     /** 对象类型展示名（弹窗标题/源位置/通知用）。 */
