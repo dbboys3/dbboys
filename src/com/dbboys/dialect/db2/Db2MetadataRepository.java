@@ -146,7 +146,7 @@ public final class Db2MetadataRepository implements MetadataRepository {
             """;
 
     private static final String SQL_VIEWS = """
-            SELECT TABNAME AS VIEWNAME, OWNER, CREATE_TIME
+            SELECT TABNAME AS VIEWNAME, TABSCHEMA, CREATE_TIME
             FROM SYSCAT.TABLES
             WHERE TABSCHEMA = ?
               AND TYPE = 'V'
@@ -585,8 +585,14 @@ public final class Db2MetadataRepository implements MetadataRepository {
         SqlRunner runner = runner(conn);
         return runner.query(SQL_VIEWS, List.of(schemaName(databaseName)), rs -> {
             View view = new View(rs.getString("VIEWNAME").trim());
-            view.setDbname(schemaName(databaseName));
-            view.setOwner(blank(rs.getString("OWNER")));
+            String schema = blank(rs.getString("TABSCHEMA"));
+            if (schema.isEmpty()) {
+                schema = schemaName(databaseName);
+            }
+            view.setDbname(schema);
+            // DB2 catalog views can have SYSIBM as OWNER; the UI owner field
+            // represents the view's schema, matching DB2 table metadata.
+            view.setOwner(schema);
             view.setCreateTime(formatTimestamp(rs.getString("CREATE_TIME")));
             return view;
         });
