@@ -487,6 +487,9 @@ public class CreateConnectController {
     public void setConnect(Connect connect){
 
         connect.setProps(props);
+        // Rebuild the runtime target from the form. A previous test may have
+        // populated sessionCatalog, which some dialects prefer over catalog.
+        connect.setSessionCatalog(null);
         String namedServerPropName = namedServerPropNameFor(connect.getDbtype());
         if(groupHbox.isVisible()){
             if (!namedServerPropName.isEmpty()) {
@@ -529,7 +532,6 @@ public class CreateConnectController {
             connect.setCatalog(databaseInput.isBlank()
                     ? defaultDatabaseFor(connect.getDbtype())
                     : databaseInput);
-            connect.setSessionCatalog(null);
         } else {
             connect.setCatalog(damengDatabaseDisabled
                     ? "N/A"
