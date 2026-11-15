@@ -60,6 +60,10 @@ public class TreeContextMenuBuilder {
 
         CustomShortcutMenuItem addUserItem = MenuItemUtil.createMenuItemI18n("metadata.menu.add_user",
                 IconFactory.group(IconPaths.METADATA_ADD_USER, 0.55, 0.55));
+        CustomShortcutMenuItem exportUsersItem = MenuItemUtil.createMenuItemI18n("metadata.menu.export_users",
+                IconFactory.group(IconPaths.RESULTSET_EXPORT, 0.6, 0.6));
+        CustomShortcutMenuItem importUsersItem = MenuItemUtil.createMenuItemI18n("metadata.menu.import_users",
+                IconFactory.group(IconPaths.METADATA_IMPORT_DATA_ITEM, 0.6, 0.6));
         CustomShortcutMenuItem modifyUserItem = MenuItemUtil.createMenuItemI18n("metadata.menu.reset_password",
                 IconFactory.group(IconPaths.METADATA_MODIFY_USER, 0.5, 0.5));
         CustomShortcutMenuItem copyItem = MenuItemUtil.createMenuItemI18n("metadata.menu.copy_name", "Ctrl+C",
@@ -729,6 +733,9 @@ public class TreeContextMenuBuilder {
 
         });
 
+        exportUsersItem.setOnAction(event -> UserExportHandler.exportUsers(treeView));
+        importUsersItem.setOnAction(event -> UserImportHandler.importUsers(treeView));
+
         //创建用户
         modifyUserItem.setOnAction(event -> {
             TreeItem<TreeData> selectedItem = treeView.getSelectionModel().getSelectedItem();
@@ -1321,6 +1328,7 @@ public class TreeContextMenuBuilder {
                 createTableItem.setDisable(false);
                 importDataItem.setDisable(false);
                 importSqlScriptItem.setDisable(false);
+                importUsersItem.setDisable(false);
                 importDdlAndDataItem.setDisable(false);
 
                 if (TreeNavigator.isMultiTableSelection(selectedItems)) {
@@ -1358,7 +1366,10 @@ public class TreeContextMenuBuilder {
                     deleteItem.setDisable(disableDelete);
                     treeview_menu.getItems().add(copyItem);
                     treeview_menu.getItems().add(deleteItem);
-                    treeview_menu.getItems().add(ddlMenu);
+                    // User objects do not have DDL, so do not show an empty/unusable DDL menu.
+                    if (!containsUserSelection(selectedItems)) {
+                        treeview_menu.getItems().add(ddlMenu);
+                    }
                     moveDeleteItemToEnd(treeview_menu, deleteItem);
                     treeview_menu.show(treeView, event.getScreenX(), event.getScreenY());
                     return;
@@ -1388,6 +1399,7 @@ public class TreeContextMenuBuilder {
                         createTableItem.setDisable(true);
                         importDataItem.setDisable(true);
                         importSqlScriptItem.setDisable(true);
+                        importUsersItem.setDisable(true);
                         importDdlAndDataItem.setDisable(true);
                     }
                 }
@@ -1541,6 +1553,8 @@ public class TreeContextMenuBuilder {
                 else if(selectedItem.getValue() instanceof UserFolder) {
                     treeview_menu.getItems().add(addUserItem);
                     treeview_menu.getItems().add(TreeViewUtil.refreshItem);
+                    treeview_menu.getItems().add(exportUsersItem);
+                    treeview_menu.getItems().add(importUsersItem);
                 }
                 else if(selectedItem.getValue() instanceof User) {
                     treeview_menu.getItems().add(modifyUserItem);
@@ -1868,6 +1882,18 @@ public class TreeContextMenuBuilder {
             items.remove(items.size() - 1);
         }
         items.add(deleteItem);
+    }
+
+    private static boolean containsUserSelection(List<TreeItem<TreeData>> selectedItems) {
+        if (selectedItems == null) {
+            return false;
+        }
+        for (TreeItem<TreeData> item : selectedItems) {
+            if (item != null && item.getValue() instanceof User) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 粘贴菜单禁用条件：没有复制的对象记录、表节点上粘贴非表对象（表节点仅支持表数据追加），或目标连接为只读（粘贴要写入目标库）。 */
